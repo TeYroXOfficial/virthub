@@ -116,6 +116,22 @@
         .meter > i { display: block; height: 100%; background: var(--accent); }
         .meter.hot > i { background: var(--warn); }
 
+        .subnav {
+            display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 24px;
+            border-bottom: 1px solid var(--border); padding-bottom: 0;
+        }
+        .subnav a {
+            padding: 8px 14px; text-decoration: none; color: var(--muted);
+            font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+        }
+        .subnav a:hover { color: var(--text); }
+        .subnav a[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+        details.form-block { margin-bottom: 20px; }
+        details.form-block > summary {
+            cursor: pointer; padding: 10px 0; font-weight: 600; font-size: 14px; color: var(--accent);
+        }
+
         .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
         .muted { color: var(--muted); }
         .secret {
@@ -136,6 +152,10 @@
                @if(request()->routeIs('panel.dashboard')) aria-current="page" @endif>Moje maszyny</a>
             <a href="{{ route('panel.servers.create') }}"
                @if(request()->routeIs('panel.servers.create')) aria-current="page" @endif>Zamów VPS</a>
+            @if (auth()->user()->isAdmin())
+                <a href="{{ route('panel.admin.index') }}"
+                   @if(request()->routeIs('panel.admin.*')) aria-current="page" @endif>Administracja</a>
+            @endif
             <span class="muted">{{ auth()->user()->email }}</span>
             <form method="POST" action="{{ route('logout') }}" style="margin:0">
                 @csrf

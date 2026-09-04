@@ -32,7 +32,7 @@ class Hypervisor extends Model
         'bridge',
     ];
 
-    protected $hidden = ['agent_token', 'callback_secret'];
+    protected $hidden = ['agent_token', 'callback_secret', 'enrollment_token_hash'];
 
     protected function casts(): array
     {
@@ -44,7 +44,23 @@ class Hypervisor extends Model
             'last_seen_at' => 'datetime',
             'last_health' => 'array',
             'accepts_new_servers' => 'boolean',
+            'enrollment_expires_at' => 'datetime',
+            'enrolled_at' => 'datetime',
         ];
+    }
+
+    /** Czy węzeł czeka jeszcze na wykonanie polecenia instalacyjnego. */
+    public function isAwaitingEnrollment(): bool
+    {
+        return $this->enrolled_at === null
+            && $this->enrollment_expires_at !== null
+            && $this->enrollment_expires_at->isFuture();
+    }
+
+    public function enrollmentExpired(): bool
+    {
+        return $this->enrolled_at === null
+            && ($this->enrollment_expires_at === null || $this->enrollment_expires_at->isPast());
     }
 
     /** @return HasMany<Server, $this> */

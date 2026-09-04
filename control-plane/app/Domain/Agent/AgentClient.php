@@ -105,6 +105,7 @@ class AgentClient
 
         $request = Http::timeout(self::TIMEOUT)
             ->connectTimeout(self::CONNECT_TIMEOUT)
+            ->withOptions(['verify' => $this->tlsVerification()])
             ->withHeaders([
                 'X-VH-Timestamp' => $timestamp,
                 'X-VH-Signature' => $this->sign($timestamp, $method, $path, $payload),
@@ -148,6 +149,24 @@ class AgentClient
             "Hypervisor {$this->hypervisor->name} odrzucił operację: {$detail}",
             status: $response->status(),
         );
+    }
+
+    /**
+     * Węzeł zarejestrowany automatycznie przedstawia się certyfikatem
+     * wygenerowanym u siebie — nie ma własnej domeny, więc nie ma jak wystawić
+     * mu certyfikatu od publicznego urzędu. Zamiast wyłączać weryfikację
+     * (`verify => false`, co otwiera drogę na atak pośrednika), przypinamy ten
+     * konkretny certyfikat: połączenie przejdzie wyłącznie z tym węzłem.
+     *
+     * Węzeł z własną domeną i certyfikatem Let's Encrypt nie ma zapisanego
+     * certyfikatu i weryfikuje się normalnie, wobec systemowych urzędów.
+     *
+     * @return string|bool ścieżka do przypiętego certyfikatu albo `true`
+     */
+    private function tlsVerification(): string|bool
+    {
+        return app(\App\Domain\Provisioning\HypervisorEnrollment::class)
+            ->certificatePath($this->hypervisor) ?? true;
     }
 
     private function sign(string $timestamp, string $method, string $path, string $body): string

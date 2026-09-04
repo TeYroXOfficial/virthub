@@ -25,6 +25,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Kod agenta serwowany przy rejestracji hypervisora
+    |--------------------------------------------------------------------------
+    | Instalator uruchamiany na nowym węźle pobiera agenta stąd. Domyślnie
+    | katalog obok panelu, zgodnie z układem monorepo; przy wdrożeniu samego
+    | panelu wskaż ścieżkę, pod którą wgrałeś katalog `node-agent`.
+    */
+
+    'agent_source_path' => env('VIRTHUB_AGENT_SOURCE_PATH', base_path('../node-agent')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Limity
     |--------------------------------------------------------------------------
     */

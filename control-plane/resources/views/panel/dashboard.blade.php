@@ -6,7 +6,7 @@
     <h1>Moje maszyny</h1>
     <p class="lede">
         {{ $servers->count() }} {{ $servers->count() === 1 ? 'maszyna' : 'maszyn' }},
-        z tego {{ $running }} działa@if($building), {{ $building }} w trakcie operacji@endif.
+        z tego {{ $running }} działa{{ $building ? ", {$building} w trakcie operacji" : '' }}.
     </p>
 
     @if ($servers->isEmpty())

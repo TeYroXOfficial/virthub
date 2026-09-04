@@ -36,6 +36,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // token CSRF nie ma tam zastosowania ani sensu.
         $middleware->validateCsrfTokens(except: [
             'api/internal/agent/*',
+            // Meldunek instalatora z nowego hypervisora — przychodzi ze skryptu
+            // powłoki, nie z przeglądarki. Chroni go jednorazowy bilet w adresie.
+            'enroll/*/complete',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
