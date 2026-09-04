@@ -1,0 +1,57 @@
+# Usługi wspierające dla środowiska developerskiego.
+#
+# Nie są konieczne: domyślnie control plane działa na SQLite i kolejce
+# synchronicznej. Ten plik przydaje się, gdy chcesz odtworzyć układ produkcyjny
+# (MySQL + Redis + Horizon) albo sprawdzić zachowanie kolejki pod obciążeniem.
+#
+#   docker compose -f infra/docker-compose.dev.yml up -d
+#
+# Następnie w control-plane/.env:
+#   DB_CONNECTION=mysql
+#   DB_HOST=127.0.0.1
+#   DB_DATABASE=virthub
+#   DB_USERNAME=virthub
+#   DB_PASSWORD=virthub
+#   QUEUE_CONNECTION=redis
+#   REDIS_HOST=127.0.0.1
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: virthub-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: virthub
+      MYSQL_USER: virthub
+      MYSQL_PASSWORD: virthub
+      MYSQL_ROOT_PASSWORD: virthub-root
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-pvirthub-root"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: virthub-redis
+    restart: unless-stopped
+    # appendonly: kolejka zadań provisioningu nie może wyparować przy restarcie
+    # kontenera — maszyna zostałaby wtedy w stanie „building" bez zlecenia.
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  mysql-data:
+  redis-data:

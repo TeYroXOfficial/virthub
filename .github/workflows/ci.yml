@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Anuluj poprzedni przebieg dla tej samej gałęzi — nikt nie czeka na wynik
+# testów sprzed trzech commitów.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  control-plane:
+    name: Control plane (Laravel)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_sqlite, sqlite3, bcmath, curl, zip
+          coverage: none
+
+      - name: Cache zależności Composera
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ hashFiles('control-plane/composer.lock') }}
+
+      - name: Instalacja zależności
+        working-directory: control-plane
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Konfiguracja środowiska
+        working-directory: control-plane
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Testy
+        working-directory: control-plane
+        run: php artisan test
+
+  node-agent:
+    name: Node agent (FastAPI)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: node-agent/requirements.txt
+
+      - name: Biblioteki systemowe libvirt
+        # libvirt-python kompiluje się wobec nagłówków libvirt. Same testy idą
+        # w trybie mock, ale instalacja requirements.txt bez tego się wywali.
+        run: sudo apt-get update && sudo apt-get install -y libvirt-dev pkg-config
+
+      - name: Instalacja zależności
+        working-directory: node-agent
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Testy
+        working-directory: node-agent
+        run: pytest -q

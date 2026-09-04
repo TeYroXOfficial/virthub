@@ -1,0 +1,42 @@
+[Unit]
+Description=VirtHub Node Agent (zarządzanie maszynami KVM)
+Documentation=https://github.com/virthub/virthub
+After=network-online.target libvirtd.service
+Wants=network-online.target
+Requires=libvirtd.service
+
+[Service]
+Type=exec
+User=virthub
+Group=libvirt
+EnvironmentFile=/etc/virthub-agent/agent.env
+WorkingDirectory=/opt/virthub-agent
+ExecStart=/opt/virthub-agent/.venv/bin/uvicorn agent.main:app --host 127.0.0.1 --port 8899
+Restart=always
+RestartSec=5
+
+# Agent nasłuchuje wyłącznie na loopbacku — ruch z control plane wchodzi przez
+# nginx z TLS. Port 8899 nigdy nie jest wystawiony bezpośrednio do sieci.
+
+# Utwardzenie: agent potrzebuje dostępu do libvirt i katalogów z obrazami,
+# reszta systemu plików jest dla niego tylko do odczytu.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/virthub /var/log/virthub
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+# nftables wymaga CAP_NET_ADMIN; nic więcej z zestawu uprawnień roota.
+AmbientCapabilities=CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=virthub-agent
+
+[Install]
+WantedBy=multi-user.target

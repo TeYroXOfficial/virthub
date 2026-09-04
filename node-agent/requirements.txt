@@ -1,0 +1,9 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+httpx==0.28.1
+psutil==6.1.1
+
+# Tylko na hypervisorze — pakiet kompiluje się wobec libvirt-dev i nie istnieje
+# na Windows/macOS. Na stacji developerskiej agent działa z VH_AGENT_DRIVER=mock.
+libvirt-python==11.0.0; sys_platform == "linux"

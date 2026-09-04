@@ -1,0 +1,66 @@
+<?php
+
+namespace App\Http\Resources;
+
+use App\Models\Server;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+/** @mixin Server */
+class ServerResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'hostname' => $this->hostname,
+            'label' => $this->label,
+            'state' => $this->state->value,
+            'state_label' => $this->state->label(),
+            'state_tone' => $this->state->tone(),
+            'state_message' => $this->state_message,
+            'build_progress' => $this->build_progress,
+            'suspended' => $this->isSuspended(),
+            'suspension_reason' => $this->suspension_reason,
+
+            'resources' => [
+                'vcpu' => $this->vcpu,
+                'ram_mb' => $this->ram_mb,
+                'disk_gb' => $this->disk_gb,
+                'bandwidth_gb' => $this->bandwidth_gb,
+            ],
+
+            'package' => $this->whenLoaded('package', fn () => [
+                'slug' => $this->package->slug,
+                'name' => $this->package->name,
+            ]),
+
+            'os' => $this->whenLoaded('template', fn () => [
+                'id' => $this->template->id,
+                'name' => $this->template->name,
+                'family' => $this->template->family,
+            ]),
+
+            'ip_addresses' => $this->whenLoaded('ipAddresses', fn () => $this->ipAddresses
+                ->map(fn ($ip) => [
+                    'address' => $ip->address,
+                    'version' => $ip->version,
+                    'primary' => $ip->is_primary,
+                    'rdns' => $ip->rdns,
+                ])->values()),
+
+            // Widoczne tylko dla personelu — klient nie musi wiedzieć, na którym
+            // węźle stoi jego maszyna, a nam ta informacja ułatwia wsparcie.
+            'hypervisor' => $this->when(
+                $request->user()?->isStaff() && $this->relationLoaded('hypervisor'),
+                fn () => [
+                    'id' => $this->hypervisor?->id,
+                    'name' => $this->hypervisor?->name,
+                ],
+            ),
+
+            'created_at' => $this->created_at,
+            'last_synced_at' => $this->last_synced_at,
+        ];
+    }
+}

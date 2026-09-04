@@ -1,0 +1,31 @@
+# Zależności
+/control-plane/vendor
+/node-agent/.venv
+/node-agent/**/__pycache__
+/node-agent/.pytest_cache
+node_modules
+
+# Środowisko i sekrety — nigdy do repozytorium
+.env
+.env.*
+!.env.example
+
+# Dane lokalne
+/control-plane/database/*.sqlite
+/control-plane/database/*.sqlite3
+/control-plane/storage/*.key
+/control-plane/storage/framework/cache/*
+/control-plane/storage/framework/sessions/*
+/control-plane/storage/framework/views/*
+/control-plane/storage/logs/*
+/control-plane/bootstrap/cache/*
+!**/.gitignore
+
+# Narzędzia pobierane lokalnie
+/tools/composer.phar
+
+# Systemowe
+.DS_Store
+Thumbs.db
+.idea
+.vscode

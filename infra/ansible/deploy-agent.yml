@@ -1,0 +1,158 @@
+---
+# Wdrożenie node agenta na hypervisorze.
+#
+#   ansible-playbook -i inventory.ini infra/ansible/deploy-agent.yml \
+#       -e "agent_token=... callback_secret=... control_plane_url=https://panel.example.com"
+#
+# Playbook celowo NIE konfiguruje mostka sieciowego. Nazwa interfejsu, VLAN-y i
+# adresacja hosta różnią się u każdego dostawcy, a błąd w tej konfiguracji odcina
+# serwer od sieci — to krok do wykonania ręcznie i sprawdzenia przed wdrożeniem.
+
+- name: Node agent na hypervisorze KVM
+  hosts: hypervisors
+  become: true
+
+  vars:
+    agent_user: virthub
+    agent_dir: /opt/virthub-agent
+    data_dir: /var/lib/virthub
+    config_dir: /etc/virthub-agent
+    bridge: br0
+    agent_port: 8899
+
+  tasks:
+    - name: Sprawdź wsparcie sprzętowe dla wirtualizacji
+      ansible.builtin.shell: grep -Ec '(vmx|svm)' /proc/cpuinfo
+      register: virt_support
+      changed_when: false
+      failed_when: virt_support.stdout | int == 0
+
+    - name: Zainstaluj pakiety hypervisora
+      ansible.builtin.apt:
+        name:
+          - qemu-kvm
+          - libvirt-daemon-system
+          - libvirt-dev          # wymagany do zbudowania libvirt-python
+          - python3-venv
+          - python3-dev
+          - build-essential
+          - genisoimage          # budowanie nośnika cloud-init
+          - nftables
+          - qemu-utils           # qemu-img
+        state: present
+        update_cache: true
+
+    - name: Utwórz konto usługi
+      ansible.builtin.user:
+        name: "{{ agent_user }}"
+        system: true
+        # Grupa libvirt daje dostęp do gniazda hypervisora bez uprawnień roota.
+        groups: libvirt
+        shell: /usr/sbin/nologin
+        create_home: false
+
+    - name: Utwórz katalogi
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ agent_user }}"
+        group: libvirt
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "{{ agent_dir }}", mode: "0755" }
+        - { path: "{{ data_dir }}", mode: "0750" }
+        - { path: "{{ data_dir }}/images", mode: "0750" }
+        - { path: "{{ data_dir }}/templates", mode: "0755" }
+        - { path: "{{ data_dir }}/seeds", mode: "0700" }
+        - { path: /var/log/virthub, mode: "0750" }
+
+    - name: Katalog konfiguracji (tylko dla roota — zawiera sekrety)
+      ansible.builtin.file:
+        path: "{{ config_dir }}"
+        state: directory
+        owner: root
+        group: "{{ agent_user }}"
+        mode: "0750"
+
+    - name: Skopiuj kod agenta
+      ansible.builtin.copy:
+        src: ../../node-agent/
+        dest: "{{ agent_dir }}/"
+        owner: "{{ agent_user }}"
+        group: libvirt
+        mode: "0644"
+        directory_mode: "0755"
+      notify: Restart agenta
+
+    - name: Utwórz wirtualne środowisko i zainstaluj zależności
+      ansible.builtin.pip:
+        requirements: "{{ agent_dir }}/requirements.txt"
+        virtualenv: "{{ agent_dir }}/.venv"
+        virtualenv_command: python3 -m venv
+      become_user: "{{ agent_user }}"
+      notify: Restart agenta
+
+    - name: Zapisz konfigurację agenta
+      ansible.builtin.template:
+        src: agent.env.j2
+        dest: "{{ config_dir }}/agent.env"
+        owner: root
+        group: "{{ agent_user }}"
+        mode: "0640"
+      notify: Restart agenta
+      no_log: true
+
+    - name: Zainstaluj jednostkę systemd
+      ansible.builtin.copy:
+        src: ../../node-agent/systemd/virthub-agent.service
+        dest: /etc/systemd/system/virthub-agent.service
+        mode: "0644"
+      notify:
+        - Przeładuj systemd
+        - Restart agenta
+
+    - name: Włącz libvirtd
+      ansible.builtin.systemd:
+        name: libvirtd
+        enabled: true
+        state: started
+
+    - name: Włącz agenta
+      ansible.builtin.systemd:
+        name: virthub-agent
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Sprawdź, czy agent odpowiada
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ agent_port }}/ping"
+        return_content: true
+      register: ping
+      retries: 5
+      delay: 3
+      until: ping.status == 200
+
+    - name: Ostrzeż, jeśli mostek nie istnieje
+      ansible.builtin.command: "ip link show {{ bridge }}"
+      register: bridge_check
+      changed_when: false
+      failed_when: false
+
+    - name: Komunikat o brakującym mostku
+      ansible.builtin.debug:
+        msg: >-
+          Mostek {{ bridge }} nie istnieje na tym hoście. Agent wstanie, ale
+          tworzenie maszyn będzie kończyć się błędem. Skonfiguruj mostek zgodnie
+          z adresacją dostawcy i zrestartuj usługę.
+      when: bridge_check.rc != 0
+
+  handlers:
+    - name: Przeładuj systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Restart agenta
+      ansible.builtin.systemd:
+        name: virthub-agent
+        state: restarted
