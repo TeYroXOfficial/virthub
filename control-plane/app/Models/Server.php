@@ -144,12 +144,17 @@ class Server extends Model
     /**
      * Hasło root pokazujemy dokładnie raz. Kolejne wejście na stronę maszyny
      * już go nie zobaczy — klient ma je zapisać albo zresetować.
+     *
+     * Wyjątek: dopóki maszyna się tworzy, hasło zostaje w bazie. Zadanie
+     * provisioningu czyta je stąd i wysyła do agenta, a klient trafia na
+     * stronę maszyny zaraz po zamówieniu — skasowanie hasła w tym momencie
+     * dałoby maszynę bez hasła i bez możliwości zalogowania.
      */
     public function consumeRootPassword(): ?string
     {
         $password = $this->root_password;
 
-        if ($password !== null) {
+        if ($password !== null && $this->state !== ServerState::Building) {
             $this->forceFill(['root_password' => null])->save();
         }
 

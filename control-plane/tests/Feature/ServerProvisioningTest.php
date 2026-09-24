@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Domain\Agent\ServerPayload;
 use App\Enums\ServerState;
 use App\Jobs\ProvisionServerJob;
 use App\Models\Hypervisor;
@@ -173,6 +174,41 @@ class ServerProvisioningTest extends TestCase
         $this->hypervisor->refresh();
         $this->assertSame(0, $this->hypervisor->cpu_cores_used,
             'Wycofana transakcja nie może zostawić zarezerwowanych zasobów');
+    }
+
+    public function test_zamowienie_z_panelu_bez_klucza_ssh_daje_haslo_roota(): void
+    {
+        Queue::fake();
+
+        // Puste pole klucza przychodzi z formularza jako null — to nie błąd.
+        $this->actingAs($this->customer)
+            ->post(route('panel.servers.store'), [
+                'package' => 'standard',
+                'template' => $this->template->id,
+                'hostname' => 'bez-klucza.example.com',
+                'ssh_keys' => [''],
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $server = Server::firstOrFail();
+        $password = $server->root_password;
+        $this->assertNotEmpty($password, 'Hasło generuje się zawsze');
+
+        // Klient trafia na stronę maszyny, zanim kolejka wyśle zlecenie do
+        // agenta. Hasło musi być widoczne i nadal czekać w bazie na agenta.
+        $this->actingAs($this->customer)
+            ->get(route('panel.servers.show', $server))
+            ->assertOk()
+            ->assertSee($password);
+        $this->assertSame($password, $server->fresh()->root_password);
+        $this->assertSame($password, ServerPayload::forCreate($server->fresh())['root_password']);
+
+        // Po utworzeniu maszyny hasło znika po pierwszym wyświetleniu.
+        $server->fresh()->markState(ServerState::Running);
+        $this->actingAs($this->customer)->get(route('panel.servers.show', $server))->assertSee($password);
+        $this->assertNull($server->fresh()->root_password);
+        $this->actingAs($this->customer)->get(route('panel.servers.show', $server))->assertDontSee($password);
     }
 
     public function test_szablon_bez_cloud_init_nie_da_sie_zamowic(): void

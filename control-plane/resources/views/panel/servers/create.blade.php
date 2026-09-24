@@ -72,12 +72,12 @@
             </div>
 
             <div class="field">
-                <label for="ssh_key">Klucz publiczny SSH <span class="muted">(zalecane)</span></label>
+                <label for="ssh_key">Klucz publiczny SSH <span class="muted">(opcjonalnie)</span></label>
                 <textarea id="ssh_key" name="ssh_keys[]" rows="3"
                           placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... twoj@komputer">{{ old('ssh_keys.0') }}</textarea>
                 <div class="hint">
-                    Bez klucza dostaniesz jednorazowe hasło roota — zobaczysz je tylko raz,
-                    zaraz po utworzeniu maszyny.
+                    Możesz zostawić puste. Hasło roota generujemy zawsze i pokazujemy na stronie
+                    maszyny zaraz po zamówieniu — zapisz je, po utworzeniu maszyny zniknie z panelu.
                 </div>
             </div>
         </div>
