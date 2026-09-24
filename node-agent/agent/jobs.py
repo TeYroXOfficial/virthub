@@ -27,6 +27,22 @@ from .schemas import JobState, JobStatus
 
 log = logging.getLogger("virthub.jobs")
 
+# Zadanie wykonywane właśnie w wątku roboczym — drivery zgłaszają przez
+# progress() etap pracy, a panel pokazuje go klientowi na żywo.
+_current = threading.local()
+
+
+def progress(stage: str, percent: int | None = None) -> None:
+    """Zapisuje etap bieżącego zadania (np. „image", 30). Poza zadaniem nic nie robi."""
+    queue_ = getattr(_current, "queue", None)
+    job_id = getattr(_current, "job_id", None)
+    if queue_ is None or job_id is None:
+        return
+    try:
+        queue_.set_progress(job_id, stage, percent)
+    except sqlite3.Error:
+        log.warning("Nie udało się zapisać etapu %s zadania %s", stage, job_id)
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
     job_id      TEXT PRIMARY KEY,
@@ -73,6 +89,12 @@ class JobQueue:
         self.settings.state_db.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(SCHEMA)
+            # Kolumny etapu doszły później — starsze bazy dostają je tutaj.
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)")}
+            if "stage" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN stage TEXT")
+            if "progress" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN progress INTEGER")
 
     # --- cykl życia workera -------------------------------------------------
 
@@ -169,6 +191,13 @@ class JobQueue:
             ).fetchall()
         return [self._to_state(row) for row in rows]
 
+    def set_progress(self, job_id: str, stage: str, percent: int | None) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE jobs SET stage = ?, progress = ? WHERE job_id = ?",
+                (stage, None if percent is None else max(0, min(100, int(percent))), job_id),
+            )
+
     def mark_reported(self, job_id: str) -> None:
         with self._connect() as conn:
             conn.execute("UPDATE jobs SET reported = 1 WHERE job_id = ?", (job_id,))
@@ -200,12 +229,15 @@ class JobQueue:
         payload = json.loads(row["payload"])
         started = time.time()
 
+        _current.queue, _current.job_id = self, job_id
         try:
             result = self.handlers[action](payload)
             status, error = JobStatus.DONE, None
         except Exception as exc:
             log.exception("Zadanie %s (%s) nie powiodło się", job_id, action)
             result, status, error = None, JobStatus.FAILED, str(exc)
+        finally:
+            _current.queue = _current.job_id = None
 
         with self._connect() as conn:
             conn.execute(
@@ -237,4 +269,6 @@ class JobQueue:
             error=row["error"],
             created_at=row["created_at"],
             finished_at=row["finished_at"],
+            stage=row["stage"] if "stage" in row.keys() else None,
+            progress=row["progress"] if "progress" in row.keys() else None,
         )

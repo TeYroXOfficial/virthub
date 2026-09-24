@@ -134,6 +134,39 @@ class ServerSettingsTest extends TestCase
         $this->actingAs($this->owner)->get(route('panel.servers.show', $this->server))->assertSee($password);
     }
 
+    public function test_status_pokazuje_etap_z_wezla_i_konczy_operacje(): void
+    {
+        $this->actingAs($this->owner)->post(route('panel.servers.rebuild', $this->server), [
+            'template' => OsTemplate::factory()->create()->id, 'confirm' => '1',
+        ]);
+        $job = ServerJob::where('action', 'rebuild')->sole();
+
+        $this->actingAs($this->owner)->getJson(route('panel.servers.status', $this->server))
+            ->assertJsonPath('job.stage', 'pending');
+
+        Http::fake([
+            '*/rebuild' => Http::response(['job_id' => 'agent-9', 'status' => 'queued'], 202),
+            '*/jobs/agent-9' => Http::sequence()
+                ->push(['job_id' => 'agent-9', 'status' => 'running', 'stage' => 'image', 'progress' => 20])
+                ->push(['job_id' => 'agent-9', 'status' => 'done', 'stage' => 'boot', 'progress' => 85,
+                    'result' => ['state' => 'running']]),
+        ]);
+        (new RunServerActionJob($job->id))->handle();
+
+        $this->actingAs($this->owner)->getJson(route('panel.servers.status', $this->server))
+            ->assertJsonPath('job.stage', 'image')
+            ->assertJsonPath('job.stage_progress', 20)
+            ->assertJsonPath('transitioning', true);
+
+        \Illuminate\Support\Facades\Cache::flush();
+
+        // Węzeł skończył — status stosuje wynik od razu, bez czekania na callback.
+        $this->actingAs($this->owner)->getJson(route('panel.servers.status', $this->server))
+            ->assertJsonPath('transitioning', false)
+            ->assertJsonPath('state', 'running')
+            ->assertJsonPath('job.finished', true);
+    }
+
     public function test_status_cudzej_maszyny_jest_niedostepny(): void
     {
         $this->actingAs(User::factory()->create(['role' => User::ROLE_CUSTOMER]))

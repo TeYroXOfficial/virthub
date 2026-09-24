@@ -63,38 +63,77 @@
             }
             setTimeout(tick, delay);
         };
-        setTimeout(tick, 1500);
+        setTimeout(tick, 400);
     };
 
-    // Ekran postępu: kroki przesuwają się według typowego czasu trwania,
-    // ostatni czeka na faktyczne zakończenie — wtedy strona się odświeża.
+    // Ekran postępu: kroki idą za etapem, który zgłasza węzeł (stop, image,
+    // network, boot…). Gdy węzeł etapu nie podaje (starszy agent, brak
+    // łączności), kroki przesuwają się według typowego czasu trwania.
     const progress = document.getElementById('progress');
     if (progress) {
         const steps = [...progress.querySelectorAll('[data-step]')];
-        const durations = JSON.parse(progress.dataset.steps || '[]');
+        const keys = steps.map((s) => s.dataset.step);
+        const durations = JSON.parse(progress.dataset.durations || '[]');
         const total = durations.reduce((a, b) => a + b, 0) || 1;
         const bar = progress.querySelector('[data-progress-bar]');
         const barWrap = bar.parentElement;
+        const sub = progress.querySelector('[data-progress-sub]');
         const t0 = Date.now() - (parseInt(progress.dataset.elapsed, 10) || 0) * 1000;
+
+        // Etapy węzła, które nie mają własnego kroku na liście.
+        const aliases = { download: 'image', prepare: keys[0], stop: keys[0] };
+        const details = {
+            pending: 'Zlecenie czeka w kolejce panelu…',
+            queued: 'Węzeł przyjął zlecenie — zaraz zacznie.',
+            download: 'Węzeł pobiera obraz systemu. Przy pierwszym użyciu tego systemu może to potrwać kilka minut.',
+        };
+
+        let node = null;          // { stage, percent, since } z ostatniego odpytania
+        let shown = 0;            // wartość paska na ekranie (wygładzana)
         let finished = false;
+
+        const stepIndex = (stage) => {
+            const key = keys.includes(stage) ? stage : aliases[stage];
+            return key === undefined ? -1 : keys.indexOf(key);
+        };
 
         const render = () => {
             if (finished) return;
             const elapsed = (Date.now() - t0) / 1000;
-            let acc = 0;
-            let current = steps.length - 1;
-            for (let i = 0; i < durations.length; i++) {
-                acc += durations[i];
-                if (elapsed < acc) { current = i; break; }
+            let current;
+            let target;
+
+            if (node && stepIndex(node.stage) >= 0) {
+                current = stepIndex(node.stage);
+                // Od zgłoszonego procentu powoli w stronę następnego etapu —
+                // pasek żyje, ale nie wyprzedza węzła.
+                const base = node.percent ?? Math.round((current / steps.length) * 90);
+                const cap = Math.min(96, base + 14);
+                const inStage = (Date.now() - node.since) / 1000;
+                target = base + (cap - base) * (1 - Math.exp(-inStage / 25));
+                sub.textContent = details[node.stage] || steps[current].textContent.trim() + '…';
+            } else {
+                let acc = 0;
+                current = steps.length - 1;
+                for (let i = 0; i < durations.length; i++) {
+                    acc += durations[i];
+                    if (elapsed < acc) { current = i; break; }
+                }
+                target = Math.min(95, 95 * (1 - Math.exp(-elapsed / (total * 0.8))));
+                if (node && details[node.stage]) {
+                    current = 0;
+                    target = Math.min(target, 4);
+                    sub.textContent = details[node.stage];
+                }
             }
+
             steps.forEach((s, i) => {
                 s.classList.toggle('done', i < current);
                 s.classList.toggle('active', i === current);
             });
-            // Asymptotycznie do 95% — pasek nigdy nie „kończy się" przed serwerem.
-            const pct = Math.min(95, 95 * (1 - Math.exp(-elapsed / (total * 0.8))));
-            bar.style.width = pct.toFixed(1) + '%';
-            barWrap.setAttribute('aria-valuenow', String(Math.round(pct)));
+            shown += (target - shown) * 0.06;
+            bar.style.width = shown.toFixed(1) + '%';
+            barWrap.setAttribute('aria-valuenow', String(Math.round(shown)));
             requestAnimationFrame(render);
         };
         requestAnimationFrame(render);
@@ -104,15 +143,22 @@
             steps.forEach((s) => { s.classList.remove('active'); s.classList.toggle('done', ok); });
             bar.style.width = '100%';
             progress.classList.add(ok ? 'is-done' : 'is-failed');
+            progress.querySelector('[data-orb-icon]').innerHTML = ok
+                ? '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
+                : '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
             progress.querySelector('[data-progress-title]').textContent = ok ? 'Gotowe! Serwer działa.' : 'Operacja nie powiodła się';
-            progress.querySelector('[data-progress-sub]').textContent = message;
-            setTimeout(() => location.reload(), ok ? 1400 : 2500);
+            sub.textContent = message;
+            setTimeout(() => location.reload(), ok ? 1400 : 3000);
         };
 
         poll(progress.dataset.statusUrl, (data) => {
+            const job = data.job || {};
+            if (job.stage && (!node || node.stage !== job.stage || node.percent !== job.stage_progress)) {
+                node = { stage: job.stage, percent: job.stage_progress, since: Date.now() };
+            }
             if (data.transitioning) return true;
-            const failed = data.state === 'error' || data.job?.status === 'failed';
-            finish(!failed, failed ? (data.job?.error || 'Szczegóły pojawią się na stronie.') : 'Odświeżam panel…');
+            const failed = data.state === 'error' || job.status === 'failed';
+            finish(!failed, failed ? (job.error || 'Szczegóły pojawią się na stronie.') : 'Odświeżam panel…');
             return false;
         });
     }

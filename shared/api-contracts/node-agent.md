@@ -78,6 +78,14 @@ zamknięte jest ignorowane — powtórzony raport nie cofa stanu maszyny.
 | `POST` | `/system/update` | zlecenie aktualizacji (409, gdy węzeł nie ma usługi aktualizacji) |
 | `GET` | `/jobs/{job_id}` | stan zadania |
 
+### Etap zadania (`GET /jobs/{job_id}`)
+
+Oprócz `status` zadanie ma pola `stage` i `progress` (0–100), aktualizowane
+przez driver w trakcie pracy: `prepare`, `download` (pobieranie obrazu LXC),
+`stop`, `image`, `network`, `boot`, `disk`, `resources`. Panel pokazuje je na
+ekranie postępu tworzenia / reinstalacji / zmiany pakietu. Starszy agent pól
+nie zwraca — panel wraca wtedy do postępu szacowanego czasem.
+
 ### Obrazy ISO (`/images/iso`, `/vm/{uuid}/iso`)
 
 `POST /images/iso` przyjmuje `{"name": "debian-13.iso", "url": "https://…", "sha256": "…"|null}`.

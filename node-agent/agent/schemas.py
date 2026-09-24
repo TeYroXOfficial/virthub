@@ -242,6 +242,10 @@ class JobState(BaseModel):
     error: str | None = None
     created_at: float
     finished_at: float | None = None
+    # Etap pracy zgłaszany przez driver: prepare, download, stop, image,
+    # network, boot, resources, disk. Postęp 0–100, jeśli driver go zna.
+    stage: str | None = None
+    progress: int | None = None
 
 
 class VmStats(BaseModel):
