@@ -23,6 +23,7 @@ from .isos import IsoError
 from .jobs import JobQueue
 from .reporter import CallbackReporter
 from .schemas import (
+    GuestOs,
     CreateVmRequest,
     HostHealth,
     ImagePrefetchRequest,
@@ -202,6 +203,17 @@ async def request_update() -> dict[str, Any]:
 )
 async def vm_stats(uuid: str) -> VmStats:
     return driver.stats(uuid)
+
+
+@app.get(
+    "/vm/{uuid}/os",
+    response_model=GuestOs,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def vm_guest_os(uuid: str) -> GuestOs:
+    # Zapytanie do qemu-guest-agent potrafi chwilę potrwać — poza pętlą zdarzeń.
+    return await run_in_threadpool(driver.guest_os, uuid)
 
 
 # --- cykl życia maszyny -----------------------------------------------------

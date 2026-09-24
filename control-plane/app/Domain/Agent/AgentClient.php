@@ -38,6 +38,12 @@ class AgentClient
         return $this->request('GET', "/vm/{$uuid}/stats");
     }
 
+    /** System zainstalowany w maszynie (odczyt z jej wnętrza). */
+    public function guestOs(string $uuid): array
+    {
+        return $this->request('GET', "/vm/{$uuid}/os");
+    }
+
     public function job(string $jobId): array
     {
         return $this->request('GET', "/jobs/{$jobId}");

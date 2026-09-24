@@ -26,12 +26,14 @@ from typing import Any
 
 from .cloudinit import CloudInitBuilder
 from .console import ConsoleTarget, TerminalTarget, VncTarget
+from .guest_os import cpu_model, from_guest_agent, parse_os_release
 from .isos import IsoLibrary
 from .jobs import progress
 from .config import Settings
 from .domain_xml import build_domain_xml, domain_name
 from .network import NetworkManager, interface_name, mac_address
 from .schemas import (
+    GuestOs,
     CreateVmRequest,
     HostHealth,
     IsoMountRequest,
@@ -110,6 +112,10 @@ class HypervisorDriver(ABC):
     def reset_password(self, uuid: str, password: str) -> dict[str, Any]:
         raise DriverError("Ten węzeł nie obsługuje zmiany hasła.")
 
+    def guest_os(self, uuid: str) -> GuestOs:
+        """System zainstalowany w maszynie (może różnić się od szablonu — np. po instalacji z ISO)."""
+        raise DriverError("Ten węzeł nie odczytuje systemu gościa.")
+
     def mount_iso(self, uuid: str, req: IsoMountRequest) -> dict[str, Any]:
         """Płyta ISO i rozruch z niej — tylko maszyny wirtualne."""
         raise DriverError("Obrazy ISO są dostępne tylko dla maszyn wirtualnych KVM.")
@@ -136,6 +142,7 @@ class HypervisorDriver(ABC):
         return {
             "hostname": socket.gethostname(),
             "cpu_cores_total": psutil.cpu_count(logical=True) or 0,
+            "cpu_model": cpu_model(),
             "cpu_load_1m": round(load1, 2),
             "ram_mb_total": mem.total // (1024**2),
             "ram_mb_free": mem.available // (1024**2),
@@ -483,6 +490,18 @@ class LibvirtDriver(HypervisorDriver):
             "state": self._state(domain),
         }
 
+    def guest_os(self, uuid: str) -> GuestOs:
+        import libvirt
+
+        domain = self._domain(uuid)
+        if not domain.isActive():
+            raise DriverError("Maszyna jest wyłączona — system odczytamy po jej uruchomieniu.")
+        try:
+            info = domain.guestInfo(libvirt.VIR_DOMAIN_GUEST_INFO_OS, 0)
+        except (libvirt.libvirtError, AttributeError) as exc:
+            raise DriverError(f"qemu-guest-agent w maszynie nie odpowiada: {exc}") from exc
+        return GuestOs(**from_guest_agent(info), source="guest-agent")
+
     def reset_password(self, uuid: str, password: str) -> dict[str, Any]:
         import libvirt
 
@@ -731,6 +750,15 @@ class MockDriver(HypervisorDriver):
         for pct in range(0, 101, 20):
             self._stage("download", pct) if pct < 100 else progress("download", 100, "Obraz na węźle")
         return {"alias": alias, "downloaded": True, "cached": False}
+
+    def guest_os(self, uuid: str) -> GuestOs:
+        record = self._get(uuid)
+        # Tryb deweloperski: „system" wynika z nazwy szablonu (ubuntu-24.04.qcow2, debian/12/cloud).
+        stem = record.get("template", "linux").replace(".qcow2", "").replace("/cloud", "")
+        family, _, version = stem.replace("/", "-").partition("-")
+        family = {"rockylinux": "rocky"}.get(family, family)
+        pretty = f"{family.capitalize()} {version}".strip() if family != "ubuntu" else f"Ubuntu {version} LTS"
+        return GuestOs(id=family, name=family.capitalize(), version=version or None, pretty_name=pretty, source="os-release")
 
     def reset_password(self, uuid: str, password: str) -> dict[str, Any]:
         data = self._load()

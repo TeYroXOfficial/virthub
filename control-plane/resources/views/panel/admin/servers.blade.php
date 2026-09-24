@@ -65,8 +65,14 @@
                             <td><input type="checkbox" name="ids[]" value="{{ $server->id }}" data-check style="width:auto"
                                        aria-label="Zaznacz {{ $server->hostname }}"></td>
                             <td>
-                                <a href="{{ route('panel.servers.show', $server) }}">{{ $server->hostname }}</a>
+                                <span class="os-inline">
+                                    @if ($server->osFamily())
+                                        @include('panel.servers._os-badge', ['template' => (object) ['family' => $server->osFamily(), 'name' => $server->osLabel()]])
+                                    @endif
+                                    <a href="{{ route('panel.servers.show', $server) }}">{{ $server->hostname }}</a>
+                                </span>
                                 <div class="hint">
+                                    {{ $server->osLabel() ?? 'system nieznany' }} ·
                                     {{ $server->vcpu }} vCPU · {{ round($server->ram_mb / 1024, 1) }} GB · {{ $server->disk_gb }} GB
                                     · {{ $server->created_at->format('d.m.Y') }}@if ($server->label) · {{ $server->label }}@endif
                                 </div>

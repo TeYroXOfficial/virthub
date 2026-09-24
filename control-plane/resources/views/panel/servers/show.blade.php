@@ -6,8 +6,8 @@
     <div class="page-header">
         <div>
             <h1 class="os-title">
-                @if ($server->template)
-                    @include('panel.servers._os-badge', ['template' => $server->template])
+                @if ($server->osFamily())
+                    @include('panel.servers._os-badge', ['template' => (object) ['family' => $server->osFamily(), 'name' => $server->osLabel()]])
                 @endif
                 {{ $server->hostname }}
             </h1>
@@ -144,11 +144,29 @@
             <div class="card">
                 <h3 class="card-title"><x-icon name="node" :size="16"/> Parametry</h3>
                 <dl class="kv">
-                    <dt>Procesor</dt><dd class="num">{{ $server->vcpu }} vCPU</dd>
+                    <dt>System</dt>
+                    <dd>
+                        @if ($server->osLabel())
+                            <span class="os-inline">
+                                @include('panel.servers._os-badge', ['template' => (object) ['family' => $server->osFamily(), 'name' => $server->osLabel()]])
+                                {{ $server->osLabel() }}
+                            </span>
+                            <div class="hint">{{ $server->osDetected() ? 'odczytany z maszyny' : 'z szablonu instalacji' }}</div>
+                        @else
+                            —
+                        @endif
+                    </dd>
+                    <dt>Procesor</dt>
+                    <dd>
+                        <span class="num">{{ $server->vcpu }} vCPU</span>
+                        @if ($cpu = $server->hypervisor?->cpuModel())
+                            <div class="hint">{{ $cpu }}</div>
+                        @endif
+                    </dd>
                     <dt>Pamięć</dt><dd class="num">{{ round($server->ram_mb / 1024, 1) }} GB</dd>
                     <dt>Dysk</dt><dd class="num">{{ $server->disk_gb }} GB</dd>
                     <dt>Transfer</dt><dd class="num">{{ $server->bandwidth_gb }} GB / mies.</dd>
-                    <dt>System</dt><dd>{{ $server->template?->name ?? '—' }}</dd>
+                    <dt>Szablon</dt><dd>{{ $server->template?->name ?? '—' }}</dd>
                     <dt>Pakiet</dt><dd>{{ $server->package?->name ?? '—' }}</dd>
                     <dt>Utworzona</dt><dd>{{ $server->created_at->format('d.m.Y H:i') }}</dd>
                 </dl>

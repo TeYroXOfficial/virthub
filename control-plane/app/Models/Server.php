@@ -45,6 +45,7 @@ class Server extends Model
             'firewall_enabled' => 'boolean',
             'firewall_locked' => 'boolean',
             'boot_from_iso' => 'boolean',
+            'guest_os_checked_at' => 'datetime',
         ];
     }
 
@@ -164,6 +165,23 @@ class Server extends Model
      * stronę maszyny zaraz po zamówieniu — skasowanie hasła w tym momencie
      * dałoby maszynę bez hasła i bez możliwości zalogowania.
      */
+    /** Rodzina systemu do ikony: odczytana z maszyny, a bez odczytu — z szablonu. */
+    public function osFamily(): ?string
+    {
+        return \App\Domain\Provisioning\GuestOs::familyFor($this->guest_os_id) ?? $this->template?->family;
+    }
+
+    /** Nazwa systemu dla ludzi: „Ubuntu 24.04.1 LTS" z maszyny albo nazwa szablonu. */
+    public function osLabel(): ?string
+    {
+        return $this->guest_os_name ?? $this->template?->name;
+    }
+
+    public function osDetected(): bool
+    {
+        return $this->guest_os_name !== null;
+    }
+
     public function consumeRootPassword(): ?string
     {
         $password = $this->root_password;

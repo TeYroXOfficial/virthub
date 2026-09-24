@@ -262,6 +262,17 @@ class VmStats(BaseModel):
     net_tx_bytes: int = 0
 
 
+class GuestOs(BaseModel):
+    """System zainstalowany w maszynie — odczytany z jej wnętrza."""
+
+    id: str | None = None
+    id_like: str | None = None
+    name: str | None = None
+    version: str | None = None
+    pretty_name: str | None = None
+    source: str = Field(description="guest-agent | os-release | template")
+
+
 class HostHealth(BaseModel):
     """Heartbeat — control plane używa tego do doboru node'a pod nowy VPS."""
 
@@ -277,6 +288,7 @@ class HostHealth(BaseModel):
     disk_gb_total: int
     disk_gb_free: int
     running_vms: int
+    cpu_model: str | None = Field(default=None, description="Model procesora hosta z /proc/cpuinfo")
     build: str | None = Field(default=None, description="Commit kodu agenta (plik VERSION)")
     firewall_stateful: bool | None = Field(
         default=None, description="Czy zapora śledzi połączenia (moduł nf_conntrack_bridge)",

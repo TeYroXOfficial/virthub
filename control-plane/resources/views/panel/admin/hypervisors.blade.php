@@ -50,6 +50,9 @@
                         <td>
                             <a href="{{ route('panel.admin.hypervisors.show', $node) }}"><strong>{{ $node->name }}</strong></a>
                             <div class="hint">{{ $node->enrolled_at ? $node->virtualization->shortLabel().' · '.$node->hostname : 'czeka na instalację' }}</div>
+                            @if ($node->cpuModel())
+                                <div class="hint">{{ $node->cpuModel() }}</div>
+                            @endif
                         </td>
                         <td>
                             @if (! $node->enrolled_at)

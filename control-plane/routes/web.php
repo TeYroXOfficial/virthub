@@ -43,6 +43,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::get('/servers/{server}/status', [ServerActionsController::class, 'status'])->name('servers.status');
     Route::delete('/servers/{server}', [ServerActionsController::class, 'destroy'])->name('servers.destroy');
     Route::post('/servers/{server}/purge', [ServerActionsController::class, 'purge'])->name('servers.purge');
+    Route::post('/servers/{server}/detect-os', [ServerActionsController::class, 'detectOs'])->name('servers.detect-os');
 
     Route::prefix('/servers/{server}/firewall')->name('servers.firewall.')->group(function () {
         Route::post('/policy', [FirewallController::class, 'policy'])->name('policy');
