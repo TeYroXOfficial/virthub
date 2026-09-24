@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
+use App\Domain\Metrics\ServerMetrics;
 use App\Enums\ServerState;
 use App\Models\Hypervisor;
 use App\Models\Server;
@@ -14,8 +15,8 @@ use Illuminate\Console\Command;
  * Zbieranie telemetrii z działających maszyn.
  *
  * Odpytujemy per hypervisor, nie per maszyna, żeby jedno połączenie obsłużyło
- * wszystkie VPS-y na węźle. CPU liczymy z różnicy czasu procesora między
- * próbkami — libvirt podaje licznik narastający, nie procent.
+ * wszystkie VPS-y na węźle. CPU i szybkości dysku/sieci liczymy z różnicy
+ * liczników narastających między próbkami (ServerMetrics::rates).
  */
 class CollectServerMetrics extends Command
 {
@@ -64,46 +65,32 @@ class CollectServerMetrics extends Command
             ->latest('sampled_at')
             ->first();
 
+        $now = now();
+        // Poprzednia próbka sprzed ponad kwadransa (maszyna była wyłączona,
+        // węzeł niedostępny) nie nadaje się do liczenia szybkości — uśredniłaby
+        // ruch z całej przerwy.
+        $usable = $previous !== null && $previous->sampled_at->gt($now->copy()->subMinutes(15));
+
+        $rates = ServerMetrics::rates(
+            $stats,
+            $usable ? $previous->only(['cpu_time_ns', 'disk_read_bytes', 'disk_write_bytes', 'net_rx_bytes', 'net_tx_bytes']) : null,
+            $usable ? max(1, $previous->sampled_at->diffInSeconds($now, absolute: true)) : 0,
+            $server->vcpu,
+        );
+
         ServerMetric::create([
             'server_id' => $server->id,
-            'sampled_at' => now(),
-            'cpu_percent' => $this->cpuPercent($stats, $previous, $server->vcpu),
+            'sampled_at' => $now,
+            ...$rates,
             'cpu_time_ns' => $stats['cpu_time_ns'] ?? 0,
             'ram_used_mb' => $stats['ram_used_mb'] ?? 0,
+            'ram_total_mb' => $stats['ram_total_mb'] ?? 0,
             'disk_read_bytes' => $stats['disk_read_bytes'] ?? 0,
             'disk_write_bytes' => $stats['disk_write_bytes'] ?? 0,
             'net_rx_bytes' => $stats['net_rx_bytes'] ?? 0,
             'net_tx_bytes' => $stats['net_tx_bytes'] ?? 0,
         ]);
 
-        $server->forceFill(['last_synced_at' => now()])->save();
-    }
-
-    private function cpuPercent(array $stats, ?ServerMetric $previous, int $vcpu): float
-    {
-        // Agent w trybie mock podaje procent wprost — nie ma z czego liczyć różnicy.
-        if (isset($stats['cpu_percent']) && $stats['cpu_percent'] > 0) {
-            return (float) $stats['cpu_percent'];
-        }
-
-        $cpuTimeNs = (int) ($stats['cpu_time_ns'] ?? 0);
-
-        // Pierwsza próbka po starcie maszyny nie ma z czym się porównać.
-        if ($previous === null || $cpuTimeNs === 0 || $previous->cpu_time_ns === 0) {
-            return 0.0;
-        }
-
-        $deltaNs = $cpuTimeNs - $previous->cpu_time_ns;
-
-        // Licznik zresetowany (maszyna była restartowana) — pomijamy próbkę
-        // zamiast raportować ujemne albo absurdalnie wysokie zużycie.
-        if ($deltaNs <= 0) {
-            return 0.0;
-        }
-
-        $elapsedSeconds = max(1, now()->diffInSeconds($previous->sampled_at, absolute: true));
-        $percent = ($deltaNs / 1_000_000_000) / ($elapsedSeconds * max(1, $vcpu)) * 100;
-
-        return round(min(100.0, max(0.0, $percent)), 2);
+        $server->forceFill(['last_synced_at' => $now])->save();
     }
 }

@@ -43,6 +43,18 @@ class AgentClient
         return $this->request('GET', "/jobs/{$jobId}");
     }
 
+    /** Stan aktualizacji węzła i commit, z którego działa agent. */
+    public function updateStatus(): array
+    {
+        return $this->request('GET', '/system/update');
+    }
+
+    /** Zleca aktualizację węzła — wykonuje ją usługa systemd na węźle. */
+    public function requestUpdate(): array
+    {
+        return $this->request('POST', '/system/update');
+    }
+
     /**
      * Parametry połączenia WebSocket z konsolą maszyny — dla przekaźnika
      * konsoli, który sam nie zna sekretu węzła. Podpis obejmuje ścieżkę, więc

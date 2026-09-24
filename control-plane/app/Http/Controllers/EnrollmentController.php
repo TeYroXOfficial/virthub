@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Provisioning\HypervisorEnrollment;
+use App\Domain\Updates\Updates;
 use App\Models\Hypervisor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -168,7 +169,13 @@ class EnrollmentController extends Controller
         }
 
         $phar = new PharData($target);
-        $phar->buildFromDirectory($source, '/^(?!.*(\.venv|__pycache__|\.pytest_cache|\.env$)).*$/');
+        $phar->buildFromDirectory($source, '/^(?!.*(\.venv|__pycache__|\.pytest_cache|\.env$|VERSION$)).*$/');
+
+        // Nowy węzeł dostaje kod z tej samej wersji co panel — zapisujemy ją,
+        // żeby Administracja → Aktualizacje wiedziała, co na nim działa.
+        if (($version = app(Updates::class)->panelVersion()) !== null) {
+            $phar->addFromString('VERSION', $version."\n");
+        }
         $phar->compress(\Phar::GZ);
         @unlink($target);
 
@@ -186,6 +193,6 @@ class EnrollmentController extends Controller
             }
         }
 
-        return substr(hash('sha256', $source.$newest), 0, 12);
+        return substr(hash('sha256', $source.$newest.app(Updates::class)->panelVersion()), 0, 12);
     }
 }

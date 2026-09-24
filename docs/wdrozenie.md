@@ -54,17 +54,39 @@ Uruchom to samo polecenie jeszcze raz. Instalator wykrywa istniejącą instalacj
 i zachowuje klucz aplikacji, bazę, hasła i konto administratora — podmienia
 tylko kod, zależności i konfigurację usług.
 
-### Aktualizacja węzła
+### Aktualizacje z panelu
 
-Zarejestrowanego węzła nie instaluje się ponownie. Na węźle, jako root:
+**Administracja → Aktualizacje** pokazuje wersję panelu i agenta na każdym
+węźle względem najnowszego commita w repozytorium (`VIRTHUB_UPDATE_REPO`,
+`VIRTHUB_UPDATE_BRANCH`) i pozwala zlecić aktualizację panelu, jednego węzła
+albo wszystkich nieaktualnych.
+
+Ani panel (`www-data`), ani agent (`virthub`) nie mają uprawnień roota.
+Zlecenie to plik (`/var/lib/virthub-panel/request`, `/var/lib/virthub/update/request`),
+a aktualizację wykonuje jako root jednostka systemd `*.path` → `*.service`:
+
+| Serwer | Usługa | Skrypt | Źródło kodu |
+|---|---|---|---|
+| panel | `virthub-panel-update` | `infra/update-panel.sh` | `/etc/virthub/panel.conf` |
+| węzeł | `virthub-agent-update` | `node-agent/scripts/update-node.sh` | `/etc/virthub-agent/update.env` |
+
+Panel może aktualizację tylko wyzwolić — skąd pobrać kod, ustala plik na
+serwerze, więc przejęty panel nie wskaże węzłowi obcego kodu. Log ostatniej
+aktualizacji: `/var/lib/virthub-panel/last.log` i `/var/lib/virthub/update/last.log`.
+
+Instalacje sprzed tej funkcji trzeba raz zaktualizować ręcznie — to zakłada
+usługi aktualizacji:
 
 ```bash
+# panel
+curl -sSL https://raw.githubusercontent.com/TeYroXOfficial/virthub/main/infra/install-panel.sh | sudo bash -s -- --domain panel.twojadomena.pl --repo https://github.com/TeYroXOfficial/virthub.git
+# każdy węzeł
 curl -sSL https://raw.githubusercontent.com/TeYroXOfficial/virthub/main/infra/update-node.sh | sudo bash
 ```
 
-Skrypt podmienia kod agenta, jednostkę systemd i dopisuje do nginx obsługę
-WebSocketów konsoli. Rejestracja, sekrety, certyfikat, mostek i maszyny
-zostają nietknięte; działające maszyny nie są restartowane.
+Aktualizacja węzła podmienia kod agenta, jednostkę systemd i konfigurację
+nginx; nie rusza rejestracji, sekretów, certyfikatu, mostka ani maszyn —
+działające maszyny nie są restartowane.
 
 ### Konsola w przeglądarce
 

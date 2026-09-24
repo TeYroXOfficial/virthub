@@ -47,6 +47,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/rebuild', [ServerController::class, 'rebuild']);
             Route::post('/resize', [ServerController::class, 'resize']);
             Route::get('/stats', [ServerController::class, 'stats']);
+            Route::get('/metrics', [ServerController::class, 'metrics']);
+            Route::get('/metrics/live', [ServerController::class, 'liveMetrics'])->middleware('throttle:90,1');
             Route::get('/credentials', [ServerController::class, 'credentials']);
             Route::post('/console-token', [ServerController::class, 'consoleToken']);
 

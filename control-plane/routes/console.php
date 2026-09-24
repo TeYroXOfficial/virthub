@@ -22,14 +22,14 @@ Schedule::command('virthub:reconcile-jobs')
     ->everyMinute()
     ->withoutOverlapping();
 
-// Telemetria co 5 minut — gęstsze próbkowanie zalewa bazę, a wykres i tak
-// jest rysowany z uśrednień.
+// Telemetria co minutę — wykres godzinowy ma wtedy 60 punktów, a tygodniowy
+// i tak uśrednia je do godzin.
 Schedule::command('virthub:collect-metrics')
-    ->everyFiveMinutes()
+    ->everyMinute()
     ->withoutOverlapping();
 
-// Retencja telemetrii: 30 dni. Bez tego server_metrics rośnie w nieskończoność
-// i po roku jest największą tabelą w systemie.
+// Retencja surowych próbek: 8 dni — tyle potrzebuje wykres tygodniowy. Bez
+// tego server_metrics rośnie w nieskończoność.
 Schedule::call(function () {
-    App\Models\ServerMetric::where('sampled_at', '<', now()->subDays(30))->delete();
+    App\Models\ServerMetric::where('sampled_at', '<', now()->subDays(8))->delete();
 })->daily()->name('prune-metrics');

@@ -34,6 +34,7 @@ DB_NAME="virthub"
 DB_USER="virthub"
 BRAND="VirtHub"
 BRAND_SET=0
+NO_TLS_ARG=0
 
 log()   { printf '\n\033[0;36m==>\033[0m \033[1m%s\033[0m\n' "$*"; }
 ok()    { printf '\033[0;32m  ✓\033[0m %s\n' "$*"; }
@@ -82,7 +83,7 @@ while [ $# -gt 0 ]; do
         --tarball)  TARBALL_URL="$2"; shift 2 ;;
         --app-dir)  APP_DIR="$2"; shift 2 ;;
         --brand)    BRAND="$2"; BRAND_SET=1; shift 2 ;;
-        --no-tls)   SKIP_TLS=1; shift ;;
+        --no-tls)   SKIP_TLS=1; NO_TLS_ARG=1; shift ;;
         -h|--help)
             cat <<'HELPEOF'
 Instalator panelu VirtHub.
@@ -371,6 +372,13 @@ fi
 CONSOLE_SECRET="$(env_get "$OLD_ENV" VIRTHUB_CONSOLE_SECRET)"
 [ -n "$CONSOLE_SECRET" ] || CONSOLE_SECRET="$(secret 48)"
 
+# Repozytorium, z którym panel porównuje wersje (Administracja → Aktualizacje).
+UPDATE_REPO="$(env_get "$OLD_ENV" VIRTHUB_UPDATE_REPO)"
+if [ -z "$UPDATE_REPO" ] && [[ "$REPO_URL" =~ github\.com[:/]([^/]+)/([^/.]+)(\.git)?/?$ ]]; then
+    UPDATE_REPO="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+fi
+UPDATE_REPO="${UPDATE_REPO:-TeYroXOfficial/virthub}"
+
 AGENT_SOURCE_LINE=""
 OLD_AGENT_SOURCE="$(env_get "$OLD_ENV" VIRTHUB_AGENT_SOURCE_PATH)"
 [ -n "$OLD_AGENT_SOURCE" ] && AGENT_SOURCE_LINE="VIRTHUB_AGENT_SOURCE_PATH=$OLD_AGENT_SOURCE"
@@ -403,6 +411,7 @@ MAIL_MAILER=log
 
 VIRTHUB_BRAND="$BRAND"
 VIRTHUB_CONSOLE_SECRET=$CONSOLE_SECRET
+VIRTHUB_UPDATE_REPO=$UPDATE_REPO
 VIRTHUB_SERVERS_PER_CUSTOMER=10
 VIRTHUB_METRICS_RETENTION_DAYS=30
 $AGENT_SOURCE_LINE
@@ -685,6 +694,63 @@ EXISTING_CRON="$(crontab -u www-data -l 2>/dev/null || true)"
 OTHER_CRON="$(printf '%s\n' "$EXISTING_CRON" | grep -v 'artisan schedule:run' || true)"
 printf '%s\n%s\n' "$OTHER_CRON" "$CRON_LINE" | sed '/^$/d' | crontab -u www-data -
 ok "Harmonogram dopisany do crona"
+
+# --- zdalne aktualizacje ------------------------------------------------------
+
+log "Włączam aktualizacje z panelu"
+
+# Parametry tej instalacji — z nimi update-panel.sh uruchomi instalator
+# ponownie, gdy administrator zleci aktualizację w panelu.
+install -d -m 0755 /etc/virthub
+{
+    printf 'DOMAIN=%q\n' "$DOMAIN"
+    printf 'ADMIN_EMAIL=%q\n' "$ADMIN_EMAIL"
+    printf 'REPO_URL=%q\n' "${REPO_URL:-https://github.com/$UPDATE_REPO.git}"
+    [ "$BRAND_SET" -eq 1 ] && printf 'BRAND=%q\n' "$BRAND"
+    printf 'NO_TLS=%s\n' "$NO_TLS_ARG"
+    printf 'VH_UPDATE_REPO=%q\n' "$UPDATE_REPO"
+} > /etc/virthub/panel.conf
+chmod 600 /etc/virthub/panel.conf
+
+# Panel (www-data) zostawia tu zlecenie; root zapisuje stan i log.
+install -d -m 0755 -o www-data -g www-data /var/lib/virthub-panel
+
+if [ -f "$ROOT_DIR/infra/update-panel.sh" ]; then
+    install -d -m 0755 /usr/local/lib/virthub
+    install -m 0755 "$ROOT_DIR/infra/update-panel.sh" /usr/local/lib/virthub/update-panel.sh
+
+    cat > /etc/systemd/system/virthub-panel-update.path <<'UNITEOF'
+[Unit]
+Description=VirtHub — zlecenie aktualizacji panelu
+
+[Path]
+PathExists=/var/lib/virthub-panel/request
+Unit=virthub-panel-update.service
+
+[Install]
+WantedBy=multi-user.target
+UNITEOF
+
+    # Kopia skryptu w /run: instalator podmienia pliki, z których bash czyta
+    # wykonywany skrypt kawałkami.
+    cat > /etc/systemd/system/virthub-panel-update.service <<'UNITEOF'
+[Unit]
+Description=VirtHub — aktualizacja panelu
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=3600
+ExecStart=/bin/bash -c 'install -m 0700 /usr/local/lib/virthub/update-panel.sh /run/virthub-update-panel.sh && exec /run/virthub-update-panel.sh --unattended'
+UNITEOF
+
+    systemctl daemon-reload
+    systemctl enable --now virthub-panel-update.path >/dev/null 2>&1
+    ok "Aktualizacje z panelu włączone (Administracja → Aktualizacje)"
+else
+    warn "Brak $ROOT_DIR/infra/update-panel.sh — aktualizacje z panelu wymagają instalacji z repozytorium (--repo)."
+fi
 
 # --- sprawdzenie ------------------------------------------------------------
 

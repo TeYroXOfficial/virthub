@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Agent\AgentException;
 use App\Domain\Console\ConsoleSessions;
+use App\Domain\Metrics\ServerMetrics;
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OrderServerRequest;
@@ -137,6 +139,33 @@ class ServerController extends Controller
     }
 
     // --- odczyty ------------------------------------------------------------
+
+    /** Historia zużycia: ?range=hour|day|week (domyślnie doba). */
+    public function metrics(Request $request, Server $server, ServerMetrics $metrics): JsonResponse
+    {
+        $this->authorize('view', $server);
+
+        $range = $request->string('range', 'day')->value();
+        abort_unless(array_key_exists($range, ServerMetrics::RANGES), 422, 'Zakres musi być jednym z: hour, day, week.');
+
+        return response()->json($metrics->history($server, $range));
+    }
+
+    /** Bieżące zużycie prosto z agenta — do podglądu na żywo. */
+    public function liveMetrics(Request $request, Server $server, ServerMetrics $metrics): JsonResponse
+    {
+        $this->authorize('view', $server);
+
+        if (! $server->isRunning() || $server->hypervisor === null || blank($server->agent_uuid)) {
+            return response()->json(['message' => 'Podgląd na żywo jest dostępny tylko dla działającej maszyny.'], 409);
+        }
+
+        try {
+            return response()->json($metrics->live($server));
+        } catch (AgentException $e) {
+            return response()->json(['message' => 'Węzeł maszyny nie odpowiada.'], 503);
+        }
+    }
 
     public function stats(Request $request, Server $server): JsonResponse
     {

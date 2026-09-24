@@ -69,6 +69,8 @@ zamknięte jest ignorowane — powtórzony raport nie cofa stanu maszyny.
 | `PUT` | `/vm/{uuid}/network` | adresacja i reguły firewalla |
 | `GET` | `/vm/{uuid}/stats` | telemetria (synchronicznie) |
 | `GET` (WebSocket) | `/vm/{uuid}/console` | konsola: RFB dla KVM, terminal dla LXC |
+| `GET` | `/system/update` | stan ostatniej aktualizacji węzła i commit agenta (`build`) |
+| `POST` | `/system/update` | zlecenie aktualizacji (409, gdy węzeł nie ma usługi aktualizacji) |
 | `GET` | `/jobs/{job_id}` | stan zadania |
 
 ### Adres maszyny (`interfaces[]` w `POST /vm` i `PUT /vm/{uuid}/network`)
