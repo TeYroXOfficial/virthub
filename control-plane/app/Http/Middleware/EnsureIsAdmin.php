@@ -12,7 +12,8 @@ class EnsureIsAdmin
      * @param  string  $level  'admin' (domyślnie) — pełny administrator;
      *                         'staff' — personel (support lub admin);
      *                         'panel' — personel z dostępem do choć jednego działu;
-     *                         'admin.xxx' — personel z danym uprawnieniem działu.
+     *                         'admin.xxx' — personel z danym uprawnieniem działu;
+     *                         'admin.xxx|admin.yyy' — z którymkolwiek z nich.
      */
     public function handle(Request $request, Closure $next, string $level = 'admin'): Response
     {
@@ -21,7 +22,8 @@ class EnsureIsAdmin
         $allowed = match (true) {
             $level === 'staff' => $user?->isStaff(),
             $level === 'panel' => $user?->hasAnyAdminPermission(),
-            str_starts_with($level, 'admin.') => $user?->isStaff() && $user->hasPermission($level),
+            str_starts_with($level, 'admin.') => $user?->isStaff()
+                && collect(explode('|', $level))->contains(fn (string $p) => $user->hasPermission($p)),
             default => $user?->isAdmin(),
         };
 

@@ -16,13 +16,14 @@
         if (updateHash) history.replaceState(null, '', '#' + name);
     };
 
+    const first = panels[0]?.dataset.tabPanel;
     const fromHash = () => {
         const hash = decodeURIComponent(location.hash.slice(1));
-        if (!hash) return 'overview';
+        if (!hash) return first;
         if (panels.some((p) => p.dataset.tabPanel === hash)) return hash;
         // Kotwica elementu wewnątrz zakładki (np. #firewall, #iso, #password).
         const target = document.getElementById(hash);
-        return target?.closest('[data-tab-panel]')?.dataset.tabPanel ?? 'overview';
+        return target?.closest('[data-tab-panel]')?.dataset.tabPanel ?? first;
     };
 
     if (tabs.length) {

@@ -90,7 +90,8 @@ class CatalogController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100'],
-            'family' => ['required', Rule::in(['ubuntu', 'debian', 'almalinux', 'rocky', 'fedora', 'windows'])],
+            'family' => ['required', Rule::in(array_keys(\App\Models\OsTemplateGroup::FAMILIES))],
+            'os_template_group_id' => ['nullable', 'integer', 'exists:os_template_groups,id'],
             'version' => ['required', 'string', 'max:32'],
             // Sama nazwa pliku, bez ścieżki — układ katalogów należy do agenta,
             // a wartość ze ścieżką pozwoliłaby sięgnąć poza katalog szablonów.
@@ -109,6 +110,7 @@ class CatalogController extends Controller
     {
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:100'],
+            'os_template_group_id' => ['sometimes', 'nullable', 'integer', 'exists:os_template_groups,id'],
             'is_active' => ['sometimes', 'boolean'],
             'min_disk_gb' => ['sometimes', 'integer', 'min:1'],
         ]);

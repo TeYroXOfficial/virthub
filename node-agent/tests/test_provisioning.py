@@ -150,3 +150,11 @@ def test_walidacja_odrzuca_bezsensowne_parametry(client, template):
         "template": template,
     })
     assert response.status_code == 422
+
+
+def test_usuniecie_nieistniejacej_maszyny_konczy_sie_sukcesem(client):
+    """Maszyny skasowanej ręcznie nie da się usunąć drugi raz — i nie trzeba."""
+    job = client.delete("/vm/00000000-0000-4000-8000-000000000000")
+    state = wait_for_job(client, job.json()["job_id"])
+    assert state["status"] == "done"
+    assert state["result"]["already_absent"] is True

@@ -31,12 +31,14 @@ class HypervisorSelector
         ?callable $accepts = null,
     ): ?Hypervisor {
         return Hypervisor::query()
+            ->with('group')
             ->available()
             // Kontener nie stanie na węźle KVM (brak Incusa) ani maszyna
             // wirtualna na węźle bez VT-x.
             ->where('virtualization', $virtualization->value)
             ->get()
             ->filter(fn (Hypervisor $h) => $h->hasCapacityFor($vcpu, $ramMb, $diskGb))
+            ->filter(fn (Hypervisor $h) => $h->acceptsMoreServers())
             ->filter(fn (Hypervisor $h) => $accepts === null || $accepts($h))
             ->sortByDesc(fn (Hypervisor $h) => $h->utilisationPercent())
             ->first();

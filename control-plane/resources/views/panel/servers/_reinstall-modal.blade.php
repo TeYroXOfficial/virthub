@@ -14,19 +14,7 @@
             <div class="alert alert-error"><div>{{ $errors->first('template') ?: $errors->first('confirm') ?: $errors->first('ssh_key') }}</div></div>
         @endif
 
-        <div class="os-grid" role="radiogroup" aria-label="System operacyjny">
-            @foreach ($templates as $t)
-                <label class="os-card">
-                    <input type="radio" name="template" value="{{ $t->id }}" required
-                           @checked((int) old('template', $server->os_template_id) === $t->id)>
-                    @include('panel.servers._os-badge', ['template' => $t])
-                    <span class="os-name">{{ $t->name }}</span>
-                    @if ($t->id === $server->os_template_id)
-                        <span class="os-current">obecny</span>
-                    @endif
-                </label>
-            @endforeach
-        </div>
+        @include('panel.servers._os-picker', ['selected' => old('template', $server->os_template_id), 'current' => $server->os_template_id])
 
         <details class="modal-more" @if(old('ssh_key')) open @endif>
             <summary>Dodaj klucz SSH (opcjonalnie)</summary>

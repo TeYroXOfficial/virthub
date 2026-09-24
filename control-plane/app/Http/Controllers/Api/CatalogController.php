@@ -37,13 +37,16 @@ class CatalogController extends Controller
 
     public function templates(): JsonResponse
     {
-        $templates = OsTemplate::query()->active()->orderBy('family')->orderByDesc('version')->get();
+        $templates = OsTemplate::query()->with('group')->active()->orderBy('family')->orderByDesc('version')->get()
+            ->filter(fn (OsTemplate $t) => $t->group === null || $t->group->is_active)
+            ->values();
 
         return response()->json([
             'data' => $templates->map(fn (OsTemplate $template) => [
                 'id' => $template->id,
                 'name' => $template->name,
                 'family' => $template->family,
+                'group' => $template->group ? ['id' => $template->group->id, 'name' => $template->group->name] : null,
                 'virtualization' => $template->virtualization->value,
                 'version' => $template->version,
                 'min_disk_gb' => $template->min_disk_gb,

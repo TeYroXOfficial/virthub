@@ -114,8 +114,9 @@ class ContainerSupportTest extends TestCase
         $this->actingAs($this->customer)
             ->get(route('panel.servers.create'))
             ->assertOk()
-            ->assertSee('Ubuntu KVM')
-            ->assertDontSee('Debian kontener');
+            ->assertSee('Ubuntu')      // system (grupa)
+            ->assertSee('KVM')         // wersja w grupie
+            ->assertDontSee('Debian');
     }
 
     public function test_formularz_grupuje_maszyny_i_kontenery(): void
@@ -128,9 +129,10 @@ class ContainerSupportTest extends TestCase
         $this->actingAs($this->customer)
             ->get(route('panel.servers.create'))
             ->assertOk()
-            ->assertSee('Maszyna wirtualna (KVM)')
-            ->assertSee('Kontener (LXC)')
-            ->assertSee('Debian kontener');
+            ->assertSee('<strong>KVM:</strong>', false)
+            ->assertSee('<strong>LXC:</strong>', false)
+            ->assertSee('Debian')
+            ->assertSee('kontener');
     }
 
     // --- rejestracja węzła --------------------------------------------------

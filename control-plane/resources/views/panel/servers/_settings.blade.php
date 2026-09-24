@@ -40,7 +40,7 @@
                     Postawienie systemu od nowa kasuje dysk; adresy IP, zapora i parametry zostają.
                 </p>
             </div>
-            <button class="btn btn-danger" type="button" data-open-reinstall @disabled(! $server->acceptsCommands() || $templates->isEmpty())>
+            <button class="btn btn-danger" type="button" data-open-reinstall @disabled(! $server->acceptsCommands() || $osChoices->isEmpty())>
                 Reinstaluj…
             </button>
         </div>
@@ -105,4 +105,44 @@
             <dt>Utworzona</dt><dd>{{ $server->created_at->format('d.m.Y H:i') }}</dd>
         </dl>
     </div>
+
+    @if ($user->can('destroy', $server) || $user->can('purge', $server))
+        <div class="card danger-zone" id="delete">
+            <h3 class="card-title" style="color:var(--critical)">Usuwanie maszyny</h3>
+            @can('destroy', $server)
+                <form method="POST" action="{{ route('panel.servers.destroy', $server) }}" class="setting-row"
+                      onsubmit="return confirm('Usunąć {{ $server->hostname }} razem z dyskiem? Tej operacji nie da się cofnąć.')">
+                    @csrf @method('DELETE')
+                    <div class="setting-text">
+                        <strong>Usuń maszynę</strong>
+                        <p class="muted">Kasuje maszynę i jej dysk na węźle, potem zwalnia adresy IP.</p>
+                        <label class="check-line" style="margin-top:8px">
+                            <input type="checkbox" name="confirm" value="1" required>
+                            Rozumiem, że dane zostaną bezpowrotnie usunięte
+                        </label>
+                    </div>
+                    <button class="btn btn-danger-solid" type="submit" @disabled($server->state === \App\Enums\ServerState::Deleting)>Usuń maszynę</button>
+                </form>
+            @endcan
+            @can('purge', $server)
+                <form method="POST" action="{{ route('panel.servers.purge', $server) }}" class="setting-row" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border)"
+                      onsubmit="return confirm('Usunąć wpis TYLKO z panelu? Panel nie skontaktuje się z węzłem.')">
+                    @csrf
+                    <div class="setting-text">
+                        <strong>Usuń tylko z panelu</strong> <span class="pill neutral">administrator</span>
+                        <p class="muted">
+                            Bez kontaktu z węzłem — gdy węzeł nie istnieje albo nie odpowiada, maszyny już tam nie ma
+                            albo operacja utknęła. Zwalnia adresy IP i zasoby węzła. Jeśli maszyna jednak działa na węźle,
+                            trzeba ją skasować tam ręcznie.
+                        </p>
+                        <label class="check-line" style="margin-top:8px">
+                            <input type="checkbox" name="confirm" value="1" required>
+                            Potwierdzam usunięcie wpisu
+                        </label>
+                    </div>
+                    <button class="btn" type="submit">Usuń z panelu</button>
+                </form>
+            @endcan
+        </div>
+    @endif
 </div>
