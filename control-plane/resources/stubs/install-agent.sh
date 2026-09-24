@@ -94,12 +94,16 @@ setup_bridge() {
         return 1
     fi
 
-    local iface gw addr
+    local iface gw addr mac
     iface="$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')"
     gw="$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')"
     addr="$(ip -4 -o addr show dev "$iface" scope global 2>/dev/null | awk '{print $4; exit}')"
+    # Mostek przejmuje adres MAC fizycznej karty. Domyślnie dostałby nowy,
+    # wygenerowany — a dostawcy filtrujący MAC-i (Hetzner, OVH i inni) po
+    # prostu odcięliby wtedy serwer od sieci.
+    mac="$(cat "/sys/class/net/$iface/address" 2>/dev/null)"
 
-    if [ -z "$iface" ] || [ -z "$addr" ] || [ -z "$gw" ]; then
+    if [ -z "$iface" ] || [ -z "$addr" ] || [ -z "$gw" ] || [ -z "$mac" ]; then
         warn "Nie udało się odczytać konfiguracji sieci — mostek trzeba zrobić ręcznie."
         return 1
     fi
@@ -170,6 +174,7 @@ network:
   bridges:
     $BRIDGE:
       interfaces: [$iface]
+      macaddress: $mac
       addresses: [$addr]
       routes:
         - to: default
@@ -226,6 +231,7 @@ iface $BRIDGE inet static
     netmask $netmask
     gateway $gw
     bridge_ports $iface
+    bridge_hw $mac
     bridge_stp off
     bridge_fd 0
 IFUPEOF
@@ -240,10 +246,19 @@ IFUPEOF
 
     sleep 8
 
-    # Sprawdzamy to, co faktycznie ma działać: łączność z panelem.
-    if ip link show "$BRIDGE" >/dev/null 2>&1 \
-       && { curl -fsS --max-time 10 "$PANEL_URL/up" >/dev/null 2>&1 \
-            || ping -c1 -W3 "$gw" >/dev/null 2>&1; }; then
+    # Łączność sprawdzamy WYŁĄCZNIE celami poza tą maszyną. Zapytanie do panelu
+    # nie nadaje się: gdy panel stoi na tym samym serwerze, odpowiedź przyszłaby
+    # przez pętlę lokalną nawet przy całkowicie zepsutej sieci zewnętrznej —
+    # wycofanie zostałoby anulowane, a serwer odcięty.
+    reachable_outside() {
+        ping -c1 -W3 "$gw" >/dev/null 2>&1 && return 0
+        ping -c1 -W3 1.1.1.1 >/dev/null 2>&1 && return 0
+        # Niektórzy dostawcy blokują ICMP — wtedy próba po HTTPS.
+        curl -fsS --max-time 8 -o /dev/null https://1.1.1.1 2>/dev/null && return 0
+        return 1
+    }
+
+    if ip link show "$BRIDGE" >/dev/null 2>&1 && reachable_outside; then
         systemctl stop virthub-net-revert.timer >/dev/null 2>&1 || true
         ok "Mostek $BRIDGE działa, łączność zachowana"
         printf '    kopia poprzedniej konfiguracji: %s\n' "$backup"
