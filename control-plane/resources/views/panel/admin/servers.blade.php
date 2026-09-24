@@ -42,7 +42,7 @@
             <table>
                 <thead>
                 <tr><th>Maszyna</th><th>Klient</th><th>Stan</th><th>Adres IP</th>
-                    <th>Węzeł</th><th>Zasoby</th><th>Utworzona</th></tr>
+                    <th>Węzeł</th><th>Zasoby</th><th>Zapora</th><th>Utworzona</th></tr>
                 </thead>
                 <tbody>
                 @forelse ($servers as $server)
@@ -67,10 +67,20 @@
                         <td class="num">
                             {{ $server->vcpu }} / {{ round($server->ram_mb / 1024, 1) }} GB / {{ $server->disk_gb }} GB
                         </td>
+                        <td>
+                            <a href="{{ route('panel.servers.show', $server) }}#firewall" style="text-decoration:none">
+                                <span class="pill {{ $server->firewall_enabled ? ($server->firewall_inbound === 'drop' ? 'ok' : 'info') : 'neutral' }}">
+                                    {{ $server->firewall_enabled ? ($server->firewall_inbound === 'drop' ? 'restrykcyjna' : 'włączona') : 'wyłączona' }}
+                                </span>
+                            </a>
+                            @if ($server->firewall_locked)
+                                <div class="hint">zablokowana</div>
+                            @endif
+                        </td>
                         <td class="muted">{{ $server->created_at->format('d.m.Y') }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="muted">Brak maszyn spełniających kryteria.</td></tr>
+                    <tr><td colspan="8" class="muted">Brak maszyn spełniających kryteria.</td></tr>
                 @endforelse
                 </tbody>
             </table>

@@ -413,3 +413,7 @@ details.form-block[open] > summary { margin-bottom: 16px; }
 .chart .u-select { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .chart-empty { display: grid; place-items: center; height: 170px; color: var(--muted); font-size: 13px; }
 .stat-value .unit { font-size: 13px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+
+/* Formularze w wąskich kartach: kilka krótkich pól w rzędzie. */
+.grid-compact { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
+.grid-compact > .field { margin-bottom: 12px; }

@@ -42,6 +42,8 @@ class Server extends Model
             'vnc_password' => 'encrypted',
             'suspended_at' => 'datetime',
             'last_synced_at' => 'datetime',
+            'firewall_enabled' => 'boolean',
+            'firewall_locked' => 'boolean',
         ];
     }
 
@@ -92,7 +94,12 @@ class Server extends Model
     /** @return HasMany<FirewallRule, $this> */
     public function firewallRules(): HasMany
     {
-        return $this->hasMany(FirewallRule::class)->orderBy('position');
+        // Reguły administratora zawsze przed regułami klienta — tak też
+        // trafiają do nftables, więc klient nie może ich obejść.
+        return $this->hasMany(FirewallRule::class)
+            ->orderByRaw("CASE WHEN managed_by = 'admin' THEN 0 ELSE 1 END")
+            ->orderBy('position')
+            ->orderBy('id');
     }
 
     /** @return HasMany<ServerMetric, $this> */

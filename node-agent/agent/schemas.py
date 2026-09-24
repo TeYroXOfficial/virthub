@@ -110,7 +110,37 @@ class FirewallRule(BaseModel):
     protocol: Literal["tcp", "udp", "icmp", "any"] = "tcp"
     port_from: int | None = Field(default=None, ge=1, le=65535)
     port_to: int | None = Field(default=None, ge=1, le=65535)
-    source: str | None = Field(default=None, description="CIDR źródła, domyślnie dowolny")
+    source: str | None = Field(
+        default=None,
+        description="Adres drugiej strony (IP albo CIDR): źródło dla ruchu przychodzącego, "
+                    "cel dla wychodzącego. Brak = dowolny.",
+    )
+
+    @field_validator("source")
+    @classmethod
+    def _valid_source(cls, value: str | None) -> str | None:
+        # Trafia wprost do skryptu nftables — tylko poprawny adres lub sieć.
+        if value is None or value == "":
+            return None
+        return str(ipaddress.ip_network(value.strip(), strict=False))
+
+    @model_validator(mode="after")
+    def _valid_ports(self) -> "FirewallRule":
+        if self.port_to is not None and self.port_from is None:
+            raise ValueError("port_to wymaga port_from")
+        if self.port_from is not None and self.port_to is not None and self.port_to < self.port_from:
+            raise ValueError("port_to nie może być mniejszy niż port_from")
+        if self.port_from is not None and self.protocol not in ("tcp", "udp"):
+            raise ValueError("Porty mają sens tylko dla TCP i UDP")
+        return self
+
+
+class FirewallPolicy(BaseModel):
+    """Zapora maszyny jako całość — reguły plus to, co dzieje się z resztą ruchu."""
+
+    enabled: bool = True
+    inbound: Literal["accept", "drop"] = "accept"
+    outbound: Literal["accept", "drop"] = "accept"
 
 
 class CreateVmRequest(BaseModel):
@@ -146,6 +176,8 @@ class PowerRequest(BaseModel):
 class NetworkConfigRequest(BaseModel):
     interfaces: list[NetworkInterfaceSpec]
     firewall: list[FirewallRule] = Field(default_factory=list)
+    # Brak polityki (starszy panel) = dawne zachowanie: reguły bez domyślnej blokady.
+    policy: FirewallPolicy | None = None
 
 
 class SnapshotRequest(BaseModel):
@@ -210,4 +242,7 @@ class HostHealth(BaseModel):
     disk_gb_free: int
     running_vms: int
     build: str | None = Field(default=None, description="Commit kodu agenta (plik VERSION)")
+    firewall_stateful: bool | None = Field(
+        default=None, description="Czy zapora śledzi połączenia (moduł nf_conntrack_bridge)",
+    )
     remote_update: bool = Field(default=False, description="Czy węzeł przyjmuje aktualizacje zlecane z panelu")

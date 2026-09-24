@@ -337,7 +337,7 @@ class IncusDriver(HypervisorDriver):
 
     def configure_network(self, uuid: str, req: NetworkConfigRequest) -> dict[str, Any]:
         name = self._name_for(uuid)
-        self.network.configure(server_id_from_name(name), req.interfaces, req.firewall)
+        self.network.configure(server_id_from_name(name), req.interfaces, req.firewall, req.policy)
         return {
             "uuid": uuid,
             "interfaces": len(req.interfaces),

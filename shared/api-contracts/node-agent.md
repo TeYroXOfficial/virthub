@@ -97,6 +97,25 @@ Adres za NAT-em węzła:
   `null` = bez przekierowań.
 - Adresy są walidowane jako IP — trafiają do reguł nftables.
 
+### Zapora (`PUT /vm/{uuid}/network`)
+
+```json
+{
+  "interfaces": [ … ],
+  "firewall": [
+    { "action": "drop", "direction": "in", "protocol": "any", "source": "192.0.2.0/24" },
+    { "action": "accept", "direction": "in", "protocol": "tcp", "port_from": 22 }
+  ],
+  "policy": { "enabled": true, "inbound": "drop", "outbound": "accept" }
+}
+```
+
+- Reguły są stosowane w podanej kolejności (panel wysyła najpierw reguły
+  administratora); `source` to adres drugiej strony — nadawca dla `in`,
+  odbiorca dla `out`; walidowany jako IP/CIDR.
+- `policy` brak (starszy panel) = reguły bez domyślnej blokady.
+  `enabled: false` = tylko anty-spoofing.
+
 ### Konsola (`/vm/{uuid}/console`)
 
 WebSocket podpisany jak każde żądanie (`GET`, pusta treść, nagłówki `X-VH-*`

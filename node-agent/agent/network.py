@@ -17,7 +17,7 @@ import subprocess
 
 from .config import Settings
 from .nat import NatManager
-from .schemas import FirewallRule, NetworkInterfaceSpec
+from .schemas import FirewallPolicy, FirewallRule, NetworkInterfaceSpec
 from .shell import CommandError, run
 
 log = logging.getLogger("virthub.network")
@@ -68,6 +68,7 @@ class NetworkManager:
         self.settings = settings
         self.table = settings.nft_table
         self.nat = NatManager(settings)
+        self._stateful: bool | None = None
 
     def bridge_for(self, interfaces: list[NetworkInterfaceSpec]) -> str:
         """Mostek, do którego trzeba podpiąć maszynę.
@@ -109,6 +110,7 @@ class NetworkManager:
         server_id: int,
         interfaces: list[NetworkInterfaceSpec],
         firewall: list[FirewallRule],
+        policy: FirewallPolicy | None = None,
     ) -> None:
         """Podmienia komplet reguł jednej maszyny w jednej transakcji."""
         if self.settings.is_mock:
@@ -117,9 +119,42 @@ class NetworkManager:
             return
 
         self.ensure_base_table()
-        self._apply(self.render_machine(server_id, interfaces, firewall))
+        self._apply(self.render_machine(
+            server_id, interfaces, firewall, policy, stateful=self.stateful(),
+        ))
         self.nat.configure(server_id, interfaces)
         log.info("Zastosowano %s reguł firewalla dla maszyny %s", len(firewall), server_id)
+
+    def stateful(self) -> bool:
+        """Czy zapora może śledzić połączenia w rodzinie bridge.
+
+        Wymaga modułu nf_conntrack_bridge (instalator węzła go ładuje). Bez
+        niego reguła z `ct state` odrzuciłaby całą transakcję — łącznie z
+        anty-spoofingiem — więc sprawdzamy to raz, na próbnej tabeli.
+        """
+        if self._stateful is None:
+            if self.settings.is_mock:
+                self._stateful = True
+            else:
+                probe = f"{self.table}_probe"
+                try:
+                    self._apply(
+                        f"add table bridge {probe}\n"
+                        f"add chain bridge {probe} c\n"
+                        f"add rule bridge {probe} c ct state established accept\n"
+                    )
+                    self._stateful = True
+                except CommandError:
+                    self._stateful = False
+                    log.warning(
+                        "Brak śledzenia połączeń w rodzinie bridge (moduł nf_conntrack_bridge) — "
+                        "zapora działa w trybie bezstanowym."
+                    )
+                try:
+                    self._apply(f"delete table bridge {probe}\n")
+                except CommandError:
+                    pass
+        return self._stateful
 
     def teardown(self, server_id: int) -> None:
         """Sprząta reguły po usuniętej maszynie — inaczej adres wróciłby do puli
@@ -163,11 +198,14 @@ class NetworkManager:
         server_id: int,
         interfaces: list[NetworkInterfaceSpec],
         firewall: list[FirewallRule],
+        policy: FirewallPolicy | None = None,
+        stateful: bool = True,
     ) -> str:
         t = f"{self.FAMILY} {self.table}"
         chain = f"vm_{server_id}"
         iface = interface_name(server_id)
         out = f'iifname "{iface}"'
+        inbound = f'oifname "{iface}"'
 
         v4 = [i.address for i in interfaces if i.version == 4]
         v6 = [i.address for i in interfaces if i.version == 6]
@@ -197,7 +235,17 @@ class NetworkManager:
         pool6 = ", ".join(["fe80::/10", "::", *v6])
         rules.append(f"{out} ip6 saddr != {{ {pool6} }} drop")
 
-        rules += [self._render_rule(rule, iface) for rule in firewall]
+        # Zapora klienta. Bez polityki (starszy panel) reguły działają jak
+        # dawniej — bez domyślnej blokady.
+        if policy is None or policy.enabled:
+            restrictive = policy is not None and "drop" in (policy.inbound, policy.outbound)
+            if restrictive:
+                rules += self._render_baseline(inbound, out, stateful)
+            rules += [self._render_rule(rule, iface) for rule in firewall]
+            if policy is not None and policy.inbound == "drop":
+                rules.append(f"{inbound} meta protocol {{ ip, ip6 }} drop")
+            if policy is not None and policy.outbound == "drop":
+                rules.append(f"{out} meta protocol {{ ip, ip6 }} drop")
 
         lines = [
             f"add chain {t} {chain}",
@@ -209,21 +257,53 @@ class NetworkManager:
         ]
         return "\n".join(lines) + "\n"
 
+    ND_TYPES = "nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, nd-redirect"
+
+    def _render_baseline(self, inbound: str, out: str, stateful: bool) -> list[str]:
+        """Ruch, bez którego domyślna blokada zepsułaby maszynę.
+
+        Odpowiedzi na połączenia nawiązane przez samą maszynę (i do niej) oraz
+        Neighbor Discovery IPv6 — bez ND maszyna traci IPv6, jak bez ARP IPv4.
+        ARP nie jest IP, więc blokada `meta protocol { ip, ip6 }` go nie dotyka.
+        """
+        rules = [
+            f"{inbound} icmpv6 type {{ {self.ND_TYPES} }} accept",
+            f"{out} icmpv6 type {{ {self.ND_TYPES} }} accept",
+        ]
+        if stateful:
+            rules += [
+                f"{inbound} ct state established,related accept",
+                f"{out} ct state established,related accept",
+                f"{inbound} ct state invalid drop",
+            ]
+        else:
+            # Tryb bezstanowy (brak nf_conntrack_bridge): przepuszczamy TCP,
+            # które nie otwiera nowego połączenia, i odpowiedzi DNS/NTP.
+            rules += [
+                f"{inbound} meta l4proto tcp tcp flags & (syn | ack) != syn accept",
+                f"{out} meta l4proto tcp tcp flags & (syn | ack) != syn accept",
+                f"{inbound} meta l4proto udp udp sport {{ 53, 123 }} accept",
+            ]
+        return rules
+
     def _render_rule(self, rule: FirewallRule, iface: str) -> str:
-        parts = [f"oifname \"{iface}\""] if rule.direction == "in" else [f"iifname \"{iface}\""]
+        parts = [f'oifname "{iface}"'] if rule.direction == "in" else [f'iifname "{iface}"']
 
         if rule.source:
             family = "ip6" if ":" in rule.source else "ip"
-            parts.append(f"{family} saddr {rule.source}")
+            # Dla ruchu przychodzącego druga strona jest nadawcą, dla
+            # wychodzącego — odbiorcą.
+            field = "saddr" if rule.direction == "in" else "daddr"
+            parts.append(f"{family} {field} {rule.source}")
 
-        if rule.protocol != "any":
-            parts.append(rule.protocol)
-            if rule.protocol in {"tcp", "udp"} and rule.port_from:
+        if rule.protocol in ("tcp", "udp"):
+            parts.append(f"meta l4proto {rule.protocol}")
+            if rule.port_from:
                 port_to = rule.port_to or rule.port_from
-                if port_to == rule.port_from:
-                    parts.append(f"dport {rule.port_from}")
-                else:
-                    parts.append(f"dport {rule.port_from}-{port_to}")
+                ports = str(rule.port_from) if port_to == rule.port_from else f"{rule.port_from}-{port_to}"
+                parts.append(f"{rule.protocol} dport {ports}")
+        elif rule.protocol == "icmp":
+            parts.append("meta l4proto { icmp, ipv6-icmp }")
 
         parts.append(rule.action)
         return " ".join(parts)
