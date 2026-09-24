@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Console\ConsoleSessions;
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OrderServerRequest;
@@ -13,8 +14,6 @@ use App\Models\VpsPackage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class ServerController extends Controller
@@ -192,12 +191,7 @@ class ServerController extends Controller
             ], 409);
         }
 
-        $token = Str::random(48);
-
-        Cache::put("console:{$token}", [
-            'server_id' => $server->id,
-            'user_id' => $request->user()->id,
-        ], now()->addSeconds(60));
+        $token = app(ConsoleSessions::class)->issueTicket($server, $request->user());
 
         return response()->json([
             'token' => $token,

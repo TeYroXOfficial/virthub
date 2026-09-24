@@ -3,15 +3,50 @@
 @section('title', $server->hostname)
 
 @section('content')
-    <h1>{{ $server->hostname }}</h1>
-    <p class="lede">
-        <span class="pill {{ $server->state->tone() }}">{{ $server->state->label() }}</span>
-        · {{ $server->virtualization->label() }}
-        @if ($server->label) · {{ $server->label }} @endif
-        @if ($server->hypervisor && auth()->user()->isStaff())
-            · węzeł {{ $server->hypervisor->name }}
-        @endif
-    </p>
+    <div class="page-header">
+        <div>
+            <h1>{{ $server->hostname }}</h1>
+            <div class="meta-line">
+                <span class="pill {{ $server->state->tone() }}">{{ $server->state->label() }}</span>
+                <span>{{ $server->virtualization->label() }}</span>
+                @if ($server->label) <span class="sep">·</span> <span>{{ $server->label }}</span> @endif
+                @if ($server->primaryIp())
+                    <span class="sep">·</span> <span class="mono">{{ $server->primaryIp()->address }}</span>
+                @endif
+                @if ($server->hypervisor && auth()->user()->isStaff())
+                    <span class="sep">·</span> <span>węzeł {{ $server->hypervisor->name }}</span>
+                @endif
+            </div>
+        </div>
+
+        <div class="actions">
+            @if ($server->acceptsCommands())
+                <form method="POST" action="{{ route('panel.servers.console', $server) }}" target="_blank" style="margin:0">
+                    @csrf
+                    <button class="btn btn-primary" type="submit" @disabled(! $server->isRunning())
+                            title="{{ $server->isRunning() ? 'Otwiera się w nowej karcie' : 'Uruchom maszynę, żeby otworzyć konsolę' }}">
+                        <x-icon :name="$server->isContainer() ? 'terminal' : 'monitor'" :size="16"/>
+                        Konsola
+                    </button>
+                </form>
+                <div class="btn-group" id="power-controls">
+                    <button class="btn" data-action="start" @disabled($server->isRunning()) title="Uruchom">
+                        <x-icon name="play" :size="15"/> Start
+                    </button>
+                    <button class="btn" data-action="reboot" @disabled(! $server->isRunning()) title="Restartuj">
+                        <x-icon name="refresh" :size="15"/> Restart
+                    </button>
+                    <button class="btn" data-action="stop" @disabled(! $server->isRunning()) title="Zamknij system">
+                        <x-icon name="stop" :size="15"/> Stop
+                    </button>
+                    <button class="btn btn-danger" data-action="force-off" @disabled(! $server->isRunning())
+                            title="Odetnij zasilanie — niezapisane dane przepadną">
+                        <x-icon name="power" :size="15"/>
+                    </button>
+                </div>
+            @endif
+        </div>
+    </div>
 
     @if ($server->state_message)
         <div class="alert {{ $server->state->tone() === 'critical' ? 'alert-error' : 'alert-info' }}">
@@ -42,7 +77,7 @@
 
     <div class="grid grid-2">
         <div class="card">
-            <h3>Parametry</h3>
+            <h3 class="card-title"><x-icon name="node" :size="16"/> Parametry</h3>
             <dl class="kv">
                 <dt>Procesor</dt><dd class="num">{{ $server->vcpu }} vCPU</dd>
                 <dt>Pamięć</dt><dd class="num">{{ round($server->ram_mb / 1024, 1) }} GB</dd>
@@ -55,7 +90,7 @@
         </div>
 
         <div class="card">
-            <h3>Adresy IP</h3>
+            <h3 class="card-title"><x-icon name="network" :size="16"/> Adresy IP</h3>
             @forelse ($server->ipAddresses as $ip)
                 <dl class="kv" style="margin-bottom:12px">
                     <dt>{{ $ip->is_primary ? 'Główny' : 'Dodatkowy' }}</dt>
@@ -97,34 +132,21 @@
         </div>
     </div>
 
-    <h2>Sterowanie</h2>
-    <div class="card">
-        @if (! $server->acceptsCommands())
-            <p class="muted">
+    @unless ($server->acceptsCommands())
+        <div class="alert alert-warning">
+            <div>
                 @if ($server->isSuspended())
                     Maszyna jest zawieszona ({{ $server->suspension_reason }}). Sterowanie jest niedostępne.
                 @else
                     Trwa operacja: {{ $server->state->label() }}. Poczekaj na jej zakończenie.
                 @endif
-            </p>
-        @else
-            <div class="btn-row" id="power-controls">
-                <button class="btn" data-action="start" @disabled($server->isRunning())>Uruchom</button>
-                <button class="btn" data-action="reboot" @disabled(! $server->isRunning())>Restartuj</button>
-                <button class="btn" data-action="stop" @disabled(! $server->isRunning())>Zatrzymaj</button>
-                <button class="btn btn-danger" data-action="force-off" @disabled(! $server->isRunning())>
-                    Odetnij zasilanie
-                </button>
             </div>
-            <p class="hint" style="margin-top:10px">
-                „Zatrzymaj" prosi system o zamknięcie się. „Odetnij zasilanie" działa natychmiast,
-                ale niezapisane dane przepadną.
-            </p>
-        @endif
-    </div>
+        </div>
+    @endunless
 
-    <h2>Zapora sieciowa</h2>
+    <div class="grid grid-2" style="margin-top:16px">
     <div class="card">
+        <h3 class="card-title"><x-icon name="shield" :size="16"/> Zapora sieciowa</h3>
         @forelse ($server->firewallRules as $rule)
             <p style="margin:0 0 6px">
                 <span class="mono">#{{ $loop->iteration }}</span> {{ $rule->describe() }}
@@ -138,8 +160,8 @@
         </p>
     </div>
 
-    <h2>Kopie</h2>
     <div class="card">
+        <h3 class="card-title"><x-icon name="archive" :size="16"/> Kopie</h3>
         @forelse ($server->backups as $backup)
             <p style="margin:0 0 6px">
                 <span class="mono">{{ $backup->name }}</span>
@@ -149,6 +171,8 @@
         @empty
             <p class="muted">Brak kopii. Snapshot wymaga zatrzymanej maszyny.</p>
         @endforelse
+    </div>
+
     </div>
 
     <h2>Historia operacji</h2>
@@ -187,10 +211,17 @@
             if (!button) return;
 
             button.disabled = true;
-            const original = button.textContent;
+            const original = button.innerHTML;
             button.textContent = 'Wysyłam…';
 
             try {
+                if (button.dataset.action === 'force-off'
+                    && !confirm('Odciąć zasilanie? Niezapisane dane w maszynie przepadną.')) {
+                    button.disabled = false;
+                    button.innerHTML = original;
+                    return;
+                }
+
                 const response = await fetch('{{ url("/api/v1/servers/{$server->id}/power") }}', {
                     method: 'POST',
                     headers: {
@@ -207,7 +238,7 @@
                 if (!response.ok) {
                     alert(payload.message ?? 'Nie udało się wykonać operacji.');
                     button.disabled = false;
-                    button.textContent = original;
+                    button.innerHTML = original;
                     return;
                 }
 
@@ -215,7 +246,7 @@
             } catch (error) {
                 alert('Brak połączenia z panelem. Sprawdź sieć i spróbuj ponownie.');
                 button.disabled = false;
-                button.textContent = original;
+                button.innerHTML = original;
             }
         });
     </script>

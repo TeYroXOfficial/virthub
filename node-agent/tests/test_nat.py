@@ -202,3 +202,22 @@ def test_tryb_mock_zapisuje_stan_bez_nft(settings, tmp_path):
     assert manager._state_file(3).exists()
     manager.teardown(3)
     assert not manager._state_file(3).exists()
+
+
+def test_wlaczone_przekazywanie_nie_wymaga_zapisu(tmp_path):
+    # Usługa ma /proc/sys tylko do odczytu (ProtectKernelTunables). Jeśli
+    # przekazywanie już jest włączone (ExecStartPre), agent nic nie zapisuje.
+    flag = tmp_path / "ip_forward"
+    flag.write_text("1\n")
+    flag.chmod(0o444)
+    NatManager._require_sysctl(str(flag), "net.ipv4.ip_forward")
+
+
+def test_wylaczone_przekazywanie_bez_uprawnien_mowi_co_zrobic(tmp_path):
+    from agent.shell import CommandError
+
+    missing_dir = tmp_path / "brak" / "ip_forward"
+    with pytest.raises(CommandError) as exc:
+        NatManager._require_sysctl(str(missing_dir), "net.ipv4.ip_forward")
+    assert "sysctl" in str(exc.value)
+    assert "90-virthub.conf" in str(exc.value)

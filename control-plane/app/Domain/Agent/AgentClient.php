@@ -43,6 +43,29 @@ class AgentClient
         return $this->request('GET', "/jobs/{$jobId}");
     }
 
+    /**
+     * Parametry połączenia WebSocket z konsolą maszyny — dla przekaźnika
+     * konsoli, który sam nie zna sekretu węzła. Podpis obejmuje ścieżkę, więc
+     * nie da się go użyć do konsoli innej maszyny, i wygasa razem z oknem
+     * czasowym agenta.
+     *
+     * @return array{url: string, headers: array<string, string>, ca_pem: ?string}
+     */
+    public function consoleConnection(string $uuid): array
+    {
+        $path = "/vm/{$uuid}/console";
+        $timestamp = (string) time();
+
+        return [
+            'url' => preg_replace('#^http#', 'ws', rtrim($this->hypervisor->agent_url, '/')).$path,
+            'headers' => [
+                'X-VH-Timestamp' => $timestamp,
+                'X-VH-Signature' => $this->sign($timestamp, 'GET', $path, ''),
+            ],
+            'ca_pem' => $this->hypervisor->agent_tls_cert ?: null,
+        ];
+    }
+
     // --- operacje (zwracają identyfikator zadania po stronie agenta) --------
 
     public function createVm(array $payload): string

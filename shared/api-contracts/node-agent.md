@@ -68,6 +68,7 @@ zamknięte jest ignorowane — powtórzony raport nie cofa stanu maszyny.
 | `POST` | `/vm/{uuid}/snapshot/restore` | przywrócenie kopii |
 | `PUT` | `/vm/{uuid}/network` | adresacja i reguły firewalla |
 | `GET` | `/vm/{uuid}/stats` | telemetria (synchronicznie) |
+| `GET` (WebSocket) | `/vm/{uuid}/console` | konsola: RFB dla KVM, terminal dla LXC |
 | `GET` | `/jobs/{job_id}` | stan zadania |
 
 ### Adres maszyny (`interfaces[]` w `POST /vm` i `PUT /vm/{uuid}/network`)
@@ -93,6 +94,19 @@ Adres za NAT-em węzła:
 - `port_from`–`port_to` (tylko IPv4): `port_from` → port 22 maszyny, reszta 1:1;
   `null` = bez przekierowań.
 - Adresy są walidowane jako IP — trafiają do reguł nftables.
+
+### Konsola (`/vm/{uuid}/console`)
+
+WebSocket podpisany jak każde żądanie (`GET`, pusta treść, nagłówki `X-VH-*`
+w handshake'u); bez poprawnego podpisu połączenie jest odrzucane przed
+otwarciem. Łączy się z nim wyłącznie przekaźnik konsoli panelu.
+
+- **KVM** — surowy strumień RFB z gniazda VNC QEMU (127.0.0.1). Podprotokół
+  `binary` jest potwierdzany, jeśli klient o niego poprosi (noVNC). Hasło VNC
+  obsługuje klient.
+- **LXC** — `incus exec -t … /bin/login` na pseudoterminalu. Ramki binarne to
+  dane w obie strony; ramki tekstowe od klienta to sterowanie w JSON:
+  `{"type": "resize", "cols": 120, "rows": 40}`.
 
 ## Kody odpowiedzi i ich znaczenie dla panelu
 

@@ -54,6 +54,33 @@ Uruchom to samo polecenie jeszcze raz. Instalator wykrywa istniejącą instalacj
 i zachowuje klucz aplikacji, bazę, hasła i konto administratora — podmienia
 tylko kod, zależności i konfigurację usług.
 
+### Aktualizacja węzła
+
+Zarejestrowanego węzła nie instaluje się ponownie. Na węźle, jako root:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/TeYroXOfficial/virthub/main/infra/update-node.sh | sudo bash
+```
+
+Skrypt podmienia kod agenta, jednostkę systemd i dopisuje do nginx obsługę
+WebSocketów konsoli. Rejestracja, sekrety, certyfikat, mostek i maszyny
+zostają nietknięte; działające maszyny nie są restartowane.
+
+### Konsola w przeglądarce
+
+Maszyna KVM dostaje ekran przez noVNC, kontener LXC — terminal xterm.js
+(logowanie jako `root` hasłem z panelu). Przeglądarka nie łączy się z węzłem:
+
+```
+przeglądarka ─wss─▶ nginx panelu (/console-ws/) ─▶ virthub-console (127.0.0.1:8090)
+             ─wss, przypięty certyfikat, podpis HMAC─▶ nginx węzła ─▶ agent ─▶ VNC / terminal
+```
+
+Instalator panelu stawia usługę `virthub-console` (katalog `console-proxy/`),
+generuje `VIRTHUB_CONSOLE_SECRET` i dodaje wewnętrzny serwer nginx na
+`127.0.0.1:8091`, przez który przekaźnik wymienia jednorazowe sesje. Diagnoza:
+`journalctl -u virthub-console -n 50`.
+
 ### 2. Hypervisor
 
 Nie potrzebujesz żadnego skryptu z repozytorium. W panelu wejdź w

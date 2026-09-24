@@ -2,40 +2,60 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Domain\Console\ConsoleSessions;
 use App\Http\Controllers\Controller;
 use App\Models\Server;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 /**
- * Wymiana biletu konsoli na sesję.
+ * Konsola maszyny w przeglądarce: noVNC dla KVM, xterm.js dla kontenerów.
  *
- * Bilet jest jednorazowy i ważny minutę. Adres hypervisora ani port VNC nigdy
- * nie trafiają do przeglądarki — po wdrożeniu proxy (Faza 2) ta strona otworzy
- * WebSocket do proxy, które samo zestawi tunel do gniazda VNC na hoście.
+ * Adres hypervisora ani sekret węzła nigdy nie trafiają do przeglądarki —
+ * dostaje ona tylko jednorazowy identyfikator sesji dla przekaźnika konsoli.
  */
 class ConsoleController extends Controller
 {
-    public function __invoke(Request $request, string $token): View
+    public function __construct(private readonly ConsoleSessions $sessions) {}
+
+    /** Przycisk „Konsola" w panelu — bilet i od razu przejście na stronę konsoli. */
+    public function open(Request $request, Server $server): RedirectResponse
     {
-        $payload = Cache::pull("console:{$token}");
+        $this->authorize('operate', $server);
 
-        abort_if($payload === null, 410, 'Bilet konsoli wygasł. Otwórz konsolę ponownie z panelu.');
+        if (! $server->isRunning()) {
+            return back()->withErrors(['console' => 'Konsola jest dostępna tylko dla działającej maszyny.']);
+        }
 
-        $server = Server::findOrFail($payload['server_id']);
+        return redirect()->route('console.show', [
+            'token' => $this->sessions->issueTicket($server, $request->user()),
+        ]);
+    }
+
+    public function show(Request $request, string $token): View
+    {
+        $ticket = $this->sessions->takeTicket($token);
+
+        abort_if($ticket === null, 410, 'Bilet konsoli wygasł. Otwórz konsolę ponownie z panelu.');
+
+        $server = Server::findOrFail($ticket['server_id']);
 
         abort_unless(
-            $request->user()?->id === $payload['user_id'] || $request->user()?->isStaff(),
+            $request->user()?->id === $ticket['user_id'] || $request->user()?->isStaff(),
             403,
         );
 
+        $enabled = ConsoleSessions::enabled();
+
         return view('console', [
             'server' => $server,
-            // Proxy WebSocket jest osobnym komponentem z Fazy 2 — do czasu jego
-            // wdrożenia strona mówi to wprost, zamiast wisieć na połączeniu.
-            'proxyConfigured' => (bool) config('virthub.console_proxy_url'),
-            'proxyUrl' => config('virthub.console_proxy_url'),
+            'enabled' => $enabled,
+            'kind' => $server->isContainer() ? 'terminal' : 'vnc',
+            'session' => $enabled ? $this->sessions->openSession($server) : null,
+            // Hasło VNC obsługuje noVNC po stronie przeglądarki — agent jest
+            // tylko rurą. Działa wyłącznie przez uwierzytelniony tunel.
+            'vncPassword' => $server->isContainer() ? null : $server->vnc_password,
         ]);
     }
 }

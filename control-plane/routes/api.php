@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\FirewallController;
 use App\Http\Controllers\Api\ServerController;
 use App\Http\Controllers\Api\SnapshotController;
 use App\Http\Controllers\Internal\AgentCallbackController;
+use App\Http\Controllers\Internal\ConsoleRedeemController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -111,3 +112,10 @@ Route::prefix('v1')->group(function () {
 // tożsamość potwierdza podpis HMAC weryfikowany w kontrolerze.
 Route::post('/internal/agent/job-result', AgentCallbackController::class)
     ->name('internal.agent.job-result');
+
+// Przekaźnik konsoli (console-proxy/) wymienia jednorazową sesję na parametry
+// połączenia z agentem. Uwierzytelnienie wspólnym sekretem w kontrolerze.
+Route::post('/internal/console/{session}', ConsoleRedeemController::class)
+    ->where('session', '[A-Za-z0-9]{32,128}')
+    ->middleware('throttle:60,1')
+    ->name('internal.console.redeem');

@@ -1,20 +1,4 @@
-@php
-    $tabs = [
-        'panel.admin.index' => 'Przegląd',
-        'panel.admin.hypervisors' => 'Hypervisory',
-        'panel.admin.servers' => 'Maszyny',
-        'panel.admin.packages' => 'Pakiety',
-        'panel.admin.templates' => 'Szablony',
-        'panel.admin.ip-pools' => 'Adresy IP',
-    ];
-@endphp
-
-<nav class="subnav">
-    @foreach ($tabs as $route => $label)
-        <a href="{{ route($route) }}" @if(request()->routeIs($route)) aria-current="page" @endif>{{ $label }}</a>
-    @endforeach
-</nav>
-
+{{-- Nawigacja administracji jest w pasku bocznym; tu zostaje tylko polecenie instalacyjne węzła. --}}
 @if (session('enrollment'))
     @php $enrollment = session('enrollment'); @endphp
     <div class="card" style="border-color: var(--accent);">

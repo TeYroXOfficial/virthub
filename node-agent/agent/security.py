@@ -35,49 +35,48 @@ def sign(secret: str, timestamp: str, method: str, path: str, body: bytes) -> st
     return hmac.new(secret.encode(), canonical.encode(), hashlib.sha256).hexdigest()
 
 
+def check_signature(signature: str, timestamp: str, method: str, path: str, body: bytes) -> str | None:
+    """Zwraca powód odrzucenia albo None, gdy podpis jest poprawny.
+
+    Wspólne dla zwykłych żądań i WebSocketów konsoli — ten sam sekret, ta sama
+    postać kanoniczna, to samo okno czasowe.
+    """
+    settings = get_settings()
+
+    if not signature or not timestamp:
+        return "Żądanie musi być podpisane nagłówkami X-VH-Signature i X-VH-Timestamp."
+
+    try:
+        sent_at = int(timestamp)
+    except ValueError:
+        return "X-VH-Timestamp musi być uniksowym znacznikiem czasu."
+
+    drift = abs(int(time.time()) - sent_at)
+    if drift > settings.max_clock_skew:
+        return (
+            f"Znacznik czasu odbiega o {drift}s od zegara hypervisora "
+            f"(limit {settings.max_clock_skew}s). Zsynchronizuj zegary przez NTP."
+        )
+
+    expected = sign(settings.agent_token, timestamp, method, path, body)
+    if not hmac.compare_digest(expected, signature):
+        return "Podpis żądania jest nieprawidłowy."
+
+    return None
+
+
 async def require_control_plane(
     request: Request,
     x_vh_signature: str = Header(default=""),
     x_vh_timestamp: str = Header(default=""),
 ) -> None:
     """Zależność FastAPI — odrzuca żądania bez poprawnego podpisu."""
-    settings = get_settings()
-
-    if not x_vh_signature or not x_vh_timestamp:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Żądanie musi być podpisane nagłówkami X-VH-Signature i X-VH-Timestamp.",
-        )
-
-    try:
-        sent_at = int(x_vh_timestamp)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="X-VH-Timestamp musi być uniksowym znacznikiem czasu.",
-        )
-
-    drift = abs(int(time.time()) - sent_at)
-    if drift > settings.max_clock_skew:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=(
-                f"Znacznik czasu odbiega o {drift}s od zegara hypervisora "
-                f"(limit {settings.max_clock_skew}s). Zsynchronizuj zegary przez NTP."
-            ),
-        )
-
-    body = await request.body()
-    expected = sign(
-        settings.agent_token,
+    error = check_signature(
+        x_vh_signature,
         x_vh_timestamp,
         request.method,
         request.url.path,
-        body,
+        await request.body(),
     )
-
-    if not hmac.compare_digest(expected, x_vh_signature):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Podpis żądania jest nieprawidłowy.",
-        )
+    if error is not None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=error)

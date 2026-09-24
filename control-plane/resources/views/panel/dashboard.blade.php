@@ -3,14 +3,41 @@
 @section('title', 'Moje maszyny')
 
 @section('content')
-    <h1>Moje maszyny</h1>
-    <p class="lede">
-        {{ $servers->count() }} {{ $servers->count() === 1 ? 'maszyna' : 'maszyn' }},
-        z tego {{ $running }} działa{{ $building ? ", {$building} w trakcie operacji" : '' }}.
-    </p>
+    <div class="page-header">
+        <div>
+            <h1>Moje maszyny</h1>
+            <p class="lede">Serwery na Twoim koncie — stan, adresy i szybki dostęp do zarządzania.</p>
+        </div>
+        <div class="actions">
+            <a class="btn btn-primary" href="{{ route('panel.servers.create') }}"><x-icon name="plus" :size="16"/> Zamów serwer</a>
+        </div>
+    </div>
+
+    @if ($servers->isNotEmpty())
+        <div class="grid grid-4" style="margin-bottom:20px">
+            <div class="stat">
+                <div class="stat-label">Wszystkie</div>
+                <div class="stat-value">{{ $servers->count() }}</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Działające</div>
+                <div class="stat-value" style="color:var(--ok)">{{ $running }}</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">W trakcie operacji</div>
+                <div class="stat-value" style="color:var(--warn)">{{ $building }}</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Łącznie vCPU / RAM</div>
+                <div class="stat-value">{{ $servers->sum('vcpu') }} <span class="stat-sub">vCPU</span>
+                    · {{ round($servers->sum('ram_mb') / 1024, 1) }} <span class="stat-sub">GB</span></div>
+            </div>
+        </div>
+    @endif
 
     @if ($servers->isEmpty())
         <div class="card empty">
+            <x-icon name="servers" :size="40"/>
             <p>Nie masz jeszcze żadnej maszyny.</p>
             <a class="btn btn-primary" href="{{ route('panel.servers.create') }}">Zamów pierwszy VPS</a>
         </div>
@@ -32,7 +59,7 @@
                     @foreach ($servers as $server)
                         <tr>
                             <td>
-                                <a href="{{ route('panel.servers.show', $server) }}">{{ $server->hostname }}</a>
+                                <a href="{{ route('panel.servers.show', $server) }}" style="font-weight:600">{{ $server->hostname }}</a>
                                 @if ($server->label)
                                     <div class="hint">{{ $server->label }}</div>
                                 @endif
@@ -47,16 +74,12 @@
                                 {{ round($server->ram_mb / 1024, 1) }} GB ·
                                 {{ $server->disk_gb }} GB
                             </td>
-                            <td><a class="btn" href="{{ route('panel.servers.show', $server) }}">Zarządzaj</a></td>
+                            <td style="text-align:right"><a class="btn btn-sm" href="{{ route('panel.servers.show', $server) }}">Zarządzaj</a></td>
                         </tr>
                     @endforeach
                     </tbody>
                 </table>
             </div>
-        </div>
-
-        <div class="btn-row">
-            <a class="btn btn-primary" href="{{ route('panel.servers.create') }}">Zamów kolejny VPS</a>
         </div>
     @endif
 

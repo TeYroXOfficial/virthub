@@ -12,10 +12,12 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
 from .config import ConfigError, get_settings
+from .console import bridge as console_bridge
 from .driver import DriverError, VmNotFound, build_driver
 from .jobs import JobQueue
 from .reporter import CallbackReporter
@@ -32,7 +34,7 @@ from .schemas import (
     SnapshotRequest,
     VmStats,
 )
-from .security import require_control_plane
+from .security import check_signature, require_control_plane
 
 logging.basicConfig(
     level=logging.INFO,
@@ -266,6 +268,43 @@ async def prefetch_image(req: ImagePrefetchRequest) -> JobAccepted:
     długa operacja, a panel dopytuje o wynik."""
     job_id = jobs.enqueue("prefetch_image", req.model_dump())
     return JobAccepted(job_id=job_id)
+
+
+# --- konsola ----------------------------------------------------------------
+
+@app.websocket("/vm/{uuid}/console")
+async def console(websocket: WebSocket, uuid: str) -> None:
+    """Konsola maszyny: RFB dla KVM, terminal dla kontenera.
+
+    Podpis jak przy każdym żądaniu (GET, pusta treść). Odrzucenie przed
+    accept() kończy się odpowiedzią 403 na etapie handshake'u — nieuprawniony
+    klient nie dostaje nawet otwartego gniazda.
+    """
+    error = check_signature(
+        websocket.headers.get("x-vh-signature", ""),
+        websocket.headers.get("x-vh-timestamp", ""),
+        "GET",
+        websocket.url.path,
+        b"",
+    )
+    if error is not None:
+        log.warning("Odrzucono połączenie konsoli: %s", error)
+        await websocket.close(code=1008)
+        return
+
+    try:
+        target = await run_in_threadpool(driver.console_target, uuid)
+    except DriverError as exc:
+        log.info("Konsola maszyny %s niedostępna: %s", uuid, exc)
+        await websocket.close(code=1008, reason=str(exc)[:120])
+        return
+
+    # noVNC prosi o podprotokół „binary" — bez jego potwierdzenia przeglądarka
+    # zrywa połączenie. Przekaźnik panelu przekazuje prośbę dalej.
+    requested = websocket.scope.get("subprotocols") or []
+    await websocket.accept(subprotocol="binary" if "binary" in requested else None)
+    log.info("Otwarto konsolę (%s) maszyny %s", target.kind, uuid)
+    await console_bridge(websocket, target)
 
 
 # --- zadania ----------------------------------------------------------------
