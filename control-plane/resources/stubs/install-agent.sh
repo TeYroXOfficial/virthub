@@ -390,8 +390,28 @@ ok "Katalogi gotowe"
 log "Pobieram agenta z panelu"
 curl -fsSL "$PANEL_URL/enroll/$TOKEN/agent.tar.gz" -o /tmp/virthub-agent.tar.gz \
     || die "Nie udało się pobrać agenta. Sprawdź, czy panel jest osiągalny i czy bilet nie wygasł."
-tar -xzf /tmp/virthub-agent.tar.gz -C "$AGENT_DIR" --strip-components=1
+# Rozpakowujemy do katalogu tymczasowego i szukamy requirements.txt, zamiast
+# zakładać układ archiwum. Paczka z panelu ma pliki w korzeniu, archiwum z
+# GitHuba — w jednym katalogu nadrzędnym. Ślepe --strip-components ucinało
+# w pierwszym przypadku requirements.txt i spłaszczało katalog agent/.
+EXTRACT_DIR="$(mktemp -d /tmp/virthub-agent.XXXXXX)"
+tar -xzf /tmp/virthub-agent.tar.gz -C "$EXTRACT_DIR"
 rm -f /tmp/virthub-agent.tar.gz
+
+AGENT_SRC="$EXTRACT_DIR"
+if [ ! -f "$AGENT_SRC/requirements.txt" ]; then
+    NESTED="$(find "$EXTRACT_DIR" -mindepth 2 -maxdepth 2 -name requirements.txt 2>/dev/null | head -1)" || true
+    [ -n "$NESTED" ] && AGENT_SRC="$(dirname "$NESTED")"
+fi
+[ -f "$AGENT_SRC/requirements.txt" ] && [ -f "$AGENT_SRC/agent/main.py" ] \
+    || die "Paczka agenta z panelu jest niekompletna (brak requirements.txt albo agent/main.py).
+     Zaktualizuj panel i wygeneruj nowe polecenie instalacyjne."
+
+# Pozostałości po wcześniejszym, nieudanym przebiegu nie mogą zostać obok
+# nowego kodu. Środowisko Pythona zostawiamy — przebuduje się niżej.
+find "$AGENT_DIR" -mindepth 1 -maxdepth 1 ! -name .venv -exec rm -rf {} +
+cp -a "$AGENT_SRC/." "$AGENT_DIR/"
+rm -rf "$EXTRACT_DIR"
 chown -R "$AGENT_USER":"$VIRT_GROUP" "$AGENT_DIR"
 ok "Kod agenta rozpakowany"
 

@@ -212,6 +212,47 @@ class HypervisorEnrollmentTest extends TestCase
 
     // --- pakiet z kodem agenta ----------------------------------------------
 
+    public function test_paczka_agenta_ma_uklad_oczekiwany_przez_instalator(): void
+    {
+        // Instalator szuka requirements.txt i agent/main.py. Kiedyś paczka i
+        // instalator rozjechały się (--strip-components na płaskim archiwum)
+        // i na serwerze zabrakło requirements.txt — ten test pilnuje kontraktu.
+        config(['virthub.agent_source_path' => base_path('../node-agent')]);
+
+        $response = $this->get("/enroll/{$this->token}/agent.tar.gz");
+        $response->assertOk();
+
+        $archive = new \PharData($response->baseResponse->getFile()->getPathname());
+        $entries = [];
+        foreach (new \RecursiveIteratorIterator($archive) as $file) {
+            $entries[] = str_replace('\\', '/', substr($file->getPathname(), strlen('phar://'.$archive->getPath()) + 1));
+        }
+
+        $this->assertContains('requirements.txt', $entries);
+        $this->assertContains('agent/main.py', $entries);
+        $this->assertContains('systemd/virthub-agent.service', $entries);
+        $this->assertEmpty(
+            array_filter($entries, fn ($e) => preg_match('#(^|/)(\.venv|__pycache__)/|(^|/)\.env$#', $e)),
+            'Do paczki nie może trafić środowisko Pythona, cache ani plik .env',
+        );
+    }
+
+    public function test_instalator_nie_ucina_sciezek_archiwum(): void
+    {
+        $script = $this->get("/enroll/{$this->token}")->getContent();
+
+        // Sprawdzamy wywołania tar, nie komentarze, które o tym błędzie opowiadają.
+        $tarCalls = array_filter(
+            explode("\n", $script),
+            fn ($line) => preg_match('/^\s*tar\s/', $line),
+        );
+
+        $this->assertNotEmpty($tarCalls);
+        foreach ($tarCalls as $call) {
+            $this->assertStringNotContainsString('--strip-components', $call);
+        }
+    }
+
     public function test_brak_kodu_agenta_daje_czytelny_komunikat(): void
     {
         config(['virthub.agent_source_path' => '/sciezka/ktora/nie/istnieje']);
