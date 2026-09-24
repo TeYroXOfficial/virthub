@@ -6,7 +6,11 @@
 # Skrypt jest jednorazowy — bilet rejestracyjny wygasa po godzinie i unieważnia
 # się przy pierwszym użyciu.
 
-set -euo pipefail
+set -Eeuo pipefail
+
+# Bez tej pułapki `set -e` przerywa instalację po cichu, w połowie, i nie
+# wiadomo nawet, na którym kroku.
+trap 'rc=$?; printf "\n\033[0;31m  ✗ Instalator przerwał się w linii %s (kod %s):\033[0m\n    %s\n\n" "$LINENO" "$rc" "$BASH_COMMAND" >&2' ERR
 
 PANEL_URL="__PANEL_URL__"
 TOKEN="__TOKEN__"
@@ -291,8 +295,9 @@ ok "Zależności Pythona zainstalowane"
 # zna swojego publicznego IP, a certyfikat musi pasować do adresu, pod który
 # panel będzie się łączył.
 log "Pytam panel o widoczny adres tego węzła"
-PUBLIC_IP="$(curl -fsSL "$PANEL_URL/enroll/$TOKEN/whoami" | python3 -c 'import sys,json; print(json.load(sys.stdin)["ip"])')"
-[ -n "$PUBLIC_IP" ] || die "Panel nie zwrócił adresu tego serwera."
+PUBLIC_IP="$(curl -fsSL "$PANEL_URL/enroll/$TOKEN/whoami" 2>/dev/null \
+    | python3 -c 'import sys,json; print(json.load(sys.stdin)["ip"])' 2>/dev/null)" || true
+[ -n "$PUBLIC_IP" ] || die "Panel nie zwrócił adresu tego serwera. Sprawdź, czy $PANEL_URL odpowiada z tej maszyny."
 ok "Panel widzi ten węzeł jako $PUBLIC_IP"
 
 log "Generuję certyfikat TLS"
@@ -343,9 +348,10 @@ except urllib.error.HTTPError as exc:
 PYEOF
 )" || die "Rejestracja w panelu nie powiodła się."
 
-AGENT_TOKEN="$(printf '%s' "$RESPONSE" | python3 -c 'import sys,json; print(json.load(sys.stdin)["agent_token"])')"
-CALLBACK_SECRET="$(printf '%s' "$RESPONSE" | python3 -c 'import sys,json; print(json.load(sys.stdin)["callback_secret"])')"
-[ -n "$AGENT_TOKEN" ] || die "Panel nie zwrócił tokenu agenta."
+AGENT_TOKEN="$(printf '%s' "$RESPONSE" | python3 -c 'import sys,json; print(json.load(sys.stdin)["agent_token"])' 2>/dev/null)" || true
+CALLBACK_SECRET="$(printf '%s' "$RESPONSE" | python3 -c 'import sys,json; print(json.load(sys.stdin)["callback_secret"])' 2>/dev/null)" || true
+[ -n "$AGENT_TOKEN" ] && [ -n "$CALLBACK_SECRET" ] \
+    || die "Panel odpowiedział, ale bez tokenów agenta. Odpowiedź: ${RESPONSE:0:300}"
 ok "Węzeł zarejestrowany w panelu"
 
 # --- konfiguracja agenta ----------------------------------------------------

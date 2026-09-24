@@ -11,7 +11,14 @@
 # Skrypt jest idempotentny: ponowne uruchomienie aktualizuje instalację,
 # zachowując klucz aplikacji i hasło do bazy.
 
-set -euo pipefail
+# -E: pułapka ERR działa także wewnątrz funkcji i podpowłok.
+set -Eeuo pipefail
+
+# Przy `set -e` skrypt kończy się na pierwszym błędzie — ale bez tej pułapki
+# robi to po cichu, w połowie instalacji, bez słowa o tym, co poszło nie tak.
+# Tak zgubiliśmy kiedyś hasło administratora: konto powstało, a podsumowanie
+# z hasłem nigdy się nie wypisało.
+trap 'rc=$?; printf "\n\033[0;31m  ✗ Instalator przerwał się w linii %s (kod %s):\033[0m\n    %s\n\n  Po usunięciu przyczyny uruchom instalator ponownie — kontynuuje bezpiecznie.\n\n" "$LINENO" "$rc" "$BASH_COMMAND" >&2' ERR
 
 # --- ustawienia domyślne ----------------------------------------------------
 
@@ -33,14 +40,25 @@ ok()    { printf '\033[0;32m  ✓\033[0m %s\n' "$*"; }
 warn()  { printf '\033[0;33m  !\033[0m %s\n' "$*"; }
 die()   { printf '\n\033[0;31m  ✗ %s\033[0m\n\n' "$*" >&2; exit 1; }
 
-secret() { openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c "${1:-24}"; }
+# Bez `| head -c`: zamknięcie potoku przez head może zabić tr sygnałem SIGPIPE,
+# a przy pipefail cały instalator razem z nim. Przycinamy w samym bashu.
+secret() {
+    local s
+    s="$(openssl rand -base64 64 | tr -dc 'A-Za-z0-9')"
+    printf '%s' "${s:0:${1:-24}}"
+}
 
 # Wartość z istniejącego .env — przy aktualizacji nie nadpisujemy ustawień,
 # które ktoś świadomie zmienił (nazwa bazy, ścieżka do agenta, marka).
 env_get() {
-    local file="$1" key="$2"
+    local file="$1" key="$2" line
     [ -f "$file" ] || return 0
-    grep "^${key}=" "$file" 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/^"\(.*\)"$/\1/'
+    # Brak klucza to normalny przypadek (starsza instalacja nie znała jeszcze
+    # tego ustawienia). grep zwraca wtedy 1, co przy pipefail zabiłoby cały
+    # instalator — dlatego wynik bierzemy osobno i zawsze kończymy sukcesem.
+    line="$(grep "^${key}=" "$file" 2>/dev/null | tail -1)" || true
+    [ -n "$line" ] || return 0
+    printf '%s' "${line#*=}" | sed 's/^"\(.*\)"$/\1/'
 }
 
 # Pytanie zadajemy na terminalu, a nie na stdin — tam siedzi treść skryptu
@@ -193,6 +211,7 @@ apt-get install -y -qq \
     "php$PHP_V-mbstring" "php$PHP_V-xml" "php$PHP_V-curl" "php$PHP_V-zip" \
     "php$PHP_V-bcmath" "php$PHP_V-gd" "php$PHP_V-intl" \
     nginx mariadb-server redis-server supervisor cron \
+    certbot python3-certbot-nginx \
     git unzip curl openssl ca-certificates >/dev/null
 
 ok "Pakiety zainstalowane"
@@ -461,24 +480,56 @@ ok "nginx nasłuchuje na porcie 80"
 if [ "$SKIP_TLS" -eq 0 ]; then
     log "Wystawiam certyfikat TLS"
 
-    RESOLVED="$(getent hosts "$DOMAIN" 2>/dev/null | awk '{print $1}' | head -1)"
+    # Wszystkie rekordy A, nie tylko pierwszy wynik — `getent hosts` potrafi
+    # oddać najpierw adres IPv6 i fałszywie uznać, że domena wskazuje gdzie
+    # indziej. Domena bez rekordów to normalny przypadek, nie awaria.
+    A_RECORDS="$(getent ahostsv4 "$DOMAIN" 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ')" || true
 
-    if [ -z "$RESOLVED" ]; then
-        warn "Domena $DOMAIN nie rozwiązuje się na żaden adres — pomijam certyfikat."
+    # Za proxy Cloudflare domena rozwiązuje się na adresy Cloudflare, więc
+    # porównanie z adresem serwera nic nie mówi. Rozpoznajemy to po nagłówku.
+    BEHIND_CLOUDFLARE=0
+    if curl -sI --max-time 10 "http://$DOMAIN/" 2>/dev/null | grep -qi '^server: *cloudflare'; then
+        BEHIND_CLOUDFLARE=1
+    fi
+
+    # Za Cloudflare przekierowanie na HTTPS robi Cloudflare. Gdyby robił je
+    # też serwer, w trybie SSL 'Flexible' powstałaby nieskończona pętla
+    # przekierowań — strona przestałaby działać w ogóle.
+    REDIRECT_FLAG="--redirect"
+    [ "$BEHIND_CLOUDFLARE" -eq 1 ] && REDIRECT_FLAG="--no-redirect"
+
+    issue_certificate() {
+        certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos \
+                --email "$ADMIN_EMAIL" "$REDIRECT_FLAG" >/tmp/virthub-certbot.log 2>&1
+    }
+
+    if [ -z "$A_RECORDS" ]; then
+        warn "Domena $DOMAIN nie ma rekordu A — pomijam certyfikat."
+        warn "Dodaj rekord A wskazujący na $PUBLIC_IP i uruchom: certbot --nginx -d $DOMAIN"
         SKIP_TLS=1
-    elif [ "$RESOLVED" != "$PUBLIC_IP" ]; then
-        warn "Domena $DOMAIN wskazuje na $RESOLVED, a ten serwer ma $PUBLIC_IP."
-        warn "Popraw rekord A i uruchom: certbot --nginx -d $DOMAIN"
-        SKIP_TLS=1
-    else
-        apt-get install -y -qq certbot python3-certbot-nginx >/dev/null
-        if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos \
-                   --email "$ADMIN_EMAIL" --redirect >/dev/null 2>&1; then
-            ok "Certyfikat wystawiony, ruch przekierowany na HTTPS"
+    elif [ "$BEHIND_CLOUDFLARE" -eq 1 ]; then
+        ok "Domena jest za proxy Cloudflare"
+        if issue_certificate; then
+            ok "Certyfikat wystawiony"
+            warn "W Cloudflare ustaw SSL/TLS → tryb 'Full (strict)'. W trybie 'Full'"
+            warn "bez certyfikatu na serwerze Cloudflare zwraca błąd 521."
         else
-            warn "Certbot nie zdołał wystawić certyfikatu. Sprawdź: certbot --nginx -d $DOMAIN"
+            warn "Certyfikat nie przeszedł weryfikacji przez Cloudflare."
+            warn "Przełącz rekord $DOMAIN w Cloudflare na 'DNS only' (szara chmurka),"
+            warn "uruchom: certbot --nginx -d $DOMAIN"
+            warn "a potem wróć do proxy i ustaw SSL/TLS na 'Full (strict)'."
             SKIP_TLS=1
         fi
+    elif ! printf ' %s' "$A_RECORDS" | grep -q " $PUBLIC_IP "; then
+        warn "Domena $DOMAIN wskazuje na: $A_RECORDS— a ten serwer ma $PUBLIC_IP."
+        warn "Popraw rekord A i uruchom: certbot --nginx -d $DOMAIN"
+        SKIP_TLS=1
+    elif issue_certificate; then
+        ok "Certyfikat wystawiony, ruch przekierowany na HTTPS"
+    else
+        warn "Certbot nie zdołał wystawić certyfikatu (szczegóły: /tmp/virthub-certbot.log)."
+        warn "Po usunięciu przyczyny: certbot --nginx -d $DOMAIN"
+        SKIP_TLS=1
     fi
 
     # APP_URL musi odpowiadać rzeczywistości — trafia do poleceń instalacyjnych
@@ -514,8 +565,14 @@ ok "Worker kolejki działa"
 
 # Harmonogram odpowiada za heartbeat węzłów i uzgadnianie wyników zadań.
 CRON_LINE="* * * * * cd $APP_DIR && php artisan schedule:run >> /dev/null 2>&1"
-( crontab -u www-data -l 2>/dev/null | grep -v 'artisan schedule:run'; echo "$CRON_LINE" ) \
-    | crontab -u www-data -
+
+# Na świeżym serwerze www-data nie ma crontaba: `crontab -l` zwraca błąd, a
+# `grep -v` bez żadnych linii wejściowych też. Oba przypadki są w porządku,
+# więc zbieramy istniejące wpisy osobno, zamiast w potoku, który przy
+# pipefail przerwałby instalację.
+EXISTING_CRON="$(crontab -u www-data -l 2>/dev/null || true)"
+OTHER_CRON="$(printf '%s\n' "$EXISTING_CRON" | grep -v 'artisan schedule:run' || true)"
+printf '%s\n%s\n' "$OTHER_CRON" "$CRON_LINE" | sed '/^$/d' | crontab -u www-data -
 ok "Harmonogram dopisany do crona"
 
 # --- sprawdzenie ------------------------------------------------------------
@@ -549,7 +606,11 @@ if [ -n "$ADMIN_PASS" ]; then
     echo
     printf '  \033[0;33mZapisz hasło teraz — nie zostanie wyświetlone ponownie.\033[0m\n'
 else
-    printf '  Login:    %s (konto istniało wcześniej)\n' "$ADMIN_EMAIL"
+    EXISTING_ADMIN="$(mariadb -N -B -e "SELECT email FROM users WHERE role='admin' ORDER BY id LIMIT 1" "$DB_NAME" 2>/dev/null)" || true
+    printf '  Login:    %s (konto istniało wcześniej)\n' "${EXISTING_ADMIN:-$ADMIN_EMAIL}"
+    echo
+    echo "  Nie pamiętasz hasła? Nowe wygenerujesz i zobaczysz poleceniem:"
+    printf '    cd %s && php artisan virthub:create-admin --email=%s\n' "$APP_DIR" "${EXISTING_ADMIN:-$ADMIN_EMAIL}"
 fi
 
 if [ "$SKIP_TLS" -eq 1 ]; then
