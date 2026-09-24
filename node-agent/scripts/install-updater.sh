@@ -50,8 +50,16 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 TimeoutStartSec=1800
-ExecStart=/bin/bash -c 'install -m 0700 /usr/local/lib/virthub/update-node.sh /run/virthub-update-node.sh && exec /run/virthub-update-node.sh --unattended'
+# Zlecenie zdejmujemy, zanim cokolwiek się uruchomi: gdyby skrypt nie wystartował,
+# .path odpalałby usługę w pętli, aż systemd wyłączyłby ją na dobre.
+ExecStartPre=/bin/rm -f /var/lib/virthub/update/request
+# /run jest montowany z noexec — skrypt czyta bash, nie uruchamiamy pliku wprost.
+ExecStart=/bin/bash -c 'install -m 0700 /usr/local/lib/virthub/update-node.sh /run/virthub-update-node.sh && exec /bin/bash /run/virthub-update-node.sh --unattended'
 UNITEOF
 
 systemctl daemon-reload
-systemctl enable --now virthub-agent-update.path >/dev/null 2>&1
+# Wcześniejsze wersje jednostki mogły wpaść w „start-limit-hit" — bez
+# zresetowania .path zostaje wyłączona i zlecenia wiszą w kolejce.
+systemctl reset-failed virthub-agent-update.path virthub-agent-update.service >/dev/null 2>&1 || true
+systemctl enable virthub-agent-update.path >/dev/null 2>&1
+systemctl restart virthub-agent-update.path

@@ -17,6 +17,9 @@ use Throwable;
  */
 class Updates
 {
+    /** Po ilu sekundach nieodebrane zlecenie uznajemy za zawieszone. */
+    public const STALL_AFTER = 90;
+
     /** Commit, z którego działa panel: z repozytorium git albo z pliku instalatora. */
     public function panelVersion(): ?string
     {
@@ -86,7 +89,15 @@ class Updates
         }
 
         if (is_file("{$dir}/request") && ($status['state'] ?? '') !== 'running') {
-            $status['state'] = 'queued';
+            // Usługa zdejmuje zlecenie w chwili startu. Jeśli leży dłużej,
+            // systemd go nie odebrał — np. jednostka .path jest wyłączona.
+            if (time() - (int) @filemtime("{$dir}/request") > self::STALL_AFTER) {
+                $status['state'] = 'stalled';
+                $status['message'] = 'Usługa aktualizacji nie odebrała zlecenia. Uruchom raz na serwerze panelu: '
+                    .'sudo bash /opt/virthub/infra/update-panel.sh — naprawi usługę i zaktualizuje panel.';
+            } else {
+                $status['state'] = 'queued';
+            }
         }
 
         if (is_file("{$dir}/last.log")) {

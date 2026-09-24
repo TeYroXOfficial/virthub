@@ -742,11 +742,19 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 TimeoutStartSec=3600
-ExecStart=/bin/bash -c 'install -m 0700 /usr/local/lib/virthub/update-panel.sh /run/virthub-update-panel.sh && exec /run/virthub-update-panel.sh --unattended'
+# Zlecenie zdejmujemy, zanim cokolwiek się uruchomi: gdyby skrypt nie wystartował,
+# .path odpalałby usługę w pętli, aż systemd wyłączyłby ją na dobre.
+ExecStartPre=/bin/rm -f /var/lib/virthub-panel/request
+# /run jest montowany z noexec — skrypt czyta bash, nie uruchamiamy pliku wprost.
+ExecStart=/bin/bash -c 'install -m 0700 /usr/local/lib/virthub/update-panel.sh /run/virthub-update-panel.sh && exec /bin/bash /run/virthub-update-panel.sh --unattended'
 UNITEOF
 
     systemctl daemon-reload
-    systemctl enable --now virthub-panel-update.path >/dev/null 2>&1
+    # Wcześniejsze wersje jednostki mogły wpaść w „start-limit-hit" — bez
+    # zresetowania .path zostaje wyłączona i zlecenia wiszą w kolejce.
+    systemctl reset-failed virthub-panel-update.path virthub-panel-update.service >/dev/null 2>&1 || true
+    systemctl enable virthub-panel-update.path >/dev/null 2>&1
+    systemctl restart virthub-panel-update.path
     ok "Aktualizacje z panelu włączone (Administracja → Aktualizacje)"
 else
     warn "Brak $ROOT_DIR/infra/update-panel.sh — aktualizacje z panelu wymagają instalacji z repozytorium (--repo)."

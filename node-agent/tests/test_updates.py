@@ -34,6 +34,32 @@ def test_zlecenie_zostawia_plik_dla_systemd(updates):
     assert status["remote_update"] is True
 
 
+def test_nieodebrane_zlecenie_jest_zawieszone(updates):
+    import os
+    import time
+
+    from agent.updates import STALL_AFTER
+
+    updates.unit.write_text("[Path]\n")
+    updates.request()
+    old = time.time() - STALL_AFTER - 5
+    os.utime(updates.dir / "request", (old, old))
+
+    status = updates.status()
+    assert status["state"] == "stalled"
+    assert "update-node.sh" in status["message"]
+
+
+def test_jednostka_nie_uruchamia_pliku_z_run(tmp_path):
+    """/run ma noexec — skrypt musi czytać bash, a zlecenie znika przed startem."""
+    from pathlib import Path
+
+    script = (Path(__file__).parents[1] / "scripts" / "install-updater.sh").read_text()
+    assert "exec /bin/bash /run/virthub-update-node.sh" in script
+    assert "ExecStartPre=/bin/rm -f /var/lib/virthub/update/request" in script
+    assert "reset-failed virthub-agent-update.path" in script
+
+
 def test_stan_z_pliku_uslugi(updates):
     updates.dir.mkdir(parents=True)
     (updates.dir / "status.json").write_text(json.dumps({"state": "failed", "message": "brak sieci"}))

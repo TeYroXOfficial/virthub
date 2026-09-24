@@ -9,6 +9,7 @@
     $stateLabel = [
         'idle' => ['—', 'neutral'],
         'queued' => ['w kolejce', 'warning'],
+        'stalled' => ['nie wystartowała', 'critical'],
         'running' => ['w toku', 'warning'],
         'done' => ['zakończona', 'ok'],
         'failed' => ['nieudana', 'critical'],

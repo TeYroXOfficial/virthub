@@ -21,6 +21,8 @@ from pathlib import Path
 from .config import Settings
 
 UPDATER_UNIT = Path("/etc/systemd/system/virthub-agent-update.path")
+# Po ilu sekundach nieodebrane zlecenie uznajemy za zawieszone.
+STALL_AFTER = 90
 
 
 class Updates:
@@ -46,8 +48,23 @@ class Updates:
             state = json.loads((self.dir / "status.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
             pass
-        if (self.dir / "request").exists() and state.get("state") not in {"running"}:
-            state = {**state, "state": "queued"}
+        request = self.dir / "request"
+        if request.exists() and state.get("state") not in {"running"}:
+            # Usługa zdejmuje zlecenie w chwili startu. Jeśli leży dłużej,
+            # systemd go nie odebrał — np. jednostka .path jest wyłączona.
+            try:
+                stalled = time.time() - request.stat().st_mtime > STALL_AFTER
+            except OSError:
+                stalled = False
+            if stalled:
+                state = {
+                    **state,
+                    "state": "stalled",
+                    "message": "Usługa aktualizacji nie odebrała zlecenia. Zaktualizuj węzeł raz ręcznie "
+                    "(update-node.sh) — naprawi usługę.",
+                }
+            else:
+                state = {**state, "state": "queued"}
         return {**state, "build": self.build(), "remote_update": self.enabled()}
 
     def request(self) -> dict:
