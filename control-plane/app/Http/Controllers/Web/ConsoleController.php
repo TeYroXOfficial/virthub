@@ -22,7 +22,7 @@ class ConsoleController extends Controller
     /** Przycisk „Konsola" w panelu — bilet i od razu przejście na stronę konsoli. */
     public function open(Request $request, Server $server): RedirectResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('console', $server);
 
         if (! $server->isRunning()) {
             return back()->withErrors(['console' => 'Konsola jest dostępna tylko dla działającej maszyny.']);

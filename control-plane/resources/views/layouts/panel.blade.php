@@ -15,17 +15,20 @@
     @php
         $user = auth()->user();
         $nav = [
-            ['panel.dashboard', 'Moje maszyny', 'servers', 'panel.dashboard'],
-            ['panel.servers.create', 'Zamów serwer', 'plus', 'panel.servers.create'],
+            ['panel.dashboard', 'Moje maszyny', 'servers', 'panel.dashboard', null],
+            ['panel.servers.create', 'Zamów serwer', 'plus', 'panel.servers.create', 'servers.order'],
         ];
+        // Działy administracji widoczne tylko z odpowiednim uprawnieniem.
         $adminNav = [
-            ['panel.admin.index', 'Przegląd', 'dashboard', 'panel.admin.index'],
-            ['panel.admin.servers', 'Maszyny', 'list', 'panel.admin.servers'],
-            ['panel.admin.hypervisors', 'Hypervisory', 'node', 'panel.admin.hypervisors'],
-            ['panel.admin.ip-pools', 'Adresy IP', 'network', 'panel.admin.ip-pools'],
-            ['panel.admin.packages', 'Pakiety', 'package', 'panel.admin.packages'],
-            ['panel.admin.templates', 'Szablony', 'disc', 'panel.admin.templates'],
-            ['panel.admin.updates', 'Aktualizacje', 'refresh', 'panel.admin.updates*'],
+            ['panel.admin.index', 'Przegląd', 'dashboard', 'panel.admin.index', null],
+            ['panel.admin.servers', 'Maszyny', 'list', 'panel.admin.servers', 'admin.servers'],
+            ['panel.admin.users', 'Użytkownicy', 'users', 'panel.admin.users*', 'admin.users'],
+            ['panel.admin.hypervisors', 'Hypervisory', 'node', 'panel.admin.hypervisors', 'admin.hypervisors'],
+            ['panel.admin.ip-pools', 'Adresy IP', 'network', 'panel.admin.ip-pools', 'admin.ip_pools'],
+            ['panel.admin.packages', 'Pakiety', 'package', 'panel.admin.packages', 'admin.packages'],
+            ['panel.admin.templates', 'Szablony', 'disc', 'panel.admin.templates', 'admin.templates'],
+            ['panel.admin.isos', 'Obrazy ISO', 'disc', 'panel.admin.isos', 'admin.templates'],
+            ['panel.admin.updates', 'Aktualizacje', 'refresh', 'panel.admin.updates*', 'admin.updates'],
         ];
     @endphp
 
@@ -48,16 +51,18 @@
             </a>
 
             <nav>
-                @foreach ($nav as [$route, $label, $icon, $pattern])
+                @foreach ($nav as [$route, $label, $icon, $pattern, $permission])
+                    @continue($permission && ! $user->hasPermission($permission))
                     <a class="nav-link" href="{{ route($route) }}"
                        @if(request()->routeIs($pattern) || ($route === 'panel.dashboard' && request()->routeIs('panel.servers.show'))) aria-current="page" @endif>
                         <x-icon :name="$icon"/> {{ $label }}
                     </a>
                 @endforeach
 
-                @if ($user->isAdmin())
+                @if ($user->hasAnyAdminPermission())
                     <div class="nav-section">Administracja</div>
-                    @foreach ($adminNav as [$route, $label, $icon, $pattern])
+                    @foreach ($adminNav as [$route, $label, $icon, $pattern, $permission])
+                        @continue($permission && ! $user->hasPermission($permission))
                         <a class="nav-link" href="{{ route($route) }}"
                            @if(request()->routeIs($pattern)) aria-current="page" @endif>
                             <x-icon :name="$icon"/> {{ $label }}

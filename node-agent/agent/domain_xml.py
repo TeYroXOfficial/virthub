@@ -127,3 +127,71 @@ def domain_name(server_id: int) -> str:
     """Nazwa domeny w libvirt. Bez nazwy hosta od klienta — ta może się zmieniać
     i zawierać znaki, których libvirt nie przyjmie."""
     return f"virthub-{server_id}"
+
+
+ISO_TARGET = "sdb"
+
+
+def with_iso(xml: str, iso_path: str | None, boot_from_iso: bool) -> str:
+    """Definicja domeny z płytą ISO w drugim napędzie i kolejnością rozruchu.
+
+    Płyta idzie do osobnego napędu `sdb` — pierwszy (`sda`) to nośnik
+    cloud-init, którego nie wolno ruszać. Kolejność rozruchu ustawiamy per
+    urządzenie (`<boot order>`) zamiast `<os><boot dev>`: przy dwóch napędach
+    CD tylko tak da się wskazać, z której płyty startować. Oba zapisy naraz
+    libvirt odrzuca, więc `<os><boot>` usuwamy.
+    """
+    from xml.etree import ElementTree as ET
+
+    root = ET.fromstring(xml)
+    devices = root.find("devices")
+    os_el = root.find("os")
+    if devices is None or os_el is None:
+        raise ValueError("Nieprawidłowa definicja domeny — brak <devices> albo <os>.")
+
+    for boot in os_el.findall("boot"):
+        os_el.remove(boot)
+    for disk in devices.findall("disk"):
+        for boot in disk.findall("boot"):
+            disk.remove(boot)
+
+    cdrom = next(
+        (d for d in devices.findall("disk")
+         if d.get("device") == "cdrom" and (d.find("target") is not None and d.find("target").get("dev") == ISO_TARGET)),
+        None,
+    )
+
+    if iso_path is None:
+        if cdrom is not None:
+            devices.remove(cdrom)
+        boot_from_iso = False
+    else:
+        if cdrom is None:
+            cdrom = ET.Element("disk", {"type": "file", "device": "cdrom"})
+            ET.SubElement(cdrom, "driver", {"name": "qemu", "type": "raw"})
+            ET.SubElement(cdrom, "target", {"dev": ISO_TARGET, "bus": "sata"})
+            ET.SubElement(cdrom, "readonly")
+            # Za ostatnim dyskiem, żeby kolejność urządzeń w XML była czytelna.
+            disks = devices.findall("disk")
+            index = list(devices).index(disks[-1]) + 1 if disks else 0
+            devices.insert(index, cdrom)
+        source = cdrom.find("source")
+        if source is None:
+            source = ET.Element("source")
+            cdrom.insert(1, source)
+        source.attrib.clear()
+        source.set("file", iso_path)
+
+    main_disk = next(
+        (d for d in devices.findall("disk")
+         if d.get("device") == "disk" and d.find("target") is not None and d.find("target").get("dev") == "vda"),
+        None,
+    )
+    if boot_from_iso and cdrom is not None:
+        ET.SubElement(cdrom, "boot", {"order": "1"})
+        if main_disk is not None:
+            ET.SubElement(main_disk, "boot", {"order": "2"})
+    elif main_disk is not None:
+        ET.SubElement(main_disk, "boot", {"order": "1"})
+
+    return ET.tostring(root, encoding="unicode")

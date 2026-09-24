@@ -60,6 +60,7 @@ class Settings:
     image_dir: Path      # dyski działających VPS-ów (qcow2)
     template_dir: Path   # bazowe obrazy szablonów OS (backing files)
     seed_dir: Path       # wygenerowane ISO cloud-init
+    iso_dir: Path        # biblioteka obrazów ISO do montowania w maszynach
     state_db: Path       # lokalna kolejka zadań (SQLite)
 
     # Sieć. Mostek NAT nie ma karty fizycznej — agent zakłada go sam przy
@@ -88,7 +89,7 @@ class Settings:
         return {"libvirt": "kvm", "lxc": "lxc"}.get(self.driver, "mock")
 
     def ensure_directories(self) -> None:
-        for path in (self.image_dir, self.template_dir, self.seed_dir, self.state_db.parent):
+        for path in (self.image_dir, self.template_dir, self.seed_dir, self.iso_dir, self.state_db.parent):
             path.mkdir(parents=True, exist_ok=True)
 
     @property
@@ -115,6 +116,7 @@ def get_settings() -> Settings:
         image_dir=_env_path("VH_IMAGE_DIR", "/var/lib/virthub/images"),
         template_dir=_env_path("VH_TEMPLATE_DIR", "/var/lib/virthub/templates"),
         seed_dir=_env_path("VH_SEED_DIR", "/var/lib/virthub/seeds"),
+        iso_dir=_env_path("VH_ISO_DIR", "/var/lib/virthub/isos"),
         state_db=_env_path("VH_STATE_DB", "/var/lib/virthub/agent-state.sqlite3"),
         bridge=_env("VH_BRIDGE", "br0"),
         nat_bridge=_env("VH_NAT_BRIDGE", "vhnat0"),

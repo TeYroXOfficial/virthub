@@ -36,7 +36,7 @@ class SnapshotController extends Controller
 
     public function store(Request $request, Server $server): JsonResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('snapshots', $server);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:64', 'regex:/^[a-zA-Z0-9_.-]+$/'],
@@ -65,7 +65,7 @@ class SnapshotController extends Controller
 
     public function restore(Request $request, Server $server, Backup $backup): JsonResponse
     {
-        $this->authorize('destroy', $server);
+        $this->authorize('restoreSnapshot', $server);
 
         if ($backup->server_id !== $server->id) {
             abort(404);
@@ -83,7 +83,7 @@ class SnapshotController extends Controller
 
     public function destroy(Request $request, Server $server, Backup $backup): JsonResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('snapshots', $server);
 
         if ($backup->server_id !== $server->id) {
             abort(404);

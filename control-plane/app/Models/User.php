@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Access\Permissions;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -25,6 +26,14 @@ class User extends Authenticatable
         'password',
         'role',
         'billing_reference',
+        'permissions',
+        'max_servers',
+        'allowed_package_ids',
+    ];
+
+    /** Domyślna rola także w pamięci — przed ponownym odczytem z bazy. */
+    protected $attributes = [
+        'role' => self::ROLE_CUSTOMER,
     ];
 
     /** @var list<string> */
@@ -43,6 +52,10 @@ class User extends Authenticatable
             'suspended_at' => 'datetime',
             'two_factor_confirmed_at' => 'datetime',
             'two_factor_secret' => 'encrypted',
+            'permissions' => 'array',
+            'allowed_package_ids' => 'array',
+            'max_servers' => 'integer',
+            'last_login_at' => 'datetime',
         ];
     }
 
@@ -69,5 +82,48 @@ class User extends Authenticatable
     public function isSuspended(): bool
     {
         return $this->suspended_at !== null;
+    }
+
+    /** @return list<string> */
+    public function effectivePermissions(): array
+    {
+        if ($this->isAdmin()) {
+            return Permissions::all();
+        }
+
+        return $this->permissions === null
+            ? Permissions::defaultsFor($this->role ?? self::ROLE_CUSTOMER)
+            : Permissions::sanitize($this->role ?? self::ROLE_CUSTOMER, $this->permissions);
+    }
+
+    /**
+     * Czy użytkownik ma uprawnienie. Zawieszone konto nie ma żadnych;
+     * administrator — wszystkie. Nazwa inna niż can(), bo to metoda Gate.
+     */
+    public function hasPermission(string $permission): bool
+    {
+        if ($this->isSuspended()) {
+            return false;
+        }
+
+        return $this->isAdmin() || in_array($permission, $this->effectivePermissions(), true);
+    }
+
+    /** Personel z dostępem do choć jednego działu administracji. */
+    public function hasAnyAdminPermission(): bool
+    {
+        return $this->isStaff() && collect($this->effectivePermissions())
+            ->contains(fn (string $p) => str_starts_with($p, 'admin.'));
+    }
+
+    public function serverLimit(): int
+    {
+        return $this->max_servers ?? (int) config('virthub.limits.servers_per_customer');
+    }
+
+    public function mayOrderPackage(VpsPackage $package): bool
+    {
+        return $this->allowed_package_ids === null
+            || in_array($package->id, array_map('intval', $this->allowed_package_ids), true);
     }
 }

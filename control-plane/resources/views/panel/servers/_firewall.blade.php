@@ -1,7 +1,7 @@
 @php
     $firewall = app(\App\Domain\Network\Firewall::class);
     $user = auth()->user();
-    $editable = $firewall->canManage($user, $server);
+    $editable = $firewall->canManage($user, $server) && $user->can('firewall', $server);
     $rules = $server->firewallRules;
     $adminRules = $rules->where('managed_by', 'admin')->values();
     $customerRules = $rules->where('managed_by', '!=', 'admin')->values();
@@ -26,7 +26,9 @@
         </div>
     </div>
 
-    @if ($server->firewall_locked && ! $user->isStaff())
+    @if (! $user->can('firewall', $server))
+        <div class="alert alert-warning">Nie masz uprawnienia do zmiany zapory — reguły możesz tylko przeglądać.</div>
+    @elseif ($server->firewall_locked && ! $user->isStaff())
         <div class="alert alert-warning">
             Administrator zablokował zmiany zapory tej maszyny. Reguły działają, ale nie możesz ich
             zmieniać — skontaktuj się z obsługą.

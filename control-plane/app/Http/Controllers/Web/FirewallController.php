@@ -17,7 +17,7 @@ class FirewallController extends Controller
 
     public function policy(Request $request, Server $server): RedirectResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('firewall', $server);
 
         $this->firewall->updatePolicy($server, $request->user(), [
             ...$request->validate([
@@ -33,7 +33,7 @@ class FirewallController extends Controller
 
     public function store(Request $request, Server $server): RedirectResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('firewall', $server);
 
         $this->firewall->addRule($server, $request->user(), $request->validate(Firewall::ruleRules()));
 
@@ -42,7 +42,7 @@ class FirewallController extends Controller
 
     public function preset(Request $request, Server $server, string $preset): RedirectResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('firewall', $server);
 
         $this->firewall->addPreset($server, $request->user(), $preset);
 
@@ -51,7 +51,7 @@ class FirewallController extends Controller
 
     public function destroy(Request $request, Server $server, FirewallRule $rule): RedirectResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('firewall', $server);
 
         $this->firewall->deleteRule($server, $request->user(), $rule);
 
@@ -60,7 +60,7 @@ class FirewallController extends Controller
 
     public function toggle(Request $request, Server $server, FirewallRule $rule): RedirectResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('firewall', $server);
 
         $this->firewall->toggleRule($server, $request->user(), $rule);
 
@@ -69,7 +69,7 @@ class FirewallController extends Controller
 
     public function move(Request $request, Server $server, FirewallRule $rule, string $direction): RedirectResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('firewall', $server);
         abort_unless(in_array($direction, ['up', 'down'], true), 404);
 
         $this->firewall->moveRule($server, $request->user(), $rule, $direction);

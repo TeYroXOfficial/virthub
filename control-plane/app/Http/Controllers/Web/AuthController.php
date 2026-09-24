@@ -57,6 +57,7 @@ class AuthController extends Controller
 
         RateLimiter::clear($key);
         $request->session()->regenerate();
+        $request->user()->forceFill(['last_login_at' => now()])->save();
         AuditLog::record('auth.login', $request->user());
 
         return redirect()->intended(route('panel.dashboard'));

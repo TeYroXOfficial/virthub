@@ -45,13 +45,23 @@ class PanelController extends Controller
     {
         $this->authorize('view', $server);
 
-        $server->load(['package', 'template', 'ipAddresses.pool', 'firewallRules', 'backups', 'hypervisor']);
+        $server->load(['package', 'template', 'ipAddresses.pool', 'firewallRules', 'backups', 'hypervisor', 'iso']);
 
         return view('panel.servers.show', [
             'server' => $server,
             'recentJobs' => $server->jobs()->limit(10)->get(),
-            'packages' => VpsPackage::query()->active()->orderBy('vcpu')->get(),
-            'templates' => OsTemplate::query()->active()->get(),
+            'packages' => VpsPackage::query()->active()->orderBy('vcpu')->get()
+                ->filter(fn (VpsPackage $p) => $request->user()->mayOrderPackage($p))
+                ->values(),
+            // Reinstalacja: tylko systemy tego samego typu, z automatyczną instalacją.
+            'templates' => OsTemplate::query()->active()
+                ->where('virtualization', $server->virtualization->value)
+                ->where('cloud_init_support', true)
+                ->orderBy('family')->orderByDesc('version')
+                ->get(),
+            'isos' => $server->isContainer()
+                ? collect()
+                : app(\App\Domain\Provisioning\IsoLibrary::class)->availableFor($server->hypervisor_id, $request->user()->isStaff()),
             // Hasło startowe pokazujemy raz — po wyświetleniu znika z bazy.
             'rootPassword' => $server->consumeRootPassword(),
         ]);
@@ -81,7 +91,9 @@ class PanelController extends Controller
             ->groupBy(fn (OsTemplate $t) => $t->virtualization->value);
 
         return view('panel.servers.create', [
-            'packages' => VpsPackage::query()->active()->orderBy('vcpu')->get(),
+            'packages' => VpsPackage::query()->active()->orderBy('vcpu')->get()
+                ->filter(fn (VpsPackage $p) => $request->user()->mayOrderPackage($p))
+                ->values(),
             'templateGroups' => $templates,
         ]);
     }
@@ -89,16 +101,7 @@ class PanelController extends Controller
     public function storeServer(OrderServerRequest $request): RedirectResponse
     {
         $this->authorize('create', Server::class);
-
-        $limit = config('virthub.limits.servers_per_customer');
-        $owned = Server::where('user_id', $request->user()->id)->count();
-
-        if (! $request->user()->isStaff() && $owned >= $limit) {
-            return back()->withErrors([
-                'package' => "Osiągnięto limit {$limit} maszyn na koncie. "
-                    .'Napisz do nas, jeśli potrzebujesz go zwiększyć.',
-            ])->withInput();
-        }
+        // Limit maszyn i dozwolone pakiety sprawdza OrderServerRequest.
 
         $server = $this->provisioner->order(
             user: $request->user(),

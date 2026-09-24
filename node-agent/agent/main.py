@@ -19,12 +19,15 @@ from fastapi.responses import JSONResponse
 from .config import ConfigError, get_settings
 from .console import bridge as console_bridge
 from .driver import DriverError, VmNotFound, build_driver
+from .isos import IsoError
 from .jobs import JobQueue
 from .reporter import CallbackReporter
 from .schemas import (
     CreateVmRequest,
     HostHealth,
     ImagePrefetchRequest,
+    IsoDownloadRequest,
+    IsoMountRequest,
     JobAccepted,
     JobState,
     NetworkConfigRequest,
@@ -69,7 +72,16 @@ def _handlers() -> dict[str, Any]:
         "prefetch_image": lambda p: driver.prefetch_image(
             ImagePrefetchRequest(**p).alias
         ),
+        "download_iso": lambda p: _download_iso(IsoDownloadRequest(**p)),
+        "mount_iso": lambda p: driver.mount_iso(p["uuid"], IsoMountRequest(**p["body"])),
     }
+
+
+def _download_iso(req: IsoDownloadRequest) -> dict[str, Any]:
+    try:
+        return driver.isos.download(req.name, req.url, req.sha256)
+    except IsoError as exc:
+        raise DriverError(str(exc)) from exc
 
 
 jobs = JobQueue(settings, _handlers())
@@ -332,6 +344,45 @@ async def console(websocket: WebSocket, uuid: str) -> None:
     await websocket.accept(subprotocol="binary" if "binary" in requested else None)
     log.info("Otwarto konsolę (%s) maszyny %s", target.kind, uuid)
     await console_bridge(websocket, target)
+
+
+# --- obrazy ISO -------------------------------------------------------------
+
+@app.get("/images/iso", dependencies=[Depends(require_control_plane)], tags=["images"])
+async def list_isos() -> dict[str, Any]:
+    return {"data": driver.isos.list()}
+
+
+@app.post(
+    "/images/iso",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["images"],
+)
+async def download_iso(req: IsoDownloadRequest) -> JobAccepted:
+    """Pobranie obrazu trwa minuty — przez kolejkę, jak szablony."""
+    return JobAccepted(job_id=jobs.enqueue("download_iso", req.model_dump()))
+
+
+@app.delete("/images/iso/{name}", dependencies=[Depends(require_control_plane)], tags=["images"])
+async def delete_iso(name: str) -> dict[str, Any]:
+    try:
+        return driver.isos.delete(name)
+    except IsoError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post(
+    "/vm/{uuid}/iso",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def mount_iso(uuid: str, req: IsoMountRequest) -> JobAccepted:
+    job_id = jobs.enqueue("mount_iso", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
 
 
 # --- zadania ----------------------------------------------------------------

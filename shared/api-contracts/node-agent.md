@@ -61,7 +61,11 @@ zamknięte jest ignorowane — powtórzony raport nie cofa stanu maszyny.
 | `GET` | `/health` | heartbeat + wolne zasoby hosta |
 | `POST` | `/vm` | utworzenie maszyny |
 | `POST` | `/vm/{uuid}/power` | `start` / `stop` / `reboot` / `force-off` |
-| `POST` | `/vm/{uuid}/rebuild` | ponowna instalacja systemu |
+| `POST` | `/vm/{uuid}/rebuild` | ponowna instalacja systemu (z `interfaces[]` i `nameservers[]`) |
+| `POST` | `/vm/{uuid}/iso` | montowanie / wysunięcie płyty ISO (tylko KVM) |
+| `GET` | `/images/iso` | lista obrazów ISO na węźle |
+| `POST` | `/images/iso` | pobranie obrazu ISO z URL (zadanie) |
+| `DELETE` | `/images/iso/{name}` | usunięcie obrazu ISO |
 | `POST` | `/vm/{uuid}/resize` | zmiana vCPU / RAM / dysku |
 | `DELETE` | `/vm/{uuid}` | usunięcie maszyny i jej dysku |
 | `POST` | `/vm/{uuid}/snapshot` | kopia dysku |
@@ -72,6 +76,20 @@ zamknięte jest ignorowane — powtórzony raport nie cofa stanu maszyny.
 | `GET` | `/system/update` | stan ostatniej aktualizacji węzła i commit agenta (`build`) |
 | `POST` | `/system/update` | zlecenie aktualizacji (409, gdy węzeł nie ma usługi aktualizacji) |
 | `GET` | `/jobs/{job_id}` | stan zadania |
+
+### Obrazy ISO (`/images/iso`, `/vm/{uuid}/iso`)
+
+`POST /images/iso` przyjmuje `{"name": "debian-13.iso", "url": "https://…", "sha256": "…"|null}`.
+Nazwa: `^[a-z0-9][a-z0-9._-]{0,80}\.iso$`. Agent pobiera plik do
+`VH_ISO_DIR` (domyślnie `/var/lib/virthub/isos`) jako `.part`, sprawdza sumę
+SHA-256 i limit rozmiaru (`VH_ISO_MAX_GB`, domyślnie 20), dopiero potem
+podmienia plik. Wynik zadania: `{"name", "size_bytes", "sha256"}`.
+
+`POST /vm/{uuid}/iso` przyjmuje `{"iso": "debian-13.iso"|null, "boot": bool, "restart": bool}`.
+`iso: null` wysuwa płytę. Płyta trafia do napędu SATA `sdb` (tylko do odczytu),
+kolejność rozruchu jest ustawiana per urządzenie (`<boot order>`). Zmiana
+definicji działa od następnego uruchomienia; `restart: true` robi to od razu
+(destroy + start). Kontener odpowiada 409.
 
 ### Adres maszyny (`interfaces[]` w `POST /vm` i `PUT /vm/{uuid}/network`)
 

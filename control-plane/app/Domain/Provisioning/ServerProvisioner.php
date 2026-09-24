@@ -9,6 +9,7 @@ use App\Models\AuditLog;
 use App\Models\Backup;
 use App\Models\Hypervisor;
 use App\Models\IpPool;
+use App\Models\IsoImage;
 use App\Models\OsTemplate;
 use App\Models\Server;
 use App\Models\ServerJob;
@@ -245,6 +246,37 @@ class ServerProvisioner
         ]);
 
         AuditLog::record('server.restore', $server, ['name' => $backup->name], $actor);
+        RunServerActionJob::dispatch($job->id);
+
+        return $job;
+    }
+
+    /**
+     * Płyta ISO w maszynie KVM. Stan w bazie zmienia dopiero udane zadanie
+     * agenta (AgentResultApplier) — panel nie pokaże płyty, której nie ma.
+     */
+    public function mountIso(Server $server, ?IsoImage $iso, bool $boot, bool $restart, ?User $actor = null): ServerJob
+    {
+        $this->assertAcceptsCommands($server);
+
+        if ($server->isContainer()) {
+            throw new \DomainException('Kontener nie ma napędu CD — obrazy ISO są tylko dla maszyn KVM.');
+        }
+
+        if ($iso !== null && ! $iso->isReadyOn($server->hypervisor_id)) {
+            throw new \DomainException("Obraz {$iso->name} nie jest jeszcze pobrany na węzeł tej maszyny.");
+        }
+
+        $job = $this->createJobRecord($server, 'iso', $actor, [
+            'iso_image_id' => $iso?->id,
+            'filename' => $iso?->filename,
+            'boot' => $iso !== null && $boot,
+            'restart' => $restart,
+        ]);
+
+        AuditLog::record($iso ? 'server.iso_mounted' : 'server.iso_ejected', $server, [
+            'iso' => $iso?->name, 'boot' => $boot, 'restart' => $restart,
+        ], $actor);
         RunServerActionJob::dispatch($job->id);
 
         return $job;

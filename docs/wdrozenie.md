@@ -88,6 +88,24 @@ Aktualizacja węzła podmienia kod agenta, jednostkę systemd i konfigurację
 nginx; nie rusza rejestracji, sekretów, certyfikatu, mostka ani maszyn —
 działające maszyny nie są restartowane.
 
+### Konta i uprawnienia
+
+**Administracja → Użytkownicy**: zakładanie kont (hasło nadane albo
+wygenerowane i pokazane raz), rola, uprawnienia, limity i blokada konta.
+
+- Rola wyznacza domyślny zestaw uprawnień: klient — wszystko przy własnych
+  maszynach; wsparcie — dodatkowo maszyny klientów i konta klientów;
+  administrator — wszystko (nie da się go ograniczyć).
+- „Własne uprawnienia" zawężają albo rozszerzają zestaw per konto: zamawianie,
+  zasilanie, konsola, zapora, snapshoty, zmiana pakietu, reinstalacja,
+  usuwanie; dla personelu — dostęp do poszczególnych działów administracji.
+- Limit maszyn (puste = `VIRTHUB_SERVERS_PER_CUSTOMER`) i lista dozwolonych
+  pakietów działają w panelu i w API.
+- Zablokowane konto jest wylogowywane przy następnym żądaniu, a jego tokeny
+  API unieważniane; maszyny działają dalej.
+- Wsparcie zarządza tylko kontami klientów. Nie da się zablokować, usunąć ani
+  zdegradować samego siebie ani ostatniego aktywnego administratora.
+
 ### Zapora maszyn
 
 Każda maszyna ma zaporę zarządzaną ze strony maszyny w panelu (klient i
@@ -447,6 +465,19 @@ chown virthub:libvirt ubuntu-24.04.qcow2
 
 Obrazu bazowego nie wolno usunąć ani nadpisać, dopóki istnieje choć jedna
 maszyna, która go używa — dyski klientów są cienkimi warstwami nad nim.
+
+### Obrazy ISO (KVM)
+
+Płyty instalacyjne dodaje się w panelu: **Administracja → Obrazy ISO** —
+nazwa, URL i (zalecane) SHA-256. Każdy zarejestrowany węzeł KVM pobiera plik
+sam do `/var/lib/virthub/isos`; węzły LXC są pomijane. Stan pobrania widać
+per węzeł, nieudane można ponowić. Klient montuje płytę na stronie maszyny
+(uprawnienie „Obrazy ISO"), zaznacza rozruch z płyty i instaluje system przez
+konsolę noVNC. Obrazu zamontowanego w jakiejkolwiek maszynie nie da się usunąć.
+
+Reinstalacja z szablonu (strona maszyny → „Reinstalacja systemu") wymaga
+wpisania nazwy hosta, czyści dysk i zachowuje adresy IP, zaporę i parametry.
+Support nie może reinstalować cudzych maszyn — tylko administrator.
 
 ---
 

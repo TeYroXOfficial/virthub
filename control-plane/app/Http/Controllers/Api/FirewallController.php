@@ -48,7 +48,7 @@ class FirewallController extends Controller
 
     public function policy(Request $request, Server $server): JsonResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('firewall', $server);
 
         $this->firewall->updatePolicy($server, $request->user(), $request->validate(Firewall::policyRules()));
 
@@ -60,7 +60,7 @@ class FirewallController extends Controller
 
     public function store(Request $request, Server $server): JsonResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('firewall', $server);
 
         $rule = $this->firewall->addRule($server, $request->user(), $request->validate(Firewall::ruleRules()));
 
@@ -74,7 +74,7 @@ class FirewallController extends Controller
 
     public function destroy(Request $request, Server $server, FirewallRule $rule): JsonResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('firewall', $server);
 
         $this->firewall->deleteRule($server, $request->user(), $rule);
 

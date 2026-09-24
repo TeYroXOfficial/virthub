@@ -44,6 +44,7 @@ class Server extends Model
             'last_synced_at' => 'datetime',
             'firewall_enabled' => 'boolean',
             'firewall_locked' => 'boolean',
+            'boot_from_iso' => 'boolean',
         ];
     }
 
@@ -92,6 +93,12 @@ class Server extends Model
     }
 
     /** @return HasMany<FirewallRule, $this> */
+    /** @return \Illuminate\Database\Eloquent\Relations\BelongsTo<IsoImage, $this> */
+    public function iso(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(IsoImage::class, 'iso_image_id');
+    }
+
     public function firewallRules(): HasMany
     {
         // Reguły administratora zawsze przed regułami klienta — tak też
