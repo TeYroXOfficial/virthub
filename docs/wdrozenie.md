@@ -11,7 +11,7 @@ i wypisywane na końcu.
 Na świeżym serwerze z Debianem 12/13 albo Ubuntu 22.04/24.04:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/UZYTKOWNIK/virthub/main/infra/install-panel.sh | sudo bash -s -- --domain panel.twojadomena.pl --repo https://github.com/UZYTKOWNIK/virthub.git
+curl -sSL https://raw.githubusercontent.com/TeYroXOfficial/virthub/main/infra/install-panel.sh | sudo bash -s -- --domain panel.twojadomena.pl --repo https://github.com/TeYroXOfficial/virthub.git
 ```
 
 Instalator sam:
