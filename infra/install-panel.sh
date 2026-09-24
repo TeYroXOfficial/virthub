@@ -561,6 +561,12 @@ SUPEOF
 
 supervisorctl reread >/dev/null 2>&1 || true
 supervisorctl update >/dev/null 2>&1 || true
+
+# Workery trzymają kod w pamięci. Bez restartu po aktualizacji dalej
+# wykonywałyby starą wersję — nowe typy zadań kończyłyby się błędem „klasa nie
+# istnieje", a poprawione zachowanie by nie weszło. queue:restart kończy je
+# łagodnie po bieżącym zadaniu, a supervisor podnosi świeże.
+php "$APP_DIR/artisan" queue:restart --quiet 2>/dev/null || true
 ok "Worker kolejki działa"
 
 # Harmonogram odpowiada za heartbeat węzłów i uzgadnianie wyników zadań.
