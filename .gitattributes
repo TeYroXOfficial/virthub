@@ -1,0 +1,21 @@
+# Pliki uruchamiane na Linuksie muszą mieć końce linii LF niezależnie od tego,
+# na jakim systemie ktoś sklonował repozytorium. Z CRLF (domyślnym przy
+# core.autocrlf=true na Windows) bash wywala się komunikatem
+# "$'\r': command not found", a systemd i nginx odrzucają konfigurację.
+
+*.sh        text eol=lf
+*.service   text eol=lf
+*.j2        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# Instalator węzła jest serwowany przez panel prosto z dysku — na hypervisor
+# trafia bajt w bajt taki, jaki leży w repozytorium.
+control-plane/resources/stubs/*  text eol=lf
+
+# Pliki binarne — bez żadnej konwersji.
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.zip   binary
+*.gz    binary

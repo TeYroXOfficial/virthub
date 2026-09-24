@@ -24,15 +24,16 @@ class DatabaseSeeder extends Seeder
     {
         $this->command->info('Tworzę konta…');
 
-        $admin = User::updateOrCreate(
+        // email_verified_at nie jest w $fillable, więc updateOrCreate by go
+        // pominął — ustawiamy go osobno przez forceFill.
+        User::updateOrCreate(
             ['email' => 'admin@virthub.test'],
             [
                 'name' => 'Administrator',
                 'password' => 'haslo-developerskie',
                 'role' => User::ROLE_ADMIN,
-                'email_verified_at' => now(),
             ],
-        );
+        )->forceFill(['email_verified_at' => now()])->save();
 
         User::updateOrCreate(
             ['email' => 'klient@virthub.test'],
@@ -40,9 +41,8 @@ class DatabaseSeeder extends Seeder
                 'name' => 'Jan Kowalski',
                 'password' => 'haslo-developerskie',
                 'role' => User::ROLE_CUSTOMER,
-                'email_verified_at' => now(),
             ],
-        );
+        )->forceFill(['email_verified_at' => now()])->save();
 
         $this->command->info('Tworzę katalog pakietów…');
 

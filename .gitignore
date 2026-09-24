@@ -29,3 +29,7 @@ node_modules
 Thumbs.db
 .idea
 .vscode
+
+# Archiwa tworzone przy wgrywaniu na serwer — nie naleza do repozytorium
+*.zip
+*.tar.gz

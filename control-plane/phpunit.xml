@@ -19,6 +19,9 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <!-- Stały klucz tylko do testów: zestaw ma działać także bez lokalnego
+             pliku .env (świeży klon, CI, katalog przygotowany do wysyłki). -->
+        <env name="APP_KEY" value="base64:dGVzdHktdmlydGh1Yi1rbHVjei0zMi1iYWp0eS0wMDA="/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>

@@ -17,18 +17,36 @@ DATA_DIR="/var/lib/virthub"
 CONFIG_DIR="/etc/virthub-agent"
 AGENT_USER="virthub"
 BRIDGE="${VH_BRIDGE:-br0}"
+SETUP_BRIDGE="${VH_SETUP_BRIDGE:-1}"
 
-log()  { printf '\033[0;36m==>\033[0m %s\n' "$*"; }
+log()  { printf '\n\033[0;36m==>\033[0m \033[1m%s\033[0m\n' "$*"; }
 ok()   { printf '\033[0;32m  ✓\033[0m %s\n' "$*"; }
 warn() { printf '\033[0;33m  !\033[0m %s\n' "$*"; }
-die()  { printf '\033[0;31m  ✗ %s\033[0m\n' "$*" >&2; exit 1; }
+die()  { printf '\n\033[0;31m  ✗ %s\033[0m\n\n' "$*" >&2; exit 1; }
+
+# --- praca z lokalnej kopii -------------------------------------------------
+
+# Skrypt przestawia konfigurację sieci hosta. Gdyby leciał prosto z potoku
+# `curl … | bash`, zerwanie połączenia w trakcie tej operacji urwałoby go w
+# połowie — bash czyta z potoku na bieżąco. Dlatego najpierw zapisujemy się
+# do pliku i uruchamiamy ponownie już z dysku.
+if [ "${VH_LOCAL_COPY:-0}" != "1" ]; then
+    SELF="$(mktemp /tmp/virthub-install.XXXXXX.sh)"
+    if curl -fsSL "$PANEL_URL/enroll/$TOKEN" -o "$SELF" && [ -s "$SELF" ]; then
+        chmod +x "$SELF"
+        export VH_LOCAL_COPY=1
+        exec bash "$SELF" "$@"
+    fi
+    rm -f "$SELF"
+    warn "Nie udało się pobrać lokalnej kopii instalatora — kontynuuję z potoku."
+fi
 
 # --- kontrola środowiska ----------------------------------------------------
 
 [ "$(id -u)" -eq 0 ] || die "Uruchom jako root (sudo bash)."
 
 command -v apt-get >/dev/null 2>&1 \
-    || die "Ten instalator obsługuje Debiana i Ubuntu. Na innych dystrybucjach użyj playbooka Ansible z infra/ansible/."
+    || die "Ten instalator obsługuje Debiana i Ubuntu. Na innych dystrybucjach użyj playbooka z infra/ansible/."
 
 log "Sprawdzam wsparcie sprzętowe dla wirtualizacji"
 if [ "$(grep -Ec '(vmx|svm)' /proc/cpuinfo)" -eq 0 ]; then
@@ -41,15 +59,200 @@ ok "KVM dostępny"
 
 log "Instaluję pakiety (to potrwa 1-3 minuty)"
 export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
 apt-get update -qq
 apt-get install -y -qq \
     qemu-kvm libvirt-daemon-system libvirt-dev qemu-utils \
     python3 python3-venv python3-dev build-essential pkg-config \
-    genisoimage nftables nginx openssl curl ca-certificates >/dev/null
+    genisoimage nftables nginx openssl curl ca-certificates \
+    bridge-utils iproute2 >/dev/null
 ok "Pakiety zainstalowane"
 
-systemctl enable --now libvirtd >/dev/null 2>&1
+systemctl enable --now libvirtd >/dev/null 2>&1 || true
 ok "libvirtd działa"
+
+# --- mostek sieciowy --------------------------------------------------------
+
+# Maszyny klientów wpinają się w mostek spięty z fizycznym interfejsem hosta.
+# Bez niego agent wstanie, ale każde tworzenie maszyny skończy się błędem.
+#
+# Zmiana konfiguracji sieci na zdalnym serwerze potrafi odciąć dostęp, więc
+# przed zastosowaniem uzbrajamy automatyczne wycofanie: jeśli w ciągu trzech
+# minut nie potwierdzimy, że łączność działa, stara konfiguracja wraca sama.
+setup_bridge() {
+    if ip link show "$BRIDGE" >/dev/null 2>&1; then
+        ok "Mostek $BRIDGE już istnieje — zostawiam bez zmian"
+        return 0
+    fi
+
+    if [ "$SETUP_BRIDGE" != "1" ]; then
+        warn "Pominięto konfigurację mostka (VH_SETUP_BRIDGE=0)."
+        return 1
+    fi
+
+    local iface gw addr
+    iface="$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')"
+    gw="$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')"
+    addr="$(ip -4 -o addr show dev "$iface" scope global 2>/dev/null | awk '{print $4; exit}')"
+
+    if [ -z "$iface" ] || [ -z "$addr" ] || [ -z "$gw" ]; then
+        warn "Nie udało się odczytać konfiguracji sieci — mostek trzeba zrobić ręcznie."
+        return 1
+    fi
+
+    # Układy nietypowe (VLAN-y, bondy, istniejące mostki) zostawiamy człowiekowi.
+    # Automat, który ich nie rozumie, zrobi więcej szkody niż pożytku.
+    case "$iface" in
+        *.*|bond*|br*|virbr*)
+            warn "Interfejs $iface wygląda na nietypowy (VLAN/bond/mostek)."
+            warn "Mostek skonfiguruj ręcznie, żeby nie zepsuć istniejącego układu."
+            return 1 ;;
+    esac
+
+    log "Konfiguruję mostek $BRIDGE na interfejsie $iface ($addr, brama $gw)"
+
+    local backup="/root/virthub-net-backup-$(date +%s)"
+    mkdir -p "$backup"
+
+    local stack=""
+    if [ -d /etc/netplan ] && command -v netplan >/dev/null 2>&1; then
+        stack="netplan"
+        cp -a /etc/netplan/. "$backup/" 2>/dev/null || true
+    elif [ -f /etc/network/interfaces ]; then
+        stack="ifupdown"
+        cp -a /etc/network/interfaces "$backup/interfaces"
+        cp -a /etc/network/interfaces.d "$backup/interfaces.d" 2>/dev/null || true
+    else
+        warn "Nie rozpoznaję sposobu konfiguracji sieci na tym systemie."
+        return 1
+    fi
+
+    # Uzbrajamy wycofanie ZANIM cokolwiek zmienimy.
+    cat > /usr/local/sbin/virthub-net-revert <<REVERTEOF
+#!/bin/sh
+# Przywraca konfigurację sieci sprzed instalacji agenta VirtHub.
+set -e
+if [ "$stack" = "netplan" ]; then
+    rm -f /etc/netplan/*.yaml /etc/netplan/*.yml
+    cp -a "$backup/." /etc/netplan/ 2>/dev/null || true
+    netplan apply || true
+else
+    cp -a "$backup/interfaces" /etc/network/interfaces
+    [ -d "$backup/interfaces.d" ] && cp -a "$backup/interfaces.d/." /etc/network/interfaces.d/ || true
+    ifdown --force $BRIDGE 2>/dev/null || true
+    systemctl restart networking || true
+fi
+logger -t virthub "Przywrocono konfiguracje sieci sprzed instalacji agenta."
+REVERTEOF
+    chmod +x /usr/local/sbin/virthub-net-revert
+
+    systemctl stop virthub-net-revert.timer >/dev/null 2>&1 || true
+    systemd-run --quiet --on-active=180 --unit=virthub-net-revert \
+        /usr/local/sbin/virthub-net-revert >/dev/null 2>&1 \
+        || { warn "Nie udało się uzbroić automatycznego wycofania — przerywam zmianę sieci."; return 1; }
+
+    ok "Uzbrojono automatyczne wycofanie (3 minuty)"
+
+    if [ "$stack" = "netplan" ]; then
+        rm -f /etc/netplan/*.yaml /etc/netplan/*.yml
+        cat > /etc/netplan/01-virthub.yaml <<NETPLANEOF
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    $iface:
+      dhcp4: false
+      dhcp6: false
+  bridges:
+    $BRIDGE:
+      interfaces: [$iface]
+      addresses: [$addr]
+      routes:
+        - to: default
+          via: $gw
+          on-link: true
+      nameservers:
+        addresses: [1.1.1.1, 9.9.9.9]
+      parameters:
+        stp: false
+        forward-delay: 0
+NETPLANEOF
+        chmod 600 /etc/netplan/01-virthub.yaml
+        netplan apply >/dev/null 2>&1 || true
+    else
+        # Stara definicja interfejsu musi zniknąć — zostawiona obok mostka
+        # oznacza, że ten sam adres jest konfigurowany dwa razy.
+        python3 - "$iface" <<'PYEOF'
+import glob, re, sys
+
+iface = sys.argv[1]
+pattern = re.compile(rf'^\s*(auto|allow-hotplug|iface)\s+{re.escape(iface)}\b')
+
+for path in ['/etc/network/interfaces'] + glob.glob('/etc/network/interfaces.d/*'):
+    try:
+        lines = open(path).read().splitlines()
+    except (OSError, UnicodeDecodeError):
+        continue
+
+    out, skipping = [], False
+    for line in lines:
+        if pattern.match(line):
+            skipping = line.strip().startswith('iface')
+            out.append('# [virthub] ' + line)
+            continue
+        # Wcięte linie należą do poprzedniej strofy iface.
+        if skipping and line[:1] in (' ', '\t') and line.strip():
+            out.append('# [virthub] ' + line)
+            continue
+        skipping = False
+        out.append(line)
+
+    open(path, 'w').write('\n'.join(out) + '\n')
+PYEOF
+
+        local netmask
+        netmask="$(python3 -c "import ipaddress; print(ipaddress.ip_network('$addr', strict=False).netmask)")"
+
+        cat >> /etc/network/interfaces <<IFUPEOF
+
+# Dodane przez instalator VirtHub
+auto $BRIDGE
+iface $BRIDGE inet static
+    address ${addr%/*}
+    netmask $netmask
+    gateway $gw
+    bridge_ports $iface
+    bridge_stp off
+    bridge_fd 0
+IFUPEOF
+        systemctl restart networking >/dev/null 2>&1 || true
+    fi
+
+    # cloud-init przy następnym starcie odtworzyłby własną konfigurację sieci
+    # i skasował mostek. Wyłączamy mu tę odpowiedzialność.
+    if [ -d /etc/cloud ]; then
+        echo 'network: {config: disabled}' > /etc/cloud/cloud.cfg.d/99-virthub-disable-network.cfg
+    fi
+
+    sleep 8
+
+    # Sprawdzamy to, co faktycznie ma działać: łączność z panelem.
+    if ip link show "$BRIDGE" >/dev/null 2>&1 \
+       && { curl -fsS --max-time 10 "$PANEL_URL/up" >/dev/null 2>&1 \
+            || ping -c1 -W3 "$gw" >/dev/null 2>&1; }; then
+        systemctl stop virthub-net-revert.timer >/dev/null 2>&1 || true
+        ok "Mostek $BRIDGE działa, łączność zachowana"
+        printf '    kopia poprzedniej konfiguracji: %s\n' "$backup"
+        return 0
+    fi
+
+    warn "Po zmianie sieci nie ma łączności — pozwalam wycofać konfigurację."
+    warn "Serwer wróci do poprzednich ustawień w ciągu 3 minut."
+    return 1
+}
+
+BRIDGE_READY=0
+setup_bridge && BRIDGE_READY=1
 
 # --- konto i katalogi -------------------------------------------------------
 
@@ -210,32 +413,50 @@ systemctl enable --now nginx >/dev/null 2>&1
 systemctl reload nginx
 ok "TLS nasłuchuje na porcie $TLS_PORT"
 
+# --- obrazy szablonów -------------------------------------------------------
+
+# Bez choćby jednego obrazu nie da się utworzyć maszyny, a pobranie go to
+# jedyna rzecz, o której i tak trzeba by pamiętać po instalacji.
+if [ -z "$(ls -A "$DATA_DIR/templates" 2>/dev/null)" ]; then
+    log "Pobieram obraz Ubuntu 24.04 (ok. 600 MB)"
+    if curl -fsSL --max-time 900 \
+        "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img" \
+        -o "$DATA_DIR/templates/ubuntu-24.04.qcow2"; then
+        chown "$AGENT_USER":libvirt "$DATA_DIR/templates/ubuntu-24.04.qcow2"
+        ok "Obraz ubuntu-24.04.qcow2 gotowy"
+    else
+        rm -f "$DATA_DIR/templates/ubuntu-24.04.qcow2"
+        warn "Nie udało się pobrać obrazu. Wgraj go później do $DATA_DIR/templates."
+    fi
+fi
+
 # --- kontrola końcowa -------------------------------------------------------
 
 echo
-if ip link show "$BRIDGE" >/dev/null 2>&1; then
-    ok "Mostek $BRIDGE istnieje"
+if [ "$BRIDGE_READY" -eq 1 ]; then
+    ok "Mostek $BRIDGE gotowy"
 else
-    warn "Mostek $BRIDGE NIE istnieje."
+    warn "Mostek $BRIDGE nie został skonfigurowany."
     warn "Agent działa, ale tworzenie maszyn będzie kończyć się błędem."
-    warn "Skonfiguruj mostek zgodnie z adresacją dostawcy, potem: systemctl restart virthub-agent"
+    warn "Skonfiguruj mostek ręcznie, potem: systemctl restart virthub-agent"
 fi
 
 if timedatectl show -p NTPSynchronized --value 2>/dev/null | grep -q yes; then
     ok "Zegar zsynchronizowany"
 else
-    warn "Zegar nie jest zsynchronizowany przez NTP. Rozjechane zegary blokują"
-    warn "komunikację z panelem. Napraw: timedatectl set-ntp true"
+    warn "Zegar nie jest zsynchronizowany. Rozjechane zegary blokują komunikację"
+    warn "z panelem. Naprawa: timedatectl set-ntp true"
+    timedatectl set-ntp true >/dev/null 2>&1 || true
 fi
 
 echo
-printf '\033[0;32m%s\033[0m\n' "Gotowe. Węzeł zgłosił się do panelu."
+printf '\033[0;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m\n'
+printf '\033[0;32m  Węzeł zarejestrowany i gotowy\033[0m\n'
+printf '\033[0;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m\n'
 echo
-echo "Co jeszcze trzeba zrobić:"
-echo "  1. Skonfigurować mostek sieciowy $BRIDGE (jeśli powyżej jest ostrzeżenie)"
-echo "  2. Wgrać obrazy szablonów do $DATA_DIR/templates"
-echo "  3. Zaimportować pulę adresów IP w panelu"
-echo "  4. Ograniczyć dostęp do portu $TLS_PORT do adresu panelu na firewallu dostawcy"
+echo "  W panelu zobaczysz go jako online w ciągu minuty."
+echo "  Zostaje tylko zaimportować pulę adresów IP: Administracja → Adresy IP."
 echo
-echo "Status agenta:  systemctl status virthub-agent"
-echo "Log agenta:     journalctl -u virthub-agent -f"
+echo "  Status agenta:  systemctl status virthub-agent"
+echo "  Log agenta:     journalctl -u virthub-agent -f"
+echo

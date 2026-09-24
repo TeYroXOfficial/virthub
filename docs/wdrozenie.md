@@ -1,5 +1,97 @@
 # Wdrożenie produkcyjne
 
+## Szybka instalacja — jedno polecenie
+
+Cały system instaluje się dwoma poleceniami: jednym na serwerze panelu, jednym
+na każdym hypervisorze. Nie trzeba edytować żadnego pliku — hasła są generowane
+i wypisywane na końcu.
+
+### 1. Panel
+
+Na świeżym serwerze z Debianem 12/13 albo Ubuntu 22.04/24.04:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/UZYTKOWNIK/virthub/main/infra/install-panel.sh | sudo bash -s -- --domain panel.twojadomena.pl --repo https://github.com/UZYTKOWNIK/virthub.git
+```
+
+Instalator sam:
+
+- dobiera wersję PHP (dokłada repozytorium, jeśli system ma za starą)
+- instaluje MariaDB, Redis, nginx, supervisor, cron i wszystkie rozszerzenia PHP
+- wyłącza Apache, jeśli zajmuje port 80
+- zakłada bazę z wygenerowanym hasłem i zapisuje kompletny `.env`
+- tworzy konto administratora
+- uruchamia kolejkę zadań i harmonogram
+- wystawia certyfikat Let's Encrypt, jeśli domena wskazuje na ten serwer
+
+Na końcu wypisuje adres panelu, login i hasło administratora. **Hasło pokazuje
+tylko raz.**
+
+Domena musi mieć rekord A wskazujący na serwer, zanim uruchomisz instalator —
+inaczej certyfikat się nie wystawi i panel zostanie na HTTP (instalator
+powie to wprost i poda polecenie, którym dokończysz TLS później).
+
+Bez `--domain` instalator zapyta o nią; wciśnięcie Enter zostawia panel na
+adresie IP, bez szyfrowania.
+
+#### Skąd instalator bierze kod
+
+Polecenie `curl` wymaga, żeby skrypt był dostępny pod publicznym adresem.
+Najprościej wrzucić repozytorium na GitHub — wtedy działa polecenie z góry.
+Dla repozytorium prywatnego `raw.githubusercontent.com` wymaga tokenu, więc
+użyj drugiego wariantu:
+
+```bash
+sudo bash install-panel.sh --domain panel.twojadomena.pl --source /root/virthub
+```
+
+gdzie `/root/virthub` to wgrany na serwer katalog repozytorium (cały, nie tylko
+`control-plane`). `install-panel.sh` leży w `infra/`.
+
+#### Aktualizacja
+
+Uruchom to samo polecenie jeszcze raz. Instalator wykrywa istniejącą instalację
+i zachowuje klucz aplikacji, bazę, hasła i konto administratora — podmienia
+tylko kod, zależności i konfigurację usług.
+
+### 2. Hypervisor
+
+Nie potrzebujesz żadnego skryptu z repozytorium. W panelu wejdź w
+**Administracja → Hypervisory**, podaj nazwę węzła i skopiuj polecenie, które
+się pojawi. Wklej je na serwerze z KVM jako root.
+
+Instalator węzła sam:
+
+- sprawdza, czy procesor wspiera wirtualizację
+- instaluje KVM, libvirt i agenta
+- **konfiguruje mostek sieciowy** — z automatycznym wycofaniem: jeśli po zmianie
+  sieci serwer straci łączność, w ciągu 3 minut wraca do poprzednich ustawień
+- generuje certyfikat TLS, który panel przypina do tego węzła
+- zgłasza się do panelu z wykrytymi zasobami (rdzenie, RAM, dysk)
+- pobiera obraz Ubuntu 24.04, żeby od razu dało się utworzyć maszynę
+
+Po około minucie węzeł pojawia się w panelu jako online. Zostaje zaimportować
+pulę adresów IP (**Administracja → Adresy IP**) — tego nie da się wykryć
+automatycznie, bo to zależy od tego, co przydzielił ci dostawca.
+
+#### Kiedy mostek trzeba zrobić ręcznie
+
+Automat konfiguruje wyłącznie prosty, najczęstszy układ: jeden interfejs z
+adresem i bramą. Jeśli serwer używa VLAN-ów, bondingu albo ma już jakiś mostek,
+instalator nie rusza sieci i mówi o tym wprost — w takim układzie automat
+zrobiłby więcej szkody niż pożytku. Wyłączenie automatu:
+
+```bash
+curl -sSL https://panel.twojadomena.pl/enroll/TOKEN | sudo VH_SETUP_BRIDGE=0 bash
+```
+
+---
+
+## Instalacja ręczna
+
+Poniżej to samo krok po kroku — na wypadek nietypowego systemu albo gdy chcesz
+wiedzieć, co dokładnie robi instalator.
+
 ## Co gdzie trafia
 
 To **dwa osobne serwery o różnych wymaganiach**. Wrzucenie wszystkiego w jedno

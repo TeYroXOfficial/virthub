@@ -42,6 +42,21 @@ Zgubiony pakiet nie zostawia maszyny w stanie „building" na zawsze.
 
 ---
 
+## Instalacja na serwerze
+
+Jedno polecenie na serwerze panelu (Debian 12/13, Ubuntu 22.04/24.04):
+
+```bash
+curl -sSL https://raw.githubusercontent.com/UZYTKOWNIK/virthub/main/infra/install-panel.sh | sudo bash -s -- --domain panel.twojadomena.pl --repo https://github.com/UZYTKOWNIK/virthub.git
+```
+
+Hypervisory dodaje się z panelu: **Administracja → Hypervisory** daje gotowe
+polecenie do wklejenia na serwerze z KVM. Oba instalatory niczego nie wymagają
+edytować — szczegóły, warianty i instalacja ręczna w
+[`docs/wdrozenie.md`](docs/wdrozenie.md).
+
+---
+
 ## Uruchomienie środowiska developerskiego
 
 Agent działa w trybie `mock` — tworzy pliki zamiast maszyn, więc cały przepływ
