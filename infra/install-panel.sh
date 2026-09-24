@@ -114,6 +114,10 @@ command -v apt-get >/dev/null 2>&1 \
 export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a           # Ubuntu potrafi zatrzymać apt pytaniem o restart usług
 export COMPOSER_ALLOW_SUPERUSER=1
+# Uruchomiony przez systemd (aktualizacja z panelu) nie ma HOME — composer
+# bez niego odmawia pracy, a git i npm szukają tam konfiguracji.
+export HOME="${HOME:-/root}"
+export COMPOSER_HOME="${COMPOSER_HOME:-$HOME/.config/composer}"
 
 # --- gdzie leży aplikacja ---------------------------------------------------
 
@@ -742,6 +746,8 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 TimeoutStartSec=3600
+# Usługi systemd nie dostają HOME — composer bez niego nie działa.
+Environment=HOME=/root
 # Zlecenie zdejmujemy, zanim cokolwiek się uruchomi: gdyby skrypt nie wystartował,
 # .path odpalałby usługę w pętli, aż systemd wyłączyłby ją na dobre.
 ExecStartPre=/bin/rm -f /var/lib/virthub-panel/request

@@ -19,6 +19,8 @@ STATE_DIR="/var/lib/virthub-panel"
 ROOT_DIR="/opt/virthub"
 
 [ "$(id -u)" -eq 0 ] || { echo "Uruchom jako root." >&2; exit 1; }
+# Usługa systemd nie ustawia HOME — composer w instalatorze bez niego nie ruszy.
+export HOME="${HOME:-/root}"
 [ -f "$CONF" ] || { echo "Brak $CONF — uruchom raz instalator panelu ręcznie." >&2; exit 1; }
 
 # shellcheck disable=SC1090

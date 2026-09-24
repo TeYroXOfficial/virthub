@@ -24,6 +24,7 @@ VH_UPDATE_BRANCH="${VH_UPDATE_BRANCH:-main}"
 VH_TARBALL="${VH_TARBALL:-}"
 
 [ "$(id -u)" -eq 0 ] || { echo "Uruchom jako root (sudo bash)." >&2; exit 1; }
+export HOME="${HOME:-/root}"
 [ -d /opt/virthub-agent ] || { echo "Brak /opt/virthub-agent — to nie jest zainstalowany węzeł VirtHub." >&2; exit 1; }
 
 mkdir -p "$STATE_DIR"
