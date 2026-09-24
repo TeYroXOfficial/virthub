@@ -88,6 +88,24 @@ Aktualizacja węzła podmienia kod agenta, jednostkę systemd i konfigurację
 nginx; nie rusza rejestracji, sekretów, certyfikatu, mostka ani maszyn —
 działające maszyny nie są restartowane.
 
+### Konta i uprawnienia
+
+**Administracja → Użytkownicy**: zakładanie kont (hasło nadane albo
+wygenerowane i pokazane raz), rola, uprawnienia, limity i blokada konta.
+
+- Rola wyznacza domyślny zestaw uprawnień: klient — wszystko przy własnych
+  maszynach; wsparcie — dodatkowo maszyny klientów i konta klientów;
+  administrator — wszystko (nie da się go ograniczyć).
+- „Własne uprawnienia" zawężają albo rozszerzają zestaw per konto: zamawianie,
+  zasilanie, konsola, zapora, snapshoty, zmiana pakietu, reinstalacja,
+  usuwanie; dla personelu — dostęp do poszczególnych działów administracji.
+- Limit maszyn (puste = `VIRTHUB_SERVERS_PER_CUSTOMER`) i lista dozwolonych
+  pakietów działają w panelu i w API.
+- Zablokowane konto jest wylogowywane przy następnym żądaniu, a jego tokeny
+  API unieważniane; maszyny działają dalej.
+- Wsparcie zarządza tylko kontami klientów. Nie da się zablokować, usunąć ani
+  zdegradować samego siebie ani ostatniego aktywnego administratora.
+
 ### Zapora maszyn
 
 Każda maszyna ma zaporę zarządzaną ze strony maszyny w panelu (klient i

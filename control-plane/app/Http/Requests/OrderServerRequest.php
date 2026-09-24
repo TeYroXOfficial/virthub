@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Models\OsTemplate;
 use App\Models\VpsPackage;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 use Illuminate\Validation\Rule;
 
 class OrderServerRequest extends FormRequest
@@ -44,6 +45,39 @@ class OrderServerRequest extends FormRequest
             'ssh_keys' => ['array', 'max:10'],
             'ssh_keys.*' => ['string', 'max:1000', 'regex:/^(ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp[0-9]+)\s+[A-Za-z0-9+\/=]+/'],
         ];
+    }
+
+    /**
+     * Limity konta: liczba maszyn i dozwolone pakiety. Tu, a nie w
+     * kontrolerze, żeby panel i API sprawdzały dokładnie to samo.
+     *
+     * @return list<callable>
+     */
+    public function after(): array
+    {
+        return [function (Validator $validator) {
+            $user = $this->user();
+
+            if ($user === null || $validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            // Personel bez własnego limitu zamawia bez ograniczeń (np. maszyny testowe).
+            if (! ($user->isStaff() && $user->max_servers === null)) {
+                $limit = $user->serverLimit();
+                if ($user->servers()->count() >= $limit) {
+                    $validator->errors()->add('package', "Osiągnięto limit {$limit} maszyn na koncie. "
+                        .'Napisz do nas, jeśli potrzebujesz go zwiększyć.');
+
+                    return;
+                }
+            }
+
+            $package = VpsPackage::where('slug', $this->string('package'))->first();
+            if ($package !== null && ! $user->mayOrderPackage($package)) {
+                $validator->errors()->add('package', "Pakiet {$package->name} nie jest dostępny dla Twojego konta.");
+            }
+        }];
     }
 
     public function messages(): array

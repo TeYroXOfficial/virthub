@@ -8,6 +8,7 @@ use App\Http\Controllers\Web\FirewallController;
 use App\Http\Controllers\Web\PanelController;
 use App\Http\Controllers\Web\SsoController;
 use App\Http\Controllers\Web\UpdatesController;
+use App\Http\Controllers\Web\UsersController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('panel.dashboard'));
@@ -27,7 +28,7 @@ Route::post('/logout', [AuthController::class, 'logout'])
 Route::get('/sso/{token}', SsoController::class)->name('sso.consume');
 
 // --- panel ------------------------------------------------------------------
-Route::middleware('auth')->prefix('panel')->name('panel.')->group(function () {
+Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->group(function () {
     Route::get('/', [PanelController::class, 'dashboard'])->name('dashboard');
 
     Route::get('/servers/new', [PanelController::class, 'createServer'])->name('servers.create');
@@ -46,40 +47,64 @@ Route::middleware('auth')->prefix('panel')->name('panel.')->group(function () {
 });
 
 // --- panel administratora ---------------------------------------------------
-Route::middleware(['auth', 'admin'])->prefix('panel/admin')->name('panel.admin.')->group(function () {
-    Route::get('/', [AdminController::class, 'index'])->name('index');
+// Każdy dział ma własne uprawnienie (App\Domain\Access\Permissions::ADMIN) —
+// administrator ma wszystkie, support te, które mu nadano.
+Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel.admin.')->group(function () {
+    Route::get('/', [AdminController::class, 'index'])->middleware('admin:panel')->name('index');
 
-    Route::get('/hypervisors', [AdminController::class, 'hypervisors'])->name('hypervisors');
-    Route::post('/hypervisors', [AdminController::class, 'storeHypervisor'])->name('hypervisors.store');
-    Route::post('/hypervisors/{hypervisor}/enrollment', [AdminController::class, 'regenerateEnrollment'])->name('hypervisors.enrollment');
-    Route::put('/hypervisors/{hypervisor}', [AdminController::class, 'updateHypervisor'])->name('hypervisors.update');
-    Route::post('/hypervisors/{hypervisor}/check', [AdminController::class, 'checkHypervisor'])->name('hypervisors.check');
-    Route::delete('/hypervisors/{hypervisor}', [AdminController::class, 'destroyHypervisor'])->name('hypervisors.destroy');
+    Route::middleware('admin:admin.hypervisors')->group(function () {
+        Route::get('/hypervisors', [AdminController::class, 'hypervisors'])->name('hypervisors');
+        Route::post('/hypervisors', [AdminController::class, 'storeHypervisor'])->name('hypervisors.store');
+        Route::post('/hypervisors/{hypervisor}/enrollment', [AdminController::class, 'regenerateEnrollment'])->name('hypervisors.enrollment');
+        Route::put('/hypervisors/{hypervisor}', [AdminController::class, 'updateHypervisor'])->name('hypervisors.update');
+        Route::post('/hypervisors/{hypervisor}/check', [AdminController::class, 'checkHypervisor'])->name('hypervisors.check');
+        Route::delete('/hypervisors/{hypervisor}', [AdminController::class, 'destroyHypervisor'])->name('hypervisors.destroy');
+    });
 
-    Route::get('/packages', [AdminController::class, 'packages'])->name('packages');
-    Route::post('/packages', [AdminController::class, 'storePackage'])->name('packages.store');
-    Route::post('/packages/{package}/toggle', [AdminController::class, 'togglePackage'])->name('packages.toggle');
+    Route::middleware('admin:admin.packages')->group(function () {
+        Route::get('/packages', [AdminController::class, 'packages'])->name('packages');
+        Route::post('/packages', [AdminController::class, 'storePackage'])->name('packages.store');
+        Route::post('/packages/{package}/toggle', [AdminController::class, 'togglePackage'])->name('packages.toggle');
+    });
 
-    Route::get('/templates', [AdminController::class, 'templates'])->name('templates');
-    Route::post('/templates', [AdminController::class, 'storeTemplate'])->name('templates.store');
-    Route::post('/templates/{template}/toggle', [AdminController::class, 'toggleTemplate'])->name('templates.toggle');
-    Route::post('/templates/{template}/retry', [AdminController::class, 'retryTemplate'])->name('templates.retry');
-    Route::post('/templates/catalog/{key}', [AdminController::class, 'addCatalogTemplate'])->name('templates.catalog');
+    Route::middleware('admin:admin.templates')->group(function () {
+        Route::get('/templates', [AdminController::class, 'templates'])->name('templates');
+        Route::post('/templates', [AdminController::class, 'storeTemplate'])->name('templates.store');
+        Route::post('/templates/{template}/toggle', [AdminController::class, 'toggleTemplate'])->name('templates.toggle');
+        Route::post('/templates/{template}/retry', [AdminController::class, 'retryTemplate'])->name('templates.retry');
+        Route::post('/templates/catalog/{key}', [AdminController::class, 'addCatalogTemplate'])->name('templates.catalog');
+    });
 
-    Route::get('/ip-pools', [AdminController::class, 'ipPools'])->name('ip-pools');
-    Route::post('/ip-pools', [AdminController::class, 'storeIpPool'])->name('ip-pools.store');
-    Route::delete('/ip-pools/{pool}', [AdminController::class, 'destroyIpPool'])->name('ip-pools.destroy');
-    Route::post('/hypervisor-groups', [AdminController::class, 'storeHypervisorGroup'])->name('hypervisor-groups.store');
-    Route::put('/hypervisor-groups/{group}', [AdminController::class, 'updateHypervisorGroup'])->name('hypervisor-groups.update');
-    Route::delete('/hypervisor-groups/{group}', [AdminController::class, 'destroyHypervisorGroup'])->name('hypervisor-groups.destroy');
+    Route::middleware('admin:admin.ip_pools')->group(function () {
+        Route::get('/ip-pools', [AdminController::class, 'ipPools'])->name('ip-pools');
+        Route::post('/ip-pools', [AdminController::class, 'storeIpPool'])->name('ip-pools.store');
+        Route::delete('/ip-pools/{pool}', [AdminController::class, 'destroyIpPool'])->name('ip-pools.destroy');
+        Route::post('/hypervisor-groups', [AdminController::class, 'storeHypervisorGroup'])->name('hypervisor-groups.store');
+        Route::put('/hypervisor-groups/{group}', [AdminController::class, 'updateHypervisorGroup'])->name('hypervisor-groups.update');
+        Route::delete('/hypervisor-groups/{group}', [AdminController::class, 'destroyHypervisorGroup'])->name('hypervisor-groups.destroy');
+    });
 
-    Route::get('/updates', [UpdatesController::class, 'index'])->name('updates');
-    Route::get('/updates/status', [UpdatesController::class, 'status'])->name('updates.status');
-    Route::post('/updates/panel', [UpdatesController::class, 'updatePanel'])->name('updates.panel');
-    Route::post('/updates/nodes', [UpdatesController::class, 'updateAllNodes'])->name('updates.nodes');
-    Route::post('/updates/nodes/{hypervisor}', [UpdatesController::class, 'updateNode'])->name('updates.node');
+    Route::middleware('admin:admin.updates')->group(function () {
+        Route::get('/updates', [UpdatesController::class, 'index'])->name('updates');
+        Route::get('/updates/status', [UpdatesController::class, 'status'])->name('updates.status');
+        Route::post('/updates/panel', [UpdatesController::class, 'updatePanel'])->name('updates.panel');
+        Route::post('/updates/nodes', [UpdatesController::class, 'updateAllNodes'])->name('updates.nodes');
+        Route::post('/updates/nodes/{hypervisor}', [UpdatesController::class, 'updateNode'])->name('updates.node');
+    });
 
-    Route::get('/servers', [AdminController::class, 'servers'])->name('servers');
+    Route::get('/servers', [AdminController::class, 'servers'])->middleware('admin:admin.servers')->name('servers');
+
+    Route::middleware('admin:admin.users')->group(function () {
+        Route::get('/users', [UsersController::class, 'index'])->name('users');
+        Route::get('/users/new', [UsersController::class, 'create'])->name('users.create');
+        Route::post('/users', [UsersController::class, 'store'])->name('users.store');
+        Route::get('/users/{user}', [UsersController::class, 'edit'])->name('users.edit');
+        Route::put('/users/{user}', [UsersController::class, 'update'])->name('users.update');
+        Route::post('/users/{user}/suspend', [UsersController::class, 'suspend'])->name('users.suspend');
+        Route::post('/users/{user}/unsuspend', [UsersController::class, 'unsuspend'])->name('users.unsuspend');
+        Route::post('/users/{user}/password', [UsersController::class, 'resetPassword'])->name('users.password');
+        Route::delete('/users/{user}', [UsersController::class, 'destroy'])->name('users.destroy');
+    });
 });
 
 // --- rejestracja hypervisora ------------------------------------------------

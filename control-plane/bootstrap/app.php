@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'admin' => EnsureIsAdmin::class,
+            'not-suspended' => \App\Http\Middleware\EnsureNotSuspended::class,
             // Zakresy tokenów Sanctum: token integracji rozliczeniowej ma
             // dostęp wyłącznie do endpointów billingowych.
             'abilities' => CheckAbilities::class,

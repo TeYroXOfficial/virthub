@@ -9,20 +9,24 @@ use Symfony\Component\HttpFoundation\Response;
 class EnsureIsAdmin
 {
     /**
-     * @param  string  $level  'admin' (domyślnie) albo 'staff' — endpointy
-     *                         wsparcia dopuszczają rolę support, reszta nie.
+     * @param  string  $level  'admin' (domyślnie) — pełny administrator;
+     *                         'staff' — personel (support lub admin);
+     *                         'panel' — personel z dostępem do choć jednego działu;
+     *                         'admin.xxx' — personel z danym uprawnieniem działu.
      */
     public function handle(Request $request, Closure $next, string $level = 'admin'): Response
     {
         $user = $request->user();
 
-        $allowed = match ($level) {
-            'staff' => $user?->isStaff(),
+        $allowed = match (true) {
+            $level === 'staff' => $user?->isStaff(),
+            $level === 'panel' => $user?->hasAnyAdminPermission(),
+            str_starts_with($level, 'admin.') => $user?->isStaff() && $user->hasPermission($level),
             default => $user?->isAdmin(),
         };
 
         if (! $allowed || $user->isSuspended()) {
-            abort(403, 'Ta operacja wymaga uprawnień administratora.');
+            abort(403, 'Nie masz uprawnień do tej części panelu.');
         }
 
         return $next($request);

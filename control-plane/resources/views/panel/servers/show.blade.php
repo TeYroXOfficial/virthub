@@ -21,6 +21,7 @@
 
         <div class="actions">
             @if ($server->acceptsCommands())
+                @can('console', $server)
                 <form method="POST" action="{{ route('panel.servers.console', $server) }}" target="_blank" style="margin:0">
                     @csrf
                     <button class="btn btn-primary" type="submit" @disabled(! $server->isRunning())
@@ -29,6 +30,8 @@
                         Konsola
                     </button>
                 </form>
+                @endcan
+                @can('power', $server)
                 <div class="btn-group" id="power-controls">
                     <button class="btn" data-action="start" @disabled($server->isRunning()) title="Uruchom">
                         <x-icon name="play" :size="15"/> Start
@@ -44,6 +47,7 @@
                         <x-icon name="power" :size="15"/>
                     </button>
                 </div>
+                @endcan
             @endif
         </div>
     </div>

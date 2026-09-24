@@ -78,7 +78,7 @@ class ServerController extends Controller
 
     public function power(Request $request, Server $server): JsonResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('power', $server);
 
         $validated = $request->validate([
             'action' => ['required', Rule::in(['start', 'stop', 'reboot', 'force-off'])],
@@ -94,7 +94,7 @@ class ServerController extends Controller
 
     public function rebuild(Request $request, Server $server): JsonResponse
     {
-        $this->authorize('destroy', $server);
+        $this->authorize('rebuild', $server);
 
         $validated = $request->validate([
             'template' => ['required', Rule::exists(OsTemplate::class, 'id')->where('is_active', true)],
@@ -120,7 +120,7 @@ class ServerController extends Controller
 
     public function resize(Request $request, Server $server): JsonResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('resize', $server);
 
         $validated = $request->validate([
             'package' => ['required', Rule::exists(VpsPackage::class, 'slug')->where('is_active', true)],
@@ -212,7 +212,7 @@ class ServerController extends Controller
      */
     public function consoleToken(Request $request, Server $server): JsonResponse
     {
-        $this->authorize('operate', $server);
+        $this->authorize('console', $server);
 
         if (! $server->isRunning()) {
             return response()->json([

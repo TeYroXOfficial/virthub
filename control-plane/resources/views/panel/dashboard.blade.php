@@ -8,9 +8,11 @@
             <h1>Moje maszyny</h1>
             <p class="lede">Serwery na Twoim koncie — stan, adresy i szybki dostęp do zarządzania.</p>
         </div>
-        <div class="actions">
-            <a class="btn btn-primary" href="{{ route('panel.servers.create') }}"><x-icon name="plus" :size="16"/> Zamów serwer</a>
-        </div>
+        @can('create', \App\Models\Server::class)
+            <div class="actions">
+                <a class="btn btn-primary" href="{{ route('panel.servers.create') }}"><x-icon name="plus" :size="16"/> Zamów serwer</a>
+            </div>
+        @endcan
     </div>
 
     @if ($servers->isNotEmpty())
@@ -39,7 +41,9 @@
         <div class="card empty">
             <x-icon name="servers" :size="40"/>
             <p>Nie masz jeszcze żadnej maszyny.</p>
-            <a class="btn btn-primary" href="{{ route('panel.servers.create') }}">Zamów pierwszy VPS</a>
+            @can('create', \App\Models\Server::class)
+                <a class="btn btn-primary" href="{{ route('panel.servers.create') }}">Zamów pierwszy VPS</a>
+            @endcan
         </div>
     @else
         <div class="card" style="padding:0">
