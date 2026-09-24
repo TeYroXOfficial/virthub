@@ -15,6 +15,7 @@ use App\Models\Server;
 use App\Models\ServerJob;
 use App\Models\User;
 use App\Models\VpsPackage;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -277,6 +278,28 @@ class ServerProvisioner
         AuditLog::record($iso ? 'server.iso_mounted' : 'server.iso_ejected', $server, [
             'iso' => $iso?->name, 'boot' => $boot, 'restart' => $restart,
         ], $actor);
+        RunServerActionJob::dispatch($job->id);
+
+        return $job;
+    }
+
+    /**
+     * Nowe, losowe hasło roota. Panel pokaże je raz, dopiero gdy agent
+     * potwierdzi zmianę — do tego czasu leży zaszyfrowane w zadaniu.
+     */
+    public function resetPassword(Server $server, ?User $actor = null): ServerJob
+    {
+        $this->assertAcceptsCommands($server);
+
+        if (! $server->isRunning()) {
+            throw new \DomainException('Uruchom maszynę — hasło zmienia się w działającym systemie.');
+        }
+
+        $job = $this->createJobRecord($server, 'password', $actor, [
+            'password' => Crypt::encryptString($this->generatePassword()),
+        ]);
+
+        AuditLog::record('server.password_reset', $server, [], $actor);
         RunServerActionJob::dispatch($job->id);
 
         return $job;

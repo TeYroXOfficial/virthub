@@ -63,6 +63,7 @@ zamknięte jest ignorowane — powtórzony raport nie cofa stanu maszyny.
 | `POST` | `/vm/{uuid}/power` | `start` / `stop` / `reboot` / `force-off` |
 | `POST` | `/vm/{uuid}/rebuild` | ponowna instalacja systemu (z `interfaces[]` i `nameservers[]`) |
 | `POST` | `/vm/{uuid}/iso` | montowanie / wysunięcie płyty ISO (tylko KVM) |
+| `POST` | `/vm/{uuid}/password` | nowe hasło roota w działającym systemie (`{"password": "…"}`) |
 | `GET` | `/images/iso` | lista obrazów ISO na węźle |
 | `POST` | `/images/iso` | pobranie obrazu ISO z URL (zadanie) |
 | `DELETE` | `/images/iso/{name}` | usunięcie obrazu ISO |
@@ -90,6 +91,13 @@ podmienia plik. Wynik zadania: `{"name", "size_bytes", "sha256"}`.
 kolejność rozruchu jest ustawiana per urządzenie (`<boot order>`). Zmiana
 definicji działa od następnego uruchomienia; `restart: true` robi to od razu
 (destroy + start). Kontener odpowiada 409.
+
+### Reset hasła (`/vm/{uuid}/password`)
+
+Hasło: drukowalne ASCII bez spacji, 8–128 znaków. KVM ustawia je przez
+qemu-guest-agent (`virDomainSetUserPassword`) — nowe maszyny dostają pakiet
+`qemu-guest-agent` przez cloud-init. LXC: `incus exec … chpasswd`, hasło
+przez stdin. Maszyna musi działać, inaczej zadanie kończy się błędem.
 
 ### Adres maszyny (`interfaces[]` w `POST /vm` i `PUT /vm/{uuid}/network`)
 

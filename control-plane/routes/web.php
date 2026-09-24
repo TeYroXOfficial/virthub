@@ -39,6 +39,8 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/console', [ConsoleController::class, 'open'])->name('servers.console');
     Route::post('/servers/{server}/rebuild', [ServerActionsController::class, 'rebuild'])->name('servers.rebuild');
     Route::post('/servers/{server}/iso', [ServerActionsController::class, 'iso'])->name('servers.iso');
+    Route::post('/servers/{server}/password', [ServerActionsController::class, 'resetPassword'])->name('servers.password');
+    Route::get('/servers/{server}/status', [ServerActionsController::class, 'status'])->name('servers.status');
 
     Route::prefix('/servers/{server}/firewall')->name('servers.firewall.')->group(function () {
         Route::post('/policy', [FirewallController::class, 'policy'])->name('policy');

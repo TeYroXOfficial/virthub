@@ -60,20 +60,19 @@ class IsoRebuildTest extends TestCase
 
     // --- reinstalacja ---------------------------------------------------------------
 
-    public function test_reinstalacja_wymaga_wpisania_nazwy_hosta(): void
+    public function test_reinstalacja_wymaga_potwierdzenia(): void
     {
         $template = OsTemplate::factory()->create(['name' => 'Debian 13', 'image_file' => 'debian-13.qcow2']);
 
         $this->actingAs($this->owner)->post(route('panel.servers.rebuild', $this->server), [
             'template' => $template->id,
-            'confirm_hostname' => 'inny.example.com',
-        ])->assertSessionHasErrors('confirm_hostname');
+        ])->assertSessionHasErrors('confirm');
 
         $this->assertDatabaseCount('server_jobs', 0);
 
         $this->actingAs($this->owner)->post(route('panel.servers.rebuild', $this->server), [
             'template' => $template->id,
-            'confirm_hostname' => 'VPS1.example.com',
+            'confirm' => '1',
         ])->assertSessionHasNoErrors();
 
         $server = $this->server->fresh();
@@ -90,7 +89,7 @@ class IsoRebuildTest extends TestCase
 
         $this->actingAs($this->owner)->post(route('panel.servers.rebuild', $this->server), [
             'template' => $container->id,
-            'confirm_hostname' => 'vps1.example.com',
+            'confirm' => '1',
         ])->assertSessionHasErrors('template');
 
         $this->assertSame(ServerState::Running, $this->server->fresh()->state);
@@ -124,7 +123,7 @@ class IsoRebuildTest extends TestCase
 
         $this->actingAs($support)->post(route('panel.servers.rebuild', $this->server), [
             'template' => OsTemplate::factory()->create()->id,
-            'confirm_hostname' => 'vps1.example.com',
+            'confirm' => '1',
         ])->assertForbidden();
     }
 

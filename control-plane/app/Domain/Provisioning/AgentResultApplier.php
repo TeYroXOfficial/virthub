@@ -6,6 +6,7 @@ use App\Enums\ServerState;
 use App\Models\Backup;
 use App\Models\Server;
 use App\Models\ServerJob;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -56,6 +57,7 @@ class AgentResultApplier
             'restore' => $server->markState(ServerState::Running),
             'network' => null,
             'iso' => $this->finishIso($server, $job, $result),
+            'password' => $this->finishPassword($server, $job),
             default => Log::warning('Nieznana akcja w wyniku zadania', ['action' => $job->action]),
         };
 
@@ -69,6 +71,10 @@ class AgentResultApplier
         match ($job->action) {
             'create' => $this->failCreate($server, $error),
             'snapshot' => $this->failSnapshot($job),
+            // Hasło, którego agent nie ustawił, nie może zostać w bazie
+            // — pokazane klientowi wyglądałoby na działające.
+            'rebuild' => $server->forceFill(['root_password' => null])->save(),
+            'password' => $job->forceFill(['payload' => []])->save(),
             default => null,
         };
 
@@ -113,6 +119,15 @@ class AgentResultApplier
         // w trakcie tworzenia trafia na węzeł osobnym zleceniem.
         if ($server->firewall_enabled || $server->firewallRules()->exists()) {
             app(ServerProvisioner::class)->syncNetwork($server);
+        }
+    }
+
+    /** Hasło trafia do maszyny (pokazane raz na stronie), a znika z zadania. */
+    private function finishPassword(Server $server, ServerJob $job): void
+    {
+        if (! empty($job->payload['password'])) {
+            $server->forceFill(['root_password' => Crypt::decryptString($job->payload['password'])])->save();
+            $job->forceFill(['payload' => []])->save();
         }
     }
 

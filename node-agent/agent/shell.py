@@ -29,12 +29,13 @@ def which(binary: str) -> str | None:
     return shutil.which(binary)
 
 
-def run(argv: list[str], *, timeout: int = 300, check: bool = True) -> str:
+def run(argv: list[str], *, timeout: int = 300, check: bool = True, input: str | None = None) -> str:
     """Uruchamia polecenie i zwraca stdout. Rzuca CommandError przy niezerowym kodzie."""
     log.debug("exec: %s", " ".join(argv))
     try:
         proc = subprocess.run(
             argv,
+            input=input,
             capture_output=True,
             text=True,
             timeout=timeout,

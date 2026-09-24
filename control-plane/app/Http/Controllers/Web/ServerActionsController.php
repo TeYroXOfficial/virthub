@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\IsoImage;
 use App\Models\OsTemplate;
 use App\Models\Server;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -23,16 +24,12 @@ class ServerActionsController extends Controller
         $validated = $request->validate([
             'template' => ['required', Rule::exists(OsTemplate::class, 'id')->where('is_active', true)],
             'ssh_key' => ['nullable', 'string', 'max:1000', 'regex:/^(ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp[0-9]+)\s+[A-Za-z0-9+\/=]+/'],
-            // Kasuje dysk bezpowrotnie — wpisanie nazwy hosta to świadome potwierdzenie.
-            'confirm_hostname' => ['required', 'string'],
+            // Kasuje dysk bezpowrotnie — wymagamy świadomego potwierdzenia.
+            'confirm' => ['accepted'],
         ], [
             'ssh_key.regex' => 'Klucz SSH musi być w formacie OpenSSH (ssh-ed25519 AAAA… lub ssh-rsa AAAA…).',
+            'confirm.accepted' => 'Potwierdź, że rozumiesz, że dane na dysku zostaną usunięte.',
         ]);
-
-        if (mb_strtolower(trim($validated['confirm_hostname'])) !== mb_strtolower($server->hostname)) {
-            return back()->withErrors(['confirm_hostname' => 'Wpisana nazwa hosta nie zgadza się — reinstalacja nie została uruchomiona.'])
-                ->withInput();
-        }
 
         try {
             $this->provisioner->rebuild(
@@ -45,8 +42,47 @@ class ServerActionsController extends Controller
             return back()->withErrors(['template' => $e->getMessage()]);
         }
 
-        return redirect()->route('panel.servers.show', $server)
-            ->with('status', 'Trwa reinstalacja systemu. Nowe hasło roota pojawi się poniżej — zapisz je.');
+        return redirect()->route('panel.servers.show', $server);
+    }
+
+    public function resetPassword(Request $request, Server $server): RedirectResponse
+    {
+        $this->authorize('resetPassword', $server);
+
+        try {
+            $this->provisioner->resetPassword($server, $request->user());
+        } catch (\DomainException $e) {
+            return redirect()->to(route('panel.servers.show', $server).'#password')->withErrors(['password' => $e->getMessage()]);
+        }
+
+        return redirect()->to(route('panel.servers.show', $server).'#password')
+            ->with('status', 'Zmieniam hasło roota — nowe pojawi się na tej stronie za kilka sekund.');
+    }
+
+    /**
+     * Stan do odpytywania przez stronę maszyny: ekran postępu reinstalacji
+     * i tworzenia odświeża stronę, gdy operacja się skończy.
+     */
+    public function status(Request $request, Server $server): JsonResponse
+    {
+        $this->authorize('view', $server);
+
+        $job = $server->jobs()->reorder()->latest('id')->first();
+
+        return response()->json([
+            'state' => $server->state->value,
+            'state_label' => $server->state->label(),
+            'transitioning' => $server->state->isTransitioning(),
+            'progress' => (int) $server->build_progress,
+            'job' => $job ? [
+                'id' => $job->id,
+                'action' => $job->action,
+                'status' => $job->status,
+                'finished' => $job->isFinished(),
+                'error' => $job->status === 'failed' ? $job->error : null,
+                'elapsed' => (int) $job->created_at->diffInSeconds(now(), true),
+            ] : null,
+        ]);
     }
 
     public function iso(Request $request, Server $server): RedirectResponse

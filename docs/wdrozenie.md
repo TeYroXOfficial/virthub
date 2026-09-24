@@ -475,9 +475,15 @@ per węzeł, nieudane można ponowić. Klient montuje płytę na stronie maszyny
 (uprawnienie „Obrazy ISO"), zaznacza rozruch z płyty i instaluje system przez
 konsolę noVNC. Obrazu zamontowanego w jakiejkolwiek maszynie nie da się usunąć.
 
-Reinstalacja z szablonu (strona maszyny → „Reinstalacja systemu") wymaga
-wpisania nazwy hosta, czyści dysk i zachowuje adresy IP, zaporę i parametry.
-Support nie może reinstalować cudzych maszyn — tylko administrator.
+Reinstalacja: przycisk „Reinstaluj" obok zasilania otwiera wybór systemu.
+Czyści dysk i zachowuje adresy IP, zaporę i parametry; w trakcie strona
+pokazuje postęp i odświeża się sama. Support nie może reinstalować cudzych
+maszyn — tylko administrator.
+
+Reset hasła roota (zakładka „Ustawienia" maszyny) działa w uruchomionej
+maszynie. KVM potrzebuje w gościu `qemu-guest-agent` — maszyny tworzone od
+tej wersji mają go od startu; w starszych trzeba go doinstalować
+(`apt install qemu-guest-agent`) albo zrobić reinstalację.
 
 ---
 

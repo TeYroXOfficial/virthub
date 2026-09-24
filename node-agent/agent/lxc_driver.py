@@ -74,9 +74,10 @@ class IncusDriver(HypervisorDriver):
 
     # --- dostęp do Incusa ---------------------------------------------------
 
-    def _incus(self, *args: str, timeout: int = 300) -> str:
+    def _incus(self, *args: str, timeout: int = 300, input: str | None = None) -> str:
         try:
-            return run(["incus", *args], timeout=timeout)
+            extra = {"input": input} if input is not None else {}
+            return run(["incus", *args], timeout=timeout, **extra)
         except CommandError as exc:
             raise DriverError(f"Incus odrzucił operację: {exc.stderr or exc}") from exc
 
@@ -283,6 +284,14 @@ class IncusDriver(HypervisorDriver):
 
         self._incus("start", name, timeout=120)
         return {"uuid": uuid, "state": self._state(name), "template": alias}
+
+    def reset_password(self, uuid: str, password: str) -> dict[str, Any]:
+        name = self._name_for(uuid)
+        if self._state(name) != "running":
+            raise DriverError("Kontener musi działać, żeby zmienić hasło — uruchom go i spróbuj ponownie.")
+        # Hasło idzie przez stdin, nie przez argumenty — nie widać go w `ps`.
+        self._incus("exec", name, "--", "chpasswd", input=f"root:{password}\n", timeout=60)
+        return {"uuid": uuid, "state": self._state(name)}
 
     def _current_interfaces(self, name: str) -> str | None:
         """Adresacja zostaje ta sama co przed przebudową — bierzemy ją z

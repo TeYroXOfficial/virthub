@@ -28,6 +28,7 @@ from .schemas import (
     ImagePrefetchRequest,
     IsoDownloadRequest,
     IsoMountRequest,
+    PasswordResetRequest,
     JobAccepted,
     JobState,
     NetworkConfigRequest,
@@ -74,6 +75,9 @@ def _handlers() -> dict[str, Any]:
         ),
         "download_iso": lambda p: _download_iso(IsoDownloadRequest(**p)),
         "mount_iso": lambda p: driver.mount_iso(p["uuid"], IsoMountRequest(**p["body"])),
+        "reset_password": lambda p: driver.reset_password(
+            p["uuid"], PasswordResetRequest(**p["body"]).password
+        ),
     }
 
 
@@ -382,6 +386,18 @@ async def delete_iso(name: str) -> dict[str, Any]:
 )
 async def mount_iso(uuid: str, req: IsoMountRequest) -> JobAccepted:
     job_id = jobs.enqueue("mount_iso", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.post(
+    "/vm/{uuid}/password",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def reset_password(uuid: str, req: PasswordResetRequest) -> JobAccepted:
+    job_id = jobs.enqueue("reset_password", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
     return JobAccepted(job_id=job_id)
 
 

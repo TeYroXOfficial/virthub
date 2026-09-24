@@ -105,6 +105,9 @@ class HypervisorDriver(ABC):
     def console_target(self, uuid: str) -> ConsoleTarget:
         """Dokąd prowadzi konsola maszyny: gniazdo VNC albo polecenie terminala."""
 
+    def reset_password(self, uuid: str, password: str) -> dict[str, Any]:
+        raise DriverError("Ten węzeł nie obsługuje zmiany hasła.")
+
     def mount_iso(self, uuid: str, req: IsoMountRequest) -> dict[str, Any]:
         """Płyta ISO i rozruch z niej — tylko maszyny wirtualne."""
         raise DriverError("Obrazy ISO są dostępne tylko dla maszyn wirtualnych KVM.")
@@ -469,6 +472,24 @@ class LibvirtDriver(HypervisorDriver):
             "state": self._state(domain),
         }
 
+    def reset_password(self, uuid: str, password: str) -> dict[str, Any]:
+        import libvirt
+
+        domain = self._domain(uuid)
+        if not domain.isActive():
+            raise DriverError("Maszyna musi działać, żeby zmienić hasło — uruchom ją i spróbuj ponownie.")
+        try:
+            # Przez qemu-guest-agent w gościu: hasło nie przechodzi przez sieć
+            # ani przez linię poleceń.
+            domain.setUserPassword("root", password, 0)
+        except libvirt.libvirtError as exc:
+            raise DriverError(
+                "Nie udało się zmienić hasła — w maszynie musi działać qemu-guest-agent "
+                "(apt install qemu-guest-agent && systemctl enable --now qemu-guest-agent). "
+                f"Szczegóły: {exc}"
+            ) from exc
+        return {"uuid": uuid, "state": self._state(domain)}
+
     def console_target(self, uuid: str) -> ConsoleTarget:
         domain = self._domain(uuid)
         if not domain.isActive():
@@ -679,6 +700,17 @@ class MockDriver(HypervisorDriver):
 
     def prefetch_image(self, alias: str) -> dict[str, Any]:
         return {"alias": alias, "downloaded": True, "cached": False}
+
+    def reset_password(self, uuid: str, password: str) -> dict[str, Any]:
+        data = self._load()
+        record = data.get(uuid)
+        if record is None:
+            raise VmNotFound(uuid)
+        if record["state"] != "running":
+            raise DriverError("Maszyna musi działać, żeby zmienić hasło — uruchom ją i spróbuj ponownie.")
+        record["password_changes"] = record.get("password_changes", 0) + 1
+        self._save(data)
+        return {"uuid": uuid, "state": record["state"]}
 
     def mount_iso(self, uuid: str, req: IsoMountRequest) -> dict[str, Any]:
         data = self._load()
