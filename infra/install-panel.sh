@@ -211,7 +211,7 @@ apt-get install -y -qq \
     "php$PHP_V-mbstring" "php$PHP_V-xml" "php$PHP_V-curl" "php$PHP_V-zip" \
     "php$PHP_V-bcmath" "php$PHP_V-gd" "php$PHP_V-intl" \
     nginx mariadb-server redis-server supervisor cron \
-    certbot python3-certbot-nginx \
+    certbot python3-certbot-nginx python3-venv \
     git unzip curl openssl ca-certificates >/dev/null
 
 ok "Pakiety zainstalowane"
@@ -366,6 +366,11 @@ fi
 
 # Ścieżka do kodu agenta — domyślnie obok panelu (układ monorepo). Zachowujemy
 # ją, jeśli ktoś wskazał inne miejsce.
+# Wspólny sekret panelu i przekaźnika konsoli. Zachowujemy go przy
+# aktualizacji — zmiana tylko rozłączyłaby otwarte konsole.
+CONSOLE_SECRET="$(env_get "$OLD_ENV" VIRTHUB_CONSOLE_SECRET)"
+[ -n "$CONSOLE_SECRET" ] || CONSOLE_SECRET="$(secret 48)"
+
 AGENT_SOURCE_LINE=""
 OLD_AGENT_SOURCE="$(env_get "$OLD_ENV" VIRTHUB_AGENT_SOURCE_PATH)"
 [ -n "$OLD_AGENT_SOURCE" ] && AGENT_SOURCE_LINE="VIRTHUB_AGENT_SOURCE_PATH=$OLD_AGENT_SOURCE"
@@ -397,7 +402,7 @@ REDIS_PORT=6379
 MAIL_MAILER=log
 
 VIRTHUB_BRAND="$BRAND"
-VIRTHUB_CONSOLE_PROXY_URL=
+VIRTHUB_CONSOLE_SECRET=$CONSOLE_SECRET
 VIRTHUB_SERVERS_PER_CUSTOMER=10
 VIRTHUB_METRICS_RETENTION_DAYS=30
 $AGENT_SOURCE_LINE
@@ -441,6 +446,15 @@ ok "Konfiguracja zbudowana"
 
 log "Konfiguruję nginx"
 
+# Nagłówek Connection dla WebSocketów. Ten sam plik zapisuje instalator
+# węzła — na serwerze, który jest i panelem, i węzłem, mapa jest jedna.
+cat > /etc/nginx/conf.d/virthub-websocket.conf <<'MAPEOF'
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+MAPEOF
+
 cat > /etc/nginx/sites-available/virthub <<NGINXEOF
 server {
     listen 80;
@@ -453,6 +467,17 @@ server {
 
     location / {
         try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    # Konsola maszyn: WebSocket do przekaźnika (usługa virthub-console).
+    location /console-ws/ {
+        proxy_pass http://127.0.0.1:8090;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$connection_upgrade;
+        proxy_set_header Host \$host;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
     }
 
     location ~ \.php\$ {
@@ -468,6 +493,32 @@ server {
 }
 NGINXEOF
 
+# Wewnętrzne wejście dla przekaźnika konsoli — tylko na loopbacku i tylko do
+# wymiany sesji. Osobny serwer, bo publiczny może przekierowywać na HTTPS
+# (certbot), a przekierowanie zamieniłoby POST w GET.
+cat > /etc/nginx/sites-available/virthub-internal <<NGINXEOF
+server {
+    listen 127.0.0.1:8091;
+    server_name virthub-internal;
+    root $APP_DIR/public;
+
+    location /api/internal/console/ {
+        try_files \$uri /index.php?\$query_string;
+    }
+
+    location = /index.php {
+        fastcgi_pass unix:/run/php/php$PHP_V-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location / {
+        return 404;
+    }
+}
+NGINXEOF
+
+ln -sf /etc/nginx/sites-available/virthub-internal /etc/nginx/sites-enabled/virthub-internal
 ln -sf /etc/nginx/sites-available/virthub /etc/nginx/sites-enabled/virthub
 rm -f /etc/nginx/sites-enabled/default
 nginx -t >/dev/null 2>&1 || die "Konfiguracja nginx jest niepoprawna."
@@ -569,6 +620,60 @@ supervisorctl update >/dev/null 2>&1 || true
 php "$APP_DIR/artisan" queue:restart --quiet 2>/dev/null || true
 ok "Worker kolejki działa"
 
+# --- przekaźnik konsoli ---------------------------------------------------
+
+log "Uruchamiam przekaźnik konsoli"
+
+# Przeglądarka nie łączy się z węzłami bezpośrednio (przypięte certyfikaty,
+# podpisy HMAC) — robi to ta usługa na serwerze panelu. Szczegóły:
+# console-proxy/console_proxy.py.
+CONSOLE_DIR="$ROOT_DIR/console-proxy"
+if [ -f "$CONSOLE_DIR/console_proxy.py" ]; then
+    python3 -m venv "$CONSOLE_DIR/.venv"
+    "$CONSOLE_DIR/.venv/bin/pip" install --quiet --upgrade pip
+    "$CONSOLE_DIR/.venv/bin/pip" install --quiet -r "$CONSOLE_DIR/requirements.txt" \
+        || die "Instalacja zależności przekaźnika konsoli nie powiodła się."
+
+    install -d -m 0755 /etc/virthub
+    cat > /etc/virthub/console-proxy.env <<ENVEOF
+VH_PANEL_URL=http://127.0.0.1:8091
+VH_CONSOLE_SECRET=$CONSOLE_SECRET
+VH_LISTEN_HOST=127.0.0.1
+VH_LISTEN_PORT=8090
+ENVEOF
+    chmod 600 /etc/virthub/console-proxy.env
+
+    cat > /etc/systemd/system/virthub-console.service <<UNITEOF
+[Unit]
+Description=VirtHub — przekaźnik konsoli maszyn (WebSocket)
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+DynamicUser=yes
+EnvironmentFile=/etc/virthub/console-proxy.env
+ExecStart=$CONSOLE_DIR/.venv/bin/python $CONSOLE_DIR/console_proxy.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+UNITEOF
+
+    systemctl daemon-reload
+    systemctl enable virthub-console >/dev/null 2>&1
+    systemctl restart virthub-console
+    ok "Przekaźnik konsoli działa"
+else
+    warn "Brak $CONSOLE_DIR — konsola w przeglądarce nie będzie działać."
+    warn "Zainstaluj panel z pełnego repozytorium (--repo), a nie ze spłaszczonej kopii."
+fi
+
 # Harmonogram odpowiada za heartbeat węzłów i uzgadnianie wyników zadań.
 CRON_LINE="* * * * * cd $APP_DIR && php artisan schedule:run >> /dev/null 2>&1"
 
@@ -593,6 +698,12 @@ esac
 
 WORKERS="$(supervisorctl status virthub-worker:* 2>/dev/null | grep -c RUNNING || true)"
 [ "${WORKERS:-0}" -gt 0 ] && ok "Workery kolejki: $WORKERS" || warn "Worker kolejki nie działa."
+
+if systemctl is-active --quiet virthub-console 2>/dev/null; then
+    ok "Przekaźnik konsoli działa"
+else
+    warn "Przekaźnik konsoli nie działa: journalctl -u virthub-console -n 30"
+fi
 
 # --- podsumowanie -----------------------------------------------------------
 

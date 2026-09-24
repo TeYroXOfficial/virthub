@@ -25,6 +25,7 @@ import uuid as uuidlib
 from typing import Any
 
 from .cloudinit import render_network_config, render_user_data
+from .console import ConsoleTarget, TerminalTarget
 from .config import Settings
 from .domain_xml import domain_name
 from .driver import DriverError, HypervisorDriver, VmNotFound, server_id_from_name, AGENT_VERSION
@@ -369,6 +370,21 @@ class IncusDriver(HypervisorDriver):
             net_rx_bytes=int(counters.get("bytes_received", 0)),
             net_tx_bytes=int(counters.get("bytes_sent", 0)),
         )
+
+    def console_target(self, uuid: str) -> ConsoleTarget:
+        """Terminal kontenera: ekran logowania systemu w środku.
+
+        `incus exec -t` zamiast `incus console`: konsola /dev/console zależy
+        od tego, czy obraz uruchamia na niej getty, a exec działa zawsze.
+        Logowanie hasłem roota — tym samym, które klient dostał w panelu.
+        """
+        name = self._name_for(uuid)
+        if self._state(name) != "running":
+            raise DriverError("Konsola jest dostępna tylko dla uruchomionego kontenera.")
+        return TerminalTarget(argv=[
+            "incus", "exec", name, "-t", "--env", "TERM=xterm-256color", "--",
+            "/bin/sh", "-c", "if [ -x /bin/login ]; then exec /bin/login; else exec /bin/sh -l; fi",
+        ])
 
     def health(self) -> HostHealth:
         metrics = self._host_metrics()

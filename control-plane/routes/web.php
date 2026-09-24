@@ -31,6 +31,7 @@ Route::middleware('auth')->prefix('panel')->name('panel.')->group(function () {
     Route::get('/servers/new', [PanelController::class, 'createServer'])->name('servers.create');
     Route::post('/servers', [PanelController::class, 'storeServer'])->name('servers.store');
     Route::get('/servers/{server}', [PanelController::class, 'showServer'])->name('servers.show');
+    Route::post('/servers/{server}/console', [ConsoleController::class, 'open'])->name('servers.console');
 });
 
 // --- panel administratora ---------------------------------------------------
@@ -74,6 +75,6 @@ Route::prefix('enroll/{token}')->name('enroll.')->group(function () {
     Route::post('/complete', [EnrollmentController::class, 'complete'])->name('complete');
 });
 
-Route::get('/console/{token}', ConsoleController::class)
+Route::get('/console/{token}', [ConsoleController::class, 'show'])
     ->middleware('auth')
     ->name('console.show');

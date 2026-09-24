@@ -14,14 +14,15 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Proxy konsoli
+    | Konsola
     |--------------------------------------------------------------------------
-    | Adres WebSocket proxy (noVNC/websockify) zestawiającego tunel do gniazda
-    | VNC maszyny. Puste = konsola jeszcze niewdrożona; panel powie to wprost
-    | zamiast pokazywać pustą ramkę.
+    | Przeglądarka łączy się z /console-ws/{sesja} na tym samym serwerze —
+    | nginx kieruje to do przekaźnika konsoli (console-proxy/), który wymienia
+    | sesję w panelu wspólnym sekretem i zestawia tunel do agenta węzła.
+    | Pusty sekret = przekaźnik niewdrożony; panel powie to wprost.
     */
 
-    'console_proxy_url' => env('VIRTHUB_CONSOLE_PROXY_URL'),
+    'console_secret' => env('VIRTHUB_CONSOLE_SECRET'),
 
     /*
     |--------------------------------------------------------------------------

@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from .cloudinit import CloudInitBuilder
+from .console import ConsoleTarget, TerminalTarget, VncTarget
 from .config import Settings
 from .domain_xml import build_domain_xml, domain_name
 from .network import NetworkManager, interface_name, mac_address
@@ -94,6 +95,10 @@ class HypervisorDriver(ABC):
 
     @abstractmethod
     def health(self) -> HostHealth: ...
+
+    @abstractmethod
+    def console_target(self, uuid: str) -> ConsoleTarget:
+        """Dokąd prowadzi konsola maszyny: gniazdo VNC albo polecenie terminala."""
 
     def prefetch_image(self, alias: str) -> dict[str, Any]:
         """Pobiera szablon na węzeł z wyprzedzeniem. Dotyczy kontenerów —
@@ -421,6 +426,15 @@ class LibvirtDriver(HypervisorDriver):
             net_tx_bytes=metrics.get("net.0.tx.bytes", 0),
         )
 
+    def console_target(self, uuid: str) -> ConsoleTarget:
+        domain = self._domain(uuid)
+        if not domain.isActive():
+            raise DriverError("Konsola jest dostępna tylko dla uruchomionej maszyny.")
+        port = self._vnc_port(domain)
+        if port is None:
+            raise DriverError("Maszyna nie ma aktywnego ekranu VNC.")
+        return VncTarget(host=self.settings.vnc_listen, port=port)
+
     def health(self) -> HostHealth:
         metrics = self._host_metrics()
         connected = True
@@ -610,6 +624,13 @@ class MockDriver(HypervisorDriver):
 
     def prefetch_image(self, alias: str) -> dict[str, Any]:
         return {"alias": alias, "downloaded": True, "cached": False}
+
+    def console_target(self, uuid: str) -> ConsoleTarget:
+        """Stacja developerska: terminal-echo zamiast prawdziwej maszyny."""
+        self._get(uuid)
+        return TerminalTarget(argv=[
+            "/bin/sh", "-c", "echo 'Konsola testowa VirtHub (tryb mock).'; exec cat",
+        ])
 
     def health(self) -> HostHealth:
         return HostHealth(

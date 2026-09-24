@@ -559,6 +559,15 @@ ok "Agent działa na 127.0.0.1:8899"
 
 # Agent nasluchuje wylacznie na loopbacku. Ruch z panelu wchodzi tedy, zeby
 # hasla root maszyn i klucze SSH nie szly przez siec otwartym tekstem.
+# Nagłówek Connection dla WebSocketów konsoli. Ten sam plik zapisuje
+# instalator panelu — na serwerze z panelem i węzłem mapa jest jedna.
+cat > /etc/nginx/conf.d/virthub-websocket.conf <<'MAPEOF'
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+MAPEOF
+
 cat > /etc/nginx/sites-available/virthub-agent <<EOF
 server {
     listen $TLS_PORT ssl;
@@ -571,7 +580,11 @@ server {
     location / {
         proxy_pass http://127.0.0.1:8899;
         proxy_set_header Host \$host;
-        proxy_read_timeout 120s;
+        # Konsola maszyn idzie WebSocketem przez ten sam port.
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$connection_upgrade;
+        proxy_read_timeout 3600s;
     }
 }
 EOF

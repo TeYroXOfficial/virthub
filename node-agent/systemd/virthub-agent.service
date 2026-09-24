@@ -14,6 +14,12 @@ User=virthub
 Group=libvirt
 EnvironmentFile=/etc/virthub-agent/agent.env
 WorkingDirectory=/opt/virthub-agent
+# Maszyny za NAT-em wymagają przekazywania pakietów IPv4. Agent ma /proc/sys
+# tylko do odczytu (ProtectKernelTunables), więc włączamy je tutaj — prefiks
+# „+" uruchamia tylko to jedno polecenie z pełnymi uprawnieniami, „-" sprawia,
+# że brak sysctl nie blokuje startu. IPv6 celowo nie: przekazywanie wyłącza
+# SLAAC na hoście, więc włącza je administrator (docs/wdrozenie.md).
+ExecStartPre=-+/usr/sbin/sysctl -q -w net.ipv4.ip_forward=1
 ExecStart=/opt/virthub-agent/.venv/bin/uvicorn agent.main:app --host 127.0.0.1 --port 8899
 Restart=always
 RestartSec=5

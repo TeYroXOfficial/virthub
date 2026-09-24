@@ -3,9 +3,12 @@
 @section('title', 'Logowanie')
 
 @section('content')
-    <div style="max-width: 380px; margin: 60px auto;">
-        <h1>{{ config('virthub.brand') }}</h1>
-        <p class="lede">Zaloguj się, aby zarządzać swoimi serwerami.</p>
+    <div>
+        <div class="brand" style="justify-content:center; padding-bottom:8px; font-size:20px">
+            <span class="brand-mark"><x-icon name="servers" :size="16"/></span>
+            {{ config('virthub.brand') }}
+        </div>
+        <p class="lede" style="text-align:center; margin:0 auto 24px">Zaloguj się, aby zarządzać swoimi serwerami.</p>
 
         <div class="card">
             <form method="POST" action="{{ route('login') }}">

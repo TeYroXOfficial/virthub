@@ -72,12 +72,12 @@ class NatManager:
         for gateway in self.render_bridge_addresses(nat):
             run(["ip", "addr", "replace", gateway, "dev", self.bridge])
 
-        self._write_sysctl("/proc/sys/net/ipv4/ip_forward")
+        self._require_sysctl("/proc/sys/net/ipv4/ip_forward", "net.ipv4.ip_forward")
         if any(i.version == 6 for i in nat):
             # Uwaga dla hostów konfigurowanych przez SLAAC: włączone
             # przekazywanie wyłącza przyjmowanie ogłoszeń routera, chyba że
             # interfejs wyjściowy ma accept_ra=2 (opisane w docs/wdrozenie.md).
-            self._write_sysctl("/proc/sys/net/ipv6/conf/all/forwarding")
+            self._require_sysctl("/proc/sys/net/ipv6/conf/all/forwarding", "net.ipv6.conf.all.forwarding")
 
     def configure(self, server_id: int, interfaces: list[NetworkInterfaceSpec]) -> None:
         """Podmienia NAT maszyny: sieci, adres wyjścia i przekierowane porty."""
@@ -292,11 +292,29 @@ class NatManager:
         return ports
 
     @staticmethod
-    def _write_sysctl(path: str) -> None:
+    def _require_sysctl(path: str, key: str) -> None:
+        """Przekazywanie pakietów musi być włączone.
+
+        Usługa agenta ma ProtectKernelTunables — /proc/sys jest dla niej tylko
+        do odczytu i tak ma zostać. IPv4 włącza uprzywilejowany ExecStartPre
+        usługi; IPv6 administrator włącza świadomie (wpływa na SLAAC hosta).
+        Jeśli jest już włączone, nie próbujemy nic zapisywać.
+        """
+        try:
+            if Path(path).read_text(encoding="ascii").strip() == "1":
+                return
+        except OSError:
+            pass
+
         try:
             Path(path).write_text("1\n", encoding="ascii")
         except OSError as exc:
-            raise CommandError(["sysctl", path], 1, str(exc)) from exc
+            raise CommandError(
+                ["sysctl", "-w", f"{key}=1"], 1,
+                f"Przekazywanie pakietów ({key}) jest wyłączone, a agent nie może go "
+                f"włączyć sam ({exc.strerror}). Na węźle uruchom jako root: "
+                f"echo '{key} = 1' > /etc/sysctl.d/90-virthub.conf && sysctl --system",
+            ) from exc
 
     def _apply(self, script: str) -> None:
         """Skrypt przez stdin `nft -f -` — jedna transakcja."""
