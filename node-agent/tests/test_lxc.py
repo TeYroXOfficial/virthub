@@ -390,3 +390,14 @@ def test_wezel_kvm_odmawia_pobierania_szablonow_kontenerow(settings):
 def test_fabryka_wybiera_sterownik_kontenerow(settings, incus):
     drv = build_driver(dataclasses.replace(settings, driver="lxc"))
     assert isinstance(drv, lxc_driver.IncusDriver)
+
+
+def test_io_dysku_kontenera_z_cgroup(tmp_path):
+    cg = tmp_path / "lxc.payload.virthub-7"
+    cg.mkdir()
+    (cg / "io.stat").write_text(
+        "8:0 rbytes=1000 wbytes=200 rios=3 wios=1 dbytes=0 dios=0\n"
+        "259:0 rbytes=24 wbytes=800 rios=1 wios=2 dbytes=0 dios=0\n"
+    )
+    assert lxc_driver._cgroup_io("virthub-7", tmp_path) == {"disk_read_bytes": 1024, "disk_write_bytes": 1000}
+    assert lxc_driver._cgroup_io("brak", tmp_path) == {"disk_read_bytes": 0, "disk_write_bytes": 0}

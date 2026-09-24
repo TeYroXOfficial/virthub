@@ -144,6 +144,80 @@
         </div>
     @endunless
 
+    @php $charts = ['cpu' => 'Procesor', 'ram' => 'Pamięć RAM', 'disk' => 'Dysk I/O', 'net' => 'Sieć']; @endphp
+    <section data-server-metrics
+             data-live-url="{{ url("/api/v1/servers/{$server->id}/metrics/live") }}"
+             data-history-url="{{ url("/api/v1/servers/{$server->id}/metrics") }}"
+             data-running="{{ $server->isRunning() && $server->agent_uuid ? '1' : '0' }}">
+
+        <div class="section-head">
+            <h2>Zużycie na żywo</h2>
+            @if ($server->isRunning())
+                <span class="pill warning" data-live-state>łączenie…</span>
+            @endif
+        </div>
+
+        @if ($server->isRunning() && $server->agent_uuid)
+            <div data-live>
+                <div class="grid grid-4" style="margin-bottom:16px">
+                    <div class="stat"><div class="stat-label">Procesor</div><div class="stat-value" data-now="cpu">—</div></div>
+                    <div class="stat"><div class="stat-label">Pamięć RAM</div><div class="stat-value" data-now="ram">—</div></div>
+                    <div class="stat"><div class="stat-label">Dysk (odczyt / zapis)</div><div class="stat-value" style="font-size:16px" data-now="disk">—</div></div>
+                    <div class="stat"><div class="stat-label">Sieć (pobieranie / wysyłanie)</div><div class="stat-value" style="font-size:16px" data-now="net">—</div></div>
+                </div>
+                <div class="chart-grid">
+                    @foreach ($charts as $key => $title)
+                        <div class="card chart-card">
+                            <div class="chart-head"><span class="chart-title">{{ $title }}</span><span class="chart-now">ostatnie 5 minut</span></div>
+                            <div class="chart" data-chart="{{ $key }}"></div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @else
+            <div class="card empty">Podgląd na żywo jest dostępny, gdy maszyna działa.</div>
+        @endif
+
+        <div data-history>
+            <div class="section-head">
+                <h2>Historia zużycia</h2>
+                <div class="segmented" role="group" aria-label="Zakres historii">
+                    <button type="button" data-range="hour" aria-pressed="false">Godzina</button>
+                    <button type="button" data-range="day" aria-pressed="true">Doba</button>
+                    <button type="button" data-range="week" aria-pressed="false">Tydzień</button>
+                </div>
+            </div>
+            <p class="hint" data-history-empty hidden style="margin-top:-4px">
+                Brak próbek w tym zakresie — panel zapisuje zużycie co minutę, gdy maszyna działa.
+            </p>
+            <div class="chart-grid">
+                @foreach ($charts as $key => $title)
+                    <div class="card chart-card">
+                        <div class="chart-head"><span class="chart-title">{{ $title }}</span><span class="chart-now">średnie w przedziałach</span></div>
+                        <div class="chart" data-chart="{{ $key }}"></div>
+                    </div>
+                @endforeach
+            </div>
+            <details class="form-block card" style="margin-top:16px">
+                <summary>Dane w tabeli</summary>
+                <div class="table-wrap" style="max-height:360px; overflow:auto">
+                    <table data-history-table>
+                        <thead><tr><th>Czas</th><th>CPU</th><th>RAM</th><th>Dysk odczyt</th><th>Dysk zapis</th><th>Sieć pobieranie</th><th>Sieć wysyłanie</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </details>
+        </div>
+    </section>
+
+    @push('head')
+        <link rel="stylesheet" href="{{ asset('vendor/uplot/uPlot.min.css') }}">
+    @endpush
+    @push('scripts')
+        <script src="{{ asset('vendor/uplot/uPlot.iife.min.js') }}"></script>
+        <script src="{{ asset('js/server-metrics.js') }}?v={{ @filemtime(public_path('js/server-metrics.js')) }}"></script>
+    @endpush
+
     <div class="grid grid-2" style="margin-top:16px">
     <div class="card">
         <h3 class="card-title"><x-icon name="shield" :size="16"/> Zapora sieciowa</h3>

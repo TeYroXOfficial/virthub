@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import platform
 import secrets
 import socket
+import time
 import uuid as uuidlib
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -608,18 +610,30 @@ class MockDriver(HypervisorDriver):
 
     def stats(self, uuid: str) -> VmStats:
         record = self._get(uuid)
-        # Deterministyczne, prawdopodobne wartości — panel ma co rysować.
+        # Prawdopodobne, zmienne w czasie wartości — panel ma co rysować na
+        # żywo. Liczniki rosną jak w prawdziwej maszynie (narastająco), więc
+        # panel liczy z nich szybkość tą samą metodą co dla libvirt i Incusa.
         seed = record["server_id"]
+        now = time.time()
+        wave = (math.sin(now / 20 + seed) + 1) / 2
+        # Całka z fali: licznik rośnie zawsze, a jego pochodna (szybkość,
+        # którą liczy panel) waha się łagodnie między base a base + amp.
+        area = (now - 20 * math.cos(now / 20 + seed)) / 2
+
+        def counter(base: int, amp: int) -> int:
+            return int(base * now + amp * area)
+
         return VmStats(
             uuid=uuid,
             state=record["state"],
-            cpu_percent=round((seed * 7) % 60 + 5.0, 2),
-            ram_used_mb=int(record["ram_mb"] * 0.42),
+            cpu_percent=round(5 + 55 * wave, 2),
+            cpu_time_ns=counter(int(0.3e9 * record["vcpu"]), int(0.5e9 * record["vcpu"])),
+            ram_used_mb=int(record["ram_mb"] * (0.35 + 0.2 * wave)),
             ram_total_mb=record["ram_mb"],
-            disk_read_bytes=seed * 1024 * 1024,
-            disk_write_bytes=seed * 512 * 1024,
-            net_rx_bytes=seed * 2048 * 1024,
-            net_tx_bytes=seed * 1024 * 1024,
+            disk_read_bytes=counter(400_000, 300_000),
+            disk_write_bytes=counter(150_000, 100_000),
+            net_rx_bytes=counter(900_000, 500_000),
+            net_tx_bytes=counter(300_000, 200_000),
         )
 
     def prefetch_image(self, alias: str) -> dict[str, Any]:

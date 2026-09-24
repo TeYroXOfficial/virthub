@@ -22,6 +22,7 @@ import json
 import logging
 import re
 import uuid as uuidlib
+from pathlib import Path
 from typing import Any
 
 from .cloudinit import render_network_config, render_user_data
@@ -369,6 +370,7 @@ class IncusDriver(HypervisorDriver):
             ram_total_mb=limit_mb or int(memory.get("total", 0)) // (1024**2),
             net_rx_bytes=int(counters.get("bytes_received", 0)),
             net_tx_bytes=int(counters.get("bytes_sent", 0)),
+            **_cgroup_io(name),
         )
 
     def console_target(self, uuid: str) -> ConsoleTarget:
@@ -422,6 +424,32 @@ def _parse_gib(value: str) -> int | None:
     """'20GiB' → 20, '20GB' → 20. Brak albo inny format → None."""
     match = re.match(r"^\s*(\d+)\s*(GiB|GB)\s*$", value or "")
     return int(match.group(1)) if match else None
+
+
+CGROUP_ROOT = Path("/sys/fs/cgroup")
+
+
+def _cgroup_io(name: str, root: Path = CGROUP_ROOT) -> dict[str, int]:
+    """Odczyt/zapis dysku kontenera z cgroup v2 (io.stat).
+
+    API Incusa podaje tylko zajętość dysku, nie ruch — liczniki bierzemy
+    wprost z cgroup kontenera. Plik jest czytelny dla każdego, więc agent nie
+    potrzebuje do tego uprawnień. Brak cgroup v2 = zera, nie błąd.
+    """
+    read = write = 0
+    try:
+        content = (root / f"lxc.payload.{name}" / "io.stat").read_text()
+    except OSError:
+        return {"disk_read_bytes": 0, "disk_write_bytes": 0}
+
+    for line in content.splitlines():
+        for field in line.split()[1:]:
+            key, _, value = field.partition("=")
+            if key == "rbytes" and value.isdigit():
+                read += int(value)
+            elif key == "wbytes" and value.isdigit():
+                write += int(value)
+    return {"disk_read_bytes": read, "disk_write_bytes": write}
 
 
 def _parse_mib(value: str) -> int | None:
