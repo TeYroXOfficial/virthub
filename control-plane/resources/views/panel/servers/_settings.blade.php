@@ -101,6 +101,23 @@
         <dl class="kv">
             <dt>Nazwa hosta</dt><dd class="mono">{{ $server->hostname }}</dd>
             <dt>Typ</dt><dd>{{ $server->virtualization->label() }}</dd>
+            <dt>System w maszynie</dt>
+            <dd>
+                {{ $server->guest_os_name ?? 'jeszcze nie odczytany' }}
+                @if ($server->guest_os_checked_at)
+                    <span class="hint">· sprawdzony {{ $server->guest_os_checked_at->diffForHumans() }}</span>
+                @endif
+                <form method="POST" action="{{ route('panel.servers.detect-os', $server) }}" style="display:inline; margin:0 0 0 6px">
+                    @csrf
+                    <button class="btn btn-sm" type="submit" @disabled(! $server->isRunning())>Odczytaj teraz</button>
+                </form>
+                @unless ($server->isContainer())
+                    <div class="hint">Maszyna KVM musi mieć działający <code>qemu-guest-agent</code>.</div>
+                @endunless
+            </dd>
+            @if ($cpu = $server->hypervisor?->cpuModel())
+                <dt>Procesor</dt><dd>{{ $cpu }}</dd>
+            @endif
             <dt>Identyfikator</dt><dd class="mono">#{{ $server->id }}</dd>
             <dt>Utworzona</dt><dd>{{ $server->created_at->format('d.m.Y H:i') }}</dd>
         </dl>

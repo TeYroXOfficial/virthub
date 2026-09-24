@@ -90,6 +90,20 @@ class ServerActionsController extends Controller
         return redirect()->route($route)->with('status', $message);
     }
 
+    /** Odczyt systemu z wnętrza maszyny na żądanie (normalnie co kilka godzin). */
+    public function detectOs(Server $server, \App\Domain\Provisioning\GuestOs $guestOs): RedirectResponse
+    {
+        $this->authorize('operate', $server);
+
+        $ok = $guestOs->detect($server->loadMissing('hypervisor'));
+
+        return redirect()->to(route('panel.servers.show', $server).'#settings')->with('status', $ok
+            ? 'System w maszynie: '.$server->fresh()->guest_os_name.'.'
+            : ($server->isContainer()
+                ? 'Nie udało się odczytać systemu kontenera — sprawdź, czy węzeł ma aktualnego agenta.'
+                : 'Nie udało się odczytać systemu — maszyna musi działać i mieć uruchomiony qemu-guest-agent.'));
+    }
+
     public function resetPassword(Request $request, Server $server): RedirectResponse
     {
         $this->authorize('resetPassword', $server);

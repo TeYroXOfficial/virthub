@@ -42,6 +42,15 @@ class ServerResource extends JsonResource
                 'family' => $this->template->family,
             ]),
 
+            // System odczytany z wnętrza maszyny (null, dopóki nie odczytany).
+            'guest_os' => $this->guest_os_name === null ? null : [
+                'id' => $this->guest_os_id,
+                'name' => $this->guest_os_name,
+                'version' => $this->guest_os_version,
+                'checked_at' => $this->guest_os_checked_at,
+            ],
+            'cpu_model' => $this->hypervisor?->cpuModel(),
+
             'ip_addresses' => $this->whenLoaded('ipAddresses', fn () => $this->ipAddresses
                 ->map(fn ($ip) => [
                     'address' => $ip->address,

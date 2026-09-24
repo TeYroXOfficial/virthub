@@ -30,10 +30,12 @@ from .cloudinit import render_network_config, render_user_data
 from .console import ConsoleTarget, TerminalTarget
 from .config import Settings
 from .domain_xml import domain_name
+from .guest_os import parse_os_release
 from .jobs import progress
 from .driver import DriverError, HypervisorDriver, VmNotFound, server_id_from_name, AGENT_VERSION
 from .network import interface_name, mac_address
 from .schemas import (
+    GuestOs,
     CreateVmRequest,
     HostHealth,
     NetworkConfigRequest,
@@ -359,6 +361,19 @@ class IncusDriver(HypervisorDriver):
         progress("boot", 85)
         self._incus("start", name, timeout=120)
         return {"uuid": uuid, "state": self._state(name), "template": alias}
+
+    def guest_os(self, uuid: str) -> GuestOs:
+        name = self._name_for(uuid)
+        # Pliku nie trzeba uruchamiać w kontenerze — Incus czyta go z systemu
+        # plików, więc działa też przy zatrzymanym kontenerze.
+        for path in ("/etc/os-release", "/usr/lib/os-release"):
+            try:
+                text = self._incus("file", "pull", f"{name}{path}", "-", timeout=30)
+            except DriverError:
+                continue
+            if text.strip():
+                return GuestOs(**parse_os_release(text), source="os-release")
+        raise DriverError("W kontenerze nie ma pliku os-release — nie da się rozpoznać systemu.")
 
     def reset_password(self, uuid: str, password: str) -> dict[str, Any]:
         name = self._name_for(uuid)

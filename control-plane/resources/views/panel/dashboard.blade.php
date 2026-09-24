@@ -73,10 +73,10 @@
                             </td>
                             <td class="mono">{{ $server->primaryIp()?->address ?? '—' }}</td>
                             <td>
-                                @if ($server->template)
+                                @if ($server->osLabel())
                                     <span class="os-inline">
-                                        @include('panel.servers._os-badge', ['template' => $server->template])
-                                        {{ $server->template->name }}
+                                        @include('panel.servers._os-badge', ['template' => (object) ['family' => $server->osFamily(), 'name' => $server->osLabel()]])
+                                        {{ $server->osLabel() }}
                                     </span>
                                 @else
                                     —

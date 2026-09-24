@@ -50,13 +50,13 @@ class AgentResultApplier
         match ($job->action) {
             'create' => $this->finishCreate($server, $result),
             'power' => $this->applyPowerState($server, $result),
-            'rebuild' => $this->finishRebuild($server),
+            'rebuild' => $this->finishRebuild($server->forceFill(['guest_os_id' => null, 'guest_os_name' => null, 'guest_os_version' => null, 'guest_os_checked_at' => null])),
             'resize' => $this->finishResize($server, $job),
             'delete' => $this->cleanup->finalise($server),
             'snapshot' => $this->finishSnapshot($job, $result),
             'restore' => $server->markState(ServerState::Running),
             'network' => null,
-            'iso' => $this->finishIso($server, $job, $result),
+            'iso' => $this->finishIso($server->forceFill(['guest_os_checked_at' => null]), $job, $result),
             'password' => $this->finishPassword($server, $job),
             default => Log::warning('Nieznana akcja w wyniku zadania', ['action' => $job->action]),
         };

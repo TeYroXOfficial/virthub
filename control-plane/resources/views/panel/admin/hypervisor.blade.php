@@ -150,6 +150,14 @@
                     <div class="hint">Po osiągnięciu limitu węzeł nie dostaje nowych maszyn.</div>
                 </div>
                 <div class="field">
+                    <label for="n-cpu-model">Procesor <span class="muted">(widoczny dla klientów)</span></label>
+                    <input id="n-cpu-model" name="cpu_model" type="text" maxlength="120" value="{{ old('cpu_model', $node->cpu_model) }}"
+                           placeholder="{{ $node->last_health['cpu_model'] ?? 'np. AMD EPYC 7763' }}">
+                    <div class="hint">
+                        Puste = wykryty przez węzeł{{ isset($node->last_health['cpu_model']) ? ': '.$node->last_health['cpu_model'] : ' (po aktualizacji agenta)' }}.
+                    </div>
+                </div>
+                <div class="field">
                     <label for="n-cpu">Dostępne vCPU</label>
                     <input id="n-cpu" name="cpu_cores_total" type="text" inputmode="numeric" value="{{ $node->cpu_cores_total }}" required>
                     <div class="hint">Zajęte: {{ $node->cpu_cores_used }}. Więcej niż rdzeni fizycznych = overcommit.</div>
@@ -225,6 +233,7 @@
                     <dt>Zarejestrowany</dt><dd>{{ $node->enrolled_at?->format('d.m.Y H:i') ?? 'nie' }}</dd>
                     <dt>Ostatni kontakt</dt><dd>{{ $node->last_seen_at?->diffForHumans() ?? 'nigdy' }}</dd>
                     <dt>Certyfikat</dt><dd>{{ $node->agent_tls_cert ? 'przypięty (własny węzła)' : 'weryfikacja publicznym urzędem' }}</dd>
+                    <dt>Procesor</dt><dd>{{ $node->cpuModel() ?? '—' }}@if ($node->cpu_model) <span class="hint">(ustawiony ręcznie)</span>@endif</dd>
                     <dt>Wersja agenta</dt><dd class="mono">{{ \App\Domain\Updates\Updates::short($node->last_health['build'] ?? null) }}</dd>
                 </dl>
                 @if ($node->notes)

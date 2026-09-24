@@ -35,6 +35,7 @@ class Hypervisor extends Model
         'bridge',
         'max_servers',
         'notes',
+        'cpu_model',
     ];
 
     protected $hidden = ['agent_token', 'callback_secret', 'enrollment_token_hash'];
@@ -150,6 +151,12 @@ class Hypervisor extends Model
         ], fn ($r) => $r !== null);
 
         return $ratios === [] ? 0 : (int) round(max($ratios) * 100);
+    }
+
+    /** Procesor pokazywany klientom: ustawiony przez administratora albo wykryty przez agenta. */
+    public function cpuModel(): ?string
+    {
+        return $this->cpu_model ?: ($this->last_health['cpu_model'] ?? null);
     }
 
     /**

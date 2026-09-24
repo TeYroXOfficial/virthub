@@ -99,6 +99,13 @@ class FakeIncus:
     def _restart(self, args):
         self.instances[args[0]]["status"] = "Running"
 
+    def _file(self, args):
+        # file pull <name>/etc/os-release -
+        name, _, path = args[1].partition("/")
+        if path == "etc/os-release":
+            return 'PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"\nID=debian\nVERSION_ID="12"\n'
+        raise CommandError(["incus", "file"], 1, "not found")
+
     def _exec(self, args):
         if self.instances[args[0]]["status"] != "Running":
             raise CommandError(["incus", "exec"], 1, "Instance is not running")
@@ -467,3 +474,13 @@ def test_io_dysku_kontenera_z_cgroup(tmp_path):
     )
     assert lxc_driver._cgroup_io("virthub-7", tmp_path) == {"disk_read_bytes": 1024, "disk_write_bytes": 1000}
     assert lxc_driver._cgroup_io("brak", tmp_path) == {"disk_read_bytes": 0, "disk_write_bytes": 0}
+
+
+def test_system_kontenera_z_os_release(driver, incus):
+    uuid = driver.create_vm(request())["uuid"]
+
+    info = driver.guest_os(uuid)
+
+    assert info.id == "debian"
+    assert info.pretty_name == "Debian GNU/Linux 12 (bookworm)"
+    assert info.source == "os-release"

@@ -27,9 +27,10 @@ class CollectServerMetrics extends Command
     public function handle(): int
     {
         $collected = 0;
+        $guestOs = app(\App\Domain\Provisioning\GuestOs::class);
 
         Hypervisor::query()->where('status', Hypervisor::STATUS_ONLINE)->each(
-            function (Hypervisor $hypervisor) use (&$collected) {
+            function (Hypervisor $hypervisor) use (&$collected, $guestOs) {
                 $client = new AgentClient($hypervisor);
 
                 $servers = Server::query()
@@ -49,6 +50,12 @@ class CollectServerMetrics extends Command
 
                     $this->store($server, $stats);
                     $collected++;
+
+                    // System w maszynie sprawdzamy rzadziej — zmienia się tylko przy
+                    // reinstalacji albo instalacji z ISO.
+                    if ($guestOs->isDue($server)) {
+                        $guestOs->detect($server->setRelation('hypervisor', $hypervisor));
+                    }
                 }
             }
         );

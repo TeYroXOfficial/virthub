@@ -58,7 +58,7 @@ zamknięte jest ignorowane — powtórzony raport nie cofa stanu maszyny.
 | Metoda | Ścieżka | Charakter |
 |---|---|---|
 | `GET` | `/ping` | liveness, bez podpisu |
-| `GET` | `/health` | heartbeat + wolne zasoby hosta |
+| `GET` | `/health` | heartbeat + wolne zasoby hosta i `cpu_model` |
 | `POST` | `/vm` | utworzenie maszyny |
 | `POST` | `/vm/{uuid}/power` | `start` / `stop` / `reboot` / `force-off` |
 | `POST` | `/vm/{uuid}/rebuild` | ponowna instalacja systemu (z `interfaces[]` i `nameservers[]`) |
@@ -73,6 +73,7 @@ zamknięte jest ignorowane — powtórzony raport nie cofa stanu maszyny.
 | `POST` | `/vm/{uuid}/snapshot/restore` | przywrócenie kopii |
 | `PUT` | `/vm/{uuid}/network` | adresacja i reguły firewalla |
 | `GET` | `/vm/{uuid}/stats` | telemetria (synchronicznie) |
+| `GET` | `/vm/{uuid}/os` | system w maszynie: `id`, `pretty_name`, `version` (KVM przez qemu-guest-agent, LXC z `/etc/os-release`) |
 | `GET` (WebSocket) | `/vm/{uuid}/console` | konsola: RFB dla KVM, terminal dla LXC |
 | `GET` | `/system/update` | stan ostatniej aktualizacji węzła i commit agenta (`build`) |
 | `POST` | `/system/update` | zlecenie aktualizacji (409, gdy węzeł nie ma usługi aktualizacji) |
