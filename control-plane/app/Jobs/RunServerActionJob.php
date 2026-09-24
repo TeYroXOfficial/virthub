@@ -66,7 +66,17 @@ class RunServerActionJob implements ShouldQueue
                     'hostname' => $payload['hostname'] ?? $server->hostname,
                     'ssh_keys' => $payload['ssh_keys'] ?? [],
                     'root_password' => $payload['root_password'] ?? null,
+                    // Adresacja dla cloud-init nowego systemu — bez niej maszyna
+                    // KVM po reinstalacji wstawała bez sieci.
+                    'interfaces' => ServerPayload::interfaces($server),
+                    'nameservers' => ServerPayload::nameservers($server),
                 ]),
+                'iso' => $client->mountIso(
+                    $server->agent_uuid,
+                    $payload['filename'] ?? null,
+                    (bool) ($payload['boot'] ?? false),
+                    (bool) ($payload['restart'] ?? false),
+                ),
                 'resize' => $client->resize($server->agent_uuid, [
                     'vcpu' => $payload['vcpu'],
                     'ram_mb' => $payload['ram_mb'],

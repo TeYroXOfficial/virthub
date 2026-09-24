@@ -5,6 +5,8 @@ use App\Http\Controllers\Web\AdminController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\ConsoleController;
 use App\Http\Controllers\Web\FirewallController;
+use App\Http\Controllers\Web\IsoController;
+use App\Http\Controllers\Web\ServerActionsController;
 use App\Http\Controllers\Web\PanelController;
 use App\Http\Controllers\Web\SsoController;
 use App\Http\Controllers\Web\UpdatesController;
@@ -35,6 +37,8 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers', [PanelController::class, 'storeServer'])->name('servers.store');
     Route::get('/servers/{server}', [PanelController::class, 'showServer'])->name('servers.show');
     Route::post('/servers/{server}/console', [ConsoleController::class, 'open'])->name('servers.console');
+    Route::post('/servers/{server}/rebuild', [ServerActionsController::class, 'rebuild'])->name('servers.rebuild');
+    Route::post('/servers/{server}/iso', [ServerActionsController::class, 'iso'])->name('servers.iso');
 
     Route::prefix('/servers/{server}/firewall')->name('servers.firewall.')->group(function () {
         Route::post('/policy', [FirewallController::class, 'policy'])->name('policy');
@@ -73,6 +77,12 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/templates/{template}/toggle', [AdminController::class, 'toggleTemplate'])->name('templates.toggle');
         Route::post('/templates/{template}/retry', [AdminController::class, 'retryTemplate'])->name('templates.retry');
         Route::post('/templates/catalog/{key}', [AdminController::class, 'addCatalogTemplate'])->name('templates.catalog');
+
+        Route::get('/isos', [IsoController::class, 'index'])->name('isos');
+        Route::post('/isos', [IsoController::class, 'store'])->name('isos.store');
+        Route::post('/isos/{iso}/retry', [IsoController::class, 'retry'])->name('isos.retry');
+        Route::post('/isos/{iso}/toggle', [IsoController::class, 'toggle'])->name('isos.toggle');
+        Route::delete('/isos/{iso}', [IsoController::class, 'destroy'])->name('isos.destroy');
     });
 
     Route::middleware('admin:admin.ip_pools')->group(function () {

@@ -43,6 +43,31 @@ class AgentClient
         return $this->request('GET', "/jobs/{$jobId}");
     }
 
+    /** Pobranie obrazu ISO do biblioteki węzła (zadanie w tle). */
+    public function downloadIso(string $filename, string $url, ?string $sha256): string
+    {
+        return $this->jobId($this->request('POST', '/images/iso', array_filter([
+            'name' => $filename,
+            'url' => $url,
+            'sha256' => $sha256,
+        ])));
+    }
+
+    public function deleteIso(string $filename): array
+    {
+        return $this->request('DELETE', '/images/iso/'.rawurlencode($filename));
+    }
+
+    /** Płyta w maszynie i kolejność rozruchu; restart = zastosuj od razu. */
+    public function mountIso(string $uuid, ?string $filename, bool $boot, bool $restart): string
+    {
+        return $this->jobId($this->request('POST', "/vm/{$uuid}/iso", [
+            'iso' => $filename,
+            'boot' => $boot,
+            'restart' => $restart,
+        ]));
+    }
+
     /** Stan aktualizacji węzła i commit, z którego działa agent. */
     public function updateStatus(): array
     {

@@ -22,6 +22,7 @@ final class Permissions
         'servers.snapshots' => ['Snapshoty', 'Tworzenie, przywracanie i usuwanie kopii dysku.'],
         'servers.resize' => ['Zmiana pakietu', 'Przejście na inny pakiet zasobów.'],
         'servers.rebuild' => ['Reinstalacja systemu', 'Postawienie systemu od nowa — kasuje dane na dysku.'],
+        'servers.iso' => ['Obrazy ISO', 'Montowanie płyt ISO i uruchamianie maszyny KVM z płyty.'],
         'servers.delete' => ['Usuwanie maszyn', 'Trwałe usunięcie maszyny razem z dyskiem.'],
     ];
 

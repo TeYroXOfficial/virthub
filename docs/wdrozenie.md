@@ -466,6 +466,19 @@ chown virthub:libvirt ubuntu-24.04.qcow2
 Obrazu bazowego nie wolno usunąć ani nadpisać, dopóki istnieje choć jedna
 maszyna, która go używa — dyski klientów są cienkimi warstwami nad nim.
 
+### Obrazy ISO (KVM)
+
+Płyty instalacyjne dodaje się w panelu: **Administracja → Obrazy ISO** —
+nazwa, URL i (zalecane) SHA-256. Każdy zarejestrowany węzeł KVM pobiera plik
+sam do `/var/lib/virthub/isos`; węzły LXC są pomijane. Stan pobrania widać
+per węzeł, nieudane można ponowić. Klient montuje płytę na stronie maszyny
+(uprawnienie „Obrazy ISO"), zaznacza rozruch z płyty i instaluje system przez
+konsolę noVNC. Obrazu zamontowanego w jakiejkolwiek maszynie nie da się usunąć.
+
+Reinstalacja z szablonu (strona maszyny → „Reinstalacja systemu") wymaga
+wpisania nazwy hosta, czyści dysk i zachowuje adresy IP, zaporę i parametry.
+Support nie może reinstalować cudzych maszyn — tylko administrator.
+
 ---
 
 ## Połączenie obu części

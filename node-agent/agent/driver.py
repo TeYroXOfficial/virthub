@@ -25,12 +25,14 @@ from typing import Any
 
 from .cloudinit import CloudInitBuilder
 from .console import ConsoleTarget, TerminalTarget, VncTarget
+from .isos import IsoLibrary
 from .config import Settings
 from .domain_xml import build_domain_xml, domain_name
 from .network import NetworkManager, interface_name, mac_address
 from .schemas import (
     CreateVmRequest,
     HostHealth,
+    IsoMountRequest,
     NetworkConfigRequest,
     PowerAction,
     RebuildVmRequest,
@@ -67,6 +69,7 @@ class HypervisorDriver(ABC):
         self.storage = build_storage_driver(settings)
         self.network = NetworkManager(settings)
         self.cloudinit = CloudInitBuilder(settings)
+        self.isos = IsoLibrary(settings)
 
     @abstractmethod
     def create_vm(self, req: CreateVmRequest) -> dict[str, Any]: ...
@@ -101,6 +104,10 @@ class HypervisorDriver(ABC):
     @abstractmethod
     def console_target(self, uuid: str) -> ConsoleTarget:
         """Dokąd prowadzi konsola maszyny: gniazdo VNC albo polecenie terminala."""
+
+    def mount_iso(self, uuid: str, req: IsoMountRequest) -> dict[str, Any]:
+        """Płyta ISO i rozruch z niej — tylko maszyny wirtualne."""
+        raise DriverError("Obrazy ISO są dostępne tylko dla maszyn wirtualnych KVM.")
 
     def prefetch_image(self, alias: str) -> dict[str, Any]:
         """Pobiera szablon na węzeł z wyprzedzeniem. Dotyczy kontenerów —
@@ -308,7 +315,7 @@ class LibvirtDriver(HypervisorDriver):
         if was_running:
             domain.destroy()
 
-        interfaces = self._interfaces_from_domain(domain)
+        interfaces = req.interfaces if req.interfaces is not None else self._interfaces_from_domain(domain)
         disk_gb = self._disk_size_gb(name)
 
         self.storage.delete_volume(name)
@@ -318,7 +325,7 @@ class LibvirtDriver(HypervisorDriver):
             server_id=server_id,
             hostname=req.hostname or name,
             interfaces=interfaces,
-            nameservers=["1.1.1.1", "9.9.9.9"],
+            nameservers=req.nameservers or ["1.1.1.1", "9.9.9.9"],
             ssh_keys=req.ssh_keys,
             root_password=req.root_password,
             mac=mac_address(server_id),
@@ -427,6 +434,40 @@ class LibvirtDriver(HypervisorDriver):
             net_rx_bytes=metrics.get("net.0.rx.bytes", 0),
             net_tx_bytes=metrics.get("net.0.tx.bytes", 0),
         )
+
+    def mount_iso(self, uuid: str, req: IsoMountRequest) -> dict[str, Any]:
+        import libvirt
+
+        from .domain_xml import with_iso
+
+        iso_path = None
+        if req.iso is not None:
+            path = self.isos.path(req.iso)
+            if not path.is_file():
+                raise DriverError(f"Obrazu {req.iso} nie ma jeszcze na tym węźle — poczekaj, aż się pobierze.")
+            iso_path = str(path)
+
+        domain = self._domain(uuid)
+        xml = domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE)
+        try:
+            self.conn.defineXML(with_iso(xml, iso_path, req.boot))
+        except libvirt.libvirtError as exc:
+            raise DriverError(f"Nie udało się zmienić płyty w maszynie: {exc}") from exc
+
+        # Zmiana kolejności rozruchu i nowy napęd działają dopiero po ponownym
+        # uruchomieniu QEMU — reboot gościa ich nie wczyta.
+        if req.restart:
+            if domain.isActive():
+                domain.destroy()
+            domain.create()
+
+        return {
+            "uuid": uuid,
+            "iso": req.iso,
+            "boot": req.boot and req.iso is not None,
+            "restarted": req.restart,
+            "state": self._state(domain),
+        }
 
     def console_target(self, uuid: str) -> ConsoleTarget:
         domain = self._domain(uuid)
@@ -638,6 +679,21 @@ class MockDriver(HypervisorDriver):
 
     def prefetch_image(self, alias: str) -> dict[str, Any]:
         return {"alias": alias, "downloaded": True, "cached": False}
+
+    def mount_iso(self, uuid: str, req: IsoMountRequest) -> dict[str, Any]:
+        data = self._load()
+        record = data.get(uuid)
+        if record is None:
+            raise VmNotFound(uuid)
+        if req.iso is not None and not self.isos.exists(req.iso):
+            raise DriverError(f"Obrazu {req.iso} nie ma jeszcze na tym węźle — poczekaj, aż się pobierze.")
+        record["iso"] = req.iso
+        record["boot_from_iso"] = bool(req.boot and req.iso)
+        if req.restart:
+            record["state"] = "running"
+        self._save(data)
+        return {"uuid": uuid, "iso": req.iso, "boot": record["boot_from_iso"],
+                "restarted": req.restart, "state": record["state"]}
 
     def console_target(self, uuid: str) -> ConsoleTarget:
         """Stacja developerska: terminal-echo zamiast prawdziwej maszyny."""

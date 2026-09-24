@@ -63,6 +63,11 @@ class ServerPolicy
         return $this->allowed($user, $server, 'servers.rebuild', destructive: true);
     }
 
+    public function iso(User $user, Server $server): bool
+    {
+        return ! $server->isContainer() && $this->allowed($user, $server, 'servers.iso');
+    }
+
     /** Przywrócenie kopii nadpisuje dysk — jak reinstalacja. */
     public function restoreSnapshot(User $user, Server $server): bool
     {

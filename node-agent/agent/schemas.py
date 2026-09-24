@@ -161,6 +161,29 @@ class RebuildVmRequest(BaseModel):
     hostname: str | None = None
     ssh_keys: list[str] = Field(default_factory=list)
     root_password: str | None = Field(default=None, repr=False)
+    # Adresacja dla cloud-init nowego systemu. Starszy panel jej nie wysyłał —
+    # wtedy maszyna KVM stawała bez sieci; kontener bierze ją ze swojej konfiguracji.
+    interfaces: list[NetworkInterfaceSpec] | None = None
+    nameservers: list[str] | None = None
+
+
+ISO_NAME = r"^[a-z0-9][a-z0-9._-]{0,80}\.iso$"
+
+
+class IsoDownloadRequest(BaseModel):
+    """Pobranie obrazu ISO do biblioteki węzła (katalog VH_ISO_DIR)."""
+
+    name: str = Field(pattern=ISO_NAME, description="Nazwa pliku na węźle, np. debian-13-netinst.iso")
+    url: str = Field(pattern=r"^https?://[^\s]{3,2000}$")
+    sha256: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{64}$")
+
+
+class IsoMountRequest(BaseModel):
+    """Płyta w wirtualnym napędzie maszyny KVM i kolejność rozruchu."""
+
+    iso: str | None = Field(default=None, pattern=ISO_NAME, description="Brak = wysuń płytę")
+    boot: bool = Field(default=False, description="Uruchamiaj z płyty przed dyskiem")
+    restart: bool = Field(default=False, description="Zastosuj od razu (wyłącz i włącz maszynę)")
 
 
 class ResizeVmRequest(BaseModel):

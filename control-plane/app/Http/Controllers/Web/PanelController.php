@@ -45,7 +45,7 @@ class PanelController extends Controller
     {
         $this->authorize('view', $server);
 
-        $server->load(['package', 'template', 'ipAddresses.pool', 'firewallRules', 'backups', 'hypervisor']);
+        $server->load(['package', 'template', 'ipAddresses.pool', 'firewallRules', 'backups', 'hypervisor', 'iso']);
 
         return view('panel.servers.show', [
             'server' => $server,
@@ -53,7 +53,15 @@ class PanelController extends Controller
             'packages' => VpsPackage::query()->active()->orderBy('vcpu')->get()
                 ->filter(fn (VpsPackage $p) => $request->user()->mayOrderPackage($p))
                 ->values(),
-            'templates' => OsTemplate::query()->active()->get(),
+            // Reinstalacja: tylko systemy tego samego typu, z automatyczną instalacją.
+            'templates' => OsTemplate::query()->active()
+                ->where('virtualization', $server->virtualization->value)
+                ->where('cloud_init_support', true)
+                ->orderBy('family')->orderByDesc('version')
+                ->get(),
+            'isos' => $server->isContainer()
+                ? collect()
+                : app(\App\Domain\Provisioning\IsoLibrary::class)->availableFor($server->hypervisor_id, $request->user()->isStaff()),
             // Hasło startowe pokazujemy raz — po wyświetleniu znika z bazy.
             'rootPassword' => $server->consumeRootPassword(),
         ]);

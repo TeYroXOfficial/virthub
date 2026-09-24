@@ -55,6 +55,7 @@ class AgentResultApplier
             'snapshot' => $this->finishSnapshot($job, $result),
             'restore' => $server->markState(ServerState::Running),
             'network' => null,
+            'iso' => $this->finishIso($server, $job, $result),
             default => Log::warning('Nieznana akcja w wyniku zadania', ['action' => $job->action]),
         };
 
@@ -112,6 +113,18 @@ class AgentResultApplier
         // w trakcie tworzenia trafia na węzeł osobnym zleceniem.
         if ($server->firewall_enabled || $server->firewallRules()->exists()) {
             app(ServerProvisioner::class)->syncNetwork($server);
+        }
+    }
+
+    private function finishIso(Server $server, ServerJob $job, array $result): void
+    {
+        $server->forceFill([
+            'iso_image_id' => $job->payload['iso_image_id'] ?? null,
+            'boot_from_iso' => (bool) ($result['boot'] ?? false),
+        ])->save();
+
+        if (! empty($result['state'])) {
+            $server->markState(ServerState::fromAgentState($result['state']));
         }
     }
 

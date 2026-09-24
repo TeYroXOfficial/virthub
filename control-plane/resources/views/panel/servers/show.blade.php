@@ -222,6 +222,8 @@
         <script src="{{ asset('js/server-metrics.js') }}?v={{ @filemtime(public_path('js/server-metrics.js')) }}"></script>
     @endpush
 
+    @include('panel.servers._maintenance')
+
     @include('panel.servers._firewall')
 
     <div class="card" style="margin-top:16px">

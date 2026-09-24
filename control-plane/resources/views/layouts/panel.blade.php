@@ -27,6 +27,7 @@
             ['panel.admin.ip-pools', 'Adresy IP', 'network', 'panel.admin.ip-pools', 'admin.ip_pools'],
             ['panel.admin.packages', 'Pakiety', 'package', 'panel.admin.packages', 'admin.packages'],
             ['panel.admin.templates', 'Szablony', 'disc', 'panel.admin.templates', 'admin.templates'],
+            ['panel.admin.isos', 'Obrazy ISO', 'disc', 'panel.admin.isos', 'admin.templates'],
             ['panel.admin.updates', 'Aktualizacje', 'refresh', 'panel.admin.updates*', 'admin.updates'],
         ];
     @endphp

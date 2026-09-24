@@ -25,6 +25,7 @@ os.environ.update(
     VH_IMAGE_DIR=str(Path(_tmp) / "images"),
     VH_TEMPLATE_DIR=str(Path(_tmp) / "templates"),
     VH_SEED_DIR=str(Path(_tmp) / "seeds"),
+    VH_ISO_DIR=str(Path(_tmp) / "isos"),
     VH_STATE_DB=str(Path(_tmp) / "state.sqlite3"),
     VH_CONTROL_PLANE_URL="",
     VH_CALLBACK_SECRET="",
