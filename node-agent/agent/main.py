@@ -142,6 +142,7 @@ async def health() -> HostHealth:
     return driver.health().model_copy(update={
         "build": updates.build(),
         "remote_update": updates.enabled(),
+        "firewall_stateful": driver.network.stateful(),
     })
 
 

@@ -107,6 +107,12 @@ class AgentResultApplier
             'build_progress' => 100,
             'last_synced_at' => now(),
         ])->save();
+
+        // Agent tworzy maszynę z samym anty-spoofingiem. Zapora ustawiona
+        // w trakcie tworzenia trafia na węzeł osobnym zleceniem.
+        if ($server->firewall_enabled || $server->firewallRules()->exists()) {
+            app(ServerProvisioner::class)->syncNetwork($server);
+        }
     }
 
     private function failCreate(Server $server, string $error): void

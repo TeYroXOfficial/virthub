@@ -4,6 +4,7 @@ use App\Http\Controllers\EnrollmentController;
 use App\Http\Controllers\Web\AdminController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\ConsoleController;
+use App\Http\Controllers\Web\FirewallController;
 use App\Http\Controllers\Web\PanelController;
 use App\Http\Controllers\Web\SsoController;
 use App\Http\Controllers\Web\UpdatesController;
@@ -33,6 +34,15 @@ Route::middleware('auth')->prefix('panel')->name('panel.')->group(function () {
     Route::post('/servers', [PanelController::class, 'storeServer'])->name('servers.store');
     Route::get('/servers/{server}', [PanelController::class, 'showServer'])->name('servers.show');
     Route::post('/servers/{server}/console', [ConsoleController::class, 'open'])->name('servers.console');
+
+    Route::prefix('/servers/{server}/firewall')->name('servers.firewall.')->group(function () {
+        Route::post('/policy', [FirewallController::class, 'policy'])->name('policy');
+        Route::post('/rules', [FirewallController::class, 'store'])->name('store');
+        Route::post('/presets/{preset}', [FirewallController::class, 'preset'])->name('preset');
+        Route::delete('/rules/{rule}', [FirewallController::class, 'destroy'])->name('destroy');
+        Route::post('/rules/{rule}/toggle', [FirewallController::class, 'toggle'])->name('toggle');
+        Route::post('/rules/{rule}/move/{direction}', [FirewallController::class, 'move'])->name('move');
+    });
 });
 
 // --- panel administratora ---------------------------------------------------

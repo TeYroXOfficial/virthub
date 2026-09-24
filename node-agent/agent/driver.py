@@ -394,7 +394,7 @@ class LibvirtDriver(HypervisorDriver):
     def configure_network(self, uuid: str, req: NetworkConfigRequest) -> dict[str, Any]:
         domain = self._domain(uuid)
         server_id = server_id_from_name(domain.name())
-        self.network.configure(server_id, req.interfaces, req.firewall)
+        self.network.configure(server_id, req.interfaces, req.firewall, req.policy)
         return {
             "uuid": uuid,
             "interfaces": len(req.interfaces),

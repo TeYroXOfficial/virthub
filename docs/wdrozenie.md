@@ -88,6 +88,25 @@ Aktualizacja węzła podmienia kod agenta, jednostkę systemd i konfigurację
 nginx; nie rusza rejestracji, sekretów, certyfikatu, mostka ani maszyn —
 działające maszyny nie są restartowane.
 
+### Zapora maszyn
+
+Każda maszyna ma zaporę zarządzaną ze strony maszyny w panelu (klient i
+personel) albo przez API (`/api/v1/servers/{id}/firewall`):
+
+- włączenie/wyłączenie i domyślna polityka ruchu przychodzącego i
+  wychodzącego (przepuszczaj albo blokuj poza regułami);
+- reguły: zezwól/zablokuj, kierunek, TCP/UDP/ICMP/wszystko, port lub zakres,
+  adres IP albo podsieć (IPv4/IPv6); kolejność, włączanie pojedynczych reguł,
+  szablony (SSH, HTTP/HTTPS, ping, RDP, poczta);
+- personel może dodać **reguły administratora** (sprawdzane przed regułami
+  klienta, dla klienta tylko do odczytu) i **zablokować** klientowi zmiany.
+
+Przy blokowaniu odpowiedzi na połączenia nawiązane przez maszynę przechodzą
+dzięki śledzeniu połączeń w rodzinie bridge (moduł `nf_conntrack_bridge`,
+ładowany przez instalator i aktualizację węzła). Bez modułu agent przechodzi
+w tryb bezstanowy (przepuszcza TCP bez samego SYN i odpowiedzi DNS/NTP) —
+heartbeat węzła zgłasza to polem `firewall_stateful`.
+
 ### Konsola w przeglądarce
 
 Maszyna KVM dostaje ekran przez noVNC, kontener LXC — terminal xterm.js

@@ -137,7 +137,7 @@ def test_mac_jest_deterministyczny_i_z_puli_qemu():
     [
         (FirewallRule(protocol="tcp", port_from=22), "tcp dport 22 accept"),
         (FirewallRule(protocol="tcp", port_from=8000, port_to=8100), "tcp dport 8000-8100"),
-        (FirewallRule(protocol="icmp", action="drop"), "icmp drop"),
+        (FirewallRule(protocol="icmp", action="drop"), "meta l4proto { icmp, ipv6-icmp } drop"),
         (FirewallRule(protocol="tcp", port_from=3306, source="10.0.0.0/8"),
          "ip saddr 10.0.0.0/8"),
     ],

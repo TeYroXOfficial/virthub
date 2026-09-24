@@ -545,6 +545,12 @@ Group=$VIRT_GROUP
 Environment=INCUS_CONF=$DATA_DIR/incus-client
 UNITEOF
 fi
+# Zapora maszyn śledzi połączenia w rodzinie bridge (odpowiedzi na ruch
+# wychodzący przy domyślnej blokadzie) — wymaga modułu nf_conntrack_bridge.
+# Bez niego agent przechodzi w tryb bezstanowy, więc brak modułu nie jest błędem.
+echo nf_conntrack_bridge > /etc/modules-load.d/virthub.conf
+modprobe nf_conntrack_bridge 2>/dev/null || true
+
 # Aktualizacje zlecane z panelu (Administracja → Aktualizacje).
 if [ -f "$AGENT_DIR/scripts/install-updater.sh" ]; then
     bash "$AGENT_DIR/scripts/install-updater.sh"

@@ -69,6 +69,12 @@ else
     warn "Brak $NGINX_SITE — agent nie jest wystawiony przez nginx."
 fi
 
+# Zapora maszyn śledzi połączenia w rodzinie bridge (odpowiedzi na ruch
+# wychodzący przy domyślnej blokadzie) — wymaga modułu nf_conntrack_bridge.
+# Bez niego agent przechodzi w tryb bezstanowy, więc brak modułu nie jest błędem.
+echo nf_conntrack_bridge > /etc/modules-load.d/virthub.conf
+modprobe nf_conntrack_bridge 2>/dev/null || true
+
 # --- restart --------------------------------------------------------------------
 
 systemctl restart virthub-agent

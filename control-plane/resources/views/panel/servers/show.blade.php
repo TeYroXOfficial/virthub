@@ -218,23 +218,9 @@
         <script src="{{ asset('js/server-metrics.js') }}?v={{ @filemtime(public_path('js/server-metrics.js')) }}"></script>
     @endpush
 
-    <div class="grid grid-2" style="margin-top:16px">
-    <div class="card">
-        <h3 class="card-title"><x-icon name="shield" :size="16"/> Zapora sieciowa</h3>
-        @forelse ($server->firewallRules as $rule)
-            <p style="margin:0 0 6px">
-                <span class="mono">#{{ $loop->iteration }}</span> {{ $rule->describe() }}
-                @if ($rule->comment) <span class="muted">— {{ $rule->comment }}</span> @endif
-            </p>
-        @empty
-            <p class="muted">Brak własnych reguł — cały ruch przychodzący jest przepuszczany.</p>
-        @endforelse
-        <p class="hint" style="margin-top:12px">
-            Niezależnie od reguł, ruch wychodzący z adresu spoza puli tej maszyny jest zawsze blokowany.
-        </p>
-    </div>
+    @include('panel.servers._firewall')
 
-    <div class="card">
+    <div class="card" style="margin-top:16px">
         <h3 class="card-title"><x-icon name="archive" :size="16"/> Kopie</h3>
         @forelse ($server->backups as $backup)
             <p style="margin:0 0 6px">
@@ -245,8 +231,6 @@
         @empty
             <p class="muted">Brak kopii. Snapshot wymaga zatrzymanej maszyny.</p>
         @endforelse
-    </div>
-
     </div>
 
     <h2>Historia operacji</h2>

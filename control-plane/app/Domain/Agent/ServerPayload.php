@@ -2,6 +2,7 @@
 
 namespace App\Domain\Agent;
 
+use App\Domain\Network\Firewall;
 use App\Models\IpAddress;
 use App\Models\Server;
 
@@ -79,9 +80,14 @@ class ServerPayload
     {
         return [
             'interfaces' => self::interfaces($server),
-            'firewall' => $server->firewallRules
+            // Kolejność ma znaczenie: reguły administratora przed regułami
+            // klienta (relacja firewallRules już je tak sortuje).
+            'firewall' => $server->firewallRules()->get()
+                ->filter(fn ($rule) => $rule->enabled)
                 ->map(fn ($rule) => $rule->toAgentPayload())
+                ->values()
                 ->all(),
+            'policy' => Firewall::policyPayload($server),
         ];
     }
 }

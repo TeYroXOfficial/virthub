@@ -54,6 +54,7 @@ Route::prefix('v1')->group(function () {
 
             Route::get('/firewall', [FirewallController::class, 'index']);
             Route::post('/firewall', [FirewallController::class, 'store']);
+            Route::put('/firewall/policy', [FirewallController::class, 'policy']);
             Route::delete('/firewall/{rule}', [FirewallController::class, 'destroy']);
 
             Route::get('/snapshots', [SnapshotController::class, 'index']);
