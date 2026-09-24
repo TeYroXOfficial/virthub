@@ -97,6 +97,22 @@ class UpdatesTest extends TestCase
             ->assertSessionHasErrors('update');
     }
 
+    public function test_nieodebrane_zlecenie_jest_zawieszone_i_mozna_je_ponowic(): void
+    {
+        file_put_contents($this->dir.'/request', '{}');
+        touch($this->dir.'/request', time() - Updates::STALL_AFTER - 5);
+
+        $status = app(Updates::class)->panelStatus();
+        $this->assertSame('stalled', $status['state']);
+        $this->assertStringContainsString('update-panel.sh', $status['message']);
+
+        $this->actingAs($this->admin)->get(route('panel.admin.updates'))->assertOk()->assertSee('update-panel.sh');
+
+        // Zawieszone zlecenie nie blokuje ponownej próby.
+        $this->actingAs($this->admin)->post(route('panel.admin.updates.panel'))->assertSessionHasNoErrors();
+        $this->assertSame('queued', app(Updates::class)->panelStatus()['state']);
+    }
+
     public function test_bez_uslugi_aktualizacji_panel_mowi_co_zrobic(): void
     {
         unlink($this->dir.'/unit.path');
