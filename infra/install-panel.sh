@@ -98,14 +98,28 @@ export COMPOSER_ALLOW_SUPERUSER=1
 
 # --- gdzie leży aplikacja ---------------------------------------------------
 
-# Instalacja z poprzedniej wersji bywa w innym miejscu — nie przenosimy jej
-# na siłę, tylko aktualizujemy tam, gdzie jest.
+# Standardowy układ to kopia całego repozytorium w /opt/virthub, z panelem w
+# control-plane/ i kodem agenta obok, w node-agent/.
+#
+# Wcześniejsze, ręczne instalacje leżą w /var/www/virthub jako spłaszczona
+# zawartość control-plane/. Tego katalogu NIGDY nie traktujemy jako korzenia
+# repozytorium — jego rodzicem jest /var/www, w którym mogą stać inne strony.
+LEGACY_DIR="/var/www/virthub"
+MIGRATE_FROM=""
+
 if [ -z "$APP_DIR" ]; then
-    if [ -f /var/www/virthub/artisan ]; then
-        APP_DIR="/var/www/virthub"
-        ROOT_DIR="$(dirname "$APP_DIR")"
-    else
-        APP_DIR="$ROOT_DIR/control-plane"
+    APP_DIR="$ROOT_DIR/control-plane"
+
+    if [ ! -f "$APP_DIR/artisan" ] && [ -f "$LEGACY_DIR/artisan" ]; then
+        if [ -n "$REPO_URL$TARBALL_URL$SOURCE_DIR" ]; then
+            # Jest nowy kod — stawiamy go w standardowym miejscu i przenosimy
+            # konfigurację (klucz aplikacji, bazę, hasła) ze starej instalacji.
+            MIGRATE_FROM="$LEGACY_DIR"
+        else
+            # Brak nowego kodu — odświeżamy starą instalację tam, gdzie jest,
+            # bez pobierania i bez ruszania plików poza nią.
+            APP_DIR="$LEGACY_DIR"
+        fi
     fi
 fi
 
@@ -133,6 +147,7 @@ printf '    domena:      %s\n' "$DOMAIN"
 printf '    katalog:     %s\n' "$APP_DIR"
 printf '    administrator: %s\n' "$ADMIN_EMAIL"
 [ "$IS_UPDATE" -eq 1 ] && printf '    tryb:        aktualizacja istniejącej instalacji\n'
+[ -n "$MIGRATE_FROM" ] && printf '    tryb:        przeniesienie z %s (konfiguracja zostaje zachowana)\n' "$MIGRATE_FROM"
 
 # --- pakiety systemowe ------------------------------------------------------
 
@@ -213,9 +228,24 @@ fi
 
 log "Przygotowuję kod aplikacji"
 
+# Nigdy nie kasujemy istniejącego katalogu. Instalator uruchamiany jako root
+# z `rm -rf` na ścieżce wyliczonej z heurystyki to przepis na utratę danych —
+# jeśli katalog docelowy jest zajęty czymś obcym, zatrzymujemy się i pytamy.
+ensure_root_dir_usable() {
+    if [ -d "$ROOT_DIR" ] && [ -n "$(ls -A "$ROOT_DIR" 2>/dev/null)" ] \
+       && [ ! -f "$ROOT_DIR/control-plane/artisan" ] && [ ! -d "$ROOT_DIR/.git" ]; then
+        die "Katalog $ROOT_DIR istnieje i zawiera coś innego niż VirtHub.
+     Nie nadpisuję go. Opróżnij go ręcznie albo wskaż inne miejsce przez --app-dir."
+    fi
+}
+
 if [ -n "$SOURCE_DIR" ]; then
-    [ -f "$SOURCE_DIR/control-plane/artisan" ] || [ -f "$SOURCE_DIR/artisan" ] \
-        || die "W $SOURCE_DIR nie ma kodu panelu."
+    # Wymagamy całego repozytorium, nie samego control-plane: bez katalogu
+    # node-agent obok panel nie ma czego wydać instalatorowi hypervisora.
+    [ -f "$SOURCE_DIR/control-plane/artisan" ] \
+        || die "W $SOURCE_DIR nie ma kodu panelu. Wskaż katalog całego repozytorium
+     (ten, w którym są podkatalogi control-plane/ i node-agent/)."
+    ensure_root_dir_usable
     mkdir -p "$ROOT_DIR"
     cp -a "$SOURCE_DIR/." "$ROOT_DIR/"
     ok "Skopiowano z $SOURCE_DIR"
@@ -224,12 +254,21 @@ elif [ -n "$REPO_URL" ]; then
         git -C "$ROOT_DIR" fetch --quiet --all
         git -C "$ROOT_DIR" reset --quiet --hard origin/HEAD 2>/dev/null \
             || git -C "$ROOT_DIR" pull --quiet
+        ok "Zaktualizowano z $REPO_URL"
     else
-        rm -rf "$ROOT_DIR"
-        git clone --quiet "$REPO_URL" "$ROOT_DIR"
+        ensure_root_dir_usable
+        # Klon do katalogu tymczasowego i dopiero potem na miejsce — przerwane
+        # pobieranie nie zostawia w $ROOT_DIR połowy repozytorium.
+        CLONE_TMP="$(mktemp -d /tmp/virthub-clone.XXXXXX)"
+        git clone --quiet "$REPO_URL" "$CLONE_TMP/repo" \
+            || die "Nie udało się pobrać repozytorium $REPO_URL."
+        mkdir -p "$ROOT_DIR"
+        cp -a "$CLONE_TMP/repo/." "$ROOT_DIR/"
+        rm -rf "$CLONE_TMP"
+        ok "Pobrano z $REPO_URL"
     fi
-    ok "Pobrano z $REPO_URL"
 elif [ -n "$TARBALL_URL" ]; then
+    ensure_root_dir_usable
     mkdir -p "$ROOT_DIR"
     curl -fsSL "$TARBALL_URL" | tar -xz -C "$ROOT_DIR" --strip-components=1
     ok "Rozpakowano archiwum"
@@ -256,6 +295,13 @@ ok "Zależności zainstalowane"
 log "Konfiguruję bazę danych"
 
 OLD_ENV="$APP_DIR/.env"
+# Przy przeniesieniu nowy katalog nie ma jeszcze .env — konfigurację bierzemy
+# ze starej instalacji. Bez tego nowy klucz aplikacji unieważniłby zaszyfrowane
+# tokeny hypervisorów, a nowe hasło odcięłoby dostęp do istniejącej bazy.
+if [ ! -f "$OLD_ENV" ] && [ -n "$MIGRATE_FROM" ] && [ -f "$MIGRATE_FROM/.env" ]; then
+    OLD_ENV="$MIGRATE_FROM/.env"
+    ok "Przenoszę konfigurację z $OLD_ENV"
+fi
 DB_PASS=""
 
 # Przy aktualizacji zachowujemy nazwę bazy, użytkownika i hasło — zmiana
@@ -511,6 +557,13 @@ if [ "$SKIP_TLS" -eq 1 ]; then
     printf '  \033[0;33mUWAGA: panel działa po HTTP, bez szyfrowania.\033[0m\n'
     printf '  Przez panel przechodzą hasła root maszyn i tokeny agentów.\n'
     printf '  Wskaż domenę na ten serwer i uruchom: certbot --nginx -d %s\n' "$DOMAIN"
+fi
+
+if [ -n "$MIGRATE_FROM" ]; then
+    echo
+    printf '  Panel działa teraz z %s.\n' "$APP_DIR"
+    printf '  Stara kopia w %s nie jest już używana. Gdy sprawdzisz, że\n' "$MIGRATE_FROM"
+    printf '  wszystko działa, możesz ją usunąć: rm -rf %s\n' "$MIGRATE_FROM"
 fi
 
 echo
