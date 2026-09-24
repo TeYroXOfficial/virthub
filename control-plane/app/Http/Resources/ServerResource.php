@@ -48,6 +48,10 @@ class ServerResource extends JsonResource
                     'version' => $ip->version,
                     'primary' => $ip->is_primary,
                     'rdns' => $ip->rdns,
+                    'type' => $ip->pool?->type ?? 'public',
+                    // Za NAT-em maszyna jest osiągalna tylko przez te porty:
+                    // ssh → 22, reszta zakresu 1:1.
+                    'nat_ports' => $ip->natPorts(),
                 ])->values()),
 
             // Widoczne tylko dla personelu — klient nie musi wiedzieć, na którym

@@ -191,10 +191,11 @@ class IncusDriver(HypervisorDriver):
 
             # Interfejs z tą samą nazwą i MAC-iem co maszyny KVM — reguły
             # firewalla i anty-spoofingu działają przez to bez zmian.
+            bridge = self.network.prepare(req.interfaces)
             self._incus(
                 "config", "device", "add", name, "eth0", "nic",
                 "nictype=bridged",
-                f"parent={self.settings.bridge}",
+                f"parent={bridge}",
                 f"host_name={target}",
                 f"hwaddr={mac}",
             )

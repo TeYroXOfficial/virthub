@@ -8,6 +8,7 @@ use App\Jobs\RunServerActionJob;
 use App\Models\AuditLog;
 use App\Models\Backup;
 use App\Models\Hypervisor;
+use App\Models\IpPool;
 use App\Models\OsTemplate;
 use App\Models\Server;
 use App\Models\ServerJob;
@@ -88,8 +89,15 @@ class ServerProvisioner
             $server->virtualization = $template->virtualization;
             $server->save();
 
-            $hypervisor = $this->selector->reserve($server, $preferred);
-            $this->ips->allocate($server, $hypervisor, $package->ip_count);
+            $networkType = $package->network_type ?: IpPool::TYPE_PUBLIC;
+            $ipv6Count = (int) $package->ipv6_count;
+
+            $hypervisor = $this->selector->reserve(
+                $server,
+                $preferred,
+                fn (Hypervisor $h) => $this->ips->hasCapacity($h, $networkType, $package->ip_count, $ipv6Count),
+            );
+            $this->ips->allocate($server, $hypervisor, $package->ip_count, $ipv6Count, $networkType);
 
             return $server;
         });

@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
+use App\Domain\Network\HypervisorGroupManager;
 use App\Domain\Provisioning\HypervisorSelector;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Hypervisor;
+use App\Models\HypervisorGroup;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -72,7 +74,7 @@ class HypervisorController extends Controller
         return response()->json(['data' => $this->present($hypervisor->loadCount('servers'))]);
     }
 
-    public function update(Request $request, Hypervisor $hypervisor): JsonResponse
+    public function update(Request $request, Hypervisor $hypervisor, HypervisorGroupManager $groups): JsonResponse
     {
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:100'],
@@ -86,7 +88,14 @@ class HypervisorController extends Controller
             'cpu_cores_total' => ['sometimes', 'integer', 'min:1'],
             'ram_mb_total' => ['sometimes', 'integer', 'min:1024'],
             'disk_gb_total' => ['sometimes', 'integer', 'min:10'],
+            'hypervisor_group_id' => ['sometimes', 'nullable', 'integer', 'exists:hypervisor_groups,id'],
         ]);
+
+        if (array_key_exists('hypervisor_group_id', $validated)) {
+            $groupId = $validated['hypervisor_group_id'];
+            $groups->assign($hypervisor, $groupId ? HypervisorGroup::find($groupId) : null);
+            unset($validated['hypervisor_group_id']);
+        }
 
         $hypervisor->update($validated);
         AuditLog::record('hypervisor.updated', $hypervisor, $validated);
@@ -174,6 +183,7 @@ class HypervisorController extends Controller
             'online' => $hypervisor->isOnline(),
             'accepts_new_servers' => $hypervisor->accepts_new_servers,
             'bridge' => $hypervisor->bridge,
+            'hypervisor_group_id' => $hypervisor->hypervisor_group_id,
             'servers_count' => $hypervisor->servers_count ?? $hypervisor->servers()->count(),
             'capacity' => [
                 'cpu_cores_total' => $hypervisor->cpu_cores_total,

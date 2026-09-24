@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Network\IpPoolManager;
 use App\Domain\Provisioning\IpAllocator;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\HypervisorGroup;
 use App\Models\Hypervisor;
 use App\Models\IpAddress;
 use App\Models\IpPool;
@@ -15,7 +17,7 @@ class IpPoolController extends Controller
 {
     public function index(): JsonResponse
     {
-        $pools = IpPool::query()->with('hypervisor')->withCount([
+        $pools = IpPool::query()->with(['hypervisor', 'group'])->withCount([
             'addresses',
             'addresses as assigned_count' => fn ($q) => $q->whereNotNull('server_id'),
             'addresses as reserved_count' => fn ($q) => $q->where('is_reserved', true),
@@ -25,65 +27,60 @@ class IpPoolController extends Controller
             'data' => $pools->map(fn (IpPool $pool) => [
                 'id' => $pool->id,
                 'name' => $pool->name,
+                'type' => $pool->type,
                 'cidr' => $pool->cidr,
                 'gateway' => $pool->gateway,
                 'prefix' => $pool->prefix,
                 'version' => $pool->version,
-                'hypervisor' => $pool->hypervisor->name,
+                'range_from' => $pool->range_from,
+                'range_to' => $pool->range_to,
+                'scope' => $pool->isGroupPool() ? 'group' : 'hypervisor',
+                'hypervisor' => $pool->hypervisor?->name,
+                'hypervisor_group' => $pool->group?->name,
+                'nat' => $pool->isNat() ? [
+                    'public_address' => $pool->nat_public_address,
+                    'port_start' => $pool->nat_port_start,
+                    'ports_per_server' => $pool->nat_ports_per_server,
+                    'port_span' => $pool->natPortSpan(),
+                ] : null,
                 'total' => $pool->addresses_count,
                 'assigned' => $pool->assigned_count,
                 'reserved' => $pool->reserved_count,
-                'free' => $pool->addresses_count - $pool->assigned_count - $pool->reserved_count,
+                // Pula IPv6 nie jest rozwinięta — liczba wolnych nie ma sensu.
+                'free' => $pool->version === 4
+                    ? $pool->addresses_count - $pool->assigned_count - $pool->reserved_count
+                    : null,
             ]),
         ]);
     }
 
     /**
-     * Utworzenie puli i rozwinięcie jej na pojedyncze adresy.
+     * Utworzenie puli. Pula IPv4 jest od razu rozwijana na pojedyncze adresy,
+     * IPv6 — przydzielana leniwie przy zamówieniach.
      *
      * Zakres można zawęzić (range_from/range_to), bo w praktyce dostawca
      * przydziela podsieć, w której część adresów należy do infrastruktury hosta.
      */
-    public function store(Request $request, IpAllocator $allocator): JsonResponse
+    public function store(Request $request, IpPoolManager $pools): JsonResponse
     {
-        $validated = $request->validate([
-            'hypervisor_id' => ['required', 'exists:hypervisors,id'],
-            'name' => ['required', 'string', 'max:100'],
-            'cidr' => ['required', 'string', 'regex:/^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/'],
-            'gateway' => ['required', 'ip'],
-            'prefix' => ['required', 'integer', 'min:1', 'max:32'],
-            'nameservers' => ['array', 'max:4'],
-            'nameservers.*' => ['ip'],
-            'range_from' => ['nullable', 'ip'],
-            'range_to' => ['nullable', 'ip'],
-        ]);
-
-        $pool = IpPool::create([
-            'hypervisor_id' => $validated['hypervisor_id'],
-            'name' => $validated['name'],
-            'cidr' => $validated['cidr'],
-            'version' => 4,
-            'gateway' => $validated['gateway'],
-            'prefix' => $validated['prefix'],
-            'nameservers' => $validated['nameservers'] ?? null,
-        ]);
-
-        $imported = $allocator->importPool(
-            $pool,
-            $validated['range_from'] ?? null,
-            $validated['range_to'] ?? null,
+        ['pool' => $pool, 'imported' => $imported] = $pools->create(
+            $request->validate(IpPoolManager::rules())
         );
 
-        AuditLog::record('ip_pool.imported', $pool, [
-            'cidr' => $pool->cidr,
-            'imported' => $imported,
-        ]);
-
         return response()->json([
-            'message' => "Zaimportowano {$imported} adresów.",
+            'message' => $pool->version === 4
+                ? "Zaimportowano {$imported} adresów."
+                : 'Dodano pulę IPv6 — adresy będą przydzielane przy zamówieniach.',
             'pool_id' => $pool->id,
             'imported' => $imported,
         ], 201);
+    }
+
+    public function destroy(IpPool $pool, IpPoolManager $pools): JsonResponse
+    {
+        $pools->delete($pool);
+
+        return response()->json(['message' => 'Pula została usunięta.']);
     }
 
     public function addresses(Request $request, IpPool $pool): JsonResponse
@@ -141,7 +138,8 @@ class IpPoolController extends Controller
     public function hypervisors(): JsonResponse
     {
         return response()->json([
-            'data' => Hypervisor::query()->get(['id', 'name'])->all(),
+            'data' => Hypervisor::query()->get(['id', 'name', 'hypervisor_group_id'])->all(),
+            'groups' => HypervisorGroup::query()->get(['id', 'name'])->all(),
         ]);
     }
 }

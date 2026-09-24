@@ -16,6 +16,7 @@ class IpAddress extends Model
         'hypervisor_id',
         'server_id',
         'address',
+        'scope_key',
         'version',
         'is_primary',
         'is_reserved',
@@ -25,6 +26,7 @@ class IpAddress extends Model
     protected function casts(): array
     {
         return [
+            'version' => 'integer',
             'is_primary' => 'boolean',
             'is_reserved' => 'boolean',
             'assigned_at' => 'datetime',
@@ -58,5 +60,23 @@ class IpAddress extends Model
     public function cidr(): string
     {
         return $this->address.'/'.$this->pool->prefix;
+    }
+
+    public function isNat(): bool
+    {
+        return $this->pool?->isNat() ?? false;
+    }
+
+    /**
+     * Przekierowane porty adresu za NAT-em: pierwszy prowadzi na SSH (22),
+     * pozostałe 1:1 na te same numery w maszynie.
+     *
+     * @return array{from: int, to: int, ssh: int}|null
+     */
+    public function natPorts(): ?array
+    {
+        $ports = $this->pool?->natPortsFor($this->address);
+
+        return $ports === null ? null : [...$ports, 'ssh' => $ports['from']];
     }
 }

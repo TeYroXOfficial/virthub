@@ -18,7 +18,7 @@ class ServerAdminController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         $servers = Server::query()
-            ->with(['user:id,name,email', 'package', 'template', 'hypervisor', 'ipAddresses'])
+            ->with(['user:id,name,email', 'package', 'template', 'hypervisor', 'ipAddresses.pool'])
             ->when($request->filled('state'), fn ($q) => $q->where('state', $request->string('state')))
             ->when($request->filled('hypervisor_id'), fn ($q) => $q->where('hypervisor_id', $request->integer('hypervisor_id')))
             ->when($request->filled('q'), function ($q) use ($request) {

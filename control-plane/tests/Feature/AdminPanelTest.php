@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Hypervisor;
+use App\Models\HypervisorGroup;
 use App\Models\IpAddress;
+use App\Models\IpPool;
 use App\Models\OsTemplate;
 use App\Models\Server;
 use App\Models\User;
@@ -268,6 +270,132 @@ class AdminPanelTest extends TestCase
                 'prefix' => 24,
             ])
             ->assertSessionHasErrors('cidr');
+    }
+
+    public function test_pula_nat_ipv6_dla_grupy_z_formularza(): void
+    {
+        $node = Hypervisor::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('panel.admin.hypervisor-groups.store'), [
+                'name' => 'Warszawa DC1',
+                'hypervisor_ids' => [$node->id],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $group = HypervisorGroup::where('name', 'Warszawa DC1')->firstOrFail();
+        $this->assertSame($group->id, $node->fresh()->hypervisor_group_id);
+
+        // Formularz wysyła wszystkie pola naraz — przy zasięgu „grupa" wybrany
+        // w liście węzeł ma zostać zignorowany.
+        $this->actingAs($this->admin)
+            ->post(route('panel.admin.ip-pools.store'), [
+                'scope' => 'group',
+                'hypervisor_id' => $node->id,
+                'hypervisor_group_id' => $group->id,
+                'type' => 'nat',
+                'name' => 'NAT v6',
+                'cidr' => 'fd00:10::/64',
+                'gateway' => 'fd00:10::1',
+                'prefix' => 64,
+                'nameservers' => '',
+                'nat_port_start' => 10000,
+                'nat_ports_per_server' => 20,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $pool = IpPool::where('name', 'NAT v6')->firstOrFail();
+        $this->assertNull($pool->hypervisor_id);
+        $this->assertSame($group->id, $pool->hypervisor_group_id);
+        $this->assertSame(6, $pool->version);
+        $this->assertNull($pool->nat_port_start, 'Przekierowania portów dotyczą tylko IPv4');
+
+        $this->actingAs($this->admin)->get(route('panel.admin.ip-pools'))
+            ->assertOk()
+            ->assertSee('NAT v6')
+            ->assertSee('grupa Warszawa DC1')
+            ->assertSee('przydział na żądanie');
+    }
+
+    public function test_pula_z_przydzielonymi_adresami_nie_da_sie_usunac(): void
+    {
+        $server = Server::factory()->create();
+        $pool = IpPool::factory()->create(['hypervisor_id' => $server->hypervisor_id]);
+        IpAddress::factory()->create(['ip_pool_id' => $pool->id, 'server_id' => $server->id]);
+
+        $this->actingAs($this->admin)
+            ->delete(route('panel.admin.ip-pools.destroy', $pool))
+            ->assertSessionHasErrors('pool');
+
+        $this->assertModelExists($pool);
+    }
+
+    public function test_pusta_pula_jest_usuwana_razem_z_adresami(): void
+    {
+        $pool = IpPool::factory()->create();
+        IpAddress::factory()->count(3)->create(['ip_pool_id' => $pool->id]);
+
+        $this->actingAs($this->admin)
+            ->delete(route('panel.admin.ip-pools.destroy', $pool))
+            ->assertSessionHasNoErrors();
+
+        $this->assertModelMissing($pool);
+        $this->assertSame(0, IpAddress::count());
+    }
+
+    public function test_grupa_z_pulami_nie_da_sie_usunac(): void
+    {
+        $group = HypervisorGroup::factory()->create();
+        IpPool::factory()->forGroup($group)->create();
+
+        $this->actingAs($this->admin)
+            ->delete(route('panel.admin.hypervisor-groups.destroy', $group))
+            ->assertSessionHasErrors('group');
+
+        $this->assertModelExists($group);
+    }
+
+    public function test_wezel_przypisany_do_grupy_w_ustawieniach(): void
+    {
+        $node = Hypervisor::factory()->create(['enrolled_at' => now()]);
+        $group = HypervisorGroup::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->put(route('panel.admin.hypervisors.update', $node), [
+                'cpu_cores_total' => 32,
+                'ram_mb_total' => 65536,
+                'disk_gb_total' => 1000,
+                'bridge' => 'br0',
+                'status' => 'online',
+                'accepts_new_servers' => 1,
+                'hypervisor_group_id' => $group->id,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame($group->id, $node->fresh()->hypervisor_group_id);
+        $this->actingAs($this->admin)->get(route('panel.admin.hypervisors'))
+            ->assertOk()
+            ->assertSee($group->name);
+    }
+
+    public function test_pakiet_nat_z_ipv6(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('panel.admin.packages.store'), [
+                'name' => 'NAT Mini',
+                'vcpu' => 1,
+                'ram_mb' => 1024,
+                'disk_gb' => 10,
+                'bandwidth_gb' => 1000,
+                'network_type' => 'nat',
+                'ip_count' => 1,
+                'ipv6_count' => 1,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $package = VpsPackage::where('slug', 'nat-mini')->firstOrFail();
+        $this->assertTrue($package->usesNat());
+        $this->assertSame(1, $package->ipv6_count);
     }
 
     // --- lista maszyn -------------------------------------------------------

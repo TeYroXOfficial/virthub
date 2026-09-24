@@ -6,10 +6,11 @@ Zmiana pola tutaj = zmiana kontraktu z control plane.
 
 from __future__ import annotations
 
+import ipaddress
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class PowerAction(str, Enum):
@@ -26,6 +27,47 @@ class JobStatus(str, Enum):
     FAILED = "failed"
 
 
+class NatSpec(BaseModel):
+    """Adres prywatny za NAT-em węzła.
+
+    Maszyna stoi na osobnym mostku (bez karty fizycznej), węzeł jest jej bramą
+    i wyprowadza ruch na świat swoim adresem. Z zewnątrz maszyna jest osiągalna
+    wyłącznie przez przekierowane porty: pierwszy port bloku trafia na SSH
+    (22), pozostałe przechodzą 1:1 — klient uruchamia usługi na tych numerach.
+    """
+
+    network: str = Field(description="Sieć prywatna za mostkiem NAT, np. 10.10.0.0/24")
+    snat_address: str | None = Field(
+        default=None,
+        description="Publiczny adres wyjścia; brak = adres interfejsu wyjściowego węzła",
+    )
+    port_from: int | None = Field(default=None, ge=1, le=65535)
+    port_to: int | None = Field(default=None, ge=1, le=65535)
+
+    @field_validator("network")
+    @classmethod
+    def _valid_network(cls, value: str) -> str:
+        # Trafia do skryptu nftables i do `ip addr` — tylko poprawna sieć.
+        return str(ipaddress.ip_network(value, strict=False))
+
+    @field_validator("snat_address")
+    @classmethod
+    def _valid_snat(cls, value: str | None) -> str | None:
+        return None if value is None else str(ipaddress.ip_address(value))
+
+    @model_validator(mode="after")
+    def _valid_ports(self) -> "NatSpec":
+        if (self.port_from is None) != (self.port_to is None):
+            raise ValueError("port_from i port_to podaje się razem albo wcale")
+        if self.port_from is not None and self.port_to < self.port_from:
+            raise ValueError("port_to nie może być mniejszy niż port_from")
+        return self
+
+    @property
+    def ip_network(self) -> ipaddress.IPv4Network | ipaddress.IPv6Network:
+        return ipaddress.ip_network(self.network)
+
+
 class NetworkInterfaceSpec(BaseModel):
     """Jeden adres przypisany do VPS-a — używany też do reguł anty-spoofingowych."""
 
@@ -33,6 +75,33 @@ class NetworkInterfaceSpec(BaseModel):
     prefix: int = Field(ge=0, le=128, description="Długość prefiksu CIDR")
     gateway: str | None = None
     version: Literal[4, 6] = 4
+    mode: Literal["bridged", "nat"] = Field(
+        default="bridged",
+        description="bridged — adres publiczny na mostku z kartą fizyczną; nat — adres prywatny za NAT-em węzła",
+    )
+    nat: NatSpec | None = None
+
+    @field_validator("address")
+    @classmethod
+    def _valid_address(cls, value: str) -> str:
+        # Adres trafia wprost do reguł nftables — nic poza poprawnym IP.
+        return str(ipaddress.ip_address(value))
+
+    @field_validator("gateway")
+    @classmethod
+    def _valid_gateway(cls, value: str | None) -> str | None:
+        return None if not value else str(ipaddress.ip_address(value))
+
+    @model_validator(mode="after")
+    def _nat_requires_details(self) -> "NetworkInterfaceSpec":
+        if self.mode == "nat":
+            if self.nat is None or not self.gateway:
+                raise ValueError("Adres NAT wymaga sekcji nat i bramy (adresu węzła na mostku NAT)")
+            network = self.nat.ip_network
+            for label, value in (("adres", self.address), ("brama", self.gateway)):
+                if ipaddress.ip_address(value) not in network:
+                    raise ValueError(f"{label} {value} leży poza siecią NAT {network}")
+        return self
 
 
 class FirewallRule(BaseModel):

@@ -19,6 +19,7 @@ class IpAddressFactory extends Factory
             'ip_pool_id' => $pool,
             'hypervisor_id' => fn (array $attributes) => IpPool::find($attributes['ip_pool_id'])->hypervisor_id,
             'address' => '203.0.113.'.fake()->unique()->numberBetween(10, 250),
+            'scope_key' => fn (array $attributes) => IpPool::find($attributes['ip_pool_id'])->scopeKey(),
             'version' => 4,
             'is_primary' => false,
             'is_reserved' => false,

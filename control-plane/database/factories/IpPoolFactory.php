@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Hypervisor;
+use App\Models\HypervisorGroup;
 use App\Models\IpPool;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -24,5 +25,38 @@ class IpPoolFactory extends Factory
             'prefix' => 24,
             'nameservers' => ['1.1.1.1', '9.9.9.9'],
         ];
+    }
+
+    /** Pula wspólna dla grupy węzłów zamiast jednego węzła. */
+    public function forGroup(HypervisorGroup $group): static
+    {
+        return $this->state(fn () => ['hypervisor_id' => null, 'hypervisor_group_id' => $group->id]);
+    }
+
+    /** Sieć prywatna za NAT-em węzła, z blokiem 20 portów na maszynę od 10000. */
+    public function nat(): static
+    {
+        return $this->state(fn () => [
+            'name' => 'Pula NAT',
+            'type' => IpPool::TYPE_NAT,
+            'cidr' => '10.10.0.0/24',
+            'gateway' => '10.10.0.1',
+            'prefix' => 24,
+            'nat_port_start' => 10000,
+            'nat_ports_per_server' => 20,
+        ]);
+    }
+
+    /** 2001:db8::/32 — prefiks dokumentacyjny z RFC 3849. */
+    public function ipv6(): static
+    {
+        return $this->state(fn () => [
+            'name' => 'Pula IPv6',
+            'cidr' => '2001:db8:10::/64',
+            'version' => 6,
+            'gateway' => '2001:db8:10::1',
+            'prefix' => 64,
+            'nameservers' => null,
+        ]);
     }
 }

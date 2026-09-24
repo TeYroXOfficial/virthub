@@ -20,6 +20,8 @@ class VpsPackage extends Model
         'disk_gb',
         'bandwidth_gb',
         'ip_count',
+        'network_type',
+        'ipv6_count',
         'price_hint_cents',
         'currency',
         'is_active',
@@ -27,7 +29,16 @@ class VpsPackage extends Model
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return [
+            'is_active' => 'boolean',
+            'ip_count' => 'integer',
+            'ipv6_count' => 'integer',
+        ];
+    }
+
+    public function usesNat(): bool
+    {
+        return $this->network_type === IpPool::TYPE_NAT;
     }
 
     /** @return HasMany<Server, $this> */

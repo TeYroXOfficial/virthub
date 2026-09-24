@@ -68,6 +68,7 @@
             @else
                 <dl class="kv">
                     <dt>Rodzaj</dt><dd>{{ $node->virtualization->label() }}</dd>
+                    <dt>Grupa</dt><dd>{{ $node->group?->name ?? '—' }}</dd>
                     <dt>Nazwa hosta</dt><dd class="mono">{{ $node->hostname }}</dd>
                     <dt>Adres agenta</dt><dd class="mono">{{ $node->agent_url }}</dd>
                     <dt>Zarejestrowany</dt><dd>{{ $node->enrolled_at->format('d.m.Y H:i') }}</dd>
@@ -105,6 +106,21 @@
                                 <input id="bridge-{{ $node->id }}" name="bridge" type="text"
                                        value="{{ $node->bridge }}" required>
                                 <div class="hint">Interfejs, do którego podpinane są maszyny.</div>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label for="group-{{ $node->id }}">Grupa węzłów</label>
+                            <select id="group-{{ $node->id }}" name="hypervisor_group_id">
+                                <option value="">— bez grupy —</option>
+                                @foreach ($groups as $group)
+                                    <option value="{{ $group->id }}" @selected($node->hypervisor_group_id === $group->id)>
+                                        {{ $group->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <div class="hint">
+                                Węzeł korzysta z pul swojej grupy i z pul przypisanych bezpośrednio do niego.
+                                Grupy zakłada się w zakładce <a href="{{ route('panel.admin.ip-pools') }}">Adresy IP</a>.
                             </div>
                         </div>
                         <div class="field">
