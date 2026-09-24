@@ -74,6 +74,15 @@ reporter = CallbackReporter(settings, jobs)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Mostek NAT i tabela nftables giną przy restarcie hosta — odtwarzamy je,
+    # zanim kolejka ruszy, żeby start maszyny nie trafił na brak mostka.
+    try:
+        restored = driver.network.nat.restore()
+        if restored:
+            log.info("Odtworzono NAT dla %s maszyn", restored)
+    except Exception:
+        log.exception("Nie udało się odtworzyć konfiguracji NAT")
+
     jobs.start()
     reporter.start()
     log.info(

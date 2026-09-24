@@ -16,6 +16,7 @@ import logging
 import subprocess
 
 from .config import Settings
+from .nat import NatManager
 from .schemas import FirewallRule, NetworkInterfaceSpec
 from .shell import CommandError, run
 
@@ -37,8 +38,6 @@ def mac_address(server_id: int) -> str:
     return f"52:54:00:{(server_id >> 16) & 0xFF:02x}:{(server_id >> 8) & 0xFF:02x}:{server_id & 0xFF:02x}"
 
 
-
-
 class NetworkManager:
     """Reguły nftables dla maszyn i kontenerów.
 
@@ -52,14 +51,39 @@ class NetworkManager:
     Łańcuchy maszyn są podpięte przez mapę werdyktów interfejs → łańcuch.
     Dzięki temu podmiana reguł to wyczyszczenie i ponowne wypełnienie
     łańcucha w jednej transakcji, bez kasowania go spod istniejących skoków.
+
+    Poza `forward` ta sama mapa jest podpięta pod `input` i `output` mostka.
+    Maszyna za NAT-em rozmawia ze światem przez węzeł (brama na mostku NAT),
+    więc jej ruch nie przechodzi między portami, tylko wpada do hosta —
+    bez tych hooków anty-spoofing i firewall klienta by go nie widziały.
     """
 
     FAMILY = "bridge"
     PORTS_MAP = "vm_ports"
 
+    # hook → kierunek dopasowania interfejsu maszyny
+    HOOKS = {"forward": ("iifname", "oifname"), "input": ("iifname",), "output": ("oifname",)}
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.table = settings.nft_table
+        self.nat = NatManager(settings)
+
+    def bridge_for(self, interfaces: list[NetworkInterfaceSpec]) -> str:
+        """Mostek, do którego trzeba podpiąć maszynę.
+
+        Wszystkie adresy maszyny są jednego rodzaju (panel tego pilnuje), bo
+        maszyna ma jedną kartę sieciową: albo na mostku z kartą fizyczną,
+        albo na mostku NAT.
+        """
+        if any(i.mode == "nat" for i in interfaces):
+            return self.settings.nat_bridge
+        return self.settings.bridge
+
+    def prepare(self, interfaces: list[NetworkInterfaceSpec]) -> str:
+        """Przygotowuje mostek pod maszynę i zwraca jego nazwę."""
+        self.nat.prepare(interfaces)
+        return self.bridge_for(interfaces)
 
     # --- publiczne API ------------------------------------------------------
 
@@ -71,13 +95,14 @@ class NetworkManager:
         self._apply(self.render_base())
 
         # `add rule` nie jest idempotentne, więc reguły kierujące ruch do mapy
-        # dokładamy tylko wtedy, gdy jeszcze ich nie ma.
-        listing = run(["nft", "list", "chain", self.FAMILY, self.table, "forward"])
-        if f"@{self.PORTS_MAP}" not in listing:
-            self._apply(
-                f"add rule {self.FAMILY} {self.table} forward iifname vmap @{self.PORTS_MAP}\n"
-                f"add rule {self.FAMILY} {self.table} forward oifname vmap @{self.PORTS_MAP}\n"
-            )
+        # dokładamy tylko tam, gdzie jeszcze ich nie ma.
+        for hook, matches in self.HOOKS.items():
+            listing = run(["nft", "list", "chain", self.FAMILY, self.table, hook])
+            if f"@{self.PORTS_MAP}" not in listing:
+                self._apply("".join(
+                    f"add rule {self.FAMILY} {self.table} {hook} {match} vmap @{self.PORTS_MAP}\n"
+                    for match in matches
+                ))
 
     def configure(
         self,
@@ -88,15 +113,19 @@ class NetworkManager:
         """Podmienia komplet reguł jednej maszyny w jednej transakcji."""
         if self.settings.is_mock:
             log.info("[mock] pominięto konfigurację nftables dla maszyny %s", server_id)
+            self.nat.configure(server_id, interfaces)
             return
 
         self.ensure_base_table()
         self._apply(self.render_machine(server_id, interfaces, firewall))
+        self.nat.configure(server_id, interfaces)
         log.info("Zastosowano %s reguł firewalla dla maszyny %s", len(firewall), server_id)
 
     def teardown(self, server_id: int) -> None:
         """Sprząta reguły po usuniętej maszynie — inaczej adres wróciłby do puli
         z cudzymi regułami wciąż aktywnymi."""
+        self.nat.teardown(server_id)
+
         if self.settings.is_mock:
             return
 
@@ -119,10 +148,14 @@ class NetworkManager:
 
     def render_base(self) -> str:
         t = f"{self.FAMILY} {self.table}"
+        chains = "".join(
+            f"add chain {t} {hook} {{ type filter hook {hook} priority filter ; policy accept ; }}\n"
+            for hook in self.HOOKS
+        )
         return (
             f"add table {t}\n"
             f"add map {t} {self.PORTS_MAP} {{ type ifname : verdict ; }}\n"
-            f"add chain {t} forward {{ type filter hook forward priority filter ; policy accept ; }}\n"
+            f"{chains}"
         )
 
     def render_machine(

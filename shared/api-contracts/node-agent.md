@@ -70,6 +70,30 @@ zamknięte jest ignorowane — powtórzony raport nie cofa stanu maszyny.
 | `GET` | `/vm/{uuid}/stats` | telemetria (synchronicznie) |
 | `GET` | `/jobs/{job_id}` | stan zadania |
 
+### Adres maszyny (`interfaces[]` w `POST /vm` i `PUT /vm/{uuid}/network`)
+
+```json
+{ "address": "203.0.113.14", "prefix": 24, "gateway": "203.0.113.1", "version": 4, "mode": "bridged" }
+```
+
+Adres za NAT-em węzła:
+
+```json
+{
+  "address": "10.10.0.5", "prefix": 24, "gateway": "10.10.0.1", "version": 4, "mode": "nat",
+  "nat": { "network": "10.10.0.0/24", "snat_address": "198.51.100.7", "port_from": 10100, "port_to": 10119 }
+}
+```
+
+- `mode: bridged` — maszyna na mostku `VH_BRIDGE` (z kartą fizyczną),
+  `mode: nat` — na mostku `VH_NAT_BRIDGE` (domyślnie `vhnat0`). Wszystkie adresy
+  jednej maszyny są jednego rodzaju.
+- `gateway` przy NAT to adres, który agent nadaje mostkowi NAT; musi leżeć w `nat.network`.
+- `snat_address` — publiczny adres wyjścia; `null` = maskarada na interfejsie wyjściowym.
+- `port_from`–`port_to` (tylko IPv4): `port_from` → port 22 maszyny, reszta 1:1;
+  `null` = bez przekierowań.
+- Adresy są walidowane jako IP — trafiają do reguł nftables.
+
 ## Kody odpowiedzi i ich znaczenie dla panelu
 
 | Kod | Znaczenie | Reakcja panelu |
@@ -96,6 +120,7 @@ z backupu wszystko wskazywało na to samo:
 | interfejs tap | `vh{id}` | `vh42` |
 | adres MAC | `52:54:00:xx:xx:xx` z `id` | `52:54:00:00:00:2a` |
 | łańcuch nftables | `vm_{id}` | `vm_42` |
+| przekierowania NAT | plik `nat/{id}.json` obok bazy stanu, mapa `fwd4` w `inet virthub_nat` | `nat/42.json` |
 
 Nie zdajemy się na automatyczne `vnet0`/`vnet1` od libvirt — po restarcie hosta
 numeracja potrafi się przesunąć i reguły firewalla trafiłyby w cudzą maszynę.

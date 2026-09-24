@@ -141,6 +141,12 @@ class FakeNetwork:
     def __init__(self):
         self.configured: list[int] = []
         self.torn_down: list[int] = []
+        self.prepared: list[str] = []
+
+    def prepare(self, interfaces):
+        bridge = "vhnat0" if any(i.mode == "nat" for i in interfaces) else "br0"
+        self.prepared.append(bridge)
+        return bridge
 
     def configure(self, server_id, interfaces, firewall):
         self.configured.append(server_id)
@@ -209,6 +215,18 @@ def test_interfejs_ma_nazwe_i_mac_jak_maszyny_kvm(driver, incus):
     assert nic["hwaddr"] == "52:54:00:00:03:e9"
     assert nic["nictype"] == "bridged"
     assert nic["parent"] == "br0"
+
+
+def test_kontener_za_nat_stoi_na_mostku_nat(driver, incus):
+    nat = NetworkInterfaceSpec(
+        address="10.10.0.5", prefix=24, gateway="10.10.0.1", mode="nat",
+        nat={"network": "10.10.0.0/24", "port_from": 10100, "port_to": 10119},
+    )
+    driver.create_vm(request(server_id=7, interfaces=[nat]))
+
+    nic = incus.instances["virthub-7"]["devices"]["eth0"]
+    assert nic["parent"] == "vhnat0", "adres prywatny nie może wylądować na mostku z kartą fizyczną"
+    assert driver.network.prepared == ["vhnat0"]
 
 
 def test_cloud_init_instaluje_ssh_i_wpuszcza_roota(driver, incus):

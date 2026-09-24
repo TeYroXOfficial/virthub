@@ -203,6 +203,9 @@ class LibvirtDriver(HypervisorDriver):
             )
             created.append("seed")
 
+            # Adres prywatny → mostek NAT, publiczny → mostek z kartą fizyczną.
+            bridge = self.network.prepare(req.interfaces)
+
             xml = build_domain_xml(
                 name=name,
                 uuid=vm_uuid,
@@ -210,7 +213,7 @@ class LibvirtDriver(HypervisorDriver):
                 ram_mb=req.ram_mb,
                 disk_path=str(disk),
                 seed_path=str(seed),
-                bridge=self.settings.bridge,
+                bridge=bridge,
                 mac=mac,
                 interface_target=target,
                 vnc_listen=self.settings.vnc_listen,

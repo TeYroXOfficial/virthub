@@ -62,8 +62,10 @@ class Settings:
     seed_dir: Path       # wygenerowane ISO cloud-init
     state_db: Path       # lokalna kolejka zadań (SQLite)
 
-    # Sieć.
+    # Sieć. Mostek NAT nie ma karty fizycznej — agent zakłada go sam przy
+    # pierwszej maszynie z adresem prywatnym i jest bramą dla takich maszyn.
     bridge: str
+    nat_bridge: str
     nft_table: str
 
     # Konsola.
@@ -89,6 +91,12 @@ class Settings:
         for path in (self.image_dir, self.template_dir, self.seed_dir, self.state_db.parent):
             path.mkdir(parents=True, exist_ok=True)
 
+    @property
+    def nat_state_dir(self) -> Path:
+        """Zastosowane przekierowania portów per maszyna — po restarcie hosta
+        agent odtwarza z nich mostek NAT i reguły, zanim maszyny wstaną."""
+        return self.state_db.parent / "nat"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
@@ -109,6 +117,7 @@ def get_settings() -> Settings:
         seed_dir=_env_path("VH_SEED_DIR", "/var/lib/virthub/seeds"),
         state_db=_env_path("VH_STATE_DB", "/var/lib/virthub/agent-state.sqlite3"),
         bridge=_env("VH_BRIDGE", "br0"),
+        nat_bridge=_env("VH_NAT_BRIDGE", "vhnat0"),
         nft_table=_env("VH_NFT_TABLE", "virthub"),
         vnc_listen=_env("VH_VNC_LISTEN", "127.0.0.1"),
         control_plane_url=_env("VH_CONTROL_PLANE_URL", "").rstrip("/"),

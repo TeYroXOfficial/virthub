@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -19,6 +20,7 @@ class Hypervisor extends Model
     public const HEARTBEAT_TIMEOUT = 120;
 
     protected $fillable = [
+        'hypervisor_group_id',
         'name',
         'hostname',
         'agent_url',
@@ -77,7 +79,12 @@ class Hypervisor extends Model
         return $this->hasMany(IpAddress::class);
     }
 
-    /** @return HasMany<IpPool, $this> */
+    /** @return BelongsTo<HypervisorGroup, $this> */
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(HypervisorGroup::class, 'hypervisor_group_id');
+    }
+
     /** @return HasMany<TemplateDownload, $this> */
     public function templateDownloads(): HasMany
     {
@@ -89,6 +96,11 @@ class Hypervisor extends Model
         return $this->virtualization === \App\Enums\Virtualization::Lxc;
     }
 
+    /**
+     * Pule przypisane bezpośrednio do węzła (bez pul jego grupy).
+     *
+     * @return HasMany<IpPool, $this>
+     */
     public function ipPools(): HasMany
     {
         return $this->hasMany(IpPool::class);

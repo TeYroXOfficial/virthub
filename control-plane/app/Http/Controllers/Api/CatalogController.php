@@ -25,6 +25,8 @@ class CatalogController extends Controller
                 'disk_gb' => $package->disk_gb,
                 'bandwidth_gb' => $package->bandwidth_gb,
                 'ip_count' => $package->ip_count,
+                'ipv6_count' => $package->ipv6_count,
+                'network_type' => $package->network_type,
                 'price_hint' => $package->price_hint_cents !== null
                     ? round($package->price_hint_cents / 100, 2)
                     : null,

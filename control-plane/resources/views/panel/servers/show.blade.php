@@ -46,8 +46,18 @@
             @forelse ($server->ipAddresses as $ip)
                 <dl class="kv" style="margin-bottom:12px">
                     <dt>{{ $ip->is_primary ? 'Główny' : 'Dodatkowy' }}</dt>
-                    <dd class="mono">{{ $ip->address }}/{{ $ip->pool->prefix }}</dd>
+                    <dd class="mono">
+                        {{ $ip->address }}/{{ $ip->pool->prefix }}
+                        @if ($ip->isNat()) <span class="pill warning">NAT</span> @endif
+                    </dd>
                     <dt>Brama</dt><dd class="mono">{{ $ip->pool->gateway }}</dd>
+                    @if ($ports = $ip->natPorts())
+                        <dt>Porty</dt>
+                        <dd class="mono">
+                            {{ $ports['ssh'] }} → 22 (SSH)@if($ports['to'] > $ports['from']),
+                            {{ $ports['from'] + 1 }}–{{ $ports['to'] }} (1:1)@endif
+                        </dd>
+                    @endif
                     @if ($ip->rdns)
                         <dt>rDNS</dt><dd class="mono">{{ $ip->rdns }}</dd>
                     @endif
@@ -56,8 +66,20 @@
                 <p class="muted">Maszyna nie ma jeszcze przypisanego adresu.</p>
             @endforelse
 
-            @if ($server->primaryIp())
-                <p class="hint">Połączenie: <code>ssh root@{{ $server->primaryIp()->address }}</code></p>
+            @if ($primary = $server->primaryIp())
+                @if ($primary->isNat())
+                    <p class="hint">
+                        Maszyna stoi za NAT-em: wychodzi w świat adresem węzła, a z zewnątrz jest
+                        osiągalna wyłącznie przez porty powyżej.
+                        @if ($ports = $primary->natPorts())
+                            Połączenie: <code>ssh -p {{ $ports['ssh'] }} root@{{ $primary->pool->nat_public_address ?: ($server->hypervisor?->hostname ?? 'adres-węzła') }}</code>.
+                            Usługę uruchomioną w maszynie na porcie z zakresu {{ $ports['from'] + 1 }}–{{ $ports['to'] }}
+                            widać z zewnątrz pod tym samym numerem.
+                        @endif
+                    </p>
+                @else
+                    <p class="hint">Połączenie: <code>ssh root@{{ $primary->address }}</code></p>
+                @endif
             @endif
         </div>
     </div>

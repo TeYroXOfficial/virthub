@@ -3,14 +3,16 @@
 namespace App\Http\Controllers\Web;
 
 use App\Domain\Agent\AgentException;
+use App\Domain\Network\HypervisorGroupManager;
+use App\Domain\Network\IpPoolManager;
 use App\Domain\Provisioning\HypervisorEnrollment;
-use App\Domain\Provisioning\IpAllocator;
 use App\Domain\Provisioning\TemplateDistributor;
 use App\Enums\ServerState;
 use App\Enums\Virtualization;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Hypervisor;
+use App\Models\HypervisorGroup;
 use App\Models\IpAddress;
 use App\Models\IpPool;
 use App\Models\OsTemplate;
@@ -53,7 +55,8 @@ class AdminController extends Controller
     public function hypervisors(): View
     {
         return view('panel.admin.hypervisors', [
-            'hypervisors' => Hypervisor::query()->withCount('servers')->orderBy('name')->get(),
+            'hypervisors' => Hypervisor::query()->with('group')->withCount('servers')->orderBy('name')->get(),
+            'groups' => HypervisorGroup::query()->orderBy('name')->get(),
         ]);
     }
 
@@ -109,13 +112,14 @@ class AdminController extends Controller
         ]);
     }
 
-    public function updateHypervisor(Request $request, Hypervisor $hypervisor): RedirectResponse
+    public function updateHypervisor(Request $request, Hypervisor $hypervisor, HypervisorGroupManager $groups): RedirectResponse
     {
         $validated = $request->validate([
             'cpu_cores_total' => ['required', 'integer', 'min:1'],
             'ram_mb_total' => ['required', 'integer', 'min:1024'],
             'disk_gb_total' => ['required', 'integer', 'min:10'],
             'bridge' => ['required', 'string', 'max:32'],
+            'hypervisor_group_id' => ['nullable', 'integer', 'exists:hypervisor_groups,id'],
             'accepts_new_servers' => ['boolean'],
             'status' => ['required', Rule::in([
                 Hypervisor::STATUS_ONLINE,
@@ -123,6 +127,12 @@ class AdminController extends Controller
                 Hypervisor::STATUS_MAINTENANCE,
             ])],
         ]);
+
+        if ($request->has('hypervisor_group_id')) {
+            $groupId = $validated['hypervisor_group_id'] ?? null;
+            $groups->assign($hypervisor, $groupId ? HypervisorGroup::find($groupId) : null);
+        }
+        unset($validated['hypervisor_group_id']);
 
         $hypervisor->update([
             ...$validated,
@@ -198,12 +208,16 @@ class AdminController extends Controller
             'disk_gb' => ['required', 'integer', 'min:5'],
             'bandwidth_gb' => ['required', 'integer', 'min:0'],
             'ip_count' => ['required', 'integer', 'min:1', 'max:16'],
+            'ipv6_count' => ['nullable', 'integer', 'min:0', 'max:16'],
+            'network_type' => ['nullable', Rule::in(IpPool::TYPES)],
             'price_hint' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $package = VpsPackage::create([
             ...$validated,
             'slug' => Str::slug($validated['name']),
+            'ipv6_count' => $validated['ipv6_count'] ?? 0,
+            'network_type' => $validated['network_type'] ?? IpPool::TYPE_PUBLIC,
             'price_hint_cents' => isset($validated['price_hint'])
                 ? (int) round($validated['price_hint'] * 100)
                 : null,
@@ -367,51 +381,76 @@ class AdminController extends Controller
     public function ipPools(): View
     {
         return view('panel.admin.ip-pools', [
-            'pools' => IpPool::query()->with('hypervisor')->withCount([
+            'pools' => IpPool::query()->with(['hypervisor', 'group'])->withCount([
                 'addresses',
                 'addresses as assigned_count' => fn ($q) => $q->whereNotNull('server_id'),
                 'addresses as reserved_count' => fn ($q) => $q->where('is_reserved', true),
-            ])->get(),
-            'hypervisors' => Hypervisor::query()->orderBy('name')->get(),
+            ])->orderBy('version')->orderBy('type')->orderBy('name')->get(),
+            'hypervisors' => Hypervisor::query()->with('group')->orderBy('name')->get(),
+            'groups' => HypervisorGroup::query()->with('hypervisors:id,name,hypervisor_group_id')
+                ->withCount('ipPools')->orderBy('name')->get(),
         ]);
     }
 
-    public function storeIpPool(Request $request, IpAllocator $allocator): RedirectResponse
+    public function storeIpPool(Request $request, IpPoolManager $pools): RedirectResponse
+    {
+        $validated = $request->validate(IpPoolManager::rules());
+
+        ['pool' => $pool, 'imported' => $imported] = $pools->create($validated);
+
+        return back()->with('status', $pool->version === 4
+            ? "Zaimportowano {$imported} adresów do puli {$pool->name}."
+            : "Dodano pulę IPv6 {$pool->name}. Adresy będą przydzielane kolejno przy zamówieniach.");
+    }
+
+    public function destroyIpPool(IpPool $pool, IpPoolManager $pools): RedirectResponse
+    {
+        $pools->delete($pool);
+
+        return back()->with('status', "Pula {$pool->name} została usunięta.");
+    }
+
+    // --- grupy węzłów -------------------------------------------------------
+
+    public function storeHypervisorGroup(Request $request, HypervisorGroupManager $groups): RedirectResponse
     {
         $validated = $request->validate([
-            'hypervisor_id' => ['required', 'exists:hypervisors,id'],
-            'name' => ['required', 'string', 'max:100'],
-            'cidr' => ['required', 'string', 'regex:/^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/'],
-            'gateway' => ['required', 'ip'],
-            'prefix' => ['required', 'integer', 'min:1', 'max:32'],
-            'range_from' => ['nullable', 'ip'],
-            'range_to' => ['nullable', 'ip'],
-            'nameservers' => ['nullable', 'string', 'max:200'],
-        ], [
-            'cidr.regex' => 'Podaj podsieć w notacji CIDR, np. 203.0.113.0/24.',
+            'name' => ['required', 'string', 'max:100', 'unique:hypervisor_groups,name'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'hypervisor_ids' => ['array'],
+            'hypervisor_ids.*' => ['integer', 'exists:hypervisors,id'],
         ]);
 
-        $pool = IpPool::create([
-            'hypervisor_id' => $validated['hypervisor_id'],
-            'name' => $validated['name'],
-            'cidr' => $validated['cidr'],
-            'version' => 4,
-            'gateway' => $validated['gateway'],
-            'prefix' => $validated['prefix'],
-            'nameservers' => $validated['nameservers']
-                ? array_map('trim', explode(',', $validated['nameservers']))
-                : null,
-        ]);
-
-        $imported = $allocator->importPool(
-            $pool,
-            $validated['range_from'] ?? null,
-            $validated['range_to'] ?? null,
+        $group = $groups->create(
+            $validated['name'],
+            $validated['description'] ?? null,
+            $validated['hypervisor_ids'] ?? [],
         );
 
-        AuditLog::record('ip_pool.imported', $pool, ['cidr' => $pool->cidr, 'imported' => $imported]);
+        return back()->with('status', "Utworzono grupę {$group->name}.");
+    }
 
-        return back()->with('status', "Zaimportowano {$imported} adresów do puli {$pool->name}.");
+    public function updateHypervisorGroup(Request $request, HypervisorGroup $group, HypervisorGroupManager $groups): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:100', Rule::unique('hypervisor_groups', 'name')->ignore($group->id)],
+            'description' => ['nullable', 'string', 'max:255'],
+            'hypervisor_ids' => ['array'],
+            'hypervisor_ids.*' => ['integer', 'exists:hypervisors,id'],
+        ]);
+
+        // Formularz wysyła komplet zaznaczonych węzłów — brak pola znaczy
+        // „żadnego węzła", a nie „bez zmian".
+        $groups->update($group, $validated['name'], $validated['description'] ?? null, $validated['hypervisor_ids'] ?? []);
+
+        return back()->with('status', "Zapisano grupę {$group->name}.");
+    }
+
+    public function destroyHypervisorGroup(HypervisorGroup $group, HypervisorGroupManager $groups): RedirectResponse
+    {
+        $groups->delete($group);
+
+        return back()->with('status', 'Grupa została usunięta. Węzły działają dalej bez grupy.');
     }
 
     // --- maszyny ------------------------------------------------------------

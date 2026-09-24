@@ -19,11 +19,16 @@ use Illuminate\Support\Facades\DB;
  */
 class HypervisorSelector
 {
+    /**
+     * @param  (callable(Hypervisor): bool)|null  $accepts  dodatkowy warunek, np.
+     *                                                      wolne adresy w pulach węzła
+     */
     public function select(
         int $vcpu,
         int $ramMb,
         int $diskGb,
         Virtualization $virtualization = Virtualization::Kvm,
+        ?callable $accepts = null,
     ): ?Hypervisor {
         return Hypervisor::query()
             ->available()
@@ -32,6 +37,7 @@ class HypervisorSelector
             ->where('virtualization', $virtualization->value)
             ->get()
             ->filter(fn (Hypervisor $h) => $h->hasCapacityFor($vcpu, $ramMb, $diskGb))
+            ->filter(fn (Hypervisor $h) => $accepts === null || $accepts($h))
             ->sortByDesc(fn (Hypervisor $h) => $h->utilisationPercent())
             ->first();
     }
@@ -40,11 +46,13 @@ class HypervisorSelector
      * Rezerwuje zasoby pod maszynę. Zwraca hypervisor, na którym maszyna
      * faktycznie się zmieściła.
      *
-     * @throws NoCapacityException
+     * @param  (callable(Hypervisor): bool)|null  $accepts  patrz select()
+     *
+     * @throws NoCapacityException|NoAddressesException
      */
-    public function reserve(Server $server, ?Hypervisor $preferred = null): Hypervisor
+    public function reserve(Server $server, ?Hypervisor $preferred = null, ?callable $accepts = null): Hypervisor
     {
-        return DB::transaction(function () use ($server, $preferred) {
+        return DB::transaction(function () use ($server, $preferred, $accepts) {
             $type = $server->virtualization ?? Virtualization::Kvm;
 
             if ($preferred !== null && $preferred->virtualization !== $type) {
@@ -55,8 +63,18 @@ class HypervisorSelector
             }
 
             $candidate = $preferred ?? $this->select(
-                $server->vcpu, $server->ram_mb, $server->disk_gb, $type,
+                $server->vcpu, $server->ram_mb, $server->disk_gb, $type, $accepts,
             );
+
+            // Zasoby są, ale żaden węzeł nie ma adresów — komunikat musi
+            // wskazać pule, a nie pojemność, bo to tam administrator ma szukać.
+            if ($candidate === null && $accepts !== null
+                && $this->select($server->vcpu, $server->ram_mb, $server->disk_gb, $type) !== null) {
+                throw new NoAddressesException(
+                    "Pula adresów jest wyczerpana: węzły typu {$type->shortLabel()} z wolnymi zasobami "
+                    .'nie mają adresów wymaganych przez pakiet. Dodaj pulę dla węzła albo jego grupy.'
+                );
+            }
 
             if ($candidate === null) {
                 throw new NoCapacityException(

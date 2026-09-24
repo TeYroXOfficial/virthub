@@ -97,8 +97,8 @@ curl -sSL https://panel.twojadomena.pl/enroll/TOKEN | sudo VH_VIRT=lxc bash
 publiczne adresy z puli i wychodzą w sieć przez mostek z własnym adresem MAC.
 Na VPS-ie z jednym adresem IP to nie zadziała — dostawca musi przydzielić
 dodatkowe adresy i dopuścić ruch z dodatkowych MAC-ów (albo dodatkowe IP muszą
-być routowane na serwer). Tryb NAT z prywatną adresacją nie jest jeszcze
-obsługiwany.
+być routowane na serwer). Jeśli to niemożliwe, użyj puli **NAT** (niżej) —
+maszyny dostają adresy prywatne i wychodzą w świat adresem węzła.
 
 Po około minucie węzeł pojawia się w panelu jako online. Zostaje zaimportować
 pulę adresów IP (**Administracja → Adresy IP**) — tego nie da się wykryć
@@ -463,6 +463,51 @@ curl -X POST https://panel.twojadomena.pl/api/v1/admin/ip-pools \
 
 `range_from`/`range_to` zawężają zakres — część adresów z podsieci należy
 zwykle do infrastruktury dostawcy i nie wolno ich przydzielać klientom.
+
+#### Zasięg: węzeł albo grupa węzłów
+
+Pula należy do jednego węzła (`hypervisor_id`) albo do grupy węzłów
+(`"scope": "group"`, `hypervisor_group_id`). Pula grupy obsługuje każdy węzeł
+grupy, więc dostawca musi dostarczać tę podsieć do wszystkich (wspólny VLAN).
+Pule węzła mają pierwszeństwo przed pulami grupy. Grupy zakłada się w
+**Administracja → Adresy IP** albo przez `POST /api/v1/admin/hypervisor-groups`.
+
+#### IPv6
+
+Wersję wykrywamy z `cidr`. Pula IPv6 (np. `2001:db8:10::/64`, `prefix: 64`) nie
+jest rozwijana na adresy — kolejne adresy powstają przy zamówieniach, od
+początku zakresu, z pominięciem bramy. Liczbę adresów IPv6 w pakiecie ustawia
+pole `ipv6_count`.
+
+#### NAT
+
+Pula `"type": "nat"` to sieć prywatna (RFC 1918, 100.64.0.0/10 albo ULA
+`fc00::/7` dla IPv6) za węzłem. Agent sam zakłada mostek `vhnat0` (zmienna
+`VH_NAT_BRIDGE`), nadaje mu adres bramy puli, włącza przekazywanie pakietów i
+maskaradę (albo SNAT na `nat_public_address`) w tabeli nftables `inet virthub_nat`.
+
+```json
+{
+  "hypervisor_id": 1, "type": "nat", "name": "NAT",
+  "cidr": "10.10.0.0/24", "gateway": "10.10.0.1", "prefix": 24,
+  "nat_port_start": 10000, "nat_ports_per_server": 20
+}
+```
+
+Każdy adres dostaje stały blok portów wyliczony z pozycji w sieci: `10.10.0.5`
+→ porty 10100–10119. Pierwszy port bloku prowadzi na SSH (22), pozostałe 1:1.
+Bloki pul NAT, które mogą trafić na ten sam węzeł, nie mogą się pokrywać — panel
+to sprawdza. Pakiet korzysta z pul NAT, gdy ma `"network_type": "nat"`.
+
+Uwagi dla węzła:
+
+- jeśli host ma własny firewall z domyślnym `drop` w łańcuchu `forward`
+  (ufw, firewalld), przepuść ruch z i do mostka `vhnat0`;
+- NAT IPv6 włącza `net.ipv6.conf.all.forwarding`, co wyłącza przyjmowanie
+  ogłoszeń routera — host konfigurowany przez SLAAC potrzebuje `accept_ra=2`
+  na interfejsie wyjściowym;
+- po restarcie hosta agent odtwarza mostek i przekierowania z
+  `/var/lib/virthub/nat/` przy starcie usługi.
 
 ### 5. Sprawdź łączność
 

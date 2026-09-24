@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\CatalogController as AdminCatalogController;
 use App\Http\Controllers\Admin\HypervisorController;
+use App\Http\Controllers\Admin\HypervisorGroupController;
 use App\Http\Controllers\Admin\IpPoolController;
 use App\Http\Controllers\Admin\ServerAdminController;
 use App\Http\Controllers\Api\BillingIntegrationController;
@@ -68,7 +69,11 @@ Route::prefix('v1')->group(function () {
 
         Route::get('ip-pools', [IpPoolController::class, 'index']);
         Route::post('ip-pools', [IpPoolController::class, 'store']);
+        Route::delete('ip-pools/{pool}', [IpPoolController::class, 'destroy']);
         Route::get('ip-pools/{pool}/addresses', [IpPoolController::class, 'addresses']);
+        Route::apiResource('hypervisor-groups', HypervisorGroupController::class)
+            ->parameters(['hypervisor-groups' => 'group'])
+            ->except('show');
         Route::post('ip-addresses/{address}/release', [IpPoolController::class, 'release']);
         Route::put('ip-addresses/{address}/rdns', [IpPoolController::class, 'updateRdns']);
 

@@ -56,6 +56,10 @@ Route::middleware(['auth', 'admin'])->prefix('panel/admin')->name('panel.admin.'
 
     Route::get('/ip-pools', [AdminController::class, 'ipPools'])->name('ip-pools');
     Route::post('/ip-pools', [AdminController::class, 'storeIpPool'])->name('ip-pools.store');
+    Route::delete('/ip-pools/{pool}', [AdminController::class, 'destroyIpPool'])->name('ip-pools.destroy');
+    Route::post('/hypervisor-groups', [AdminController::class, 'storeHypervisorGroup'])->name('hypervisor-groups.store');
+    Route::put('/hypervisor-groups/{group}', [AdminController::class, 'updateHypervisorGroup'])->name('hypervisor-groups.update');
+    Route::delete('/hypervisor-groups/{group}', [AdminController::class, 'destroyHypervisorGroup'])->name('hypervisor-groups.destroy');
 
     Route::get('/servers', [AdminController::class, 'servers'])->name('servers');
 });

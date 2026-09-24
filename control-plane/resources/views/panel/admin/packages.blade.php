@@ -36,8 +36,21 @@
                            value="{{ old('bandwidth_gb', 2000) }}" required>
                 </div>
                 <div class="field">
-                    <label for="ip_count">Adresy IP</label>
+                    <label for="network_type">Sieć</label>
+                    <select id="network_type" name="network_type">
+                        <option value="public" @selected(old('network_type', 'public') === 'public')>Publiczne adresy</option>
+                        <option value="nat" @selected(old('network_type') === 'nat')>NAT (adres prywatny + porty)</option>
+                    </select>
+                    <div class="hint">Z jakich pul pochodzą adresy maszyny.</div>
+                </div>
+                <div class="field">
+                    <label for="ip_count">Adresy IPv4</label>
                     <input id="ip_count" name="ip_count" type="text" value="{{ old('ip_count', 1) }}" required>
+                </div>
+                <div class="field">
+                    <label for="ipv6_count">Adresy IPv6</label>
+                    <input id="ipv6_count" name="ipv6_count" type="text" value="{{ old('ipv6_count', 0) }}" required>
+                    <div class="hint">0 — maszyna bez IPv6.</div>
                 </div>
                 <div class="field">
                     <label for="price_hint">Cena (PLN)</label>
@@ -55,7 +68,7 @@
             <table>
                 <thead>
                 <tr>
-                    <th>Nazwa</th><th>Zasoby</th><th>Transfer</th><th>IP</th>
+                    <th>Nazwa</th><th>Zasoby</th><th>Transfer</th><th>Sieć</th>
                     <th>Cena</th><th>Maszyny</th><th>Status</th><th></th>
                 </tr>
                 </thead>
@@ -70,7 +83,10 @@
                             {{ $package->vcpu }} vCPU · {{ $package->ramGb() }} GB RAM · {{ $package->disk_gb }} GB
                         </td>
                         <td class="num">{{ $package->bandwidth_gb }} GB</td>
-                        <td class="num">{{ $package->ip_count }}</td>
+                        <td class="num">
+                            {{ $package->usesNat() ? 'NAT' : 'publ.' }} ·
+                            {{ $package->ip_count }}× IPv4@if($package->ipv6_count) · {{ $package->ipv6_count }}× IPv6@endif
+                        </td>
                         <td class="num">
                             {{ $package->price_hint_cents ? number_format($package->price_hint_cents / 100, 2, ',', ' ').' zł' : '—' }}
                         </td>

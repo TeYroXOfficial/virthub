@@ -20,20 +20,40 @@ class ServerPayload
         return $server->ipAddresses()
             ->with('pool')
             ->get()
-            ->map(fn (IpAddress $ip) => [
-                'address' => $ip->address,
-                'prefix' => $ip->pool->prefix,
-                'gateway' => $ip->pool->gateway,
-                'version' => $ip->version,
-            ])
+            ->map(fn (IpAddress $ip) => self::interface($ip))
             ->values()
             ->all();
+    }
+
+    /** @return array<string, mixed> */
+    public static function interface(IpAddress $ip): array
+    {
+        $pool = $ip->pool;
+        $interface = [
+            'address' => $ip->address,
+            'prefix' => $pool->prefix,
+            'gateway' => $pool->gateway,
+            'version' => $ip->version,
+            'mode' => $pool->isNat() ? 'nat' : 'bridged',
+        ];
+
+        if ($pool->isNat()) {
+            $ports = $pool->natPortsFor($ip->address);
+            $interface['nat'] = [
+                'network' => $pool->cidr,
+                'snat_address' => $pool->nat_public_address,
+                'port_from' => $ports['from'] ?? null,
+                'port_to' => $ports['to'] ?? null,
+            ];
+        }
+
+        return $interface;
     }
 
     /** @return list<string> */
     public static function nameservers(Server $server): array
     {
-        $primary = $server->ipAddresses()->with('pool')->first();
+        $primary = $server->ipAddresses()->with('pool')->orderByDesc('is_primary')->orderBy('id')->first();
 
         return $primary?->pool->nameserverList() ?? ['1.1.1.1', '9.9.9.9'];
     }

@@ -27,7 +27,7 @@ class ServerController extends Controller
 
         $servers = Server::query()
             ->ownedBy($request->user())
-            ->with(['package', 'template', 'ipAddresses', 'hypervisor'])
+            ->with(['package', 'template', 'ipAddresses.pool', 'hypervisor'])
             ->latest()
             ->paginate(25);
 
@@ -47,7 +47,7 @@ class ServerController extends Controller
             label: $request->input('label'),
         );
 
-        return ServerResource::make($server->load(['package', 'template', 'ipAddresses']))
+        return ServerResource::make($server->load(['package', 'template', 'ipAddresses.pool']))
             ->response()
             ->setStatusCode(201);
     }
@@ -57,7 +57,7 @@ class ServerController extends Controller
         $this->authorize('view', $server);
 
         return ServerResource::make(
-            $server->load(['package', 'template', 'ipAddresses', 'hypervisor'])
+            $server->load(['package', 'template', 'ipAddresses.pool', 'hypervisor'])
         );
     }
 
