@@ -18,8 +18,10 @@ class OsTemplateGroup extends Model
     /** Rodziny z kolorem znaczka w panelu. */
     public const FAMILIES = [
         'ubuntu' => 'Ubuntu', 'debian' => 'Debian', 'almalinux' => 'AlmaLinux', 'rocky' => 'Rocky Linux',
-        'centos' => 'CentOS', 'fedora' => 'Fedora', 'alpine' => 'Alpine', 'arch' => 'Arch Linux',
-        'opensuse' => 'openSUSE', 'windows' => 'Windows', 'linux' => 'Inny Linux',
+        'centos' => 'CentOS', 'fedora' => 'Fedora', 'redhat' => 'Red Hat', 'alpine' => 'Alpine',
+        'arch' => 'Arch Linux', 'opensuse' => 'openSUSE', 'linuxmint' => 'Linux Mint', 'kali' => 'Kali Linux',
+        'gentoo' => 'Gentoo', 'manjaro' => 'Manjaro', 'nixos' => 'NixOS', 'freebsd' => 'FreeBSD',
+        'windows' => 'Windows', 'linux' => 'Inny Linux',
     ];
 
     protected $fillable = ['name', 'family', 'description', 'sort_order', 'is_active'];

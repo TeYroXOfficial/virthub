@@ -89,6 +89,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/template-groups/{group}/toggle', [AdminController::class, 'toggleTemplateGroup'])->name('template-groups.toggle');
         Route::delete('/template-groups/{group}', [AdminController::class, 'destroyTemplateGroup'])->name('template-groups.destroy');
 
+        Route::get('/downloads/status', [AdminController::class, 'downloadsStatus'])->name('downloads.status');
         Route::get('/isos', [IsoController::class, 'index'])->name('isos');
         Route::post('/isos', [IsoController::class, 'store'])->name('isos.store');
         Route::post('/isos/{iso}/retry', [IsoController::class, 'retry'])->name('isos.retry');

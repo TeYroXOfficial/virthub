@@ -112,7 +112,9 @@
                 const cap = Math.min(96, base + 14);
                 const inStage = (Date.now() - node.since) / 1000;
                 target = base + (cap - base) * (1 - Math.exp(-inStage / 25));
-                sub.textContent = details[node.stage] || steps[current].textContent.trim() + '…';
+                sub.textContent = node.stage === 'download' && node.detail
+                    ? 'Węzeł pobiera obraz systemu: ' + node.detail
+                    : details[node.stage] || steps[current].textContent.trim() + '…';
             } else {
                 let acc = 0;
                 current = steps.length - 1;
@@ -157,6 +159,7 @@
             if (job.stage && (!node || node.stage !== job.stage || node.percent !== job.stage_progress)) {
                 node = { stage: job.stage, percent: job.stage_progress, since: Date.now() };
             }
+            if (node) node.detail = job.stage_detail;
             if (data.transitioning) return true;
             const failed = data.state === 'error' || job.status === 'failed';
             finish(!failed, failed ? (job.error || 'Szczegóły pojawią się na stronie.') : 'Odświeżam panel…');

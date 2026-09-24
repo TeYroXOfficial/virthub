@@ -64,6 +64,8 @@ class IsoLibrary
                 'agent_job_id' => null,
                 'error' => null,
                 'finished_at' => null,
+                'progress' => null,
+                'progress_detail' => null,
             ])->save();
 
             DownloadIsoJob::dispatch($download->id);

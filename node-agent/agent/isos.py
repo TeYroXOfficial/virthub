@@ -16,6 +16,8 @@ import urllib.request
 from pathlib import Path
 
 from .config import Settings
+from .jobs import progress
+from .transfer import TransferProgress
 
 log = logging.getLogger("virthub.isos")
 
@@ -61,8 +63,12 @@ class IsoLibrary:
         request = urllib.request.Request(url, headers={"User-Agent": "VirtHub-Agent"})
         try:
             with urllib.request.urlopen(request, timeout=60) as response, partial.open("wb") as out:
+                length = response.headers.get("Content-Length")
+                tracker = TransferProgress(total=int(length) if length and length.isdigit() else None)
+                tracker.update(0, force=True)
                 while chunk := response.read(CHUNK):
                     size += len(chunk)
+                    tracker.update(size)
                     if size > MAX_BYTES:
                         raise IsoError(f"Obraz przekracza limit {MAX_BYTES // 1024**3} GB (VH_ISO_MAX_GB).")
                     digest.update(chunk)
@@ -74,6 +80,8 @@ class IsoLibrary:
             partial.unlink(missing_ok=True)
             raise IsoError(f"Nie udało się pobrać obrazu: {exc}") from exc
 
+        tracker.update(size, force=True)
+        progress("verify", 100, "Sprawdzam sumę kontrolną")
         actual = digest.hexdigest()
         if sha256 and actual.lower() != sha256.lower():
             partial.unlink(missing_ok=True)

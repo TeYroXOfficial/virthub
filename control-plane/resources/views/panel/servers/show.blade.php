@@ -5,7 +5,12 @@
 @section('content')
     <div class="page-header">
         <div>
-            <h1>{{ $server->hostname }}</h1>
+            <h1 class="os-title">
+                @if ($server->template)
+                    @include('panel.servers._os-badge', ['template' => $server->template])
+                @endif
+                {{ $server->hostname }}
+            </h1>
             <div class="meta-line">
                 <span class="pill {{ $server->state->tone() }}">{{ $server->state->label() }}</span>
                 <span>{{ $server->virtualization->label() }}</span>

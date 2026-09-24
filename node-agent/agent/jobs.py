@@ -32,14 +32,15 @@ log = logging.getLogger("virthub.jobs")
 _current = threading.local()
 
 
-def progress(stage: str, percent: int | None = None) -> None:
-    """Zapisuje etap bieżącego zadania (np. „image", 30). Poza zadaniem nic nie robi."""
+def progress(stage: str, percent: int | None = None, detail: str | None = None) -> None:
+    """Zapisuje etap bieżącego zadania (np. „image", 30) i opcjonalny opis
+    („412 MB z 1,2 GB · 18 MB/s"). Poza zadaniem nic nie robi."""
     queue_ = getattr(_current, "queue", None)
     job_id = getattr(_current, "job_id", None)
     if queue_ is None or job_id is None:
         return
     try:
-        queue_.set_progress(job_id, stage, percent)
+        queue_.set_progress(job_id, stage, percent, detail)
     except sqlite3.Error:
         log.warning("Nie udało się zapisać etapu %s zadania %s", stage, job_id)
 
@@ -95,6 +96,8 @@ class JobQueue:
                 conn.execute("ALTER TABLE jobs ADD COLUMN stage TEXT")
             if "progress" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN progress INTEGER")
+            if "detail" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN detail TEXT")
 
     # --- cykl życia workera -------------------------------------------------
 
@@ -191,11 +194,11 @@ class JobQueue:
             ).fetchall()
         return [self._to_state(row) for row in rows]
 
-    def set_progress(self, job_id: str, stage: str, percent: int | None) -> None:
+    def set_progress(self, job_id: str, stage: str, percent: int | None, detail: str | None = None) -> None:
         with self._connect() as conn:
             conn.execute(
-                "UPDATE jobs SET stage = ?, progress = ? WHERE job_id = ?",
-                (stage, None if percent is None else max(0, min(100, int(percent))), job_id),
+                "UPDATE jobs SET stage = ?, progress = ?, detail = ? WHERE job_id = ?",
+                (stage, None if percent is None else max(0, min(100, int(percent))), detail, job_id),
             )
 
     def mark_reported(self, job_id: str) -> None:
@@ -271,4 +274,5 @@ class JobQueue:
             finished_at=row["finished_at"],
             stage=row["stage"] if "stage" in row.keys() else None,
             progress=row["progress"] if "progress" in row.keys() else None,
+            detail=row["detail"] if "detail" in row.keys() else None,
         )

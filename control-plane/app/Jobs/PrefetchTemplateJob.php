@@ -20,7 +20,7 @@ class PrefetchTemplateJob implements ShouldQueue
 {
     use Queueable;
 
-    private const POLL_SECONDS = 15;
+    private const POLL_SECONDS = 5;
 
     public function __construct(public readonly int $downloadId) {}
 
@@ -64,20 +64,36 @@ class PrefetchTemplateJob implements ShouldQueue
                 return;
             }
 
-            $this->finish($download, TemplateDownload::STATUS_FAILED, $e->getMessage());
+            self::finish($download, TemplateDownload::STATUS_FAILED, $e->getMessage());
 
             return;
         }
 
+        if (! self::apply($download, $state)) {
+            $this->release(self::POLL_SECONDS);
+        }
+    }
+
+    /**
+     * Stan zadania z węzła → pobranie w panelu (true = zakończone). Wołane też
+     * przez stronę szablonów, która odpytuje węzły na żywo dla paska postępu.
+     *
+     * @param  array<string, mixed>  $state
+     */
+    public static function apply(TemplateDownload $download, array $state): bool
+    {
         match ($state['status'] ?? null) {
-            'done' => $this->finish($download, TemplateDownload::STATUS_READY),
-            'failed' => $this->finish(
-                $download,
-                TemplateDownload::STATUS_FAILED,
-                $state['error'] ?? 'Węzeł nie podał przyczyny.',
-            ),
-            default => $this->touchAndWait($download),
+            'done' => self::finish($download, TemplateDownload::STATUS_READY),
+            'failed' => self::finish($download, TemplateDownload::STATUS_FAILED, $state['error'] ?? 'Węzeł nie podał przyczyny.'),
+            // Odświeżony znacznik czasu mówi dystrybutorowi, że zlecenie żyje —
+            // inaczej po dwóch godzinach uznałby je za zgubione i zlecił drugie.
+            default => $download->forceFill([
+                'progress' => $state['progress'] ?? $download->progress,
+                'progress_detail' => $state['detail'] ?? $download->progress_detail,
+            ])->touch(),
         };
+
+        return $download->fresh()?->isInProgress() === false;
     }
 
     /** Wołane przez kolejkę, gdy minie retryUntil albo zadanie rzuci wyjątkiem. */
@@ -86,7 +102,7 @@ class PrefetchTemplateJob implements ShouldQueue
         $download = TemplateDownload::find($this->downloadId);
 
         if ($download?->isInProgress()) {
-            $this->finish(
+            self::finish(
                 $download,
                 TemplateDownload::STATUS_FAILED,
                 $exception?->getMessage() ?: 'Pobieranie trwało zbyt długo.',
@@ -94,20 +110,14 @@ class PrefetchTemplateJob implements ShouldQueue
         }
     }
 
-    private function touchAndWait(TemplateDownload $download): void
-    {
-        // Odświeżony znacznik czasu mówi dystrybutorowi, że zlecenie żyje —
-        // inaczej po dwóch godzinach uznałby je za zgubione i zlecił drugie.
-        $download->touch();
-        $this->release(self::POLL_SECONDS);
-    }
-
-    private function finish(TemplateDownload $download, string $status, ?string $error = null): void
+    private static function finish(TemplateDownload $download, string $status, ?string $error = null): void
     {
         $download->forceFill([
             'status' => $status,
             'error' => $error,
             'finished_at' => now(),
+            'progress' => $status === TemplateDownload::STATUS_READY ? 100 : $download->progress,
+            'progress_detail' => null,
         ])->save();
     }
 }

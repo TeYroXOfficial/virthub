@@ -16,7 +16,7 @@ class IsoDownload extends Model
 
     protected function casts(): array
     {
-        return ['finished_at' => 'datetime'];
+        return ['finished_at' => 'datetime', 'progress' => 'integer'];
     }
 
     /** @return BelongsTo<IsoImage, $this> */

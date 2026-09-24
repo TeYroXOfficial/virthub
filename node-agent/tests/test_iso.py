@@ -127,3 +127,24 @@ def test_montowanie_przez_api(client, template, settings, iso_server):
     assert state["result"]["boot"] is True
 
     assert client.delete("/images/iso/netinst.iso").json()["deleted"] is True
+
+
+def test_pobieranie_iso_raportuje_postep(settings, tmp_path, iso_server, monkeypatch):
+    from agent import isos as isos_module
+    from agent import transfer
+
+    seen = []
+    record = lambda stage, pct=None, detail=None: seen.append((stage, pct, detail))  # noqa: E731
+    monkeypatch.setattr(transfer, "progress", record)
+    monkeypatch.setattr(isos_module, "progress", record)
+
+    url, _sha, _size = iso_server
+    lib = IsoLibrary(settings)
+    lib.dir = tmp_path / "lib"
+    lib.download("postep.iso", url)
+
+    downloads = [s for s in seen if s[0] == "download"]
+    assert downloads[0][1] == 0
+    assert downloads[-1][1] == 100
+    assert " z " in downloads[-1][2] and "/s" in downloads[-1][2]
+    assert seen[-1][0] == "verify"

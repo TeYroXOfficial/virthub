@@ -121,9 +121,16 @@
                                         <span class="muted">brak węzłów kontenerów</span>
                                     @else
                                         @foreach ($template->downloads as $download)
-                                            <span class="pill {{ $download->tone() }}" @if($download->error) title="{{ $download->error }}" @endif>
-                                                {{ $download->hypervisor->name }}: {{ $download->label() }}
-                                            </span>
+                                            @if ($download->isInProgress())
+                                                @include('panel.admin._download-progress', ['kind' => 'template'])
+                                            @else
+                                                <span class="pill {{ $download->tone() }}" @if($download->error) title="{{ $download->error }}" @endif>
+                                                    {{ $download->hypervisor->name }}: {{ $download->label() }}
+                                                </span>
+                                                @if ($download->error)
+                                                    <div class="hint" style="color:var(--critical)">{{ $download->error }}</div>
+                                                @endif
+                                            @endif
                                         @endforeach
                                     @endif
                                 </td>
@@ -272,4 +279,8 @@
     @if (request('group'))
         <script>document.getElementById('add-version')?.setAttribute('open', '');</script>
     @endif
+    @push('scripts')
+        <script src="{{ asset('js/downloads.js') }}?v={{ @filemtime(public_path('js/downloads.js')) }}"
+                data-status-url="{{ route('panel.admin.downloads.status') }}"></script>
+    @endpush
 @endsection

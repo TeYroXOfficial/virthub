@@ -139,6 +139,7 @@ class ServerActionsController extends Controller
                 // Etap na węźle: null, dopóki zadanie czeka w kolejce panelu.
                 'stage' => $job->isFinished() ? null : ($agent['stage'] ?? ($job->agent_job_id ? 'queued' : 'pending')),
                 'stage_progress' => $job->isFinished() ? 100 : ($agent['progress'] ?? null),
+                'stage_detail' => $job->isFinished() ? null : ($agent['detail'] ?? null),
             ] : null,
         ]);
     }

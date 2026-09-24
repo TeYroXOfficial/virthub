@@ -65,7 +65,11 @@
                 <dt>Węzły</dt>
                 <dd>
                     @forelse ($iso->downloads as $d)
-                        <span class="pill {{ $tone[$d->status] ?? 'neutral' }}" title="{{ $d->error }}">{{ $d->hypervisor->name }}: {{ $label[$d->status] ?? $d->status }}</span>
+                        @if ($d->isInProgress())
+                            @include('panel.admin._download-progress', ['kind' => 'iso', 'download' => $d])
+                        @else
+                            <span class="pill {{ $tone[$d->status] ?? 'neutral' }}" title="{{ $d->error }}">{{ $d->hypervisor->name }}: {{ $label[$d->status] ?? $d->status }}</span>
+                        @endif
                     @empty
                         <span class="muted">brak węzłów KVM</span>
                     @endforelse
@@ -91,4 +95,8 @@
     @empty
         <div class="card empty">Biblioteka jest pusta. Dodaj pierwszy obraz formularzem powyżej.</div>
     @endforelse
+    @push('scripts')
+        <script src="{{ asset('js/downloads.js') }}?v={{ @filemtime(public_path('js/downloads.js')) }}"
+                data-status-url="{{ route('panel.admin.downloads.status') }}"></script>
+    @endpush
 @endsection

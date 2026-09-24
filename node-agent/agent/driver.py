@@ -727,6 +727,9 @@ class MockDriver(HypervisorDriver):
         )
 
     def prefetch_image(self, alias: str) -> dict[str, Any]:
+        # Postęp jak przy prawdziwym pobieraniu — do podglądu paska w panelu.
+        for pct in range(0, 101, 20):
+            self._stage("download", pct) if pct < 100 else progress("download", 100, "Obraz na węźle")
         return {"alias": alias, "downloaded": True, "cached": False}
 
     def reset_password(self, uuid: str, password: str) -> dict[str, Any]:
