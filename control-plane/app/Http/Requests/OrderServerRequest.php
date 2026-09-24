@@ -42,6 +42,7 @@ class OrderServerRequest extends FormRequest
                 'regex:/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/i',
             ],
             'label' => ['nullable', 'string', 'max:100'],
+            'location' => ['nullable', 'integer'],
             'ssh_keys' => ['array', 'max:10'],
             'ssh_keys.*' => ['string', 'max:1000', 'regex:/^(ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp[0-9]+)\s+[A-Za-z0-9+\/=]+/'],
         ];
@@ -73,6 +74,20 @@ class OrderServerRequest extends FormRequest
                 }
             }
 
+            $template = OsTemplate::with('group')->find($this->integer('template'));
+            if ($template?->group !== null && ! $template->group->is_active) {
+                $validator->errors()->add('template', "System {$template->group->name} nie jest teraz dostępny.");
+
+                return;
+            }
+
+            $location = $this->location();
+            if ($this->filled('location') && $location === null) {
+                $validator->errors()->add('location', 'Wybrana lokalizacja nie jest dostępna.');
+
+                return;
+            }
+
             $package = VpsPackage::where('slug', $this->string('package'))->first();
             if ($package !== null && ! $user->mayOrderPackage($package)) {
                 $validator->errors()->add('package', "Pakiet {$package->name} nie jest dostępny dla Twojego konta.");
@@ -98,6 +113,19 @@ class OrderServerRequest extends FormRequest
     public function template(): OsTemplate
     {
         return OsTemplate::findOrFail($this->integer('template'));
+    }
+
+    /** Lokalizacja wybrana przez klienta — tylko grupa oznaczona jako widoczna. */
+    public function location(): ?\App\Models\HypervisorGroup
+    {
+        if (! $this->filled('location')) {
+            return null;
+        }
+
+        return \App\Models\HypervisorGroup::query()
+            ->where('is_public', true)
+            ->where('accepts_new_servers', true)
+            ->find($this->integer('location'));
     }
 
     /** @return list<string> */

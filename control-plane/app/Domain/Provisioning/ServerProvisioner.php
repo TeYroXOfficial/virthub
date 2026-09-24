@@ -8,6 +8,7 @@ use App\Jobs\RunServerActionJob;
 use App\Models\AuditLog;
 use App\Models\Backup;
 use App\Models\Hypervisor;
+use App\Models\HypervisorGroup;
 use App\Models\IpPool;
 use App\Models\IsoImage;
 use App\Models\OsTemplate;
@@ -51,6 +52,7 @@ class ServerProvisioner
         ?string $label = null,
         ?Hypervisor $preferred = null,
         ?string $billingReference = null,
+        ?HypervisorGroup $location = null,
     ): Server {
         if (! $template->isSelfService()) {
             throw new \InvalidArgumentException(
@@ -65,10 +67,17 @@ class ServerProvisioner
             );
         }
 
+        if ($location !== null && ! $this->locationHasCapacity($location, $package, $template)) {
+            throw new NoCapacityException(
+                "W lokalizacji {$location->publicName()} nie ma teraz wolnych zasobów dla tego pakietu. "
+                .'Wybierz inną lokalizację albo spróbuj później.'
+            );
+        }
+
         $rootPassword = $this->generatePassword();
 
         $server = DB::transaction(function () use (
-            $user, $package, $template, $hostname, $label, $preferred, $billingReference, $rootPassword
+            $user, $package, $template, $hostname, $label, $preferred, $billingReference, $rootPassword, $location
         ) {
             $server = new Server([
                 'user_id' => $user->id,
@@ -97,7 +106,8 @@ class ServerProvisioner
             $hypervisor = $this->selector->reserve(
                 $server,
                 $preferred,
-                fn (Hypervisor $h) => $this->ips->hasCapacity($h, $networkType, $package->ip_count, $ipv6Count),
+                fn (Hypervisor $h) => ($location === null || $h->hypervisor_group_id === $location->id)
+                    && $this->ips->hasCapacity($h, $networkType, $package->ip_count, $ipv6Count),
             );
             $this->ips->allocate($server, $hypervisor, $package->ip_count, $ipv6Count, $networkType);
 
@@ -118,6 +128,15 @@ class ServerProvisioner
         ProvisionServerJob::dispatch($job->id, $sshKeys);
 
         return $server->refresh();
+    }
+
+    /** Czy w grupie jest węzeł, który przyjmie taką maszynę (bez sprawdzania adresów). */
+    private function locationHasCapacity(HypervisorGroup $location, VpsPackage $package, OsTemplate $template): bool
+    {
+        return $this->selector->select(
+            $package->vcpu, $package->ram_mb, $package->disk_gb, $template->virtualization,
+            fn (Hypervisor $h) => $h->hypervisor_group_id === $location->id,
+        ) !== null;
     }
 
     // --- operacje na istniejącej maszynie -----------------------------------
@@ -207,6 +226,31 @@ class ServerProvisioner
         RunServerActionJob::dispatch($job->id);
 
         return $job;
+    }
+
+    /**
+     * Usunięcie maszyny wyłącznie z panelu — bez kontaktu z węzłem. Dla
+     * wpisów, których nie da się usunąć normalnie: węzeł nie istnieje albo
+     * nie odpowiada, maszyna zniknęła z hypervisora ręcznie, zadanie utknęło.
+     * Zwalnia adresy IP i zasoby węzła; jeśli maszyna jednak żyje na węźle,
+     * trzeba ją skasować tam ręcznie.
+     */
+    public function purge(Server $server, ?User $actor = null): void
+    {
+        DB::transaction(function () use ($server, $actor) {
+            $server->jobs()
+                ->whereNotIn('status', [ServerJob::STATUS_DONE, ServerJob::STATUS_FAILED])
+                ->get()
+                ->each(fn (ServerJob $job) => $job->markFailed('Anulowane — maszynę usunięto z panelu.'));
+
+            AuditLog::record('server.purged', $server, [
+                'hostname' => $server->hostname,
+                'hypervisor' => $server->hypervisor?->name,
+                'agent_uuid' => $server->agent_uuid,
+            ], $actor);
+
+            app(ServerCleanup::class)->finalise($server);
+        });
     }
 
     public function snapshot(Server $server, string $name, ?User $actor = null): ServerJob

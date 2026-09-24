@@ -53,6 +53,43 @@ class ServerActionsController extends Controller
         return redirect()->route('panel.servers.show', $server);
     }
 
+    public function destroy(Request $request, Server $server): RedirectResponse
+    {
+        $this->authorize('destroy', $server);
+        $request->validate(['confirm' => ['accepted']], [
+            'confirm.accepted' => 'Potwierdź, że maszyna ma zostać usunięta razem z dyskiem.',
+        ]);
+
+        if ($server->state === \App\Enums\ServerState::Deleting) {
+            return back()->withErrors(['delete' => 'Maszyna jest już usuwana. Jeśli to trwa zbyt długo, administrator może usunąć ją tylko z panelu.']);
+        }
+
+        $this->provisioner->destroy($server, $request->user());
+
+        return $this->afterDelete($request, $server, "Maszyna {$server->hostname} jest usuwana.");
+    }
+
+    public function purge(Request $request, Server $server): RedirectResponse
+    {
+        $this->authorize('purge', $server);
+        $request->validate(['confirm' => ['accepted']], [
+            'confirm.accepted' => 'Potwierdź usunięcie wpisu z panelu.',
+        ]);
+
+        $this->provisioner->purge($server, $request->user());
+
+        return $this->afterDelete($request, $server, "Usunięto {$server->hostname} z panelu. Adresy IP i zasoby węzła są wolne.");
+    }
+
+    private function afterDelete(Request $request, Server $server, string $message): RedirectResponse
+    {
+        $route = $server->user_id !== $request->user()->id && $request->user()->isStaff()
+            ? 'panel.admin.servers'
+            : 'panel.dashboard';
+
+        return redirect()->route($route)->with('status', $message);
+    }
+
     public function resetPassword(Request $request, Server $server): RedirectResponse
     {
         $this->authorize('resetPassword', $server);

@@ -24,35 +24,44 @@
                     @endforeach
                 </select>
             </div>
+        </div>
 
-            <div class="field">
-                <label for="template">System operacyjny</label>
-                @if ($templateGroups->isEmpty())
-                    <p class="muted">
-                        W tej chwili nie ma dostępnego systemu do zamówienia. Spróbuj za chwilę
-                        albo skontaktuj się z obsługą.
-                    </p>
-                @else
-                    <select id="template" name="template" required>
-                        @foreach ($templateGroups as $type => $templates)
-                            <optgroup label="{{ \App\Enums\Virtualization::from($type)->label() }}">
-                                @foreach ($templates as $template)
-                                    <option value="{{ $template->id }}" @selected((int) old('template') === $template->id)>
-                                        {{ $template->name }}
-                                    </option>
-                                @endforeach
-                            </optgroup>
-                        @endforeach
-                    </select>
-                    @foreach ($templateGroups->keys() as $type)
-                        <div class="hint">
-                            <strong>{{ \App\Enums\Virtualization::from($type)->shortLabel() }}:</strong>
-                            {{ \App\Enums\Virtualization::from($type)->description() }}
-                        </div>
+        <div class="card">
+            <h3>System operacyjny</h3>
+            @if ($osChoices->isEmpty())
+                <p class="muted">
+                    W tej chwili nie ma dostępnego systemu do zamówienia. Spróbuj za chwilę
+                    albo skontaktuj się z obsługą.
+                </p>
+            @else
+                @error('template') <div class="alert alert-error"><div>{{ $message }}</div></div> @enderror
+                @include('panel.servers._os-picker', ['selected' => old('template')])
+                @php
+                    $types = $osChoices->flatMap(fn ($c) => $c['templates']->map(fn ($t) => $t->virtualization->value))
+                        ->unique()->map(fn ($v) => \App\Enums\Virtualization::from($v));
+                @endphp
+                @if ($types->count() > 1)
+                    @foreach ($types as $type)
+                        <div class="hint"><strong>{{ $type->shortLabel() }}:</strong> {{ $type->description() }}</div>
                     @endforeach
                 @endif
-            </div>
+            @endif
         </div>
+
+        @if ($locations->isNotEmpty())
+            <div class="card">
+                <h3>Lokalizacja</h3>
+                <div class="field" style="margin-bottom:0">
+                    <select id="location" name="location">
+                        <option value="">Dowolna — wybierzemy najmniej obciążoną</option>
+                        @foreach ($locations as $location)
+                            <option value="{{ $location->id }}" @selected((int) old('location') === $location->id)>{{ $location->publicName() }}</option>
+                        @endforeach
+                    </select>
+                    @error('location') <div class="hint" style="color:var(--critical)">{{ $message }}</div> @enderror
+                </div>
+            </div>
+        @endif
 
         <div class="card">
             <h3>Konfiguracja maszyny</h3>
@@ -87,4 +96,8 @@
             <a class="btn" href="{{ route('panel.dashboard') }}">Anuluj</a>
         </div>
     </form>
+
+    @push('scripts')
+        <script src="{{ asset('js/os-picker.js') }}?v={{ @filemtime(public_path('js/os-picker.js')) }}"></script>
+    @endpush
 @endsection

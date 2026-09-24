@@ -466,6 +466,29 @@ chown virthub:libvirt ubuntu-24.04.qcow2
 Obrazu bazowego nie wolno usunąć ani nadpisać, dopóki istnieje choć jedna
 maszyna, która go używa — dyski klientów są cienkimi warstwami nad nim.
 
+### Systemy i wersje
+
+Szablony są zgrupowane w systemy (**Administracja → Szablony**): np. „Ubuntu"
+z wersjami 22.04 i 24.04, osobno dla KVM i LXC. Klient wybiera najpierw
+system, potem wersję — przy zamówieniu i przy reinstalacji. Po aktualizacji
+istniejące szablony trafiają do systemów automatycznie, według rodziny.
+Ukrycie systemu wyłącza wszystkie jego wersje naraz; wersję bez maszyn można
+usunąć.
+
+### Węzły, grupy i sprzątanie maszyn
+
+Każdy węzeł ma własną stronę (**Hypervisory → Zarządzaj**): zajętość, maszyny
+na węźle, ustawienia (nazwa, grupa, limit maszyn, notatki, pojemność, tryb
+pracy) i usuwanie. Grupa węzłów może mieć lokalizację widoczną dla klientów —
+wtedy klient wybiera ją przy zamówieniu — oraz wstrzymane przyjmowanie maszyn
+dla wszystkich węzłów grupy naraz.
+
+Maszyny usuwa się z listy **Maszyny** (pojedynczo albo zaznaczone). „Usuń"
+kasuje maszynę na węźle. „Z panelu" (tylko administrator) usuwa sam wpis bez
+kontaktu z węzłem — dla maszyn, których węzeł już nie istnieje, które zniknęły
+z węzła albo których operacja utknęła; adresy IP wracają do pul. Martwy węzeł
+można usunąć razem z wpisami jego maszyn po wpisaniu jego nazwy.
+
 ### Obrazy ISO (KVM)
 
 Płyty instalacyjne dodaje się w panelu: **Administracja → Obrazy ISO** —

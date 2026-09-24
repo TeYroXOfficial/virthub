@@ -54,11 +54,7 @@ class PanelController extends Controller
                 ->filter(fn (VpsPackage $p) => $request->user()->mayOrderPackage($p))
                 ->values(),
             // Reinstalacja: tylko systemy tego samego typu, z automatyczną instalacją.
-            'templates' => OsTemplate::query()->active()
-                ->where('virtualization', $server->virtualization->value)
-                ->where('cloud_init_support', true)
-                ->orderBy('family')->orderByDesc('version')
-                ->get(),
+            'osChoices' => app(\App\Domain\Provisioning\TemplateCatalog::class)->choices([$server->virtualization->value]),
             'isos' => $server->isContainer()
                 ? collect()
                 : app(\App\Domain\Provisioning\IsoLibrary::class)->availableFor($server->hypervisor_id, $request->user()->isStaff()),
@@ -81,20 +77,18 @@ class PanelController extends Controller
             ->unique()
             ->all();
 
-        $templates = OsTemplate::query()
-            ->active()
-            ->where('cloud_init_support', true)
-            ->whereIn('virtualization', $availableTypes)
-            ->orderBy('family')
-            ->orderByDesc('version')
-            ->get()
-            ->groupBy(fn (OsTemplate $t) => $t->virtualization->value);
-
         return view('panel.servers.create', [
             'packages' => VpsPackage::query()->active()->orderBy('vcpu')->get()
                 ->filter(fn (VpsPackage $p) => $request->user()->mayOrderPackage($p))
                 ->values(),
-            'templateGroups' => $templates,
+            'osChoices' => app(\App\Domain\Provisioning\TemplateCatalog::class)->choices($availableTypes),
+            // Lokalizacje do wyboru: widoczne grupy z działającym węzłem.
+            'locations' => \App\Models\HypervisorGroup::query()
+                ->where('is_public', true)
+                ->where('accepts_new_servers', true)
+                ->whereHas('hypervisors', fn ($q) => $q->available())
+                ->ordered()
+                ->get(),
         ]);
     }
 
@@ -110,6 +104,7 @@ class PanelController extends Controller
             hostname: $request->string('hostname')->lower()->value(),
             sshKeys: $request->sshKeys(),
             label: $request->input('label'),
+            location: $request->location(),
         );
 
         return redirect()

@@ -64,7 +64,7 @@ def _handlers() -> dict[str, Any]:
         "power": lambda p: driver.power(p["uuid"], PowerRequest(**p["body"]).action),
         "rebuild": lambda p: driver.rebuild(p["uuid"], RebuildVmRequest(**p["body"])),
         "resize": lambda p: driver.resize(p["uuid"], ResizeVmRequest(**p["body"])),
-        "delete": lambda p: driver.delete(p["uuid"]),
+        "delete": lambda p: _delete_vm(p["uuid"]),
         "snapshot": lambda p: driver.snapshot(p["uuid"], p["body"]["name"]),
         "restore": lambda p: driver.restore(p["uuid"], p["body"]["name"]),
         "configure_network": lambda p: driver.configure_network(
@@ -79,6 +79,17 @@ def _handlers() -> dict[str, Any]:
             p["uuid"], PasswordResetRequest(**p["body"]).password
         ),
     }
+
+
+def _delete_vm(uuid: str) -> dict[str, Any]:
+    """Usunięcie jest idempotentne: maszyny, której już nie ma (skasowanej ręcznie
+    albo w poprzedniej, przerwanej próbie), nie da się usunąć drugi raz — i nie
+    trzeba. Panel dostaje sukces i może zwolnić adresy."""
+    try:
+        return driver.delete(uuid)
+    except VmNotFound:
+        log.warning("Usuwana maszyna %s nie istnieje na węźle — uznaję za usuniętą", uuid)
+        return {"uuid": uuid, "deleted": True, "already_absent": True}
 
 
 def _download_iso(req: IsoDownloadRequest) -> dict[str, Any]:

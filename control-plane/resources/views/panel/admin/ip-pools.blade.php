@@ -207,73 +207,7 @@
         </div>
     </div>
 
-    <h2 id="groups">Grupy węzłów</h2>
-    <p class="lede">
-        Węzły w jednej grupie korzystają ze wspólnych pul. Typowo to węzły w tej samej
-        lokalizacji, podpięte do tego samego segmentu sieci. Pule przypisane bezpośrednio
-        do węzła mają pierwszeństwo przed pulami grupy.
-    </p>
-
-    <details class="form-block card" @if($groups->isEmpty()) open @endif>
-        <summary>Utwórz grupę</summary>
-        <form method="POST" action="{{ route('panel.admin.hypervisor-groups.store') }}" style="margin-top:12px">
-            @csrf
-            <div class="grid grid-2">
-                <div class="field">
-                    <label for="group-name">Nazwa</label>
-                    <input id="group-name" name="name" type="text" placeholder="Warszawa DC1" required>
-                </div>
-                <div class="field">
-                    <label for="group-description">Opis <span class="muted">(opcjonalnie)</span></label>
-                    <input id="group-description" name="description" type="text" placeholder="VLAN 120, wspólna /24">
-                </div>
-            </div>
-            @include('panel.admin._group-members', ['group' => null])
-            <button class="btn btn-primary" type="submit">Utwórz grupę</button>
-        </form>
-    </details>
-
-    @foreach ($groups as $group)
-        <div class="card">
-            <h3>
-                {{ $group->name }}
-                <span class="pill neutral" style="float:right">
-                    {{ $group->hypervisors->count() }} węzł. · {{ $group->ip_pools_count }} pul
-                </span>
-            </h3>
-            @if ($group->description)
-                <p class="muted">{{ $group->description }}</p>
-            @endif
-
-            <details class="form-block">
-                <summary>Edytuj grupę</summary>
-                <form method="POST" action="{{ route('panel.admin.hypervisor-groups.update', $group) }}">
-                    @csrf @method('PUT')
-                    <div class="grid grid-2">
-                        <div class="field">
-                            <label for="group-name-{{ $group->id }}">Nazwa</label>
-                            <input id="group-name-{{ $group->id }}" name="name" type="text" value="{{ $group->name }}" required>
-                        </div>
-                        <div class="field">
-                            <label for="group-description-{{ $group->id }}">Opis</label>
-                            <input id="group-description-{{ $group->id }}" name="description" type="text"
-                                   value="{{ $group->description }}">
-                        </div>
-                    </div>
-                    @include('panel.admin._group-members', ['group' => $group])
-                    <button class="btn btn-primary" type="submit">Zapisz</button>
-                </form>
-            </details>
-
-            @if ($group->ip_pools_count === 0)
-                <form method="POST" action="{{ route('panel.admin.hypervisor-groups.destroy', $group) }}"
-                      onsubmit="return confirm('Usunąć grupę {{ $group->name }}?')">
-                    @csrf @method('DELETE')
-                    <button class="btn btn-danger" type="submit">Usuń grupę</button>
-                </form>
-            @endif
-        </div>
-    @endforeach
+    @include('panel.admin._groups')
 
     <script>
         // Pokazuje tylko pola pasujące do wybranego zasięgu i rodzaju puli.

@@ -20,10 +20,11 @@ use Illuminate\Validation\ValidationException;
 class HypervisorGroupManager
 {
     /** @param  list<int|string>  $hypervisorIds */
-    public function create(string $name, ?string $description, array $hypervisorIds = []): HypervisorGroup
+    /** @param  array<string, mixed>  $settings  lokalizacja, widoczność dla klientów, przyjmowanie maszyn */
+    public function create(string $name, ?string $description, array $hypervisorIds = [], array $settings = []): HypervisorGroup
     {
-        return DB::transaction(function () use ($name, $description, $hypervisorIds) {
-            $group = HypervisorGroup::create(['name' => $name, 'description' => $description]);
+        return DB::transaction(function () use ($name, $description, $hypervisorIds, $settings) {
+            $group = HypervisorGroup::create([...$this->settings($settings), 'name' => $name, 'description' => $description]);
             $this->syncMembers($group, $hypervisorIds);
             AuditLog::record('hypervisor_group.created', $group, ['name' => $group->name]);
 
@@ -36,10 +37,10 @@ class HypervisorGroupManager
      *
      * @throws ValidationException
      */
-    public function update(HypervisorGroup $group, string $name, ?string $description, ?array $hypervisorIds): HypervisorGroup
+    public function update(HypervisorGroup $group, string $name, ?string $description, ?array $hypervisorIds, array $settings = []): HypervisorGroup
     {
-        return DB::transaction(function () use ($group, $name, $description, $hypervisorIds) {
-            $group->update(['name' => $name, 'description' => $description]);
+        return DB::transaction(function () use ($group, $name, $description, $hypervisorIds, $settings) {
+            $group->update([...$this->settings($settings), 'name' => $name, 'description' => $description]);
 
             if ($hypervisorIds !== null) {
                 $this->syncMembers($group, $hypervisorIds);
@@ -49,6 +50,15 @@ class HypervisorGroupManager
 
             return $group;
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function settings(array $settings): array
+    {
+        return array_intersect_key($settings, array_flip(['location', 'is_public', 'accepts_new_servers', 'sort_order']));
     }
 
     /** @throws ValidationException */

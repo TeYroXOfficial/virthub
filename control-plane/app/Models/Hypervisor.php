@@ -33,6 +33,8 @@ class Hypervisor extends Model
         'disk_gb_total',
         'accepts_new_servers',
         'bridge',
+        'max_servers',
+        'notes',
     ];
 
     protected $hidden = ['agent_token', 'callback_secret', 'enrollment_token_hash'];
@@ -148,6 +150,19 @@ class Hypervisor extends Model
         ], fn ($r) => $r !== null);
 
         return $ratios === [] ? 0 : (int) round(max($ratios) * 100);
+    }
+
+    /**
+     * Limity administracyjne poza pojemnością: maksymalna liczba maszyn na
+     * węźle i wstrzymane przyjmowanie maszyn przez całą grupę.
+     */
+    public function acceptsMoreServers(): bool
+    {
+        if ($this->group !== null && ! $this->group->accepts_new_servers) {
+            return false;
+        }
+
+        return $this->max_servers === null || $this->servers()->count() < $this->max_servers;
     }
 
     /** @param Builder<Hypervisor> $query */

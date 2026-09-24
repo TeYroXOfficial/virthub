@@ -14,7 +14,28 @@ class HypervisorGroup extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'description'];
+    protected $fillable = ['name', 'description', 'location', 'is_public', 'accepts_new_servers', 'sort_order'];
+
+    protected function casts(): array
+    {
+        return [
+            'is_public' => 'boolean',
+            'accepts_new_servers' => 'boolean',
+            'sort_order' => 'integer',
+        ];
+    }
+
+    /** @param \Illuminate\Database\Eloquent\Builder<HypervisorGroup> $query */
+    public function scopeOrdered(\Illuminate\Database\Eloquent\Builder $query): void
+    {
+        $query->orderBy('sort_order')->orderBy('name');
+    }
+
+    /** Nazwa dla klienta: lokalizacja, a gdy jej brak — nazwa grupy. */
+    public function publicName(): string
+    {
+        return $this->location ?: $this->name;
+    }
 
     /** @return HasMany<Hypervisor, $this> */
     public function hypervisors(): HasMany

@@ -41,6 +41,8 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/iso', [ServerActionsController::class, 'iso'])->name('servers.iso');
     Route::post('/servers/{server}/password', [ServerActionsController::class, 'resetPassword'])->name('servers.password');
     Route::get('/servers/{server}/status', [ServerActionsController::class, 'status'])->name('servers.status');
+    Route::delete('/servers/{server}', [ServerActionsController::class, 'destroy'])->name('servers.destroy');
+    Route::post('/servers/{server}/purge', [ServerActionsController::class, 'purge'])->name('servers.purge');
 
     Route::prefix('/servers/{server}/firewall')->name('servers.firewall.')->group(function () {
         Route::post('/policy', [FirewallController::class, 'policy'])->name('policy');
@@ -60,6 +62,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
 
     Route::middleware('admin:admin.hypervisors')->group(function () {
         Route::get('/hypervisors', [AdminController::class, 'hypervisors'])->name('hypervisors');
+        Route::get('/hypervisors/{hypervisor}', [AdminController::class, 'showHypervisor'])->name('hypervisors.show');
         Route::post('/hypervisors', [AdminController::class, 'storeHypervisor'])->name('hypervisors.store');
         Route::post('/hypervisors/{hypervisor}/enrollment', [AdminController::class, 'regenerateEnrollment'])->name('hypervisors.enrollment');
         Route::put('/hypervisors/{hypervisor}', [AdminController::class, 'updateHypervisor'])->name('hypervisors.update');
@@ -79,6 +82,12 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/templates/{template}/toggle', [AdminController::class, 'toggleTemplate'])->name('templates.toggle');
         Route::post('/templates/{template}/retry', [AdminController::class, 'retryTemplate'])->name('templates.retry');
         Route::post('/templates/catalog/{key}', [AdminController::class, 'addCatalogTemplate'])->name('templates.catalog');
+        Route::put('/templates/{template}', [AdminController::class, 'updateTemplate'])->name('templates.update');
+        Route::delete('/templates/{template}', [AdminController::class, 'destroyTemplate'])->name('templates.destroy');
+        Route::post('/template-groups', [AdminController::class, 'storeTemplateGroup'])->name('template-groups.store');
+        Route::put('/template-groups/{group}', [AdminController::class, 'updateTemplateGroup'])->name('template-groups.update');
+        Route::post('/template-groups/{group}/toggle', [AdminController::class, 'toggleTemplateGroup'])->name('template-groups.toggle');
+        Route::delete('/template-groups/{group}', [AdminController::class, 'destroyTemplateGroup'])->name('template-groups.destroy');
 
         Route::get('/isos', [IsoController::class, 'index'])->name('isos');
         Route::post('/isos', [IsoController::class, 'store'])->name('isos.store');
@@ -91,6 +100,9 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::get('/ip-pools', [AdminController::class, 'ipPools'])->name('ip-pools');
         Route::post('/ip-pools', [AdminController::class, 'storeIpPool'])->name('ip-pools.store');
         Route::delete('/ip-pools/{pool}', [AdminController::class, 'destroyIpPool'])->name('ip-pools.destroy');
+    });
+
+    Route::middleware('admin:admin.hypervisors|admin.ip_pools')->group(function () {
         Route::post('/hypervisor-groups', [AdminController::class, 'storeHypervisorGroup'])->name('hypervisor-groups.store');
         Route::put('/hypervisor-groups/{group}', [AdminController::class, 'updateHypervisorGroup'])->name('hypervisor-groups.update');
         Route::delete('/hypervisor-groups/{group}', [AdminController::class, 'destroyHypervisorGroup'])->name('hypervisor-groups.destroy');
@@ -104,7 +116,10 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/updates/nodes/{hypervisor}', [UpdatesController::class, 'updateNode'])->name('updates.node');
     });
 
-    Route::get('/servers', [AdminController::class, 'servers'])->middleware('admin:admin.servers')->name('servers');
+    Route::middleware('admin:admin.servers')->group(function () {
+        Route::get('/servers', [AdminController::class, 'servers'])->name('servers');
+        Route::post('/servers/bulk', [AdminController::class, 'bulkServers'])->name('servers.bulk');
+    });
 
     Route::middleware('admin:admin.users')->group(function () {
         Route::get('/users', [UsersController::class, 'index'])->name('users');

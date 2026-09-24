@@ -85,6 +85,12 @@ class ServerPolicy
         return $this->allowed($user, $server, 'servers.delete', destructive: true);
     }
 
+    /** Usunięcie tylko z panelu (bez węzła) — wyłącznie administrator. */
+    public function purge(User $user, Server $server): bool
+    {
+        return ! $user->isSuspended() && $user->isAdmin();
+    }
+
     public function create(User $user): bool
     {
         return $user->hasPermission('servers.order');

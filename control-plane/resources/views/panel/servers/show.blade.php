@@ -48,7 +48,7 @@
                     </button>
                 </div>
                 @endcan
-                @if (auth()->user()->can('rebuild', $server) && $templates->isNotEmpty())
+                @if (auth()->user()->can('rebuild', $server) && $osChoices->isNotEmpty())
                     <button class="btn" type="button" data-open-reinstall title="Postaw system od nowa">
                         <x-icon name="refresh" :size="15"/> Reinstaluj
                     </button>
@@ -110,6 +110,21 @@
 
     @if ($inProgress)
         @include('panel.servers._progress')
+        @can('purge', $server)
+            <details class="form-block card" style="margin-top:16px">
+                <summary>Operacja utknęła? Opcje administratora</summary>
+                <form method="POST" action="{{ route('panel.servers.purge', $server) }}" style="margin-top:12px"
+                      onsubmit="return confirm('Usunąć wpis TYLKO z panelu? Panel nie skontaktuje się z węzłem.')">
+                    @csrf
+                    <p class="muted" style="margin-top:0">
+                        Usuwa maszynę z panelu bez kontaktu z węzłem i zwalnia jej adresy IP. Jeśli maszyna
+                        istnieje na węźle, trzeba ją tam skasować ręcznie.
+                    </p>
+                    <label class="check-line"><input type="checkbox" name="confirm" value="1" required> Potwierdzam</label>
+                    <button class="btn btn-danger" type="submit" style="margin-top:10px">Usuń tylko z panelu</button>
+                </form>
+            </details>
+        @endcan
     @else
         <nav class="tabs" role="tablist" aria-label="Sekcje maszyny">
             <button type="button" role="tab" data-tab="overview">Przegląd</button>
@@ -310,7 +325,7 @@
         </div>
     @endif
 
-    @if (auth()->user()->can('rebuild', $server) && $templates->isNotEmpty() && $server->acceptsCommands())
+    @if (auth()->user()->can('rebuild', $server) && $osChoices->isNotEmpty() && $server->acceptsCommands())
         @include('panel.servers._reinstall-modal')
     @endif
 
@@ -362,6 +377,7 @@
         });
     </script>
     @push('scripts')
+        <script src="{{ asset('js/os-picker.js') }}?v={{ @filemtime(public_path('js/os-picker.js')) }}"></script>
         <script src="{{ asset('js/server-page.js') }}?v={{ @filemtime(public_path('js/server-page.js')) }}"></script>
     @endpush
 @endsection

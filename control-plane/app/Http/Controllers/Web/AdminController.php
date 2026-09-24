@@ -16,6 +16,7 @@ use App\Models\HypervisorGroup;
 use App\Models\IpAddress;
 use App\Models\IpPool;
 use App\Models\OsTemplate;
+use App\Models\OsTemplateGroup;
 use App\Models\Server;
 use App\Models\User;
 use App\Models\VpsPackage;
@@ -56,8 +57,33 @@ class AdminController extends Controller
     {
         return view('panel.admin.hypervisors', [
             'hypervisors' => Hypervisor::query()->with('group')->withCount('servers')->orderBy('name')->get(),
-            'groups' => HypervisorGroup::query()->orderBy('name')->get(),
+            'groups' => $this->groupsForView(),
         ]);
+    }
+
+    public function showHypervisor(Hypervisor $hypervisor): View
+    {
+        $hypervisor->load('group')->loadCount('servers');
+
+        return view('panel.admin.hypervisor', [
+            'node' => $hypervisor,
+            'servers' => $hypervisor->servers()->with(['user:id,email', 'ipAddresses', 'template'])->latest()->get(),
+            'groups' => HypervisorGroup::query()->ordered()->get(),
+            'pools' => IpPool::query()->where('hypervisor_id', $hypervisor->id)
+                ->orWhere(fn ($q) => $q->whereNotNull('hypervisor_group_id')->where('hypervisor_group_id', $hypervisor->hypervisor_group_id))
+                ->withCount(['addresses', 'addresses as assigned_count' => fn ($q) => $q->whereNotNull('server_id')])
+                ->orderBy('version')->get(),
+        ]);
+    }
+
+    /** @return \Illuminate\Support\Collection<int, HypervisorGroup> */
+    private function groupsForView()
+    {
+        return HypervisorGroup::query()
+            ->with('hypervisors:id,name,hypervisor_group_id,status,last_seen_at')
+            ->withCount('ipPools')
+            ->ordered()
+            ->get();
     }
 
     /**
@@ -115,6 +141,9 @@ class AdminController extends Controller
     public function updateHypervisor(Request $request, Hypervisor $hypervisor, HypervisorGroupManager $groups): RedirectResponse
     {
         $validated = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:100', Rule::unique('hypervisors', 'name')->ignore($hypervisor->id)],
+            'max_servers' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'notes' => ['nullable', 'string', 'max:5000'],
             'cpu_cores_total' => ['required', 'integer', 'min:1'],
             'ram_mb_total' => ['required', 'integer', 'min:1024'],
             'disk_gb_total' => ['required', 'integer', 'min:10'],
@@ -136,6 +165,7 @@ class AdminController extends Controller
 
         $hypervisor->update([
             ...$validated,
+            'max_servers' => $validated['max_servers'] ?? null,
             'accepts_new_servers' => $request->boolean('accepts_new_servers'),
         ]);
 
@@ -175,8 +205,22 @@ class AdminController extends Controller
         ));
     }
 
-    public function destroyHypervisor(Hypervisor $hypervisor): RedirectResponse
+    public function destroyHypervisor(Request $request, Hypervisor $hypervisor, \App\Domain\Provisioning\ServerProvisioner $provisioner): RedirectResponse
     {
+        // Martwy węzeł z maszynami: administrator może usunąć go razem z ich
+        // wpisami w panelu (bez kontaktu z węzłem) — po wpisaniu nazwy węzła.
+        if ($request->boolean('purge_servers') && $hypervisor->servers()->exists()) {
+            abort_unless($request->user()->isAdmin(), 403, 'Usunąć węzeł z maszynami może tylko administrator.');
+
+            if ($request->input('confirm_name') !== $hypervisor->name) {
+                return back()->withErrors(['delete' => 'Wpisz dokładną nazwę węzła, żeby potwierdzić usunięcie razem z maszynami.']);
+            }
+
+            foreach ($hypervisor->servers()->get() as $server) {
+                $provisioner->purge($server, $request->user());
+            }
+        }
+
         if ($hypervisor->servers()->exists()) {
             return back()->withErrors([
                 'delete' => "Na węźle {$hypervisor->name} są maszyny. Usuń je najpierw — "
@@ -187,7 +231,7 @@ class AdminController extends Controller
         AuditLog::record('hypervisor.deleted', $hypervisor, ['name' => $hypervisor->name]);
         $hypervisor->delete();
 
-        return back()->with('status', 'Węzeł został usunięty.');
+        return redirect()->route('panel.admin.hypervisors')->with('status', "Węzeł {$hypervisor->name} został usunięty.");
     }
 
     // --- pakiety ------------------------------------------------------------
@@ -245,8 +289,9 @@ class AdminController extends Controller
     {
         $templates = OsTemplate::query()
             ->with('downloads.hypervisor')
+            ->withCount('servers')
+            ->orderBy('sort_order')
             ->orderBy('virtualization')
-            ->orderBy('family')
             ->orderByDesc('version')
             ->get();
 
@@ -257,6 +302,7 @@ class AdminController extends Controller
 
         return view('panel.admin.templates', [
             'templates' => $templates,
+            'groups' => OsTemplateGroup::query()->ordered()->get(),
             'catalog' => collect(config('virthub.lxc_catalog'))
                 ->map(fn (array $entry, string $key) => [
                     ...$entry,
@@ -277,10 +323,17 @@ class AdminController extends Controller
         $request->mergeIfMissing(['virtualization' => Virtualization::Kvm->value]);
         $isContainer = $request->input('virtualization') === Virtualization::Lxc->value;
 
+        // Wersja dodawana do istniejącego systemu dziedziczy jego rodzinę.
+        if ($request->filled('os_template_group_id') && ! $request->filled('family')) {
+            $request->merge(['family' => OsTemplateGroup::find($request->integer('os_template_group_id'))?->family]);
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100'],
+            'os_template_group_id' => ['nullable', 'integer', 'exists:os_template_groups,id'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'virtualization' => ['required', Rule::enum(Virtualization::class)],
-            'family' => ['required', Rule::in(['ubuntu', 'debian', 'almalinux', 'rocky', 'fedora', 'windows'])],
+            'family' => ['required', Rule::in(array_keys(OsTemplateGroup::FAMILIES))],
             'version' => ['required', 'string', 'max:32'],
             'image_file' => $isContainer
                 // Alias obrazu z serwera obrazów. Bez prefiksu serwera
@@ -304,6 +357,7 @@ class AdminController extends Controller
 
         $template = OsTemplate::create([
             ...$validated,
+            'sort_order' => (int) ($validated['sort_order'] ?? 0),
             'cloud_init_support' => $validated['family'] !== 'windows',
             'is_active' => true,
         ]);
@@ -376,6 +430,91 @@ class AdminController extends Controller
             : "Szablon {$template->name} został wyłączony.");
     }
 
+    /** Edycja wersji: nazwa, wersja, system (grupa), kolejność, minimalny dysk. */
+    public function updateTemplate(Request $request, OsTemplate $template): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'version' => ['required', 'string', 'max:32'],
+            'os_template_group_id' => ['nullable', 'integer', 'exists:os_template_groups,id'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'min_disk_gb' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $template->update([...$validated, 'sort_order' => (int) ($validated['sort_order'] ?? 0)]);
+        AuditLog::record('template.updated', $template, $validated);
+
+        return back()->with('status', "Zapisano {$template->name}.");
+    }
+
+    public function destroyTemplate(OsTemplate $template): RedirectResponse
+    {
+        $count = $template->servers()->count();
+        if ($count > 0) {
+            return back()->withErrors([
+                'template' => "Na {$template->name} stoi {$count} maszyn — usuń je albo przeinstaluj na inny system. "
+                    .'Możesz też tylko wyłączyć ten szablon, żeby nie był dostępny do zamówienia.',
+            ]);
+        }
+
+        AuditLog::record('template.deleted', $template, ['name' => $template->name]);
+        $template->delete();
+
+        return back()->with('status', "Usunięto szablon {$template->name}. Plik obrazu na węzłach usuń ręcznie, jeśli nie jest potrzebny.");
+    }
+
+    // --- systemy (grupy szablonów) -------------------------------------------
+
+    public function storeTemplateGroup(Request $request): RedirectResponse
+    {
+        $validated = $request->validate($this->templateGroupRules());
+        $group = OsTemplateGroup::create([...$validated, 'sort_order' => (int) ($validated['sort_order'] ?? 0), 'is_active' => true]);
+        AuditLog::record('template_group.created', $group, ['name' => $group->name]);
+
+        return back()->with('status', "Dodano system {$group->name}. Dodaj do niego wersje.");
+    }
+
+    public function updateTemplateGroup(Request $request, OsTemplateGroup $group): RedirectResponse
+    {
+        $validated = $request->validate($this->templateGroupRules($group));
+        $group->update([...$validated, 'sort_order' => (int) ($validated['sort_order'] ?? 0)]);
+        AuditLog::record('template_group.updated', $group, $validated);
+
+        return back()->with('status', "Zapisano system {$group->name}.");
+    }
+
+    public function toggleTemplateGroup(OsTemplateGroup $group): RedirectResponse
+    {
+        $group->update(['is_active' => ! $group->is_active]);
+
+        return back()->with('status', $group->is_active
+            ? "System {$group->name} jest znowu dostępny."
+            : "System {$group->name} został ukryty — żadna jego wersja nie jest dostępna do zamówienia ani reinstalacji.");
+    }
+
+    public function destroyTemplateGroup(OsTemplateGroup $group): RedirectResponse
+    {
+        if ($group->templates()->exists()) {
+            return back()->withErrors(['group' => "System {$group->name} ma wersje — usuń je albo przenieś do innego systemu."]);
+        }
+
+        AuditLog::record('template_group.deleted', $group, ['name' => $group->name]);
+        $group->delete();
+
+        return back()->with('status', "Usunięto system {$group->name}.");
+    }
+
+    /** @return array<string, list<mixed>> */
+    private function templateGroupRules(?OsTemplateGroup $group = null): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:100', Rule::unique('os_template_groups', 'name')->ignore($group?->id)],
+            'family' => ['required', Rule::in(array_keys(OsTemplateGroup::FAMILIES))],
+            'description' => ['nullable', 'string', 'max:255'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:100000'],
+        ];
+    }
+
     // --- pule adresów -------------------------------------------------------
 
     public function ipPools(): View
@@ -387,8 +526,7 @@ class AdminController extends Controller
                 'addresses as reserved_count' => fn ($q) => $q->where('is_reserved', true),
             ])->orderBy('version')->orderBy('type')->orderBy('name')->get(),
             'hypervisors' => Hypervisor::query()->with('group')->orderBy('name')->get(),
-            'groups' => HypervisorGroup::query()->with('hypervisors:id,name,hypervisor_group_id')
-                ->withCount('ipPools')->orderBy('name')->get(),
+            'groups' => $this->groupsForView(),
         ]);
     }
 
@@ -419,12 +557,14 @@ class AdminController extends Controller
             'description' => ['nullable', 'string', 'max:255'],
             'hypervisor_ids' => ['array'],
             'hypervisor_ids.*' => ['integer', 'exists:hypervisors,id'],
+            ...self::groupSettingsRules(),
         ]);
 
         $group = $groups->create(
             $validated['name'],
             $validated['description'] ?? null,
             $validated['hypervisor_ids'] ?? [],
+            $this->groupSettings($request, $validated),
         );
 
         return back()->with('status', "Utworzono grupę {$group->name}.");
@@ -437,13 +577,46 @@ class AdminController extends Controller
             'description' => ['nullable', 'string', 'max:255'],
             'hypervisor_ids' => ['array'],
             'hypervisor_ids.*' => ['integer', 'exists:hypervisors,id'],
+            ...self::groupSettingsRules(),
         ]);
 
         // Formularz wysyła komplet zaznaczonych węzłów — brak pola znaczy
         // „żadnego węzła", a nie „bez zmian".
-        $groups->update($group, $validated['name'], $validated['description'] ?? null, $validated['hypervisor_ids'] ?? []);
+        $groups->update(
+            $group,
+            $validated['name'],
+            $validated['description'] ?? null,
+            $validated['hypervisor_ids'] ?? [],
+            $this->groupSettings($request, $validated),
+        );
 
         return back()->with('status', "Zapisano grupę {$group->name}.");
+    }
+
+    /** @return array<string, list<string>> */
+    private static function groupSettingsRules(): array
+    {
+        return [
+            'location' => ['nullable', 'string', 'max:100'],
+            'is_public' => ['sometimes', 'boolean'],
+            'accepts_new_servers' => ['sometimes', 'boolean'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:100000'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function groupSettings(Request $request, array $validated): array
+    {
+        return [
+            'location' => $validated['location'] ?? null,
+            'is_public' => $request->boolean('is_public'),
+            // Brak pola w starszym formularzu = przyjmuje (dotychczasowe zachowanie).
+            'accepts_new_servers' => $request->has('accepts_new_servers') ? $request->boolean('accepts_new_servers') : true,
+            'sort_order' => (int) ($validated['sort_order'] ?? 0),
+        ];
     }
 
     public function destroyHypervisorGroup(HypervisorGroup $group, HypervisorGroupManager $groups): RedirectResponse
@@ -474,6 +647,48 @@ class AdminController extends Controller
             'servers' => $servers,
             'states' => ServerState::cases(),
         ]);
+    }
+
+    /** Usuwanie wielu maszyn naraz — np. sprzątanie starych, nieudanych wpisów. */
+    public function bulkServers(Request $request, \App\Domain\Provisioning\ServerProvisioner $provisioner): RedirectResponse
+    {
+        // Przycisk przy pojedynczej maszynie wysyła „akcja:id" zamiast zaznaczeń.
+        if (preg_match('/^(delete|purge):(\d+)$/', (string) $request->input('row'), $m)) {
+            $request->merge(['action' => $m[1], 'ids' => [(int) $m[2]]]);
+        }
+
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:200'],
+            'ids.*' => ['integer'],
+            'action' => ['required', Rule::in(['delete', 'purge'])],
+        ], ['ids.required' => 'Zaznacz co najmniej jedną maszynę.']);
+
+        $done = [];
+        $skipped = [];
+
+        foreach (Server::query()->whereIn('id', $validated['ids'])->get() as $server) {
+            $ability = $validated['action'] === 'purge' ? 'purge' : 'destroy';
+
+            if ($request->user()->cannot($ability, $server)
+                || ($validated['action'] === 'delete' && $server->state === ServerState::Deleting)) {
+                $skipped[] = $server->hostname;
+
+                continue;
+            }
+
+            $validated['action'] === 'purge'
+                ? $provisioner->purge($server, $request->user())
+                : $provisioner->destroy($server, $request->user());
+            $done[] = $server->hostname;
+        }
+
+        $message = ($validated['action'] === 'purge' ? 'Usunięto z panelu: ' : 'Zlecono usunięcie: ')
+            .($done === [] ? 'nic' : implode(', ', $done)).'.';
+        if ($skipped !== []) {
+            $message .= ' Pominięto (brak uprawnień albo już usuwane): '.implode(', ', $skipped).'.';
+        }
+
+        return back()->with('status', $message);
     }
 
     // --- pomocnicze ---------------------------------------------------------
