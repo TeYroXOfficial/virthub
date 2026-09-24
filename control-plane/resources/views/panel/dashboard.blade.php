@@ -72,7 +72,16 @@
                                 <span class="pill {{ $server->state->tone() }}">{{ $server->state->label() }}</span>
                             </td>
                             <td class="mono">{{ $server->primaryIp()?->address ?? '—' }}</td>
-                            <td>{{ $server->template?->name ?? '—' }}</td>
+                            <td>
+                                @if ($server->template)
+                                    <span class="os-inline">
+                                        @include('panel.servers._os-badge', ['template' => $server->template])
+                                        {{ $server->template->name }}
+                                    </span>
+                                @else
+                                    —
+                                @endif
+                            </td>
                             <td class="num">
                                 {{ $server->vcpu }} vCPU ·
                                 {{ round($server->ram_mb / 1024, 1) }} GB ·

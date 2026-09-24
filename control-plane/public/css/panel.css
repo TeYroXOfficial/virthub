@@ -474,7 +474,7 @@ details.form-block[open] > summary { margin-bottom: 16px; }
 .os-current { margin-left: auto; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .os-badge {
     flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
-    background: var(--os); color: #fff; font-weight: 700; font-size: 13px; letter-spacing: .02em;
+    background: var(--os); font-weight: 700; font-size: 13px; letter-spacing: .02em;
 }
 .confirm-line { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; font-weight: 400; color: var(--text-2);
     padding: 12px 14px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--critical) 7%, transparent);
@@ -569,3 +569,19 @@ details.form-block[open] > summary { margin-bottom: 16px; }
 .row-actions { text-align: right; }
 .row-actions .btn { display: block; width: 100%; margin: 3px 0; white-space: nowrap; }
 .os-current-note { font-size: 11.5px; color: var(--accent); font-weight: 600; }
+
+/* --- pobieranie na węzłach ------------------------------------------------ */
+.dl { min-width: 190px; margin: 2px 0 8px; }
+.dl-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; }
+.dl-node { font-weight: 600; }
+.dl-pct { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }
+.dl-bar { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; margin: 4px 0 2px; }
+.dl-bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; transition: width .6s ease; }
+.dl-bar.is-indeterminate i { width: 35% !important; animation: dl-slide 1.2s ease-in-out infinite; }
+.dl-detail { margin-top: 2px; font-variant-numeric: tabular-nums; }
+@keyframes dl-slide { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+.os-inline { display: inline-flex; align-items: center; gap: 8px; }
+.os-inline .os-badge { width: 24px; height: 24px; border-radius: 7px; }
+.os-inline .os-badge svg { width: 14px; height: 14px; }
+.os-title { display: flex; align-items: center; gap: 12px; }
+.os-title .os-badge { width: 34px; height: 34px; }

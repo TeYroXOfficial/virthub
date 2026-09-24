@@ -80,8 +80,8 @@ zamknięte jest ignorowane — powtórzony raport nie cofa stanu maszyny.
 
 ### Etap zadania (`GET /jobs/{job_id}`)
 
-Oprócz `status` zadanie ma pola `stage` i `progress` (0–100), aktualizowane
-przez driver w trakcie pracy: `prepare`, `download` (pobieranie obrazu LXC),
+Oprócz `status` zadanie ma pola `stage`, `progress` (0–100) i `detail`
+(np. „412 MB z 1,2 GB · 18 MB/s"), aktualizowane przez driver w trakcie pracy: `prepare`, `download` (pobieranie obrazu LXC),
 `stop`, `image`, `network`, `boot`, `disk`, `resources`. Panel pokazuje je na
 ekranie postępu tworzenia / reinstalacji / zmiany pakietu. Starszy agent pól
 nie zwraca — panel wraca wtedy do postępu szacowanego czasem.

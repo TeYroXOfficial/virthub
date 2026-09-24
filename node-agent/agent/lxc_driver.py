@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 import uuid as uuidlib
 from pathlib import Path
 from typing import Any
@@ -57,6 +58,14 @@ UUID_KEY = "user.virthub.uuid"
 CONTAINER_PACKAGES = ["openssh-server"]
 
 
+# „rootfs: 45% (12.34MB/s)" z metadanych operacji Incusa.
+PROGRESS_RE = re.compile(r"(?P<pct>\d{1,3})%(?:\s*\((?P<speed>[^)]+)\))?")
+
+
+class CommandFailed(DriverError):
+    """Incus zgłosił błąd pobierania — nie próbujemy drugi raz poleceniem CLI."""
+
+
 class IncusDriver(HypervisorDriver):
     """Kontenery LXC zarządzane przez Incus."""
 
@@ -67,6 +76,9 @@ class IncusDriver(HypervisorDriver):
         "frozen": "paused",
         "error": "crashed",
     }
+
+    # Co ile sekund dopytujemy Incusa o postęp pobierania obrazu.
+    poll_interval = 1.0
 
     def __init__(self, settings: Settings):
         super().__init__(settings)
@@ -120,24 +132,78 @@ class IncusDriver(HypervisorDriver):
         except CommandError:
             return False
 
-    def ensure_image(self, alias: str) -> bool:
+    def ensure_image(self, alias: str, low: int = 0, high: int = 100) -> bool:
         """Sprowadza obraz na węzeł, jeśli jeszcze go nie ma. Zwraca True, gdy
         faktycznie pobierał — przydaje się w logach, bo pierwsze pobranie
-        trwa minuty, a kolejne użycia są natychmiastowe."""
+        trwa minuty, a kolejne użycia są natychmiastowe.
+
+        `low`–`high` to przedział postępu zadania, który zajmuje pobieranie
+        (w tworzeniu kontenera to tylko jego początek)."""
         alias = self._validate_alias(alias)
         if self._has_local_image(alias):
             return False
 
         log.info("Pobieram obraz %s:%s", self.remote, alias)
-        progress("download", 10)
-        # --auto-update: Incus sam odświeża obraz, gdy dystrybucja wyda
-        # poprawki. Nowe kontenery nie startują od miesięcy starych pakietów.
-        self._incus(
-            "image", "copy", f"{self.remote}:{alias}", "local:",
-            "--alias", alias, "--auto-update",
-            timeout=1800,
-        )
+        progress("download", low, "Łączę się z serwerem obrazów")
+        try:
+            self._copy_image_tracked(alias, low, high)
+        except CommandFailed:
+            raise
+        except (DriverError, ValueError, KeyError) as exc:
+            # Postęp to wygoda, nie warunek: gdy API Incusa zachowa się inaczej,
+            # niż zakładamy, pobieramy zwykłym poleceniem, bez procentów.
+            log.warning("Pobieranie z postępem nieudane (%s) — używam incus image copy", exc)
+            progress("download", low, "Pobieram obraz")
+            # --auto-update: Incus sam odświeża obraz, gdy dystrybucja wyda
+            # poprawki. Nowe kontenery nie startują od miesięcy starych pakietów.
+            self._incus(
+                "image", "copy", f"{self.remote}:{alias}", "local:",
+                "--alias", alias, "--auto-update",
+                timeout=1800,
+            )
+        progress("download", high, "Obraz na węźle")
         return True
+
+    def _remote_source(self) -> dict[str, str]:
+        """Adres i protokół zdalnego serwera obrazów z konfiguracji Incusa."""
+        remotes = json.loads(self._incus("remote", "list", "--format", "json", timeout=30) or "{}")
+        remote = remotes[self.remote]
+        addr = remote.get("addr") or remote.get("Addr")
+        protocol = remote.get("protocol") or remote.get("Protocol") or "simplestreams"
+        if not addr:
+            raise ValueError(f"Zdalny serwer {self.remote} nie ma adresu")
+        return {"server": addr, "protocol": protocol}
+
+    def _copy_image_tracked(self, alias: str, low: int, high: int) -> None:
+        """Pobranie przez API Incusa: operacja w tle, której metadane podają
+        postęp („rootfs: 45% (12.3MB/s)") — CLI pokazuje go tylko na terminalu."""
+        body = {
+            "source": {"type": "image", "mode": "pull", "alias": alias, **self._remote_source()},
+            "aliases": [{"name": alias}],
+            "auto_update": True,
+        }
+        operation = json.loads(self._incus("query", "-X", "POST", "-d", json.dumps(body), "/1.0/images", timeout=60) or "{}")
+        op_id = operation.get("id")
+        if not op_id:
+            raise ValueError("Incus nie zwrócił identyfikatora operacji")
+
+        deadline = time.monotonic() + 1800
+        while time.monotonic() < deadline:
+            state = self._query(f"/1.0/operations/{op_id}") or {}
+            status = str(state.get("status", "")).lower()
+            if status == "success":
+                return
+            if status in {"failure", "cancelled"}:
+                raise CommandFailed(state.get("err") or "Incus przerwał pobieranie obrazu")
+            text = str((state.get("metadata") or {}).get("download_progress") or "")
+            match = PROGRESS_RE.search(text)
+            if match:
+                share = int(match.group("pct")) / 100
+                speed = match.group("speed")
+                progress("download", int(low + (high - low) * share),
+                         f"{match.group('pct')}%{' · ' + speed if speed else ''}")
+            time.sleep(self.poll_interval)
+        raise CommandFailed("Pobieranie obrazu trwa dłużej niż 30 minut")
 
     def prefetch_image(self, alias: str) -> dict[str, Any]:
         downloaded = self.ensure_image(alias)
@@ -170,7 +236,7 @@ class IncusDriver(HypervisorDriver):
         target = interface_name(req.server_id)
         alias = self._validate_alias(req.template)
 
-        self.ensure_image(alias)
+        self.ensure_image(alias, low=5, high=30)
 
         created: list[str] = []
         try:
@@ -267,7 +333,7 @@ class IncusDriver(HypervisorDriver):
         server_id = server_id_from_name(name)
         alias = self._validate_alias(req.template)
 
-        self.ensure_image(alias)
+        self.ensure_image(alias, low=5, high=24)
 
         progress("stop", 25)
         if self._state(name) == "running":

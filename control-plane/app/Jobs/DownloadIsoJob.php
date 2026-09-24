@@ -18,7 +18,7 @@ class DownloadIsoJob implements ShouldQueue
 {
     use Queueable;
 
-    private const POLL_SECONDS = 15;
+    private const POLL_SECONDS = 5;
 
     public function __construct(public readonly int $downloadId) {}
 
@@ -54,16 +54,36 @@ class DownloadIsoJob implements ShouldQueue
                 return;
             }
 
-            $this->finish($download, IsoDownload::STATUS_FAILED, $e->getMessage());
+            self::finish($download, IsoDownload::STATUS_FAILED, $e->getMessage());
 
             return;
         }
 
+        if (! self::apply($download, $state)) {
+            $this->release(self::POLL_SECONDS);
+        }
+    }
+
+    /**
+     * Stan zadania z węzła → pobranie w panelu. Zwraca true, gdy pobieranie
+     * się zakończyło. Wołane też przez stronę biblioteki, która odpytuje węzły
+     * na żywo, żeby pasek postępu nie czekał na kolejny obieg kolejki.
+     *
+     * @param  array<string, mixed>  $state
+     */
+    public static function apply(IsoDownload $download, array $state): bool
+    {
         match ($state['status'] ?? null) {
-            'done' => $this->succeed($download, $state['result'] ?? []),
-            'failed' => $this->finish($download, IsoDownload::STATUS_FAILED, $state['error'] ?? 'Węzeł nie podał przyczyny.'),
-            default => $this->touchAndWait($download),
+            'done' => self::succeed($download, $state['result'] ?? []),
+            'failed' => self::finish($download, IsoDownload::STATUS_FAILED, $state['error'] ?? 'Węzeł nie podał przyczyny.'),
+            // Odświeżony znacznik czasu mówi, że zlecenie żyje.
+            default => $download->forceFill([
+                'progress' => $state['progress'] ?? $download->progress,
+                'progress_detail' => $state['detail'] ?? $download->progress_detail,
+            ])->touch(),
         };
+
+        return $download->fresh()?->isInProgress() === false;
     }
 
     public function failed(?Throwable $exception): void
@@ -71,27 +91,27 @@ class DownloadIsoJob implements ShouldQueue
         $download = IsoDownload::find($this->downloadId);
 
         if ($download?->isInProgress()) {
-            $this->finish($download, IsoDownload::STATUS_FAILED, $exception?->getMessage() ?: 'Pobieranie trwało zbyt długo.');
+            self::finish($download, IsoDownload::STATUS_FAILED, $exception?->getMessage() ?: 'Pobieranie trwało zbyt długo.');
         }
     }
 
-    private function succeed(IsoDownload $download, array $result): void
+    private static function succeed(IsoDownload $download, array $result): void
     {
-        $this->finish($download, IsoDownload::STATUS_READY);
+        self::finish($download, IsoDownload::STATUS_READY);
 
         if (! empty($result['size_bytes']) && $download->iso->size_bytes === null) {
             $download->iso->forceFill(['size_bytes' => (int) $result['size_bytes']])->save();
         }
     }
 
-    private function touchAndWait(IsoDownload $download): void
+    private static function finish(IsoDownload $download, string $status, ?string $error = null): void
     {
-        $download->touch();
-        $this->release(self::POLL_SECONDS);
-    }
-
-    private function finish(IsoDownload $download, string $status, ?string $error = null): void
-    {
-        $download->forceFill(['status' => $status, 'error' => $error, 'finished_at' => now()])->save();
+        $download->forceFill([
+            'status' => $status,
+            'error' => $error,
+            'finished_at' => now(),
+            'progress' => $status === IsoDownload::STATUS_READY ? 100 : $download->progress,
+            'progress_detail' => null,
+        ])->save();
     }
 }

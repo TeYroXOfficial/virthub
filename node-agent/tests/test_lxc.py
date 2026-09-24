@@ -30,6 +30,8 @@ class FakeIncus:
         self.instances: dict[str, dict] = {}
         self.calls: list[list[str]] = []
         self.inputs: list[str | None] = []
+        self.operations: dict[str, list[dict]] = {}
+        self.rest_images = True  # False = API odrzuca POST /1.0/images (stary Incus)
         self.fail_on: str | None = None
 
     def __call__(self, argv, timeout=300, check=True, input=None):
@@ -120,8 +122,26 @@ class FakeIncus:
             for i in self.instances.values()
         ])
 
+    def _remote(self, args):
+        return json.dumps({"images": {"addr": "https://images.linuxcontainers.org", "protocol": "simplestreams"}})
+
     def _query(self, args):
+        if args[0] == "-X":
+            body = json.loads(args[3])
+            if not self.rest_images:
+                raise CommandError(["incus", "query"], 1, "not supported")
+            self.images.add(body["aliases"][0]["name"])
+            self.last_image_request = body
+            op = f"op{len(self.operations) + 1}"
+            self.operations[op] = [
+                {"id": op, "status": "Running", "metadata": {"download_progress": "rootfs: 42% (12.3MB/s)"}},
+                {"id": op, "status": "Success", "metadata": {}},
+            ]
+            return json.dumps({"id": op, "status": "Running"})
         path = args[0]
+        if path.startswith("/1.0/operations/"):
+            steps = self.operations[path.rsplit("/", 1)[1]]
+            return json.dumps(steps.pop(0) if len(steps) > 1 else steps[0])
         if path.startswith("/1.0/storage-pools/"):
             return json.dumps({"space": {"total": 200 * 1024**3, "used": 50 * 1024**3}})
         parts = path.split("/")
@@ -166,6 +186,7 @@ def driver(settings, incus):
     lxc_settings = dataclasses.replace(settings, driver="lxc")
     drv = lxc_driver.IncusDriver(lxc_settings)
     drv.network = FakeNetwork()   # nft nie istnieje na stacji testowej
+    drv.poll_interval = 0
     return drv
 
 
@@ -190,9 +211,17 @@ def request(server_id=42, **overrides):
 def test_szablon_pobiera_sie_sam_przy_pierwszym_uzyciu(driver, incus):
     driver.create_vm(request())
 
+    assert incus.last_image_request["source"]["alias"] == "debian/12/cloud"
+    assert incus.last_image_request["auto_update"] is True, "obraz ma się sam odświeżać o poprawki dystrybucji"
+
+
+def test_zapasowe_pobieranie_poleceniem_tez_sie_odswieza(driver, incus):
+    incus.rest_images = False
+    driver.create_vm(request())
+
     copy = next(c for c in incus.calls if c[:2] == ["image", "copy"])
     assert copy[2] == "images:debian/12/cloud"
-    assert "--auto-update" in copy, "obraz ma się sam odświeżać o poprawki dystrybucji"
+    assert "--auto-update" in copy
 
 
 def test_pobrany_szablon_nie_jest_sciagany_ponownie(driver, incus):
@@ -394,7 +423,29 @@ def test_pobieranie_szablonu_z_wyprzedzeniem(driver, incus):
 
     assert first["downloaded"] is True
     assert second["cached"] is True
-    assert sum(1 for c in incus.calls if c[:2] == ["image", "copy"]) == 1
+    posts = [c for c in incus.calls if c[:3] == ["query", "-X", "POST"]]
+    assert len(posts) == 1, "drugi raz obraz jest już na węźle"
+    source = incus.last_image_request["source"]
+    assert source["alias"] == "almalinux/9/cloud"
+    assert source["server"] == "https://images.linuxcontainers.org"
+    assert incus.last_image_request["auto_update"] is True
+
+
+def test_postep_pobierania_obrazu_trafia_do_zadania(driver, incus, monkeypatch):
+    seen = []
+    monkeypatch.setattr(lxc_driver, "progress", lambda stage, pct=None, detail=None: seen.append((stage, pct, detail)))
+
+    driver.prefetch_image("debian/13/cloud")
+
+    assert ("download", 42, "42% · 12.3MB/s") in seen
+    assert seen[-1][:2] == ("download", 100)
+
+
+def test_bez_api_obrazow_pobiera_poleceniem(driver, incus):
+    incus.rest_images = False
+
+    assert driver.prefetch_image("debian/12/cloud")["downloaded"] is True
+    assert any(c[:2] == ["image", "copy"] for c in incus.calls)
 
 
 def test_wezel_kvm_odmawia_pobierania_szablonow_kontenerow(settings):

@@ -91,6 +91,8 @@ class TemplateDistributor
             'agent_job_id' => null,
             'error' => null,
             'finished_at' => null,
+            'progress' => null,
+            'progress_detail' => null,
         ])->save();
 
         PrefetchTemplateJob::dispatch($download->id);

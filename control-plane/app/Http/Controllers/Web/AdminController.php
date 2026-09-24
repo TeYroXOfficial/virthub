@@ -463,6 +463,54 @@ class AdminController extends Controller
         return back()->with('status', "Usunięto szablon {$template->name}. Plik obrazu na węzłach usuń ręcznie, jeśli nie jest potrzebny.");
     }
 
+    /**
+     * Postęp pobierań szablonów i obrazów ISO na żywo. Pyta węzły o trwające
+     * zadania (cache 2 s), więc pasek nie czeka na kolejny obieg kolejki.
+     */
+    public function downloadsStatus(): \Illuminate\Http\JsonResponse
+    {
+        $rows = [];
+
+        $track = function ($download, string $kind, callable $apply) use (&$rows) {
+            $state = null;
+            if ($download->agent_job_id && $download->hypervisor) {
+                $state = \Illuminate\Support\Facades\Cache::remember(
+                    "agent-job:{$download->agent_job_id}",
+                    now()->addSeconds(2),
+                    function () use ($download) {
+                        try {
+                            return (new \App\Domain\Agent\AgentClient($download->hypervisor))->job($download->agent_job_id);
+                        } catch (AgentException) {
+                            return null;
+                        }
+                    },
+                );
+                if ($state !== null) {
+                    $apply($download, $state);
+                    $download->refresh();
+                }
+            }
+
+            $rows[] = [
+                'kind' => $kind,
+                'id' => $download->id,
+                'status' => $download->status,
+                'progress' => $download->progress,
+                'detail' => $download->progress_detail,
+                'finished' => ! $download->isInProgress(),
+            ];
+        };
+
+        $inProgress = fn ($q) => $q->whereIn('status', ['queued', 'downloading']);
+
+        \App\Models\TemplateDownload::query()->with('hypervisor')->where($inProgress)->get()
+            ->each(fn ($d) => $track($d, 'template', [\App\Jobs\PrefetchTemplateJob::class, 'apply']));
+        \App\Models\IsoDownload::query()->with(['hypervisor', 'iso'])->where($inProgress)->get()
+            ->each(fn ($d) => $track($d, 'iso', [\App\Jobs\DownloadIsoJob::class, 'apply']));
+
+        return response()->json(['data' => $rows]);
+    }
+
     // --- systemy (grupy szablonów) -------------------------------------------
 
     public function storeTemplateGroup(Request $request): RedirectResponse

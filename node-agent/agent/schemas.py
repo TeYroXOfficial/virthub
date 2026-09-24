@@ -246,6 +246,7 @@ class JobState(BaseModel):
     # network, boot, resources, disk. Postęp 0–100, jeśli driver go zna.
     stage: str | None = None
     progress: int | None = None
+    detail: str | None = None
 
 
 class VmStats(BaseModel):
