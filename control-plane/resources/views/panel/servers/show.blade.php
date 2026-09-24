@@ -22,8 +22,21 @@
     @if ($rootPassword)
         <div class="alert alert-info">
             <strong>Hasło początkowe roota — zapisz je teraz.</strong>
-            <p style="margin:8px 0 0">Nie zobaczysz go ponownie. Po zalogowaniu zmień je na własne.</p>
+            <p style="margin:8px 0 0">
+                @if ($server->state === \App\Enums\ServerState::Building)
+                    Hasło jest widoczne, dopóki maszyna się tworzy — potem zniknie z panelu.
+                @else
+                    Nie zobaczysz go ponownie.
+                @endif
+                Po zalogowaniu zmień je na własne (<code>passwd</code>).
+            </p>
             <p class="secret" style="margin-top:10px">{{ $rootPassword }}</p>
+            <div class="btn-row">
+                <button class="btn" type="button" onclick="
+                    navigator.clipboard.writeText(@js($rootPassword));
+                    this.textContent = 'Skopiowane';
+                ">Kopiuj hasło</button>
+            </div>
         </div>
     @endif
 

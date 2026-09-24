@@ -9,6 +9,24 @@ use Illuminate\Validation\Rule;
 
 class OrderServerRequest extends FormRequest
 {
+    /**
+     * Puste pole klucza z formularza przychodzi jako null (middleware
+     * ConvertEmptyStringsToNull) — to „bez klucza", a nie błędny klucz.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (! is_array($this->input('ssh_keys'))) {
+            return;
+        }
+
+        $this->merge([
+            'ssh_keys' => array_values(array_filter(
+                array_map(fn ($key) => is_string($key) ? trim($key) : $key, $this->input('ssh_keys')),
+                fn ($key) => $key !== null && $key !== '',
+            )),
+        ]);
+    }
+
     public function rules(): array
     {
         return [
