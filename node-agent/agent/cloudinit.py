@@ -38,6 +38,11 @@ def render_meta_data(server_id: int, hostname: str) -> str:
     return f"instance-id: virthub-{server_id}\nlocal-hostname: {hostname}\n"
 
 
+# qemu-guest-agent pozwala panelowi zmienić hasło roota w działającej maszynie
+# (reset hasła) bez logowania się do niej. Obrazy cloud zwykle go nie mają.
+VM_PACKAGES = ["qemu-guest-agent"]
+
+
 def render_user_data(
     hostname: str,
     ssh_keys: list[str],
@@ -96,6 +101,8 @@ def render_user_data(
         "  - [ sh, -c, 'systemctl enable --now ssh 2>/dev/null || systemctl enable --now sshd' ]",
         "  - [ sh, -c, 'systemctl restart ssh 2>/dev/null || systemctl restart sshd' ]",
     ]
+    if packages and "qemu-guest-agent" in packages:
+        lines.append("  - [ sh, -c, 'systemctl enable --now qemu-guest-agent || true' ]")
     return "\n".join(lines) + "\n"
 
 
@@ -167,7 +174,7 @@ class CloudInitBuilder:
 
         payload = {
             "meta-data": render_meta_data(server_id, hostname),
-            "user-data": render_user_data(hostname, ssh_keys, root_password),
+            "user-data": render_user_data(hostname, ssh_keys, root_password, packages=VM_PACKAGES),
             "network-config": render_network_config(interfaces, nameservers, mac),
         }
 

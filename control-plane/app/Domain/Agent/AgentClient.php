@@ -58,6 +58,12 @@ class AgentClient
         return $this->request('DELETE', '/images/iso/'.rawurlencode($filename));
     }
 
+    /** Nowe hasło roota w działającym systemie (qemu-guest-agent / incus exec). */
+    public function resetPassword(string $uuid, string $password): string
+    {
+        return $this->jobId($this->request('POST', "/vm/{$uuid}/password", ['password' => $password]));
+    }
+
     /** Płyta w maszynie i kolejność rozruchu; restart = zastosuj od razu. */
     public function mountIso(string $uuid, ?string $filename, bool $boot, bool $restart): string
     {

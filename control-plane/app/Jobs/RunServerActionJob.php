@@ -8,6 +8,7 @@ use App\Domain\Agent\ServerPayload;
 use App\Models\ServerJob;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -71,6 +72,10 @@ class RunServerActionJob implements ShouldQueue
                     'interfaces' => ServerPayload::interfaces($server),
                     'nameservers' => ServerPayload::nameservers($server),
                 ]),
+                'password' => $client->resetPassword(
+                    $server->agent_uuid,
+                    Crypt::decryptString($payload['password']),
+                ),
                 'iso' => $client->mountIso(
                     $server->agent_uuid,
                     $payload['filename'] ?? null,

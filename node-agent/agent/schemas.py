@@ -186,6 +186,14 @@ class IsoMountRequest(BaseModel):
     restart: bool = Field(default=False, description="Zastosuj od razu (wyłącz i włącz maszynę)")
 
 
+class PasswordResetRequest(BaseModel):
+    """Nowe hasło roota ustawiane w działającym systemie maszyny."""
+
+    # Drukowalne ASCII bez spacji: hasło trafia do chpasswd jako „root:hasło",
+    # więc znak nowej linii pozwoliłby dopisać zmianę hasła innego konta.
+    password: str = Field(pattern=r"^[\x21-\x7e]{8,128}$")
+
+
 class ResizeVmRequest(BaseModel):
     vcpu: int = Field(ge=1, le=128)
     ram_mb: int = Field(ge=256)

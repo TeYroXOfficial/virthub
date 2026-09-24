@@ -63,6 +63,11 @@ class ServerPolicy
         return $this->allowed($user, $server, 'servers.rebuild', destructive: true);
     }
 
+    public function resetPassword(User $user, Server $server): bool
+    {
+        return $this->allowed($user, $server, 'servers.password');
+    }
+
     public function iso(User $user, Server $server): bool
     {
         return ! $server->isContainer() && $this->allowed($user, $server, 'servers.iso');

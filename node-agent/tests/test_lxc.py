@@ -29,12 +29,14 @@ class FakeIncus:
         self.images: set[str] = set()
         self.instances: dict[str, dict] = {}
         self.calls: list[list[str]] = []
+        self.inputs: list[str | None] = []
         self.fail_on: str | None = None
 
-    def __call__(self, argv, timeout=300, check=True):
+    def __call__(self, argv, timeout=300, check=True, input=None):
         assert argv[0] == "incus", argv
         args = argv[1:]
         self.calls.append(args)
+        self.inputs.append(input)
         if self.fail_on and args[0] == self.fail_on:
             raise CommandError(argv, 1, f"symulowany błąd {self.fail_on}")
         handler = getattr(self, "_" + args[0].replace("-", "_"))
@@ -94,6 +96,10 @@ class FakeIncus:
 
     def _restart(self, args):
         self.instances[args[0]]["status"] = "Running"
+
+    def _exec(self, args):
+        if self.instances[args[0]]["status"] != "Running":
+            raise CommandError(["incus", "exec"], 1, "Instance is not running")
 
     def _delete(self, args):
         del self.instances[args[0]]
@@ -324,6 +330,15 @@ def test_przebudowa_zachowuje_kontener_i_podmienia_system(driver, incus):
     assert ct["config"]["user.virthub.uuid"] == uuid, "UUID musi przetrwać przebudowę"
     assert "NoweHaslo456" in ct["config"]["cloud-init.user-data"]
     assert result["state"] == "running"
+
+
+def test_reset_hasla_idzie_przez_stdin(driver, incus):
+    uuid = driver.create_vm(request())["uuid"]
+
+    driver.reset_password(uuid, "NoweHaslo789")
+
+    i = incus.calls.index(["exec", "virthub-42", "--", "chpasswd"])
+    assert incus.inputs[i] == "root:NoweHaslo789\n", "hasło idzie przez stdin, nie przez argumenty"
 
 
 def test_snapshot_i_przywrocenie_bez_zatrzymywania(driver, incus):

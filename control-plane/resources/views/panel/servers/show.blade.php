@@ -48,11 +48,27 @@
                     </button>
                 </div>
                 @endcan
+                @if (auth()->user()->can('rebuild', $server) && $templates->isNotEmpty())
+                    <button class="btn" type="button" data-open-reinstall title="Postaw system od nowa">
+                        <x-icon name="refresh" :size="15"/> Reinstaluj
+                    </button>
+                @endif
             @endif
         </div>
     </div>
 
-    @if ($server->state_message)
+    @php
+        $inProgress = $server->state->isTransitioning();
+        $pendingJob = $inProgress ? null : $recentJobs->first(fn ($j) => ! $j->isFinished());
+        $jobLabels = [
+            'password' => 'zmiana hasła roota', 'iso' => 'zmiana płyty ISO', 'power' => 'operacja zasilania',
+            'network' => 'konfiguracja sieci', 'snapshot' => 'tworzenie kopii', 'restore' => 'przywracanie kopii',
+            'create' => 'utworzenie', 'rebuild' => 'reinstalacja', 'resize' => 'zmiana pakietu', 'delete' => 'usunięcie',
+            'firewall' => 'zapora',
+        ];
+    @endphp
+
+    @if ($server->state_message && ! $inProgress)
         <div class="alert {{ $server->state->tone() === 'critical' ? 'alert-error' : 'alert-info' }}">
             {{ $server->state_message }}
         </div>
@@ -60,10 +76,10 @@
 
     @if ($rootPassword)
         <div class="alert alert-info">
-            <strong>Hasło początkowe roota — zapisz je teraz.</strong>
+            <strong>Hasło roota — zapisz je teraz.</strong>
             <p style="margin:8px 0 0">
-                @if ($server->state === \App\Enums\ServerState::Building)
-                    Hasło jest widoczne, dopóki maszyna się tworzy — potem zniknie z panelu.
+                @if ($inProgress)
+                    Hasło zadziała, gdy system się uruchomi. Widać je do końca operacji — potem zniknie z panelu.
                 @else
                     Nie zobaczysz go ponownie.
                 @endif
@@ -79,82 +95,98 @@
         </div>
     @endif
 
-    <div class="grid grid-2">
-        <div class="card">
-            <h3 class="card-title"><x-icon name="node" :size="16"/> Parametry</h3>
-            <dl class="kv">
-                <dt>Procesor</dt><dd class="num">{{ $server->vcpu }} vCPU</dd>
-                <dt>Pamięć</dt><dd class="num">{{ round($server->ram_mb / 1024, 1) }} GB</dd>
-                <dt>Dysk</dt><dd class="num">{{ $server->disk_gb }} GB</dd>
-                <dt>Transfer</dt><dd class="num">{{ $server->bandwidth_gb }} GB / mies.</dd>
-                <dt>System</dt><dd>{{ $server->template?->name ?? '—' }}</dd>
-                <dt>Pakiet</dt><dd>{{ $server->package?->name ?? '—' }}</dd>
-                <dt>Utworzona</dt><dd>{{ $server->created_at->format('d.m.Y H:i') }}</dd>
-            </dl>
-        </div>
-
-        <div class="card">
-            <h3 class="card-title"><x-icon name="network" :size="16"/> Adresy IP</h3>
-            @forelse ($server->ipAddresses as $ip)
-                <dl class="kv" style="margin-bottom:12px">
-                    <dt>{{ $ip->is_primary ? 'Główny' : 'Dodatkowy' }}</dt>
-                    <dd class="mono">
-                        {{ $ip->address }}/{{ $ip->pool->prefix }}
-                        @if ($ip->isNat()) <span class="pill warning">NAT</span> @endif
-                    </dd>
-                    <dt>Brama</dt><dd class="mono">{{ $ip->pool->gateway }}</dd>
-                    @if ($ports = $ip->natPorts())
-                        <dt>Porty</dt>
-                        <dd class="mono">
-                            {{ $ports['ssh'] }} → 22 (SSH)@if($ports['to'] > $ports['from']),
-                            {{ $ports['from'] + 1 }}–{{ $ports['to'] }} (1:1)@endif
-                        </dd>
-                    @endif
-                    @if ($ip->rdns)
-                        <dt>rDNS</dt><dd class="mono">{{ $ip->rdns }}</dd>
-                    @endif
-                </dl>
-            @empty
-                <p class="muted">Maszyna nie ma jeszcze przypisanego adresu.</p>
-            @endforelse
-
-            @if ($primary = $server->primaryIp())
-                @if ($primary->isNat())
-                    <p class="hint">
-                        Maszyna stoi za NAT-em: wychodzi w świat adresem węzła, a z zewnątrz jest
-                        osiągalna wyłącznie przez porty powyżej.
-                        @if ($ports = $primary->natPorts())
-                            Połączenie: <code>ssh -p {{ $ports['ssh'] }} root@{{ $primary->pool->nat_public_address ?: ($server->hypervisor?->hostname ?? 'adres-węzła') }}</code>.
-                            Usługę uruchomioną w maszynie na porcie z zakresu {{ $ports['from'] + 1 }}–{{ $ports['to'] }}
-                            widać z zewnątrz pod tym samym numerem.
-                        @endif
-                    </p>
-                @else
-                    <p class="hint">Połączenie: <code>ssh root@{{ $primary->address }}</code></p>
-                @endif
-            @endif
-        </div>
-    </div>
-
-    @unless ($server->acceptsCommands())
+    @if ($server->isSuspended())
         <div class="alert alert-warning">
-            <div>
-                @if ($server->isSuspended())
-                    Maszyna jest zawieszona ({{ $server->suspension_reason }}). Sterowanie jest niedostępne.
-                @else
-                    Trwa operacja: {{ $server->state->label() }}. Poczekaj na jej zakończenie.
+            <div>Maszyna jest zawieszona ({{ $server->suspension_reason }}). Sterowanie jest niedostępne.</div>
+        </div>
+    @endif
+
+    @if ($pendingJob)
+        <div class="alert alert-info job-watch" data-watch-job data-status-url="{{ route('panel.servers.status', $server) }}">
+            <span class="spinner" aria-hidden="true"></span>
+            <div>Trwa: {{ $jobLabels[$pendingJob->action] ?? $pendingJob->action }}… Strona odświeży się po zakończeniu.</div>
+        </div>
+    @endif
+
+    @if ($inProgress)
+        @include('panel.servers._progress')
+    @else
+        <nav class="tabs" role="tablist" aria-label="Sekcje maszyny">
+            <button type="button" role="tab" data-tab="overview">Przegląd</button>
+            <button type="button" role="tab" data-tab="stats">Statystyki</button>
+            <button type="button" role="tab" data-tab="firewall-tab">Zapora</button>
+            <button type="button" role="tab" data-tab="history">Kopie i historia</button>
+            <button type="button" role="tab" data-tab="settings">Ustawienia</button>
+        </nav>
+
+        <div data-tab-panel="overview" role="tabpanel">
+        <div class="grid grid-2">
+            <div class="card">
+                <h3 class="card-title"><x-icon name="node" :size="16"/> Parametry</h3>
+                <dl class="kv">
+                    <dt>Procesor</dt><dd class="num">{{ $server->vcpu }} vCPU</dd>
+                    <dt>Pamięć</dt><dd class="num">{{ round($server->ram_mb / 1024, 1) }} GB</dd>
+                    <dt>Dysk</dt><dd class="num">{{ $server->disk_gb }} GB</dd>
+                    <dt>Transfer</dt><dd class="num">{{ $server->bandwidth_gb }} GB / mies.</dd>
+                    <dt>System</dt><dd>{{ $server->template?->name ?? '—' }}</dd>
+                    <dt>Pakiet</dt><dd>{{ $server->package?->name ?? '—' }}</dd>
+                    <dt>Utworzona</dt><dd>{{ $server->created_at->format('d.m.Y H:i') }}</dd>
+                </dl>
+            </div>
+
+            <div class="card">
+                <h3 class="card-title"><x-icon name="network" :size="16"/> Adresy IP</h3>
+                @forelse ($server->ipAddresses as $ip)
+                    <dl class="kv" style="margin-bottom:12px">
+                        <dt>{{ $ip->is_primary ? 'Główny' : 'Dodatkowy' }}</dt>
+                        <dd class="mono">
+                            {{ $ip->address }}/{{ $ip->pool->prefix }}
+                            @if ($ip->isNat()) <span class="pill warning">NAT</span> @endif
+                        </dd>
+                        <dt>Brama</dt><dd class="mono">{{ $ip->pool->gateway }}</dd>
+                        @if ($ports = $ip->natPorts())
+                            <dt>Porty</dt>
+                            <dd class="mono">
+                                {{ $ports['ssh'] }} → 22 (SSH)@if($ports['to'] > $ports['from']),
+                                {{ $ports['from'] + 1 }}–{{ $ports['to'] }} (1:1)@endif
+                            </dd>
+                        @endif
+                        @if ($ip->rdns)
+                            <dt>rDNS</dt><dd class="mono">{{ $ip->rdns }}</dd>
+                        @endif
+                    </dl>
+                @empty
+                    <p class="muted">Maszyna nie ma jeszcze przypisanego adresu.</p>
+                @endforelse
+
+                @if ($primary = $server->primaryIp())
+                    @if ($primary->isNat())
+                        <p class="hint">
+                            Maszyna stoi za NAT-em: wychodzi w świat adresem węzła, a z zewnątrz jest
+                            osiągalna wyłącznie przez porty powyżej.
+                            @if ($ports = $primary->natPorts())
+                                Połączenie: <code>ssh -p {{ $ports['ssh'] }} root@{{ $primary->pool->nat_public_address ?: ($server->hypervisor?->hostname ?? 'adres-węzła') }}</code>.
+                                Usługę uruchomioną w maszynie na porcie z zakresu {{ $ports['from'] + 1 }}–{{ $ports['to'] }}
+                                widać z zewnątrz pod tym samym numerem.
+                            @endif
+                        </p>
+                    @else
+                        <p class="hint">Połączenie: <code>ssh root@{{ $primary->address }}</code></p>
+                    @endif
                 @endif
             </div>
         </div>
-    @endunless
 
+        </div>
+
+        <div data-tab-panel="stats" role="tabpanel" hidden>
     @php $charts = ['cpu' => 'Procesor', 'ram' => 'Pamięć RAM', 'disk' => 'Dysk I/O', 'net' => 'Sieć']; @endphp
     <section data-server-metrics
              data-live-url="{{ url("/api/v1/servers/{$server->id}/metrics/live") }}"
              data-history-url="{{ url("/api/v1/servers/{$server->id}/metrics") }}"
              data-running="{{ $server->isRunning() && $server->agent_uuid ? '1' : '0' }}">
 
-        <div class="section-head">
+        <div class="section-head" style="margin-top:0">
             <h2>Zużycie na żywo</h2>
             @if ($server->isRunning())
                 <span class="pill warning" data-live-state>łączenie…</span>
@@ -222,11 +254,15 @@
         <script src="{{ asset('js/server-metrics.js') }}?v={{ @filemtime(public_path('js/server-metrics.js')) }}"></script>
     @endpush
 
-    @include('panel.servers._maintenance')
+        </div>
 
-    @include('panel.servers._firewall')
+        <div data-tab-panel="firewall-tab" role="tabpanel" hidden>
+            @include('panel.servers._firewall')
+        </div>
 
-    <div class="card" style="margin-top:16px">
+        <div data-tab-panel="history" role="tabpanel" hidden>
+
+    <div class="card">
         <h3 class="card-title"><x-icon name="archive" :size="16"/> Kopie</h3>
         @forelse ($server->backups as $backup)
             <p style="margin:0 0 6px">
@@ -239,7 +275,7 @@
         @endforelse
     </div>
 
-    <h2>Historia operacji</h2>
+    <h2 class="section-head">Historia operacji</h2>
     <div class="card" style="padding:0">
         <div class="table-wrap">
             <table>
@@ -249,7 +285,7 @@
                 <tbody>
                 @forelse ($recentJobs as $job)
                     <tr>
-                        <td class="mono">{{ $job->action }}</td>
+                        <td>{{ ucfirst($jobLabels[$job->action] ?? $job->action) }}</td>
                         <td>
                             <span class="pill {{ match($job->status) {
                                 'done' => 'ok', 'failed' => 'critical', default => 'warning' } }}">
@@ -266,6 +302,17 @@
             </table>
         </div>
     </div>
+
+        </div>
+
+        <div data-tab-panel="settings" role="tabpanel" hidden>
+            @include('panel.servers._settings')
+        </div>
+    @endif
+
+    @if (auth()->user()->can('rebuild', $server) && $templates->isNotEmpty() && $server->acceptsCommands())
+        @include('panel.servers._reinstall-modal')
+    @endif
 
     <script>
         // Sterowanie idzie przez API — ten sam endpoint, którego używa integracja
@@ -314,4 +361,7 @@
             }
         });
     </script>
+    @push('scripts')
+        <script src="{{ asset('js/server-page.js') }}?v={{ @filemtime(public_path('js/server-page.js')) }}"></script>
+    @endpush
 @endsection
