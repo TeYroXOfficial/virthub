@@ -60,11 +60,6 @@ jobs:
           cache: pip
           cache-dependency-path: node-agent/requirements.txt
 
-      - name: Biblioteki systemowe libvirt
-        # libvirt-python kompiluje się wobec nagłówków libvirt. Same testy idą
-        # w trybie mock, ale instalacja requirements.txt bez tego się wywali.
-        run: sudo apt-get update && sudo apt-get install -y libvirt-dev pkg-config
-
       - name: Instalacja zależności
         working-directory: node-agent
         run: |

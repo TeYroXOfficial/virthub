@@ -93,15 +93,17 @@ export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 apt-get update -qq
 
-# libvirt-dev jest potrzebny w obu trybach: bez niego nie zbuduje się pakiet
-# Pythona z wymagań agenta. Samego libvirtd na węźle kontenerów nie ma.
 apt-get install -y -qq \
-    python3 python3-venv python3-dev build-essential pkg-config libvirt-dev \
+    python3 python3-venv python3-dev build-essential pkg-config \
     nftables nginx openssl curl ca-certificates gnupg \
     bridge-utils iproute2 >/dev/null
 
 if [ "$VIRT" = "kvm" ]; then
-    apt-get install -y -qq qemu-kvm libvirt-daemon-system qemu-utils genisoimage >/dev/null
+    # python3-libvirt z repozytorium systemu, a nie libvirt-python z PyPI:
+    # wersja z PyPI kompiluje się wobec systemowego libvirt i wywala, gdy
+    # ten jest nowszy od niej. Pakiet systemowy zawsze pasuje.
+    apt-get install -y -qq qemu-kvm libvirt-daemon-system qemu-utils genisoimage \
+        python3-libvirt >/dev/null
     systemctl enable --now libvirtd >/dev/null 2>&1 || true
     ok "KVM i libvirtd zainstalowane"
 else
@@ -416,10 +418,22 @@ chown -R "$AGENT_USER":"$VIRT_GROUP" "$AGENT_DIR"
 ok "Kod agenta rozpakowany"
 
 log "Instaluję zależności Pythona (to potrwa 1-2 minuty)"
-python3 -m venv "$AGENT_DIR/.venv"
+# --clear: środowisko po nieudanym przebiegu mogło zostać w połowie budowy.
+# Węzeł KVM widzi pakiety systemowe, żeby agent mógł zaimportować
+# python3-libvirt; pakiety z requirements.txt i tak mają pierwszeństwo.
+if [ "$VIRT" = "kvm" ]; then
+    python3 -m venv --clear --system-site-packages "$AGENT_DIR/.venv"
+else
+    python3 -m venv --clear "$AGENT_DIR/.venv"
+fi
 "$AGENT_DIR/.venv/bin/pip" install --quiet --upgrade pip
 "$AGENT_DIR/.venv/bin/pip" install --quiet -r "$AGENT_DIR/requirements.txt" \
-    || die "Instalacja zależności Pythona nie powiodła się. Sprawdź, czy libvirt-dev się zainstalował."
+    || die "Instalacja zależności Pythona nie powiodła się (log powyżej)."
+
+if [ "$VIRT" = "kvm" ]; then
+    "$AGENT_DIR/.venv/bin/python" -c "import libvirt" 2>/dev/null \
+        || die "Agent nie widzi powiązań libvirt. Sprawdź: apt install python3-libvirt"
+fi
 chown -R "$AGENT_USER":"$VIRT_GROUP" "$AGENT_DIR/.venv"
 ok "Zależności Pythona zainstalowane"
 

@@ -32,7 +32,7 @@
         name:
           - qemu-kvm
           - libvirt-daemon-system
-          - libvirt-dev          # wymagany do zbudowania libvirt-python
+          - python3-libvirt      # systemowe powiązania — zawsze pasują do wersji libvirt
           - python3-venv
           - python3-dev
           - build-essential
@@ -89,6 +89,8 @@
         requirements: "{{ agent_dir }}/requirements.txt"
         virtualenv: "{{ agent_dir }}/.venv"
         virtualenv_command: python3 -m venv
+        # Agent importuje python3-libvirt z pakietów systemowych.
+        virtualenv_site_packages: true
       become_user: "{{ agent_user }}"
       notify: Restart agenta
 

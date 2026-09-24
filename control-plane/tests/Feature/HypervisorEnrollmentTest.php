@@ -235,6 +235,11 @@ class HypervisorEnrollmentTest extends TestCase
             array_filter($entries, fn ($e) => preg_match('#(^|/)(\.venv|__pycache__)/|(^|/)\.env$#', $e)),
             'Do paczki nie może trafić środowisko Pythona, cache ani plik .env',
         );
+
+        // libvirt-python z PyPI nie kompiluje się wobec nowszego systemowego
+        // libvirt (Debian 13) — węzeł KVM bierze python3-libvirt z systemu.
+        $requirements = file_get_contents('phar://'.$archive->getPath().'/requirements.txt');
+        $this->assertDoesNotMatchRegularExpression('/^\s*libvirt-python/m', $requirements);
     }
 
     public function test_instalator_nie_ucina_sciezek_archiwum(): void

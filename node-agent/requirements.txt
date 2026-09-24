@@ -4,6 +4,8 @@ pydantic==2.10.4
 httpx==0.28.1
 psutil==6.1.1
 
-# Tylko na hypervisorze — pakiet kompiluje się wobec libvirt-dev i nie istnieje
-# na Windows/macOS. Na stacji developerskiej agent działa z VH_AGENT_DRIVER=mock.
-libvirt-python==11.0.0; sys_platform == "linux"
+# Powiązań libvirt celowo tu nie ma. Pakiet z PyPI kompiluje się wobec
+# systemowego libvirt i wywala się, gdy libvirt jest nowszy od powiązań
+# (np. Debian 13). Na węźle KVM instalator bierze systemowy python3-libvirt,
+# który zawsze pasuje do zainstalowanej wersji, i tworzy środowisko z
+# --system-site-packages. Węzeł kontenerów (Incus) libvirt nie potrzebuje wcale.
