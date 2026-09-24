@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 import platform
 import secrets
 import socket
@@ -26,6 +27,7 @@ from typing import Any
 from .cloudinit import CloudInitBuilder
 from .console import ConsoleTarget, TerminalTarget, VncTarget
 from .isos import IsoLibrary
+from .jobs import progress
 from .config import Settings
 from .domain_xml import build_domain_xml, domain_name
 from .network import NetworkManager, interface_name, mac_address
@@ -205,9 +207,11 @@ class LibvirtDriver(HypervisorDriver):
 
         created: list[str] = []
         try:
+            progress("image", 20)
             disk = self.storage.create_volume(name, req.template, req.disk_gb)
             created.append("volume")
 
+            progress("network", 55)
             seed = self.cloudinit.build(
                 name=name,
                 server_id=req.server_id,
@@ -243,6 +247,7 @@ class LibvirtDriver(HypervisorDriver):
             self.network.configure(req.server_id, req.interfaces, firewall=[])
             created.append("network")
 
+            progress("boot", 85)
             domain.create()  # start
         except Exception as exc:
             # Rollback: nieudany provisioning nie może zostawić półmaszyny,
@@ -315,14 +320,17 @@ class LibvirtDriver(HypervisorDriver):
         server_id = server_id_from_name(name)
         was_running = bool(domain.isActive())
 
+        progress("stop", 5)
         if was_running:
             domain.destroy()
 
         interfaces = req.interfaces if req.interfaces is not None else self._interfaces_from_domain(domain)
         disk_gb = self._disk_size_gb(name)
 
+        progress("image", 20)
         self.storage.delete_volume(name)
         self.storage.create_volume(name, req.template, disk_gb)
+        progress("network", 60)
         self.cloudinit.build(
             name=name,
             server_id=server_id,
@@ -334,6 +342,7 @@ class LibvirtDriver(HypervisorDriver):
             mac=mac_address(server_id),
         )
 
+        progress("boot", 85)
         domain.create()
         return {"uuid": uuid, "state": self._state(domain), "template": req.template}
 
@@ -347,8 +356,10 @@ class LibvirtDriver(HypervisorDriver):
             )
 
         name = domain.name()
+        progress("disk", 30)
         self.storage.resize_volume(name, req.disk_gb)
 
+        progress("resources", 75)
         try:
             domain.setMemoryFlags(req.ram_mb * 1024, libvirt.VIR_DOMAIN_AFFECT_CONFIG)
             domain.setMaxMemory(req.ram_mb * 1024)
@@ -571,10 +582,22 @@ class MockDriver(HypervisorDriver):
             raise VmNotFound(uuid)
         return data[uuid]
 
+    @staticmethod
+    def _stage(stage: str, percent: int) -> None:
+        """Etap jak w prawdziwym driverze; VH_MOCK_STEP_DELAY spowalnia go na
+        potrzeby podglądu animacji w panelu."""
+        progress(stage, percent)
+        delay = float(os.environ.get("VH_MOCK_STEP_DELAY", "0") or 0)
+        if delay > 0:
+            time.sleep(delay)
+
     def create_vm(self, req: CreateVmRequest) -> dict[str, Any]:
         name = domain_name(req.server_id)
         vm_uuid = str(uuidlib.uuid4())
+        self._stage("prepare", 5)
+        self._stage("image", 20)
         disk = self.storage.create_volume(name, req.template, req.disk_gb)
+        self._stage("network", 55)
         self.cloudinit.build(
             name=name,
             server_id=req.server_id,
@@ -601,6 +624,7 @@ class MockDriver(HypervisorDriver):
             "vnc_password": secrets.token_urlsafe(12),
             "disk_path": str(disk),
         }
+        self._stage("boot", 85)
         data = self._load()
         data[vm_uuid] = record
         self._save(data)
@@ -625,6 +649,10 @@ class MockDriver(HypervisorDriver):
         record = data.get(uuid) or {}
         if not record:
             raise VmNotFound(uuid)
+        self._stage("stop", 5)
+        self._stage("image", 20)
+        self._stage("network", 60)
+        self._stage("boot", 85)
         record["template"] = req.template
         record["state"] = "running"
         self._save(data)

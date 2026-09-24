@@ -2,12 +2,17 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Domain\Agent\AgentClient;
+use App\Domain\Agent\AgentException;
+use App\Domain\Provisioning\AgentResultApplier;
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Http\Controllers\Controller;
 use App\Models\IsoImage;
 use App\Models\OsTemplate;
 use App\Models\Server;
+use App\Models\ServerJob;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -15,7 +20,10 @@ use Illuminate\Validation\Rule;
 /** Reinstalacja systemu i płyty ISO z poziomu strony maszyny. */
 class ServerActionsController extends Controller
 {
-    public function __construct(private readonly ServerProvisioner $provisioner) {}
+    public function __construct(
+        private readonly ServerProvisioner $provisioner,
+        private readonly AgentResultApplier $results,
+    ) {}
 
     public function rebuild(Request $request, Server $server): RedirectResponse
     {
@@ -60,14 +68,24 @@ class ServerActionsController extends Controller
     }
 
     /**
-     * Stan do odpytywania przez stronę maszyny: ekran postępu reinstalacji
-     * i tworzenia odświeża stronę, gdy operacja się skończy.
+     * Stan do odpytywania przez stronę maszyny. Dla trwającej operacji pyta
+     * węzeł o bieżący etap (kopiowanie obrazu, sieć, uruchamianie…), żeby
+     * ekran postępu pokazywał to, co naprawdę dzieje się na hypervisorze.
      */
     public function status(Request $request, Server $server): JsonResponse
     {
         $this->authorize('view', $server);
 
         $job = $server->jobs()->reorder()->latest('id')->first();
+        $agent = $job ? $this->agentJobState($server, $job) : null;
+
+        if ($agent !== null && in_array($agent['status'] ?? null, ['done', 'failed'], true) && ! $job->isFinished()) {
+            // Węzeł skończył, a callback jeszcze nie dotarł — stosujemy wynik
+            // od razu (operacja jest idempotentna), zamiast czekać na uzgadnianie.
+            $this->results->apply($job, $agent);
+            $server->refresh();
+            $job->refresh();
+        }
 
         return response()->json([
             'state' => $server->state->value,
@@ -81,8 +99,27 @@ class ServerActionsController extends Controller
                 'finished' => $job->isFinished(),
                 'error' => $job->status === 'failed' ? $job->error : null,
                 'elapsed' => (int) $job->created_at->diffInSeconds(now(), true),
+                // Etap na węźle: null, dopóki zadanie czeka w kolejce panelu.
+                'stage' => $job->isFinished() ? null : ($agent['stage'] ?? ($job->agent_job_id ? 'queued' : 'pending')),
+                'stage_progress' => $job->isFinished() ? 100 : ($agent['progress'] ?? null),
             ] : null,
         ]);
+    }
+
+    /** @return array<string, mixed>|null stan zadania na węźle (cache 2 s — stronę może oglądać kilka osób) */
+    private function agentJobState(Server $server, ServerJob $job): ?array
+    {
+        if ($job->isFinished() || ! $job->agent_job_id || ! $server->hypervisor) {
+            return null;
+        }
+
+        return Cache::remember("agent-job:{$job->agent_job_id}", now()->addSeconds(2), function () use ($server, $job) {
+            try {
+                return (new AgentClient($server->hypervisor))->job($job->agent_job_id);
+            } catch (AgentException) {
+                return null; // węzeł chwilowo nie odpowiada — pokażemy postęp szacowany
+            }
+        });
     }
 
     public function iso(Request $request, Server $server): RedirectResponse

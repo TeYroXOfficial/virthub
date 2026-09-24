@@ -29,6 +29,7 @@ from .cloudinit import render_network_config, render_user_data
 from .console import ConsoleTarget, TerminalTarget
 from .config import Settings
 from .domain_xml import domain_name
+from .jobs import progress
 from .driver import DriverError, HypervisorDriver, VmNotFound, server_id_from_name, AGENT_VERSION
 from .network import interface_name, mac_address
 from .schemas import (
@@ -128,6 +129,7 @@ class IncusDriver(HypervisorDriver):
             return False
 
         log.info("Pobieram obraz %s:%s", self.remote, alias)
+        progress("download", 10)
         # --auto-update: Incus sam odświeża obraz, gdy dystrybucja wyda
         # poprawki. Nowe kontenery nie startują od miesięcy starych pakietów.
         self._incus(
@@ -172,6 +174,7 @@ class IncusDriver(HypervisorDriver):
 
         created: list[str] = []
         try:
+            progress("image", 35)
             self._incus(
                 "init", f"local:{alias}", name,
                 "--storage", self.pool,
@@ -194,6 +197,7 @@ class IncusDriver(HypervisorDriver):
 
             # Interfejs z tą samą nazwą i MAC-iem co maszyny KVM — reguły
             # firewalla i anty-spoofingu działają przez to bez zmian.
+            progress("network", 65)
             bridge = self.network.prepare(req.interfaces)
             self._incus(
                 "config", "device", "add", name, "eth0", "nic",
@@ -206,6 +210,7 @@ class IncusDriver(HypervisorDriver):
             self.network.configure(req.server_id, req.interfaces, firewall=[])
             created.append("network")
 
+            progress("boot", 85)
             self._incus("start", name, timeout=120)
         except Exception as exc:
             log.error("Tworzenie kontenera %s nieudane (%s) — sprzątam", req.server_id, exc)
@@ -264,15 +269,18 @@ class IncusDriver(HypervisorDriver):
 
         self.ensure_image(alias)
 
+        progress("stop", 25)
         if self._state(name) == "running":
             self._incus("stop", name, "--force", timeout=60)
 
+        progress("image", 40)
         # rebuild podmienia system plików na świeży z obrazu, zostawiając
         # konfigurację kontenera: limity, interfejs, MAC i nasz UUID.
         self._incus("rebuild", f"local:{alias}", name, timeout=900)
 
         # Nowa konfiguracja cloud-init zmienia identyfikator instancji, więc
         # cloud-init w świeżym systemie wykona się od nowa — z nowym hasłem.
+        progress("network", 70)
         interfaces = self._current_interfaces(name)
         user_data = render_user_data(
             req.hostname or name, req.ssh_keys, req.root_password,
@@ -282,6 +290,7 @@ class IncusDriver(HypervisorDriver):
         if interfaces is not None:
             self._incus("config", "set", name, f"cloud-init.network-config={interfaces}")
 
+        progress("boot", 85)
         self._incus("start", name, timeout=120)
         return {"uuid": uuid, "state": self._state(name), "template": alias}
 
@@ -311,11 +320,13 @@ class IncusDriver(HypervisorDriver):
                 f"wspierane — dane klienta mogłyby się nie zmieścić."
             )
 
+        progress("resources", 40)
         self._incus(
             "config", "set", name,
             f"limits.cpu={req.vcpu}",
             f"limits.memory={req.ram_mb}MiB",
         )
+        progress("disk", 75)
         self._incus("config", "device", "set", name, "root", f"size={req.disk_gb}GiB")
         return {"uuid": uuid, "vcpu": req.vcpu, "ram_mb": req.ram_mb, "disk_gb": req.disk_gb}
 
