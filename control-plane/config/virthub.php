@@ -26,6 +26,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Aktualizacje
+    |--------------------------------------------------------------------------
+    | Repozytorium i gałąź, z którymi panel porównuje wersje. Samo pobieranie
+    | kodu robią uprzywilejowane usługi systemd na serwerach (panel tylko
+    | zostawia zlecenie w update_dir) — patrz infra/update-panel.sh
+    | i node-agent/scripts/update-node.sh.
+    */
+
+    'update_repo' => env('VIRTHUB_UPDATE_REPO', 'TeYroXOfficial/virthub'),
+    'update_branch' => env('VIRTHUB_UPDATE_BRANCH', 'main'),
+    'update_dir' => env('VIRTHUB_UPDATE_DIR', '/var/lib/virthub-panel'),
+    'update_unit' => env('VIRTHUB_UPDATE_UNIT', '/etc/systemd/system/virthub-panel-update.path'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Kod agenta serwowany przy rejestracji hypervisora
     |--------------------------------------------------------------------------
     | Instalator uruchamiany na nowym węźle pobiera agenta stąd. Domyślnie

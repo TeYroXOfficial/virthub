@@ -6,6 +6,7 @@ use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\ConsoleController;
 use App\Http\Controllers\Web\PanelController;
 use App\Http\Controllers\Web\SsoController;
+use App\Http\Controllers\Web\UpdatesController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('panel.dashboard'));
@@ -61,6 +62,12 @@ Route::middleware(['auth', 'admin'])->prefix('panel/admin')->name('panel.admin.'
     Route::post('/hypervisor-groups', [AdminController::class, 'storeHypervisorGroup'])->name('hypervisor-groups.store');
     Route::put('/hypervisor-groups/{group}', [AdminController::class, 'updateHypervisorGroup'])->name('hypervisor-groups.update');
     Route::delete('/hypervisor-groups/{group}', [AdminController::class, 'destroyHypervisorGroup'])->name('hypervisor-groups.destroy');
+
+    Route::get('/updates', [UpdatesController::class, 'index'])->name('updates');
+    Route::get('/updates/status', [UpdatesController::class, 'status'])->name('updates.status');
+    Route::post('/updates/panel', [UpdatesController::class, 'updatePanel'])->name('updates.panel');
+    Route::post('/updates/nodes', [UpdatesController::class, 'updateAllNodes'])->name('updates.nodes');
+    Route::post('/updates/nodes/{hypervisor}', [UpdatesController::class, 'updateNode'])->name('updates.node');
 
     Route::get('/servers', [AdminController::class, 'servers'])->name('servers');
 });

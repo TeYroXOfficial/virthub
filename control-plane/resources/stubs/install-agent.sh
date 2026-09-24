@@ -545,6 +545,10 @@ Group=$VIRT_GROUP
 Environment=INCUS_CONF=$DATA_DIR/incus-client
 UNITEOF
 fi
+# Aktualizacje zlecane z panelu (Administracja → Aktualizacje).
+if [ -f "$AGENT_DIR/scripts/install-updater.sh" ]; then
+    bash "$AGENT_DIR/scripts/install-updater.sh"
+fi
 systemctl daemon-reload
 systemctl enable --now virthub-agent >/dev/null 2>&1
 sleep 2

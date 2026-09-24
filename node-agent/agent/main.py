@@ -35,6 +35,7 @@ from .schemas import (
     VmStats,
 )
 from .security import check_signature, require_control_plane
+from .updates import Updates, UpdaterMissing
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,6 +46,7 @@ log = logging.getLogger("virthub.agent")
 settings = get_settings()
 settings.ensure_directories()
 driver = build_driver(settings)
+updates = Updates(settings)
 
 
 def _handlers() -> dict[str, Any]:
@@ -137,7 +139,31 @@ async def ping() -> dict[str, str]:
     tags=["system"],
 )
 async def health() -> HostHealth:
-    return driver.health()
+    return driver.health().model_copy(update={
+        "build": updates.build(),
+        "remote_update": updates.enabled(),
+    })
+
+
+# --- aktualizacja węzła -----------------------------------------------------
+
+@app.get("/system/update", dependencies=[Depends(require_control_plane)], tags=["system"])
+async def update_status() -> dict[str, Any]:
+    return updates.status()
+
+
+@app.post(
+    "/system/update",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["system"],
+)
+async def request_update() -> dict[str, Any]:
+    """Zleca aktualizację; wykonuje ją uprzywilejowana usługa systemd."""
+    try:
+        return updates.request()
+    except UpdaterMissing as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.get(

@@ -209,3 +209,5 @@ class HostHealth(BaseModel):
     disk_gb_total: int
     disk_gb_free: int
     running_vms: int
+    build: str | None = Field(default=None, description="Commit kodu agenta (plik VERSION)")
+    remote_update: bool = Field(default=False, description="Czy węzeł przyjmuje aktualizacje zlecane z panelu")
