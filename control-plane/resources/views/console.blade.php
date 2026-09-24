@@ -30,12 +30,20 @@
 
         <div class="card">
             <h3>Dostęp alternatywny</h3>
-            <p>Do czasu wdrożenia konsoli administrator może połączyć się z maszyną z poziomu hypervisora:</p>
-            <p class="secret">virsh console virthub-{{ $server->id }}</p>
-            <p class="hint">
-                Definicja maszyny ma włączoną konsolę szeregową, więc to polecenie zadziała
-                nawet przy niedziałającej sieci gościa.
-            </p>
+            <p>Do czasu wdrożenia konsoli administrator może połączyć się z maszyną z poziomu węzła:</p>
+            @if ($server->isContainer())
+                <p class="secret">incus exec virthub-{{ $server->id }} -- bash</p>
+                <p class="hint">
+                    To powłoka roota wewnątrz kontenera, dostępna nawet przy niedziałającej
+                    sieci kontenera. Tekstowa konsola systemu: incus console virthub-{{ $server->id }}
+                </p>
+            @else
+                <p class="secret">virsh console virthub-{{ $server->id }}</p>
+                <p class="hint">
+                    Definicja maszyny ma włączoną konsolę szeregową, więc to polecenie zadziała
+                    nawet przy niedziałającej sieci gościa.
+                </p>
+            @endif
         </div>
     @endif
 

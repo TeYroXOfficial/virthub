@@ -83,6 +83,9 @@ class ServerProvisioner
             ]);
             $server->state = ServerState::Building;
             $server->root_password = $rootPassword;
+            // Szablon decyduje o rodzaju maszyny: z obrazu kontenera powstaje
+            // kontener, z obrazu dysku — maszyna wirtualna.
+            $server->virtualization = $template->virtualization;
             $server->save();
 
             $hypervisor = $this->selector->reserve($server, $preferred);
@@ -123,6 +126,14 @@ class ServerProvisioner
     public function rebuild(Server $server, OsTemplate $template, array $sshKeys = [], ?User $actor = null): ServerJob
     {
         $this->assertAcceptsCommands($server);
+
+        if ($template->virtualization !== $server->virtualization) {
+            throw new \DomainException(
+                "Nie da się przebudować maszyny typu {$server->virtualization->shortLabel()} "
+                ."z szablonu {$template->name} ({$template->virtualization->shortLabel()}). "
+                .'Wybierz szablon tego samego typu.'
+            );
+        }
 
         $password = $this->generatePassword();
         $server->forceFill(['root_password' => $password])->save();

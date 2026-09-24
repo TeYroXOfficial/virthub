@@ -6,6 +6,7 @@
     <h1>{{ $server->hostname }}</h1>
     <p class="lede">
         <span class="pill {{ $server->state->tone() }}">{{ $server->state->label() }}</span>
+        · {{ $server->virtualization->label() }}
         @if ($server->label) · {{ $server->label }} @endif
         @if ($server->hypervisor && auth()->user()->isStaff())
             · węzeł {{ $server->hypervisor->name }}

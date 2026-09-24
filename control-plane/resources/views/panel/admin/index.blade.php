@@ -52,6 +52,7 @@
                 </p>
             @else
                 <dl class="kv">
+                    <dt>Rodzaj</dt><dd>{{ $node->virtualization->label() }}</dd>
                     <dt>Adres</dt><dd class="mono">{{ $node->agent_url }}</dd>
                     <dt>Maszyny</dt><dd class="num">{{ $node->servers_count }}</dd>
                     <dt>vCPU</dt><dd class="num">{{ $node->cpu_cores_used }} / {{ $node->cpu_cores_total }}</dd>

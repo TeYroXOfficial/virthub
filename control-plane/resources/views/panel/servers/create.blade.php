@@ -27,14 +27,30 @@
 
             <div class="field">
                 <label for="template">System operacyjny</label>
-                <select id="template" name="template" required>
-                    @foreach ($templates as $template)
-                        <option value="{{ $template->id }}" @selected((int) old('template') === $template->id)>
-                            {{ $template->name }}
-                        </option>
+                @if ($templateGroups->isEmpty())
+                    <p class="muted">
+                        W tej chwili nie ma dostępnego systemu do zamówienia. Spróbuj za chwilę
+                        albo skontaktuj się z obsługą.
+                    </p>
+                @else
+                    <select id="template" name="template" required>
+                        @foreach ($templateGroups as $type => $templates)
+                            <optgroup label="{{ \App\Enums\Virtualization::from($type)->label() }}">
+                                @foreach ($templates as $template)
+                                    <option value="{{ $template->id }}" @selected((int) old('template') === $template->id)>
+                                        {{ $template->name }}
+                                    </option>
+                                @endforeach
+                            </optgroup>
+                        @endforeach
+                    </select>
+                    @foreach ($templateGroups->keys() as $type)
+                        <div class="hint">
+                            <strong>{{ \App\Enums\Virtualization::from($type)->shortLabel() }}:</strong>
+                            {{ \App\Enums\Virtualization::from($type)->description() }}
+                        </div>
                     @endforeach
-                </select>
-                <div class="hint">Dysk zostanie sformatowany i zainstalowany od zera.</div>
+                @endif
             </div>
         </div>
 

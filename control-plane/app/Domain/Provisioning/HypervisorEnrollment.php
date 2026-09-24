@@ -68,7 +68,7 @@ class HypervisorEnrollment
      * Domyka rejestrację: zapisuje zgłoszone przez węzeł dane, generuje sekrety
      * i unieważnia bilet.
      *
-     * @param  array{hostname: string, cpu_cores: int, ram_mb: int, disk_gb: int, tls_cert: string}  $report
+     * @param  array{hostname: string, cpu_cores: int, ram_mb: int, disk_gb: int, tls_cert: string, virtualization?: string|null}  $report
      * @param  string  $sourceIp  adres, z którego przyszło zgłoszenie — bierzemy
      *                            go zamiast adresu podanego przez skrypt, bo
      *                            serwer za NAT-em nie zna swojego publicznego IP
@@ -85,6 +85,9 @@ class HypervisorEnrollment
             'agent_token' => $agentToken,
             'callback_secret' => $callbackSecret,
             'agent_tls_cert' => $report['tls_cert'],
+            // Rodzaj węzła wykrywa instalator na podstawie sprzętu: bez VT-x
+            // stawia Incusa i zgłasza się jako węzeł kontenerów.
+            'virtualization' => $report['virtualization'] ?? 'kvm',
 
             // Pojemność zgłoszona przez węzeł, pomniejszona o zapas na system
             // hosta. Bez zapasu hypervisor zaczyna się dławić przy pełnym

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Provisioning;
 
+use App\Enums\Virtualization;
 use App\Models\Hypervisor;
 use App\Models\Server;
 use Illuminate\Support\Facades\DB;
@@ -18,10 +19,17 @@ use Illuminate\Support\Facades\DB;
  */
 class HypervisorSelector
 {
-    public function select(int $vcpu, int $ramMb, int $diskGb): ?Hypervisor
-    {
+    public function select(
+        int $vcpu,
+        int $ramMb,
+        int $diskGb,
+        Virtualization $virtualization = Virtualization::Kvm,
+    ): ?Hypervisor {
         return Hypervisor::query()
             ->available()
+            // Kontener nie stanie na węźle KVM (brak Incusa) ani maszyna
+            // wirtualna na węźle bez VT-x.
+            ->where('virtualization', $virtualization->value)
             ->get()
             ->filter(fn (Hypervisor $h) => $h->hasCapacityFor($vcpu, $ramMb, $diskGb))
             ->sortByDesc(fn (Hypervisor $h) => $h->utilisationPercent())
@@ -37,11 +45,22 @@ class HypervisorSelector
     public function reserve(Server $server, ?Hypervisor $preferred = null): Hypervisor
     {
         return DB::transaction(function () use ($server, $preferred) {
-            $candidate = $preferred ?? $this->select($server->vcpu, $server->ram_mb, $server->disk_gb);
+            $type = $server->virtualization ?? Virtualization::Kvm;
+
+            if ($preferred !== null && $preferred->virtualization !== $type) {
+                throw new NoCapacityException(
+                    "Węzeł {$preferred->name} uruchamia {$preferred->virtualization->label()}, "
+                    ."a zamówienie dotyczy: {$type->label()}."
+                );
+            }
+
+            $candidate = $preferred ?? $this->select(
+                $server->vcpu, $server->ram_mb, $server->disk_gb, $type,
+            );
 
             if ($candidate === null) {
                 throw new NoCapacityException(
-                    "Brak hypervisora z wolnymi zasobami na {$server->vcpu} vCPU, "
+                    "Brak węzła typu {$type->shortLabel()} z wolnymi zasobami na {$server->vcpu} vCPU, "
                     ."{$server->ram_mb} MB RAM i {$server->disk_gb} GB dysku."
                 );
             }

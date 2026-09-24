@@ -51,6 +51,8 @@ Route::middleware(['auth', 'admin'])->prefix('panel/admin')->name('panel.admin.'
     Route::get('/templates', [AdminController::class, 'templates'])->name('templates');
     Route::post('/templates', [AdminController::class, 'storeTemplate'])->name('templates.store');
     Route::post('/templates/{template}/toggle', [AdminController::class, 'toggleTemplate'])->name('templates.toggle');
+    Route::post('/templates/{template}/retry', [AdminController::class, 'retryTemplate'])->name('templates.retry');
+    Route::post('/templates/catalog/{key}', [AdminController::class, 'addCatalogTemplate'])->name('templates.catalog');
 
     Route::get('/ip-pools', [AdminController::class, 'ipPools'])->name('ip-pools');
     Route::post('/ip-pools', [AdminController::class, 'storeIpPool'])->name('ip-pools.store');

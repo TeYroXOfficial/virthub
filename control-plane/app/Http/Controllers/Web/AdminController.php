@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Web;
 use App\Domain\Agent\AgentException;
 use App\Domain\Provisioning\HypervisorEnrollment;
 use App\Domain\Provisioning\IpAllocator;
+use App\Domain\Provisioning\TemplateDistributor;
 use App\Enums\ServerState;
+use App\Enums\Virtualization;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Hypervisor;
@@ -227,24 +229,64 @@ class AdminController extends Controller
 
     public function templates(): View
     {
+        $templates = OsTemplate::query()
+            ->with('downloads.hypervisor')
+            ->orderBy('virtualization')
+            ->orderBy('family')
+            ->orderByDesc('version')
+            ->get();
+
+        $existingAliases = $templates
+            ->filter(fn (OsTemplate $t) => $t->isContainer())
+            ->pluck('image_file')
+            ->all();
+
         return view('panel.admin.templates', [
-            'templates' => OsTemplate::query()->orderBy('family')->orderByDesc('version')->get(),
+            'templates' => $templates,
+            'catalog' => collect(config('virthub.lxc_catalog'))
+                ->map(fn (array $entry, string $key) => [
+                    ...$entry,
+                    'key' => $key,
+                    'added' => in_array($entry['alias'], $existingAliases, true),
+                ]),
+            'containerNodes' => Hypervisor::query()
+                ->where('virtualization', Virtualization::Lxc->value)
+                ->whereNotNull('enrolled_at')
+                ->count(),
         ]);
     }
 
-    public function storeTemplate(Request $request): RedirectResponse
+    public function storeTemplate(Request $request, TemplateDistributor $distributor): RedirectResponse
     {
+        // Bez podanego rodzaju to szablon KVM — tak działał formularz, zanim
+        // pojawiły się kontenery.
+        $request->mergeIfMissing(['virtualization' => Virtualization::Kvm->value]);
+        $isContainer = $request->input('virtualization') === Virtualization::Lxc->value;
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100'],
+            'virtualization' => ['required', Rule::enum(Virtualization::class)],
             'family' => ['required', Rule::in(['ubuntu', 'debian', 'almalinux', 'rocky', 'fedora', 'windows'])],
             'version' => ['required', 'string', 'max:32'],
-            // Sama nazwa pliku — układ katalogów należy do agenta, a wartość
-            // ze ścieżką pozwoliłaby sięgnąć poza katalog szablonów.
-            'image_file' => ['required', 'string', 'max:120', 'regex:/^[a-zA-Z0-9._-]+$/'],
+            'image_file' => $isContainer
+                // Alias obrazu z serwera obrazów. Bez prefiksu serwera
+                // („inny:debian/12") — węzeł pobiera wyłącznie z zaufanego źródła.
+                ? ['required', 'string', 'max:120', 'regex:/^[a-z0-9][a-z0-9._-]*(\/[a-z0-9._-]+){0,3}$/']
+                // Sama nazwa pliku — układ katalogów należy do agenta, a wartość
+                // ze ścieżką pozwoliłaby sięgnąć poza katalog szablonów.
+                : ['required', 'string', 'max:120', 'regex:/^[a-zA-Z0-9._-]+$/'],
             'min_disk_gb' => ['required', 'integer', 'min:1'],
         ], [
-            'image_file.regex' => 'Podaj samą nazwę pliku obrazu, bez ścieżki (np. ubuntu-24.04.qcow2).',
+            'image_file.regex' => $isContainer
+                ? 'Podaj alias obrazu kontenera, np. debian/12/cloud (małe litery, bez prefiksu serwera).'
+                : 'Podaj samą nazwę pliku obrazu, bez ścieżki (np. ubuntu-24.04.qcow2).',
         ]);
+
+        if ($isContainer && $validated['family'] === 'windows') {
+            return back()->withInput()->withErrors([
+                'family' => 'Windows nie działa w kontenerze — kontener dzieli jądro Linuksa z hostem.',
+            ]);
+        }
 
         $template = OsTemplate::create([
             ...$validated,
@@ -254,13 +296,66 @@ class AdminController extends Controller
 
         AuditLog::record('template.created', $template, ['name' => $template->name]);
 
+        if ($template->isContainer()) {
+            $queued = $distributor->distribute($template);
+
+            return back()->with('status', "Szablon {$template->name} został dodany. "
+                ."Pobieranie zlecone na {$queued} ".($queued === 1 ? 'węźle' : 'węzłach').' kontenerów.');
+        }
+
         return back()->with('status', "Szablon {$template->name} został dodany. "
-            ."Upewnij się, że plik {$template->image_file} leży w katalogu szablonów na każdym węźle.");
+            ."Upewnij się, że plik {$template->image_file} leży w katalogu szablonów na każdym węźle KVM.");
     }
 
-    public function toggleTemplate(OsTemplate $template): RedirectResponse
+    /** Dodanie szablonu kontenera z katalogu jednym kliknięciem. */
+    public function addCatalogTemplate(string $key, TemplateDistributor $distributor): RedirectResponse
+    {
+        $entry = config("virthub.lxc_catalog.{$key}");
+        abort_if($entry === null, 404);
+
+        $template = OsTemplate::query()->firstOrCreate(
+            ['image_file' => $entry['alias'], 'virtualization' => Virtualization::Lxc->value],
+            [
+                'name' => $entry['name'],
+                'family' => $entry['family'],
+                'version' => $entry['version'],
+                'min_disk_gb' => $entry['min_disk_gb'] ?? 4,
+                'cloud_init_support' => true,
+                'is_active' => true,
+            ],
+        );
+
+        if (! $template->is_active) {
+            $template->update(['is_active' => true]);
+        }
+
+        AuditLog::record('template.created', $template, ['name' => $template->name, 'catalog' => $key]);
+        $queued = $distributor->distribute($template);
+
+        return back()->with('status', "Dodano {$template->name}. "
+            .($queued > 0
+                ? "Pobieranie zlecone na {$queued} ".($queued === 1 ? 'węźle' : 'węzłach').'.'
+                : 'Nie ma jeszcze węzła kontenerów — szablon pobierze się, gdy taki dołączy.'));
+    }
+
+    public function retryTemplate(OsTemplate $template, TemplateDistributor $distributor): RedirectResponse
+    {
+        $queued = $distributor->retryFailed($template);
+
+        return back()->with('status', $queued > 0
+            ? "Ponowiono pobieranie {$template->name} na {$queued} ".($queued === 1 ? 'węźle' : 'węzłach').'.'
+            : "Szablon {$template->name} nie ma nieudanych pobrań do ponowienia.");
+    }
+
+    public function toggleTemplate(OsTemplate $template, TemplateDistributor $distributor): RedirectResponse
     {
         $template->update(['is_active' => ! $template->is_active]);
+
+        // Włączony z powrotem szablon kontenera trafia na węzły, które mogły
+        // dołączyć, kiedy był wyłączony.
+        if ($template->is_active) {
+            $distributor->distribute($template);
+        }
 
         return back()->with('status', $template->is_active
             ? "Szablon {$template->name} jest znowu dostępny."

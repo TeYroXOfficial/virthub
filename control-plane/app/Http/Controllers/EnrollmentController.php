@@ -101,6 +101,8 @@ class EnrollmentController extends Controller
             'ram_mb' => ['required', 'integer', 'min:1024'],
             'disk_gb' => ['required', 'integer', 'min:10'],
             'tls_cert' => ['required', 'string', 'max:8192'],
+            // Starsze instalatory nie wysyłały tego pola — wtedy węzeł to KVM.
+            'virtualization' => ['nullable', \Illuminate\Validation\Rule::in(['kvm', 'lxc'])],
         ]);
 
         if (! str_contains($validated['tls_cert'], 'BEGIN CERTIFICATE')) {

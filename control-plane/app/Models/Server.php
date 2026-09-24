@@ -19,6 +19,7 @@ class Server extends Model
         'hypervisor_id',
         'vps_package_id',
         'os_template_id',
+        'virtualization',
         'hostname',
         'label',
         'vcpu',
@@ -34,6 +35,7 @@ class Server extends Model
     {
         return [
             'state' => ServerState::class,
+            'virtualization' => \App\Enums\Virtualization::class,
             // Hasło root jest jednorazowe: pokazujemy je klientowi raz po
             // provisioningu i kasujemy przy pierwszym odczycie.
             'root_password' => 'encrypted',
@@ -105,6 +107,11 @@ class Server extends Model
     {
         return $this->ipAddresses->firstWhere('is_primary', true)
             ?? $this->ipAddresses->first();
+    }
+
+    public function isContainer(): bool
+    {
+        return $this->virtualization === \App\Enums\Virtualization::Lxc;
     }
 
     public function isRunning(): bool

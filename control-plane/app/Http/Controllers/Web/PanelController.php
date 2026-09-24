@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Enums\ServerState;
+use App\Enums\Virtualization;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OrderServerRequest;
 use App\Models\Hypervisor;
@@ -60,9 +61,28 @@ class PanelController extends Controller
     {
         $this->authorize('create', Server::class);
 
+        // Pokazujemy tylko systemy, które da się faktycznie postawić: szablon
+        // kontenera bez żadnego węzła kontenerów skończyłby się błędem
+        // „brak zasobów" dopiero po złożeniu zamówienia.
+        $availableTypes = Hypervisor::query()
+            ->available()
+            ->pluck('virtualization')
+            ->map(fn ($type) => $type instanceof Virtualization ? $type->value : $type)
+            ->unique()
+            ->all();
+
+        $templates = OsTemplate::query()
+            ->active()
+            ->where('cloud_init_support', true)
+            ->whereIn('virtualization', $availableTypes)
+            ->orderBy('family')
+            ->orderByDesc('version')
+            ->get()
+            ->groupBy(fn (OsTemplate $t) => $t->virtualization->value);
+
         return view('panel.servers.create', [
             'packages' => VpsPackage::query()->active()->orderBy('vcpu')->get(),
-            'templates' => OsTemplate::query()->active()->orderBy('family')->get(),
+            'templateGroups' => $templates,
         ]);
     }
 

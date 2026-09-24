@@ -83,6 +83,16 @@ class SnapshotRequest(BaseModel):
     name: str = Field(pattern=r"^[a-zA-Z0-9_.-]{1,64}$")
 
 
+class ImagePrefetchRequest(BaseModel):
+    """Pobranie szablonu kontenera na węzeł, zanim ktoś go zamówi — pierwsze
+    zamówienie nie czeka wtedy kilku minut na ściągnięcie obrazu."""
+
+    alias: str = Field(
+        pattern=r"^[a-z0-9][a-z0-9._-]*(/[a-z0-9._-]+){0,3}$",
+        description="Alias obrazu na serwerze obrazów, np. debian/12/cloud",
+    )
+
+
 class JobAccepted(BaseModel):
     """Odpowiedź na każdą operację modyfikującą — agent pracuje asynchronicznie."""
 
@@ -120,6 +130,7 @@ class HostHealth(BaseModel):
 
     agent_version: str
     driver: str
+    virtualization: str = "kvm"  # kvm | lxc | mock
     hostname: str
     libvirt_connected: bool
     cpu_cores_total: int

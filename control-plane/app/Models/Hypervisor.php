@@ -25,6 +25,7 @@ class Hypervisor extends Model
         'agent_token',
         'callback_secret',
         'status',
+        'virtualization',
         'cpu_cores_total',
         'ram_mb_total',
         'disk_gb_total',
@@ -44,6 +45,7 @@ class Hypervisor extends Model
             'last_seen_at' => 'datetime',
             'last_health' => 'array',
             'accepts_new_servers' => 'boolean',
+            'virtualization' => \App\Enums\Virtualization::class,
             'enrollment_expires_at' => 'datetime',
             'enrolled_at' => 'datetime',
         ];
@@ -76,6 +78,17 @@ class Hypervisor extends Model
     }
 
     /** @return HasMany<IpPool, $this> */
+    /** @return HasMany<TemplateDownload, $this> */
+    public function templateDownloads(): HasMany
+    {
+        return $this->hasMany(TemplateDownload::class);
+    }
+
+    public function runsContainers(): bool
+    {
+        return $this->virtualization === \App\Enums\Virtualization::Lxc;
+    }
+
     public function ipPools(): HasMany
     {
         return $this->hasMany(IpPool::class);

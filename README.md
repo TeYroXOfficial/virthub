@@ -16,7 +16,13 @@ Dwa niezależnie wdrażane komponenty:
 | Komponent | Technologia | Rola |
 |---|---|---|
 | `control-plane/` | PHP 8.2+ / Laravel 12 | Panel, API, baza, kolejka zadań, księgowanie zasobów |
-| `node-agent/` | Python 3.12 / FastAPI | Jedyny komponent dotykający libvirt i jądra hosta |
+| `node-agent/` | Python 3.12 / FastAPI | Jedyny komponent dotykający hypervisora i jądra hosta |
+
+Węzeł jest jednego z dwóch rodzajów, wykrywanego przez instalator:
+
+- **KVM** (libvirt/QEMU) — maszyny wirtualne; wymaga VT-x/AMD-V,
+- **LXC** (Incus) — kontenery; działa bez wsparcia sprzętowego, np. na VPS-ie.
+  Szablony pobierają się same z `images.linuxcontainers.org`.
 
 Control plane **nigdy nie loguje się na hypervisor po SSH**. Cała komunikacja idzie
 przez API agenta, podpisane HMAC-SHA256 na kanonicznej postaci żądania:
@@ -105,8 +111,8 @@ Poprawna odpowiedź: `dev-node: mock, 0 VM, wolne … MB RAM / … GB dysku`.
 ## Testy
 
 ```bash
-cd control-plane && php artisan test      # 56 testów
-cd node-agent && .venv/bin/pytest -q      # 33 testy
+cd control-plane && ./vendor/bin/phpunit   # 126 testów
+cd node-agent && .venv/bin/pytest -q       # 70 testów
 ```
 
 Cały zestaw działa bez hypervisora i bez sieci zewnętrznej.
@@ -141,16 +147,17 @@ Wobec planu fazowego (`docs/plan.md`):
 
 **Czego nie ma i trzeba zrobić przed produkcją:**
 
-1. **Weryfikacja na prawdziwym KVM.** Sterownik libvirt jest napisany, ale
-   uruchamiany był wyłącznie w trybie mock — na tej maszynie nie ma hypervisora.
-   Pierwszy krok na docelowym serwerze to `VH_AGENT_DRIVER=libvirt` i pełny
-   przejazd cyklu życia maszyny.
-2. **Proxy konsoli** (websockify + noVNC) — panel wystawia bilety dostępu,
+1. **Weryfikacja na prawdziwym węźle.** Sterowniki libvirt i Incus są
+   przetestowane na atrapach, ale nie były uruchamiane na prawdziwym KVM ani
+   Incusie. Pierwszy węzeł każdego typu to pełny przejazd cyklu życia maszyny.
+2. **Tryb NAT dla kontenerów.** Kontenery dostają publiczne adresy z puli, jak
+   maszyny KVM. VPS z jednym adresem IP wymaga dodatkowych adresów od dostawcy.
+3. **Proxy konsoli** (websockify + noVNC) — panel wystawia bilety dostępu,
    brakuje komponentu zestawiającego tunel.
-3. **Powiadomienia e-mail** — zdarzenia są logowane, ale nikt ich nie wysyła.
-4. **Snapshoty maszyn działających** — obecnie wymagają zatrzymania VPS-a.
+4. **Powiadomienia e-mail** — zdarzenia są logowane, ale nikt ich nie wysyła.
+5. **Snapshoty maszyn działających** — obecnie wymagają zatrzymania VPS-a.
    Snapshot live wymaga QEMU guest agent w gościu.
-5. **IPv6** — schemat bazy jest przygotowany, import puli obsługuje wyłącznie IPv4.
+6. **IPv6** — schemat bazy jest przygotowany, import puli obsługuje wyłącznie IPv4.
 
 ---
 

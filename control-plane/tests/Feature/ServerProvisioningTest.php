@@ -154,7 +154,7 @@ class ServerProvisioningTest extends TestCase
         ]);
 
         $response->assertStatus(503)
-            ->assertJsonPath('message', fn ($m) => str_contains($m, 'Brak hypervisora'));
+            ->assertJsonPath('message', fn ($m) => str_contains($m, 'Brak węzła typu KVM'));
 
         $this->assertSame(0, Server::count(), 'Nieudane zamówienie nie może zostawić rekordu');
     }

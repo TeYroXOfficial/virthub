@@ -22,6 +22,7 @@ from .reporter import CallbackReporter
 from .schemas import (
     CreateVmRequest,
     HostHealth,
+    ImagePrefetchRequest,
     JobAccepted,
     JobState,
     NetworkConfigRequest,
@@ -60,6 +61,9 @@ def _handlers() -> dict[str, Any]:
         "restore": lambda p: driver.restore(p["uuid"], p["body"]["name"]),
         "configure_network": lambda p: driver.configure_network(
             p["uuid"], NetworkConfigRequest(**p["body"])
+        ),
+        "prefetch_image": lambda p: driver.prefetch_image(
+            ImagePrefetchRequest(**p).alias
         ),
     }
 
@@ -236,6 +240,22 @@ async def configure_network(uuid: str, req: NetworkConfigRequest) -> JobAccepted
     job_id = jobs.enqueue(
         "configure_network", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid
     )
+    return JobAccepted(job_id=job_id)
+
+
+# --- szablony kontenerów ----------------------------------------------------
+
+@app.post(
+    "/images/prefetch",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["images"],
+)
+async def prefetch_image(req: ImagePrefetchRequest) -> JobAccepted:
+    """Pobranie szablonu trwa minuty — idzie przez kolejkę, jak każda
+    długa operacja, a panel dopytuje o wynik."""
+    job_id = jobs.enqueue("prefetch_image", req.model_dump())
     return JobAccepted(job_id=job_id)
 
 

@@ -25,6 +25,7 @@ class ServerFactory extends Factory
             'os_template_id' => OsTemplate::factory(),
             'hostname' => fake()->unique()->domainWord().'.example.com',
             'state' => ServerState::Running,
+            'virtualization' => 'kvm',
             'vcpu' => 2,
             'ram_mb' => 4096,
             'disk_gb' => 50,

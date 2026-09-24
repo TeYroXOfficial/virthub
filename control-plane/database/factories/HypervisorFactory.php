@@ -22,6 +22,7 @@ class HypervisorFactory extends Factory
             'agent_token' => Str::random(64),
             'callback_secret' => Str::random(64),
             'status' => Hypervisor::STATUS_ONLINE,
+            'virtualization' => 'kvm',
             'cpu_cores_total' => 64,
             'ram_mb_total' => 262144,
             'disk_gb_total' => 4000,
@@ -41,6 +42,12 @@ class HypervisorFactory extends Factory
             'status' => Hypervisor::STATUS_OFFLINE,
             'last_seen_at' => now()->subHour(),
         ]);
+    }
+
+    /** Węzeł kontenerów — bez VT-x, z Incusem. */
+    public function containers(): static
+    {
+        return $this->state(fn () => ['virtualization' => 'lxc', 'enrolled_at' => now()]);
     }
 
     public function full(): static

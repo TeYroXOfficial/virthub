@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
+use App\Domain\Provisioning\TemplateDistributor;
 use App\Models\Hypervisor;
 use Illuminate\Console\Command;
 
@@ -67,5 +68,14 @@ class PollHypervisors extends Command
             $health['ram_mb_free'] ?? 0,
             $health['disk_gb_free'] ?? 0,
         ));
+
+        // Węzeł kontenerów, który właśnie dołączył albo wrócił po awarii,
+        // dociąga szablony dodane w międzyczasie. Szablony już pobrane albo w
+        // trakcie pobierania są pomijane, więc przy zwykłym heartbeacie to nic
+        // nie kosztuje.
+        $queued = app(TemplateDistributor::class)->syncNode($hypervisor);
+        if ($queued > 0) {
+            $this->line("  zlecono pobranie {$queued} szablonów kontenerów");
+        }
     }
 }

@@ -37,25 +37,47 @@ def mac_address(server_id: int) -> str:
     return f"52:54:00:{(server_id >> 16) & 0xFF:02x}:{(server_id >> 8) & 0xFF:02x}:{server_id & 0xFF:02x}"
 
 
+
+
 class NetworkManager:
+    """Reguły nftables dla maszyn i kontenerów.
+
+    Rodzina `bridge`, a nie `inet`: ruch maszyny idzie przez mostek (port vhN ↔
+    karta fizyczna) i nigdy nie trafia do haków IP — reguły w tabeli `inet`
+    po prostu by go nie widziały, chyba że ktoś załaduje br_netfilter. Hak
+    `forward` rodziny bridge widzi dokładnie ramki przechodzące między portami
+    mostka, niezależnie od tego, czy po drugiej stronie jest QEMU, czy veth
+    kontenera.
+
+    Łańcuchy maszyn są podpięte przez mapę werdyktów interfejs → łańcuch.
+    Dzięki temu podmiana reguł to wyczyszczenie i ponowne wypełnienie
+    łańcucha w jednej transakcji, bez kasowania go spod istniejących skoków.
+    """
+
+    FAMILY = "bridge"
+    PORTS_MAP = "vm_ports"
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.table = settings.nft_table
 
-    # --- publiczne API używane przez sterownik libvirt -----------------------
+    # --- publiczne API ------------------------------------------------------
 
     def ensure_base_table(self) -> None:
-        """Tworzy tabelę i łańcuch bazowy, jeśli jeszcze nie istnieją."""
+        """Tabela, mapa portów i łańcuch bazowy — tworzone raz, idempotentnie."""
         if self.settings.is_mock:
             return
-        script = f"""
-table inet {self.table} {{
-    chain forward {{
-        type filter hook forward priority filter; policy accept;
-    }}
-}}
-"""
-        self._apply(script)
+
+        self._apply(self.render_base())
+
+        # `add rule` nie jest idempotentne, więc reguły kierujące ruch do mapy
+        # dokładamy tylko wtedy, gdy jeszcze ich nie ma.
+        listing = run(["nft", "list", "chain", self.FAMILY, self.table, "forward"])
+        if f"@{self.PORTS_MAP}" not in listing:
+            self._apply(
+                f"add rule {self.FAMILY} {self.table} forward iifname vmap @{self.PORTS_MAP}\n"
+                f"add rule {self.FAMILY} {self.table} forward oifname vmap @{self.PORTS_MAP}\n"
+            )
 
     def configure(
         self,
@@ -63,48 +85,96 @@ table inet {self.table} {{
         interfaces: list[NetworkInterfaceSpec],
         firewall: list[FirewallRule],
     ) -> None:
-        """Podmienia komplet reguł dla jednego VPS-a."""
+        """Podmienia komplet reguł jednej maszyny w jednej transakcji."""
         if self.settings.is_mock:
-            log.info("[mock] pominięto konfigurację nftables dla VPS %s", server_id)
+            log.info("[mock] pominięto konfigurację nftables dla maszyny %s", server_id)
             return
 
         self.ensure_base_table()
-        chain = f"vm_{server_id}"
-        iface = interface_name(server_id)
-
-        script = [f"table inet {self.table} {{"]
-        script.append(f"  chain {chain} {{")
-
-        # 1. Anty-spoofing: ruch wychodzący tylko z przypisanych adresów.
-        v4 = [i.address for i in interfaces if i.version == 4]
-        v6 = [i.address for i in interfaces if i.version == 6]
-        if v4:
-            script.append(f"    iifname \"{iface}\" ip saddr {{ {', '.join(v4)} }} accept")
-        if v6:
-            script.append(f"    iifname \"{iface}\" ip6 saddr {{ {', '.join(v6)} }} accept")
-        script.append(f"    iifname \"{iface}\" drop")
-
-        # 2. Reguły klienta dla ruchu przychodzącego do VPS-a.
-        for rule in firewall:
-            script.append("    " + self._render_rule(rule, iface))
-
-        script.append("  }")
-        script.append("}")
-
-        # Podmiana atomowa: usuń stary łańcuch, wgraj nowy, podepnij pod forward.
-        self._delete_chain(chain)
-        self._apply("\n".join(script))
-        self._link_chain(chain, iface)
-        log.info("Zastosowano %s reguł firewalla dla VPS %s", len(firewall), server_id)
+        self._apply(self.render_machine(server_id, interfaces, firewall))
+        log.info("Zastosowano %s reguł firewalla dla maszyny %s", len(firewall), server_id)
 
     def teardown(self, server_id: int) -> None:
-        """Sprząta reguły po usuniętym VPS-ie — inaczej adres wróciłby do puli
+        """Sprząta reguły po usuniętej maszynie — inaczej adres wróciłby do puli
         z cudzymi regułami wciąż aktywnymi."""
         if self.settings.is_mock:
             return
-        self._delete_chain(f"vm_{server_id}")
 
-    # --- wewnętrzne ---------------------------------------------------------
+        chain = f"vm_{server_id}"
+        iface = interface_name(server_id)
+        # Każdy krok osobno: brak elementu czy łańcucha nie jest błędem —
+        # maszyna mogła nigdy nie dostać reguł (nieudany provisioning).
+        for script in (
+            f'delete element {self.FAMILY} {self.table} {self.PORTS_MAP} {{ "{iface}" }}\n',
+            f"flush chain {self.FAMILY} {self.table} {chain}\n",
+            f"delete chain {self.FAMILY} {self.table} {chain}\n",
+        ):
+            try:
+                self._apply(script)
+            except CommandError as exc:
+                if "No such file or directory" not in exc.stderr:
+                    raise
+
+    # --- generowanie reguł (czyste funkcje, testowalne bez nft) --------------
+
+    def render_base(self) -> str:
+        t = f"{self.FAMILY} {self.table}"
+        return (
+            f"add table {t}\n"
+            f"add map {t} {self.PORTS_MAP} {{ type ifname : verdict ; }}\n"
+            f"add chain {t} forward {{ type filter hook forward priority filter ; policy accept ; }}\n"
+        )
+
+    def render_machine(
+        self,
+        server_id: int,
+        interfaces: list[NetworkInterfaceSpec],
+        firewall: list[FirewallRule],
+    ) -> str:
+        t = f"{self.FAMILY} {self.table}"
+        chain = f"vm_{server_id}"
+        iface = interface_name(server_id)
+        out = f'iifname "{iface}"'
+
+        v4 = [i.address for i in interfaces if i.version == 4]
+        v6 = [i.address for i in interfaces if i.version == 6]
+
+        rules = [
+            # Z maszyny wychodzi wyłącznie IPv4, IPv6 i ARP. Reszta (znaczniki
+            # VLAN, protokoły warstwy 2) to albo pomyłka, albo próba ataku na
+            # sieć dostawcy.
+            f"{out} ether type != {{ ip, ip6, arp }} drop",
+        ]
+
+        # Anty-spoofing: ruch i ARP wyłącznie z adresów przypisanych maszynie.
+        # Zapisane jako „odrzuć, jeśli nie z puli" zamiast „przyjmij, jeśli z
+        # puli" — dzięki temu reguły klienta dla ruchu wychodzącego niżej w
+        # łańcuchu nadal są sprawdzane, a nie przeskakiwane.
+        if v4:
+            pool4 = ", ".join(v4)
+            rules += [
+                f"{out} arp saddr ip != {{ {pool4} }} drop",
+                f"{out} ip saddr != {{ {pool4} }} drop",
+            ]
+        else:
+            rules.append(f"{out} ether type {{ ip, arp }} drop")
+
+        # IPv6: adresy link-local i nieokreślony (::) są konieczne dla Neighbor
+        # Discovery i DAD — bez nich IPv6 w maszynie w ogóle nie wstanie.
+        pool6 = ", ".join(["fe80::/10", "::", *v6])
+        rules.append(f"{out} ip6 saddr != {{ {pool6} }} drop")
+
+        rules += [self._render_rule(rule, iface) for rule in firewall]
+
+        lines = [
+            f"add chain {t} {chain}",
+            f"flush chain {t} {chain}",
+            *[f"add rule {t} {chain} {rule}" for rule in rules],
+            # Podpięcie łańcucha po wypełnieniu — w tej samej transakcji, więc
+            # nie ma chwili, w której maszyna chodzi bez reguł.
+            f'add element {t} {self.PORTS_MAP} {{ "{iface}" : jump {chain} }}',
+        ]
+        return "\n".join(lines) + "\n"
 
     def _render_rule(self, rule: FirewallRule, iface: str) -> str:
         parts = [f"oifname \"{iface}\""] if rule.direction == "in" else [f"iifname \"{iface}\""]
@@ -125,8 +195,11 @@ table inet {self.table} {{
         parts.append(rule.action)
         return " ".join(parts)
 
+    # --- wykonanie ----------------------------------------------------------
+
     def _apply(self, script: str) -> None:
-        """Wgrywa fragment rulesetu przez stdin `nft -f -`.
+        """Wgrywa skrypt przez stdin `nft -f -` — jedna transakcja: albo wchodzą
+        wszystkie reguły, albo żadna.
 
         Nie przez plik tymczasowy: ruleset zawiera adresy klientów, a plik w /tmp
         na hoście współdzielonym to niepotrzebna ekspozycja.
@@ -141,22 +214,3 @@ table inet {self.table} {{
         )
         if proc.returncode != 0:
             raise CommandError(["nft", "-f", "-"], proc.returncode, proc.stderr)
-
-    def _delete_chain(self, chain: str) -> None:
-        # Brak łańcucha nie jest błędem — konfigurujemy VPS-a pierwszy raz.
-        try:
-            run(["nft", "flush", "chain", "inet", self.table, chain], check=True)
-            run(["nft", "delete", "chain", "inet", self.table, chain], check=True)
-        except CommandError as exc:
-            if "No such file or directory" not in exc.stderr:
-                raise
-
-    def _link_chain(self, chain: str, iface: str) -> None:
-        run([
-            "nft", "add", "rule", "inet", self.table, "forward",
-            "iifname", iface, "jump", chain,
-        ])
-        run([
-            "nft", "add", "rule", "inet", self.table, "forward",
-            "oifname", iface, "jump", chain,
-        ])

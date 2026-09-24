@@ -15,6 +15,7 @@ class ServerResource extends JsonResource
             'id' => $this->id,
             'hostname' => $this->hostname,
             'label' => $this->label,
+            'virtualization' => $this->virtualization?->value,
             'state' => $this->state->value,
             'state_label' => $this->state->label(),
             'state_tone' => $this->state->tone(),

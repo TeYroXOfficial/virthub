@@ -42,6 +42,7 @@ class CatalogController extends Controller
                 'id' => $template->id,
                 'name' => $template->name,
                 'family' => $template->family,
+                'virtualization' => $template->virtualization->value,
                 'version' => $template->version,
                 'min_disk_gb' => $template->min_disk_gb,
                 'self_service' => $template->isSelfService(),

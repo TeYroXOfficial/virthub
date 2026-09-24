@@ -85,6 +85,12 @@ class AgentClient
         return $this->jobId($this->request('PUT', "/vm/{$uuid}/network", $payload));
     }
 
+    /** Pobranie szablonu kontenera na węzeł z wyprzedzeniem. */
+    public function prefetchImage(string $alias): string
+    {
+        return $this->jobId($this->request('POST', '/images/prefetch', ['alias' => $alias]));
+    }
+
     // --- transport ----------------------------------------------------------
 
     private function jobId(array $response): string

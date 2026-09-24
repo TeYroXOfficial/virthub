@@ -1,13 +1,16 @@
 [Unit]
 Description=VirtHub Node Agent (zarządzanie maszynami KVM)
 Documentation=https://github.com/virthub/virthub
-After=network-online.target libvirtd.service
+# Bez Requires=libvirtd: węzeł kontenerów (LXC) w ogóle nie ma libvirt, a
+# węzeł KVM i tak łączy się z nim leniwie i przeżywa jego restarty.
+After=network-online.target libvirtd.service incus.service
 Wants=network-online.target
-Requires=libvirtd.service
 
 [Service]
 Type=exec
 User=virthub
+# Grupa daje dostęp do gniazda hypervisora: libvirt na węzłach KVM. Na węzłach
+# LXC instalator nadpisuje ją na incus-admin (drop-in w virthub-agent.service.d).
 Group=libvirt
 EnvironmentFile=/etc/virthub-agent/agent.env
 WorkingDirectory=/opt/virthub-agent

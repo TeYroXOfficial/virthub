@@ -95,7 +95,14 @@ class HypervisorDriver(ABC):
     @abstractmethod
     def health(self) -> HostHealth: ...
 
-    # --- wspólne dla obu implementacji --------------------------------------
+    def prefetch_image(self, alias: str) -> dict[str, Any]:
+        """Pobiera szablon na węzeł z wyprzedzeniem. Dotyczy kontenerów —
+        maszyny KVM korzystają z obrazów qcow2 wgrywanych do katalogu szablonów."""
+        raise DriverError(
+            "Ten węzeł uruchamia maszyny KVM — szablony kontenerów go nie dotyczą."
+        )
+
+    # --- wspólne dla wszystkich implementacji -------------------------------
 
     def _host_metrics(self) -> dict[str, Any]:
         import psutil
@@ -423,6 +430,7 @@ class LibvirtDriver(HypervisorDriver):
         return HostHealth(
             agent_version=AGENT_VERSION,
             driver="libvirt",
+            virtualization="kvm",
             libvirt_connected=connected,
             running_vms=running,
             **metrics,
@@ -597,10 +605,14 @@ class MockDriver(HypervisorDriver):
             net_tx_bytes=seed * 1024 * 1024,
         )
 
+    def prefetch_image(self, alias: str) -> dict[str, Any]:
+        return {"alias": alias, "downloaded": True, "cached": False}
+
     def health(self) -> HostHealth:
         return HostHealth(
             agent_version=AGENT_VERSION,
             driver="mock",
+            virtualization="mock",
             libvirt_connected=False,
             running_vms=sum(1 for r in self._load().values() if r["state"] == "running"),
             **self._host_metrics(),
@@ -614,4 +626,8 @@ def build_driver(settings: Settings) -> HypervisorDriver:
             platform.system(),
         )
         return MockDriver(settings)
+    if settings.driver == "lxc":
+        from .lxc_driver import IncusDriver
+
+        return IncusDriver(settings)
     return LibvirtDriver(settings)

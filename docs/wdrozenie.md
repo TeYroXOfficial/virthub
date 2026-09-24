@@ -70,6 +70,36 @@ Instalator węzła sam:
 - zgłasza się do panelu z wykrytymi zasobami (rdzenie, RAM, dysk)
 - pobiera obraz Ubuntu 24.04, żeby od razu dało się utworzyć maszynę
 
+#### Węzeł bez sprzętowej wirtualizacji — kontenery LXC
+
+Jeśli procesor nie zgłasza VT-x/AMD-V (typowo VPS bez zagnieżdżonej
+wirtualizacji), instalator nie odmawia — stawia **Incusa** i węzeł uruchamia
+kontenery LXC zamiast maszyn wirtualnych. Tworzy też pulę dyskową btrfs, na
+której działa limit dysku z pakietu.
+
+Szablony kontenerów nie wymagają wgrywania: w **Administracja → Szablony**
+dodajesz system z katalogu jednym kliknięciem, a panel sam zleca pobranie na
+wszystkie węzły kontenerów (obrazy z `images.linuxcontainers.org`, tego samego
+źródła, z którego korzysta Proxmox). Stan pobrania widać przy szablonie, osobno
+dla każdego węzła. Węzeł, który dołączy później, dociągnie szablony sam przy
+pierwszym kontakcie z panelem.
+
+Klient przy zamawianiu widzi, czy wybiera maszynę wirtualną, czy kontener, i
+widzi tylko te systemy, dla których jest działający węzeł danego typu.
+
+Żeby wymusić kontenery na serwerze, który obsługuje KVM:
+
+```bash
+curl -sSL https://panel.twojadomena.pl/enroll/TOKEN | sudo VH_VIRT=lxc bash
+```
+
+**Sieć kontenerów na VPS-ie.** Kontenery, tak jak maszyny KVM, dostają
+publiczne adresy z puli i wychodzą w sieć przez mostek z własnym adresem MAC.
+Na VPS-ie z jednym adresem IP to nie zadziała — dostawca musi przydzielić
+dodatkowe adresy i dopuścić ruch z dodatkowych MAC-ów (albo dodatkowe IP muszą
+być routowane na serwer). Tryb NAT z prywatną adresacją nie jest jeszcze
+obsługiwany.
+
 Po około minucie węzeł pojawia się w panelu jako online. Zostaje zaimportować
 pulę adresów IP (**Administracja → Adresy IP**) — tego nie da się wykryć
 automatycznie, bo to zależy od tego, co przydzielił ci dostawca.

@@ -14,6 +14,12 @@
             Podaj tylko nazwę. Adres, liczba rdzeni, pamięć i pojemność dysku zostaną
             wykryte automatycznie, kiedy węzeł zgłosi się po instalacji.
         </p>
+        <p class="hint">
+            Rodzaj węzła instalator też wykrywa sam: serwer z VT-x/AMD-V dostaje KVM i uruchamia
+            maszyny wirtualne, a serwer bez niego (np. VPS) — kontenery LXC. Żeby wymusić kontenery
+            na serwerze z KVM, uruchom polecenie z <span class="mono">sudo VH_VIRT=lxc bash</span>
+            zamiast <span class="mono">sudo bash</span>.
+        </p>
         <form method="POST" action="{{ route('panel.admin.hypervisors.store') }}">
             @csrf
             <div class="field">
@@ -61,6 +67,7 @@
                 </div>
             @else
                 <dl class="kv">
+                    <dt>Rodzaj</dt><dd>{{ $node->virtualization->label() }}</dd>
                     <dt>Nazwa hosta</dt><dd class="mono">{{ $node->hostname }}</dd>
                     <dt>Adres agenta</dt><dd class="mono">{{ $node->agent_url }}</dd>
                     <dt>Zarejestrowany</dt><dd>{{ $node->enrolled_at->format('d.m.Y H:i') }}</dd>

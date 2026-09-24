@@ -147,3 +147,107 @@ def test_reguly_firewalla_tlumacza_sie_na_sklade_nftables(settings, rule, expect
     rendered = manager._render_rule(rule, "vh7")
     assert expected_fragment in rendered
     assert 'oifname "vh7"' in rendered
+
+
+# --- reguły sieciowe w rodzinie bridge --------------------------------------
+
+def _machine_rules(settings, interfaces, firewall=()):
+    return NetworkManager(settings).render_machine(7, list(interfaces), list(firewall))
+
+
+def test_reguly_sa_w_rodzinie_bridge(settings):
+    # Ruch maszyny idzie przez mostek i nie dociera do haków IP — reguły w
+    # tabeli inet po prostu by go nie widziały.
+    rules = _machine_rules(settings, [NetworkInterfaceSpec(address="203.0.113.14", prefix=24)])
+    assert "bridge virthub" in rules
+    assert " inet " not in rules
+
+
+def test_anty_spoofing_obejmuje_ip_i_arp(settings):
+    rules = _machine_rules(settings, [NetworkInterfaceSpec(address="203.0.113.14", prefix=24)])
+
+    assert 'iifname "vh7" ip saddr != { 203.0.113.14 } drop' in rules
+    assert 'iifname "vh7" arp saddr ip != { 203.0.113.14 } drop' in rules, (
+        "bez tego maszyna podszyje się pod cudzy adres na poziomie ARP"
+    )
+
+
+def test_arp_z_wlasnego_adresu_nie_jest_blokowany(settings):
+    # W rodzinie bridge reguły widzą ARP. Stara reguła „odrzuć wszystko inne"
+    # odcięłaby maszynie sieć, bo nie mogłaby rozwiązać adresu bramy.
+    rules = _machine_rules(settings, [NetworkInterfaceSpec(address="203.0.113.14", prefix=24)])
+    assert 'iifname "vh7" drop' not in rules
+
+
+def test_ipv6_przepuszcza_neighbor_discovery(settings):
+    rules = _machine_rules(settings, [
+        NetworkInterfaceSpec(address="2001:db8::7", prefix=64, version=6),
+    ])
+    assert "fe80::/10" in rules and "::" in rules and "2001:db8::7" in rules
+
+
+def test_maszyna_bez_ipv4_nie_wysyla_ipv4(settings):
+    rules = _machine_rules(settings, [
+        NetworkInterfaceSpec(address="2001:db8::7", prefix=64, version=6),
+    ])
+    assert 'iifname "vh7" ether type { ip, arp } drop' in rules
+
+
+def test_regula_klienta_na_ruch_wychodzacy_jest_osiagalna(settings):
+    # Wcześniej anty-spoofing był regułą „accept" — ruch z własnego adresu
+    # kończył łańcuch, zanim doszedł do reguł klienta, więc blokady ruchu
+    # wychodzącego nigdy nie działały.
+    rules = _machine_rules(
+        settings,
+        [NetworkInterfaceSpec(address="203.0.113.14", prefix=24)],
+        [FirewallRule(direction="out", protocol="tcp", port_from=25, action="drop")],
+    )
+    lines = rules.splitlines()
+    client = next(i for i, l in enumerate(lines) if "tcp dport 25 drop" in l)
+    assert all("accept" not in l for l in lines[:client])
+
+
+def test_podpiecie_lancucha_w_tej_samej_transakcji(settings):
+    rules = _machine_rules(settings, [NetworkInterfaceSpec(address="203.0.113.14", prefix=24)])
+    lines = rules.strip().splitlines()
+
+    assert lines[0] == "add chain bridge virthub vm_7"
+    assert lines[1] == "flush chain bridge virthub vm_7", "ponowna konfiguracja nie może dublować reguł"
+    assert lines[-1] == 'add element bridge virthub vm_ports { "vh7" : jump vm_7 }'
+
+
+def test_tabela_bazowa_jest_idempotentna(settings):
+    # Wykonywana przy każdej konfiguracji — `add` nie zgłasza błędu, gdy
+    # obiekt już istnieje, w odróżnieniu od `create`.
+    base = NetworkManager(settings).render_base()
+    assert all(line.startswith("add ") for line in base.strip().splitlines())
+
+
+# --- cloud-init: dostęp do świeżej maszyny ----------------------------------
+
+def test_obraz_cloud_nie_blokuje_roota():
+    # Domyślnie cloud-init wpisuje rootowi „zaloguj się jako debian" — klient
+    # z samym kontem root nie wszedłby wtedy na maszynę nawet kluczem.
+    assert "disable_root: false" in render_user_data("vps.example.com", ["ssh-ed25519 AAA"], None)
+
+
+def test_haslo_roota_dziala_przez_ssh():
+    user_data = render_user_data("vps.example.com", [], "Tajne123")
+    assert "PermitRootLogin yes" in user_data, (
+        "Debian i Ubuntu mają domyślnie prohibit-password — hasło roota by nie zadziałało"
+    )
+
+
+def test_bez_hasla_root_nie_dostaje_logowania_haslem():
+    assert "PermitRootLogin yes" not in render_user_data("vps.example.com", ["ssh-ed25519 AAA"], None)
+
+
+def test_pakiety_wlaczaja_aktualizacje_listy():
+    user_data = render_user_data("ct.example.com", [], None, packages=["openssh-server"])
+    assert "package_update: true" in user_data
+    assert "- openssh-server" in user_data
+
+
+def test_ssh_startuje_w_rodzinie_debiana_i_rhel():
+    user_data = render_user_data("vps.example.com", [], None)
+    assert "enable --now ssh" in user_data and "enable --now sshd" in user_data

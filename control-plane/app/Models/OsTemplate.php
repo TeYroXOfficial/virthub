@@ -13,6 +13,7 @@ class OsTemplate extends Model
     protected $fillable = [
         'name',
         'family',
+        'virtualization',
         'version',
         'image_file',
         'min_disk_gb',
@@ -26,7 +27,19 @@ class OsTemplate extends Model
         return [
             'cloud_init_support' => 'boolean',
             'is_active' => 'boolean',
+            'virtualization' => \App\Enums\Virtualization::class,
         ];
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Relations\HasMany<TemplateDownload, $this> */
+    public function downloads(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(TemplateDownload::class);
+    }
+
+    public function isContainer(): bool
+    {
+        return $this->virtualization === \App\Enums\Virtualization::Lxc;
     }
 
     /** @param Builder<OsTemplate> $query */

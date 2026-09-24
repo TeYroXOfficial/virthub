@@ -52,12 +52,39 @@ fi
 command -v apt-get >/dev/null 2>&1 \
     || die "Ten instalator obsługuje Debiana i Ubuntu. Na innych dystrybucjach użyj playbooka z infra/ansible/."
 
+# --- rodzaj węzła -----------------------------------------------------------
+
+# Maszyny KVM wymagają sprzętowego wsparcia wirtualizacji. Bez niego (typowo
+# VPS bez zagnieżdżonej wirtualizacji) węzeł uruchamia kontenery LXC — dzielą
+# jądro z hostem i nie potrzebują VT-x. VH_VIRT=lxc wymusza kontenery także
+# na maszynie, która KVM potrafi.
 log "Sprawdzam wsparcie sprzętowe dla wirtualizacji"
-if [ "$(grep -Ec '(vmx|svm)' /proc/cpuinfo)" -eq 0 ]; then
-    die "Procesor nie zgłasza VT-x/AMD-V. Na tej maszynie nie da się uruchomić KVM.
-     Jeśli to maszyna wirtualna, włącz zagnieżdżoną wirtualizację u dostawcy."
+VIRT="${VH_VIRT:-}"
+if [ -z "$VIRT" ]; then
+    if [ "$(grep -Ec '(vmx|svm)' /proc/cpuinfo)" -gt 0 ] && [ -e /dev/kvm ]; then
+        VIRT="kvm"
+    else
+        VIRT="lxc"
+    fi
 fi
-ok "KVM dostępny"
+
+case "$VIRT" in
+    kvm)
+        ok "KVM dostępny — węzeł będzie uruchamiał maszyny wirtualne"
+        VIRT_GROUP="libvirt"
+        AGENT_DRIVER="libvirt"
+        ;;
+    lxc)
+        if [ -z "${VH_VIRT:-}" ]; then
+            warn "Procesor nie zgłasza VT-x/AMD-V — maszyny KVM są tu niemożliwe."
+        fi
+        ok "Węzeł będzie uruchamiał kontenery LXC (Incus)"
+        VIRT_GROUP="incus-admin"
+        AGENT_DRIVER="lxc"
+        ;;
+    *)
+        die "VH_VIRT musi mieć wartość kvm albo lxc, ma: $VIRT" ;;
+esac
 
 # --- pakiety ----------------------------------------------------------------
 
@@ -65,15 +92,85 @@ log "Instaluję pakiety (to potrwa 1-3 minuty)"
 export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 apt-get update -qq
+
+# libvirt-dev jest potrzebny w obu trybach: bez niego nie zbuduje się pakiet
+# Pythona z wymagań agenta. Samego libvirtd na węźle kontenerów nie ma.
 apt-get install -y -qq \
-    qemu-kvm libvirt-daemon-system libvirt-dev qemu-utils \
-    python3 python3-venv python3-dev build-essential pkg-config \
-    genisoimage nftables nginx openssl curl ca-certificates \
+    python3 python3-venv python3-dev build-essential pkg-config libvirt-dev \
+    nftables nginx openssl curl ca-certificates gnupg \
     bridge-utils iproute2 >/dev/null
+
+if [ "$VIRT" = "kvm" ]; then
+    apt-get install -y -qq qemu-kvm libvirt-daemon-system qemu-utils genisoimage >/dev/null
+    systemctl enable --now libvirtd >/dev/null 2>&1 || true
+    ok "KVM i libvirtd zainstalowane"
+else
+    # Incus jest w Debianie 13 i Ubuntu 24.04. Starsze wydania go nie mają —
+    # wtedy bierzemy oficjalne pakiety od opiekunów projektu (Zabbly).
+    if ! apt-get install -y -qq incus btrfs-progs >/dev/null 2>&1; then
+        warn "Incusa nie ma w repozytoriach systemu — dokładam repozytorium Zabbly."
+        install -d -m 0755 /etc/apt/keyrings
+        curl -fsSL https://pkgs.zabbly.com/key.asc -o /etc/apt/keyrings/zabbly.asc
+        . /etc/os-release
+        echo "deb [signed-by=/etc/apt/keyrings/zabbly.asc] https://pkgs.zabbly.com/incus/stable ${VERSION_CODENAME} main" \
+            > /etc/apt/sources.list.d/zabbly-incus-stable.list
+        apt-get update -qq
+        apt-get install -y -qq incus btrfs-progs >/dev/null \
+            || die "Nie udało się zainstalować Incusa na tym systemie."
+    fi
+    systemctl enable --now incus >/dev/null 2>&1 || true
+    ok "Incus zainstalowany"
+fi
 ok "Pakiety zainstalowane"
 
-systemctl enable --now libvirtd >/dev/null 2>&1 || true
-ok "libvirtd działa"
+# --- pula dyskowa kontenerów ------------------------------------------------
+
+# btrfs, a nie zwykły katalog: tylko na puli z obsługą quot Incus egzekwuje
+# limit dysku z pakietu. Na katalogu kontener klienta mógłby zapełnić cały
+# dysk hosta i położyć wszystkie pozostałe.
+if [ "$VIRT" = "lxc" ]; then
+    log "Przygotowuję pulę dyskową kontenerów"
+
+    if incus storage show default >/dev/null 2>&1; then
+        ok "Pula default już istnieje — zostawiam bez zmian"
+    else
+        FREE_GB="$(df -BG --output=avail /var/lib | tail -1 | tr -dc '0-9')"
+        # Zapas dla systemu hosta, logów i pobieranych obrazów.
+        POOL_GB=$(( FREE_GB - 20 ))
+        if [ "$POOL_GB" -lt 10 ]; then
+            die "Na /var/lib jest tylko ${FREE_GB} GB wolnego miejsca — za mało na kontenery."
+        fi
+
+        preseed() {
+            cat <<PRESEEDEOF
+config: {}
+networks: []
+storage_pools:
+- name: default
+  driver: $1
+  config: $2
+profiles:
+- name: default
+  devices:
+    root:
+      path: /
+      pool: default
+      type: disk
+PRESEEDEOF
+        }
+
+        # Bez sieci zarządzanej przez Incusa (networks: []): kontenery wpinamy
+        # w mostek hosta, tak samo jak maszyny KVM, z adresami z puli panelu.
+        if preseed btrfs "{size: ${POOL_GB}GiB}" | incus admin init --preseed >/dev/null 2>&1; then
+            ok "Pula btrfs ${POOL_GB} GB (limity dysku egzekwowane)"
+        elif preseed dir "{}" | incus admin init --preseed >/dev/null 2>&1; then
+            warn "btrfs niedostępny — pula na zwykłym katalogu."
+            warn "Limit dysku z pakietu NIE jest egzekwowany: kontener może zająć cały dysk hosta."
+        else
+            die "Nie udało się zainicjować Incusa. Sprawdź: journalctl -u incus"
+        fi
+    fi
+fi
 
 # --- mostek sieciowy --------------------------------------------------------
 
@@ -276,14 +373,16 @@ setup_bridge && BRIDGE_READY=1
 # --- konto i katalogi -------------------------------------------------------
 
 if ! id "$AGENT_USER" >/dev/null 2>&1; then
-    useradd --system --no-create-home --shell /usr/sbin/nologin --groups libvirt "$AGENT_USER"
+    useradd --system --no-create-home --shell /usr/sbin/nologin --groups "$VIRT_GROUP" "$AGENT_USER"
+else
+    usermod -aG "$VIRT_GROUP" "$AGENT_USER"
 fi
 
-install -d -o "$AGENT_USER" -g libvirt -m 0755 "$AGENT_DIR"
-install -d -o "$AGENT_USER" -g libvirt -m 0750 "$DATA_DIR" "$DATA_DIR/images" "$DATA_DIR/templates"
-install -d -o "$AGENT_USER" -g libvirt -m 0700 "$DATA_DIR/seeds"
+install -d -o "$AGENT_USER" -g "$VIRT_GROUP" -m 0755 "$AGENT_DIR"
+install -d -o "$AGENT_USER" -g "$VIRT_GROUP" -m 0750 "$DATA_DIR" "$DATA_DIR/images" "$DATA_DIR/templates"
+install -d -o "$AGENT_USER" -g "$VIRT_GROUP" -m 0700 "$DATA_DIR/seeds"
 install -d -o root -g "$AGENT_USER" -m 0750 "$CONFIG_DIR"
-install -d -o "$AGENT_USER" -g libvirt -m 0750 /var/log/virthub
+install -d -o "$AGENT_USER" -g "$VIRT_GROUP" -m 0750 /var/log/virthub
 ok "Katalogi gotowe"
 
 # --- kod agenta -------------------------------------------------------------
@@ -293,7 +392,7 @@ curl -fsSL "$PANEL_URL/enroll/$TOKEN/agent.tar.gz" -o /tmp/virthub-agent.tar.gz 
     || die "Nie udało się pobrać agenta. Sprawdź, czy panel jest osiągalny i czy bilet nie wygasł."
 tar -xzf /tmp/virthub-agent.tar.gz -C "$AGENT_DIR" --strip-components=1
 rm -f /tmp/virthub-agent.tar.gz
-chown -R "$AGENT_USER":libvirt "$AGENT_DIR"
+chown -R "$AGENT_USER":"$VIRT_GROUP" "$AGENT_DIR"
 ok "Kod agenta rozpakowany"
 
 log "Instaluję zależności Pythona (to potrwa 1-2 minuty)"
@@ -301,7 +400,7 @@ python3 -m venv "$AGENT_DIR/.venv"
 "$AGENT_DIR/.venv/bin/pip" install --quiet --upgrade pip
 "$AGENT_DIR/.venv/bin/pip" install --quiet -r "$AGENT_DIR/requirements.txt" \
     || die "Instalacja zależności Pythona nie powiodła się. Sprawdź, czy libvirt-dev się zainstalował."
-chown -R "$AGENT_USER":libvirt "$AGENT_DIR/.venv"
+chown -R "$AGENT_USER":"$VIRT_GROUP" "$AGENT_DIR/.venv"
 ok "Zależności Pythona zainstalowane"
 
 # --- certyfikat -------------------------------------------------------------
@@ -335,10 +434,10 @@ DISK_GB="$(df -BG --output=size "$DATA_DIR" | tail -1 | tr -dc '0-9')"
 log "Melduję się w panelu (${CPU_CORES} rdzeni, ${RAM_MB} MB RAM, ${DISK_GB} GB dysku)"
 
 RESPONSE="$(python3 - "$PANEL_URL" "$TOKEN" "$(hostname -f 2>/dev/null || hostname)" \
-                     "$CPU_CORES" "$RAM_MB" "$DISK_GB" "$CONFIG_DIR/tls/agent.crt" <<'PYEOF'
+                     "$CPU_CORES" "$RAM_MB" "$DISK_GB" "$CONFIG_DIR/tls/agent.crt" "$VIRT" <<'PYEOF'
 import json, sys, urllib.request, urllib.error
 
-panel, token, hostname, cores, ram, disk, cert_path = sys.argv[1:8]
+panel, token, hostname, cores, ram, disk, cert_path, virtualization = sys.argv[1:9]
 
 payload = json.dumps({
     "hostname": hostname,
@@ -346,6 +445,7 @@ payload = json.dumps({
     "ram_mb": int(ram),
     "disk_gb": int(disk),
     "tls_cert": open(cert_path).read(),
+    "virtualization": virtualization,
 }).encode()
 
 request = urllib.request.Request(
@@ -377,7 +477,7 @@ VH_AGENT_TOKEN=$AGENT_TOKEN
 VH_CALLBACK_SECRET=$CALLBACK_SECRET
 VH_CONTROL_PLANE_URL=$PANEL_URL
 
-VH_AGENT_DRIVER=libvirt
+VH_AGENT_DRIVER=$AGENT_DRIVER
 VH_LIBVIRT_URI=qemu:///system
 
 VH_IMAGE_DIR=$DATA_DIR/images
@@ -397,6 +497,20 @@ ok "Konfiguracja zapisana"
 # --- usługa -----------------------------------------------------------------
 
 cp "$AGENT_DIR/systemd/virthub-agent.service" /etc/systemd/system/virthub-agent.service
+
+# Węzeł kontenerów: agent działa w grupie incus-admin zamiast libvirt, a klient
+# incus trzyma swoją konfigurację (listę serwerów obrazów) w katalogu agenta —
+# konto usługi nie ma katalogu domowego.
+rm -rf /etc/systemd/system/virthub-agent.service.d
+if [ "$VIRT" = "lxc" ]; then
+    install -d -o "$AGENT_USER" -g "$VIRT_GROUP" -m 0700 "$DATA_DIR/incus-client"
+    install -d -m 0755 /etc/systemd/system/virthub-agent.service.d
+    cat > /etc/systemd/system/virthub-agent.service.d/lxc.conf <<UNITEOF
+[Service]
+Group=$VIRT_GROUP
+Environment=INCUS_CONF=$DATA_DIR/incus-client
+UNITEOF
+fi
 systemctl daemon-reload
 systemctl enable --now virthub-agent >/dev/null 2>&1
 sleep 2
@@ -438,12 +552,17 @@ ok "TLS nasłuchuje na porcie $TLS_PORT"
 
 # Bez choćby jednego obrazu nie da się utworzyć maszyny, a pobranie go to
 # jedyna rzecz, o której i tak trzeba by pamiętać po instalacji.
-if [ -z "$(ls -A "$DATA_DIR/templates" 2>/dev/null)" ]; then
+if [ "$VIRT" = "lxc" ]; then
+    # Szablony kontenerów pobiera panel: po rejestracji węzła zleca pobranie
+    # wszystkich aktywnych szablonów LXC, a brakujący obraz węzeł ściąga sam
+    # przy pierwszym zamówieniu.
+    ok "Szablony kontenerów zostaną pobrane automatycznie na zlecenie panelu"
+elif [ -z "$(ls -A "$DATA_DIR/templates" 2>/dev/null)" ]; then
     log "Pobieram obraz Ubuntu 24.04 (ok. 600 MB)"
     if curl -fsSL --max-time 900 \
         "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img" \
         -o "$DATA_DIR/templates/ubuntu-24.04.qcow2"; then
-        chown "$AGENT_USER":libvirt "$DATA_DIR/templates/ubuntu-24.04.qcow2"
+        chown "$AGENT_USER":"$VIRT_GROUP" "$DATA_DIR/templates/ubuntu-24.04.qcow2"
         ok "Obraz ubuntu-24.04.qcow2 gotowy"
     else
         rm -f "$DATA_DIR/templates/ubuntu-24.04.qcow2"
@@ -472,7 +591,11 @@ fi
 
 echo
 printf '\033[0;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m\n'
-printf '\033[0;32m  Węzeł zarejestrowany i gotowy\033[0m\n'
+if [ "$VIRT" = "lxc" ]; then
+    printf '\033[0;32m  Węzeł kontenerów LXC zarejestrowany i gotowy\033[0m\n'
+else
+    printf '\033[0;32m  Węzeł KVM zarejestrowany i gotowy\033[0m\n'
+fi
 printf '\033[0;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m\n'
 echo
 echo "  W panelu zobaczysz go jako online w ciągu minuty."

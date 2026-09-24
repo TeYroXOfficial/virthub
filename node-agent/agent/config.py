@@ -45,9 +45,16 @@ class Settings:
     # Uwierzytelnianie żądań z control plane (HMAC-SHA256, sekret współdzielony).
     agent_token: str
 
-    # "libvirt" na hypervisorze, "mock" na stacji developerskiej bez KVM.
+    # "libvirt" — maszyny wirtualne KVM (wymaga VT-x/AMD-V),
+    # "lxc"     — kontenery przez Incus (działa bez wsparcia sprzętowego),
+    # "mock"    — stacja developerska, żadnych prawdziwych maszyn.
     driver: str
     libvirt_uri: str
+
+    # Kontenery: pula dyskowa Incusa i serwer obrazów, z którego węzeł
+    # sam pobiera szablony przy pierwszym użyciu.
+    incus_storage_pool: str
+    incus_image_remote: str
 
     # Układ katalogów na hoście.
     image_dir: Path      # dyski działających VPS-ów (qcow2)
@@ -73,6 +80,11 @@ class Settings:
     def is_mock(self) -> bool:
         return self.driver == "mock"
 
+    @property
+    def virtualization(self) -> str:
+        """Rodzaj maszyn, jakie daje ten węzeł — tak widzi go panel."""
+        return {"libvirt": "kvm", "lxc": "lxc"}.get(self.driver, "mock")
+
     def ensure_directories(self) -> None:
         for path in (self.image_dir, self.template_dir, self.seed_dir, self.state_db.parent):
             path.mkdir(parents=True, exist_ok=True)
@@ -81,13 +93,17 @@ class Settings:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     driver = _env("VH_AGENT_DRIVER", "libvirt").lower()
-    if driver not in {"libvirt", "mock"}:
-        raise ConfigError(f"VH_AGENT_DRIVER musi być 'libvirt' albo 'mock', jest: {driver!r}")
+    if driver not in {"libvirt", "lxc", "mock"}:
+        raise ConfigError(
+            f"VH_AGENT_DRIVER musi być 'libvirt', 'lxc' albo 'mock', jest: {driver!r}"
+        )
 
     settings = Settings(
         agent_token=_env("VH_AGENT_TOKEN", required=True),
         driver=driver,
         libvirt_uri=_env("VH_LIBVIRT_URI", "qemu:///system"),
+        incus_storage_pool=_env("VH_INCUS_POOL", "default"),
+        incus_image_remote=_env("VH_INCUS_REMOTE", "images"),
         image_dir=_env_path("VH_IMAGE_DIR", "/var/lib/virthub/images"),
         template_dir=_env_path("VH_TEMPLATE_DIR", "/var/lib/virthub/templates"),
         seed_dir=_env_path("VH_SEED_DIR", "/var/lib/virthub/seeds"),

@@ -42,11 +42,22 @@ def render_user_data(
     hostname: str,
     ssh_keys: list[str],
     root_password: str | None,
+    packages: list[str] | None = None,
 ) -> str:
+    """Konfiguracja pierwszego startu.
+
+    `packages` — pakiety doinstalowywane przy pierwszym starcie. Obrazy
+    kontenerów LXC w odróżnieniu od obrazów cloud dla maszyn wirtualnych
+    nie mają serwera SSH, więc bez tego klient nie miałby jak się zalogować.
+    """
     lines = [
         "#cloud-config",
         f"hostname: {hostname}",
         "manage_etc_hosts: true",
+        # Obrazy cloud domyślnie blokują logowanie na roota — wpisują do jego
+        # authorized_keys polecenie „zaloguj się jako debian/ubuntu". Klient
+        # dostaje konto root, więc ta blokada musi zniknąć.
+        "disable_root: false",
         "users:",
         "  - name: root",
         f"    ssh_authorized_keys:{_yaml_list(ssh_keys, 6)}",
@@ -59,16 +70,31 @@ def render_user_data(
             "  list: |",
             f"    root:{root_password}",
             "ssh_pwauth: true",
+            # Debian i Ubuntu mają domyślnie PermitRootLogin prohibit-password:
+            # samo ssh_pwauth włącza hasła dla wszystkich poza rootem, czyli
+            # dokładnie poza jedynym kontem, jakie klient ma.
+            "write_files:",
+            "  - path: /etc/ssh/sshd_config.d/10-virthub.conf",
+            "    permissions: '0644'",
+            "    content: |",
+            "      PermitRootLogin yes",
+            "      PasswordAuthentication yes",
         ]
     else:
         # Bez hasła zostawiamy wyłączone logowanie hasłem — inaczej obraz z
         # domyślnym hasłem szablonu byłby dostępny dla każdego skanera.
         lines.append("ssh_pwauth: false")
 
+    if packages:
+        lines += ["package_update: true", f"packages:{_yaml_list(packages, 2)}"]
+    else:
+        lines.append("package_update: false")
+
+    # Usługa nazywa się „ssh" w rodzinie Debiana i „sshd" w rodzinie RHEL.
     lines += [
-        "package_update: false",
         "runcmd:",
-        "  - [ systemctl, restart, ssh ]",
+        "  - [ sh, -c, 'systemctl enable --now ssh 2>/dev/null || systemctl enable --now sshd' ]",
+        "  - [ sh, -c, 'systemctl restart ssh 2>/dev/null || systemctl restart sshd' ]",
     ]
     return "\n".join(lines) + "\n"
 

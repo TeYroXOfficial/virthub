@@ -93,6 +93,22 @@ class DatabaseSeeder extends Seeder
             );
         }
 
+        $this->command->info('Tworzę szablony kontenerów z katalogu…');
+
+        foreach (config('virthub.lxc_catalog') as $entry) {
+            OsTemplate::updateOrCreate(
+                ['image_file' => $entry['alias'], 'virtualization' => 'lxc'],
+                [
+                    'name' => $entry['name'],
+                    'family' => $entry['family'],
+                    'version' => $entry['version'],
+                    'min_disk_gb' => 4,
+                    'cloud_init_support' => true,
+                    'is_active' => true,
+                ],
+            );
+        }
+
         $this->command->info('Rejestruję lokalny hypervisor (agent w trybie mock)…');
 
         $hypervisor = Hypervisor::updateOrCreate(

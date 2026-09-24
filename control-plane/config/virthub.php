@@ -36,6 +36,33 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Katalog szablonów kontenerów
+    |--------------------------------------------------------------------------
+    | Obrazy z images.linuxcontainers.org — oficjalnego serwera obrazów
+    | projektu Linux Containers, z którego korzysta też Proxmox. Wariant
+    | „cloud" zawiera cloud-init, dzięki któremu kontener dostaje hasło, klucz
+    | SSH i adresację przy pierwszym starcie.
+    |
+    | Tylko dystrybucje z systemd i pakietem openssh-server — instalator
+    | kontenera doinstalowuje serwer SSH pod tą nazwą i uruchamia go przez
+    | systemctl. Alpine, Arch czy openSUSE mają inne nazwy pakietów i nie
+    | zadziałałyby bez zmian w agencie.
+    |
+    | Administrator dodaje szablon jednym kliknięciem, a panel rozsyła go na
+    | wszystkie węzły kontenerów. Własny alias też da się dodać ręcznie.
+    */
+
+    'lxc_catalog' => [
+        'debian-13' => ['name' => 'Debian 13', 'family' => 'debian', 'version' => '13', 'alias' => 'debian/13/cloud'],
+        'debian-12' => ['name' => 'Debian 12', 'family' => 'debian', 'version' => '12', 'alias' => 'debian/12/cloud'],
+        'ubuntu-2404' => ['name' => 'Ubuntu 24.04 LTS', 'family' => 'ubuntu', 'version' => '24.04', 'alias' => 'ubuntu/24.04/cloud'],
+        'ubuntu-2204' => ['name' => 'Ubuntu 22.04 LTS', 'family' => 'ubuntu', 'version' => '22.04', 'alias' => 'ubuntu/22.04/cloud'],
+        'almalinux-9' => ['name' => 'AlmaLinux 9', 'family' => 'almalinux', 'version' => '9', 'alias' => 'almalinux/9/cloud'],
+        'rocky-9' => ['name' => 'Rocky Linux 9', 'family' => 'rocky', 'version' => '9', 'alias' => 'rockylinux/9/cloud'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Limity
     |--------------------------------------------------------------------------
     */
