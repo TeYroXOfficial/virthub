@@ -50,6 +50,8 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 TimeoutStartSec=1800
+# Usługi systemd nie dostają HOME — pip i git szukają tam konfiguracji.
+Environment=HOME=/root
 # Zlecenie zdejmujemy, zanim cokolwiek się uruchomi: gdyby skrypt nie wystartował,
 # .path odpalałby usługę w pętli, aż systemd wyłączyłby ją na dobre.
 ExecStartPre=/bin/rm -f /var/lib/virthub/update/request
