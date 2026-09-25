@@ -30,8 +30,16 @@ chown -R "$AGENT_USER":"$GROUP" "$AGENT_DIR"
 ok "Kod agenta podmieniony${COMMIT:+ (${COMMIT:0:12})}"
 
 if [ -x "$AGENT_DIR/.venv/bin/pip" ]; then
-    "$AGENT_DIR/.venv/bin/pip" install --quiet -r "$AGENT_DIR/requirements.txt"
-    ok "Zależności Pythona aktualne"
+    # requirements.txt bez zmian od ostatniej aktualizacji — pip nie ma nic do zrobienia.
+    REQ_SUM="$(sha256sum "$AGENT_DIR/requirements.txt" | cut -d' ' -f1)"
+    STAMP="/var/lib/virthub/update/requirements.sha256"
+    if [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$REQ_SUM" ] && [ "${VH_FULL_INSTALL:-0}" != "1" ]; then
+        ok "Zależności Pythona bez zmian"
+    else
+        "$AGENT_DIR/.venv/bin/pip" install --quiet -r "$AGENT_DIR/requirements.txt"
+        mkdir -p "$(dirname "$STAMP")" && printf '%s' "$REQ_SUM" > "$STAMP"
+        ok "Zależności Pythona zaktualizowane"
+    fi
 fi
 
 # --- usługa agenta ------------------------------------------------------------

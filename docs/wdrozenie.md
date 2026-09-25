@@ -74,6 +74,13 @@ Panel może aktualizację tylko wyzwolić — skąd pobrać kod, ustala plik na
 serwerze, więc przejęty panel nie wskaże węzłowi obcego kodu. Log ostatniej
 aktualizacji: `/var/lib/virthub-panel/last.log` i `/var/lib/virthub/update/last.log`.
 
+Aktualizacja pomija kroki, których wynik się nie zmienił: pakiety systemowe
+(gdy wszystkie są zainstalowane), `composer install` (gdy `composer.lock` i
+wersja PHP są te same — odświeża tylko autoloader), zależności przekaźnika
+konsoli i agenta (gdy `requirements.txt` jest ten sam) oraz wystawianie
+certyfikatu (istniejący jest tylko podpinany do nginx; odnawia go certbot).
+Wszystko od nowa: `install-panel.sh --full` albo `VH_FULL_INSTALL=1`.
+
 Instalacje sprzed tej funkcji trzeba raz zaktualizować ręcznie — to zakłada
 usługi aktualizacji:
 

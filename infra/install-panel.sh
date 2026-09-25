@@ -74,6 +74,21 @@ ask() {
 
 # --- argumenty --------------------------------------------------------------
 
+FULL_INSTALL="${VH_FULL_INSTALL:-0}"
+STARTED_AT="$(date +%s)"
+
+# Aktualizacja pomija kroki, których wynik się nie zmienił (pakiety systemowe,
+# zależności PHP i Pythona, certyfikat). Odciski plików wejściowych trzymamy tu.
+STAMP_DIR="/var/lib/virthub-install"
+stamp_matches() {  # nazwa plik [dodatek] — czy od ostatniego razu nic się nie zmieniło
+    [ "$FULL_INSTALL" -eq 0 ] && [ -f "$STAMP_DIR/$1" ] && [ -f "$2" ] \
+        && [ "$(cat "$STAMP_DIR/$1")" = "$(sha256sum "$2" | cut -d' ' -f1)${3:-}" ]
+}
+stamp_save() {
+    install -d -m 0700 "$STAMP_DIR"
+    printf '%s%s' "$(sha256sum "$2" | cut -d' ' -f1)" "${3:-}" > "$STAMP_DIR/$1"
+}
+
 while [ $# -gt 0 ]; do
     case "$1" in
         --domain)   DOMAIN="$2"; shift 2 ;;
@@ -84,6 +99,7 @@ while [ $# -gt 0 ]; do
         --app-dir)  APP_DIR="$2"; shift 2 ;;
         --brand)    BRAND="$2"; BRAND_SET=1; shift 2 ;;
         --no-tls)   SKIP_TLS=1; NO_TLS_ARG=1; shift ;;
+        --full)     FULL_INSTALL=1; shift ;;
         -h|--help)
             cat <<'HELPEOF'
 Instalator panelu VirtHub.
@@ -96,6 +112,8 @@ Instalator panelu VirtHub.
   --app-dir KATALOG gdzie leży aplikacja (domyślnie /opt/virthub/control-plane)
   --brand NAZWA     nazwa produktu widoczna w panelu
   --no-tls          nie wystawiaj certyfikatu
+  --full            przy aktualizacji też przeinstaluj pakiety systemowe,
+                    zależności i certyfikat (domyślnie pomijane, gdy się nie zmieniły)
 
 Ponowne uruchomienie aktualizuje instalację i zachowuje klucz, bazę i konto.
 HELPEOF
@@ -175,6 +193,35 @@ printf '    administrator: %s\n' "$ADMIN_EMAIL"
 # --- pakiety systemowe ------------------------------------------------------
 
 log "Instaluję pakiety systemowe"
+
+# Pakiety potrzebne panelowi, bez wersji PHP (dokładana niżej).
+BASE_PACKAGES=(nginx mariadb-server redis-server supervisor cron
+    certbot python3-certbot-nginx python3-venv git unzip curl openssl ca-certificates)
+PHP_EXTENSIONS=(fpm cli mysql redis mbstring xml curl zip bcmath gd intl)
+
+packages_installed() {
+    local p
+    for p in "$@"; do
+        dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q "install ok installed" || return 1
+    done
+}
+
+PACKAGES_READY=0
+if [ "$IS_UPDATE" -eq 1 ] && [ "$FULL_INSTALL" -eq 0 ]; then
+    INSTALLED_PHP="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || true)"
+    case "$INSTALLED_PHP" in
+        8.2|8.3|8.4|8.5)
+            if packages_installed "${BASE_PACKAGES[@]}" "${PHP_EXTENSIONS[@]/#/php$INSTALLED_PHP-}"; then
+                PHP_V="$INSTALLED_PHP"
+                PACKAGES_READY=1
+            fi ;;
+    esac
+fi
+
+if [ "$PACKAGES_READY" -eq 1 ]; then
+    ok "PHP $PHP_V"
+    ok "Pakiety systemowe już są — pomijam (pełna instalacja: --full)"
+else
 apt-get update -qq
 
 # Wersja PHP zależy od dystrybucji: Debian 13 ma 8.4, Ubuntu 22.04 tylko 8.1,
@@ -211,15 +258,10 @@ fi
 ok "PHP $PHP_V"
 
 # Debian nie ma pakietu mysql-server — MariaDB jest w pełni zgodna.
-apt-get install -y -qq \
-    "php$PHP_V-fpm" "php$PHP_V-cli" "php$PHP_V-mysql" "php$PHP_V-redis" \
-    "php$PHP_V-mbstring" "php$PHP_V-xml" "php$PHP_V-curl" "php$PHP_V-zip" \
-    "php$PHP_V-bcmath" "php$PHP_V-gd" "php$PHP_V-intl" \
-    nginx mariadb-server redis-server supervisor cron \
-    certbot python3-certbot-nginx python3-venv \
-    git unzip curl openssl ca-certificates >/dev/null
+apt-get install -y -qq "${PHP_EXTENSIONS[@]/#/php$PHP_V-}" "${BASE_PACKAGES[@]}" >/dev/null
 
 ok "Pakiety zainstalowane"
+fi
 
 for service in "php$PHP_V-fpm" mariadb redis-server supervisor cron; do
     systemctl enable --now "$service" >/dev/null 2>&1 || true
@@ -310,9 +352,16 @@ fi
 
 cd "$APP_DIR"
 
-log "Instaluję zależności PHP (to potrwa 1-3 minuty)"
-composer install --no-dev --optimize-autoloader --no-interaction --quiet
-ok "Zależności zainstalowane"
+if [ -f vendor/autoload.php ] && stamp_matches composer composer.lock "-php$PHP_V"; then
+    # composer.lock bez zmian — wystarczy odświeżyć mapę klas (nowe pliki w app/).
+    composer dump-autoload --optimize --no-dev --no-interaction --quiet
+    ok "Zależności PHP bez zmian — odświeżono tylko autoloader"
+else
+    log "Instaluję zależności PHP (to potrwa 1-3 minuty)"
+    composer install --no-dev --optimize-autoloader --no-interaction --quiet
+    stamp_save composer composer.lock "-php$PHP_V"
+    ok "Zależności zainstalowane"
+fi
 
 # --- baza danych ------------------------------------------------------------
 
@@ -567,7 +616,18 @@ if [ "$SKIP_TLS" -eq 0 ]; then
                 --email "$ADMIN_EMAIL" "$REDIRECT_FLAG" >/tmp/virthub-certbot.log 2>&1
     }
 
-    if [ -z "$A_RECORDS" ]; then
+    # Certyfikat już jest (certbot sam go odnawia) — przy aktualizacji tylko
+    # podpinamy go do świeżo zapisanej konfiguracji nginx, bez pytania Let's Encrypt.
+    reuse_certificate() {
+        [ "$IS_UPDATE" -eq 1 ] && [ "$FULL_INSTALL" -eq 0 ] \
+            && [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ] \
+            && certbot install --nginx --cert-name "$DOMAIN" --non-interactive "$REDIRECT_FLAG" \
+                >/tmp/virthub-certbot.log 2>&1
+    }
+
+    if reuse_certificate; then
+        ok "Certyfikat już jest — podpięty do nginx (odnawia go certbot)"
+    elif [ -z "$A_RECORDS" ]; then
         warn "Domena $DOMAIN nie ma rekordu A — pomijam certyfikat."
         warn "Dodaj rekord A wskazujący na $PUBLIC_IP i uruchom: certbot --nginx -d $DOMAIN"
         SKIP_TLS=1
@@ -642,10 +702,16 @@ log "Uruchamiam przekaźnik konsoli"
 # console-proxy/console_proxy.py.
 CONSOLE_DIR="$ROOT_DIR/console-proxy"
 if [ -f "$CONSOLE_DIR/console_proxy.py" ]; then
-    python3 -m venv "$CONSOLE_DIR/.venv"
-    "$CONSOLE_DIR/.venv/bin/pip" install --quiet --upgrade pip
-    "$CONSOLE_DIR/.venv/bin/pip" install --quiet -r "$CONSOLE_DIR/requirements.txt" \
-        || die "Instalacja zależności przekaźnika konsoli nie powiodła się."
+    PY_V="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+    if [ -x "$CONSOLE_DIR/.venv/bin/python" ] && stamp_matches console-venv "$CONSOLE_DIR/requirements.txt" "-py$PY_V"; then
+        ok "Zależności przekaźnika konsoli bez zmian"
+    else
+        python3 -m venv "$CONSOLE_DIR/.venv"
+        "$CONSOLE_DIR/.venv/bin/pip" install --quiet --upgrade pip
+        "$CONSOLE_DIR/.venv/bin/pip" install --quiet -r "$CONSOLE_DIR/requirements.txt" \
+            || die "Instalacja zależności przekaźnika konsoli nie powiodła się."
+        stamp_save console-venv "$CONSOLE_DIR/requirements.txt" "-py$PY_V"
+    fi
 
     install -d -m 0755 /etc/virthub
     cat > /etc/virthub/console-proxy.env <<ENVEOF
@@ -828,4 +894,7 @@ echo
 echo "  Następny krok: zaloguj się, wejdź w Administracja → Hypervisory"
 echo "  i dodaj pierwszy węzeł. Dostaniesz jedno polecenie do wklejenia"
 echo "  na serwerze z KVM — reszta zrobi się sama."
+echo
+printf '  Czas instalacji: %s s%s\n' "$(( $(date +%s) - STARTED_AT ))" \
+    "$([ "$IS_UPDATE" -eq 1 ] && [ "$FULL_INSTALL" -eq 0 ] && echo ' (aktualizacja — niezmienione kroki pominięte; wszystko od nowa: --full)')"
 echo
