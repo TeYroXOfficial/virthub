@@ -39,9 +39,9 @@ class BillingIntegrationController extends Controller
             'customer_reference' => ['nullable', 'string', 'max:100'],
             'package' => ['required', Rule::exists(VpsPackage::class, 'slug')],
             'template' => ['required', Rule::exists(OsTemplate::class, 'id')],
-            'hostname' => ['required', 'string', 'max:253'],
+            'hostname' => ['required', 'string', 'max:253', new \App\Rules\Hostname],
             'ssh_keys' => ['array', 'max:10'],
-            'ssh_keys.*' => ['string', 'max:1000'],
+            'ssh_keys.*' => ['string', 'max:1000', new \App\Rules\SshPublicKey],
         ]);
 
         $existing = Server::withTrashed()

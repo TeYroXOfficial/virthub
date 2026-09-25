@@ -120,7 +120,19 @@ else
         apt-get install -y -qq incus btrfs-progs >/dev/null \
             || die "Nie udało się zainstalować Incusa na tym systemie."
     fi
+    # Osobny zakres UID/GID dla każdego kontenera klienta (security.idmap.isolated).
+    for f in /etc/subuid /etc/subgid; do
+        touch "$f"
+        if ! awk -F: '$1 == "root" && $3 >= 1000000000 { ok = 1 } END { exit !ok }' "$f"; then
+            if grep -q '^root:' "$f"; then
+                sed -i -E 's/^root:([0-9]+):[0-9]+$/root:\1:1000000000/' "$f"
+            else
+                echo "root:1000000:1000000000" >> "$f"
+            fi
+        fi
+    done
     systemctl enable --now incus >/dev/null 2>&1 || true
+    systemctl restart incus >/dev/null 2>&1 || true
     ok "Incus zainstalowany"
 fi
 ok "Pakiety zainstalowane"

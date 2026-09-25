@@ -65,6 +65,9 @@
                             @unless ($node->accepts_new_servers)
                                 <div class="hint">nie przyjmuje maszyn</div>
                             @endunless
+                            @if (! empty($node->last_health['security']['instance_issues']) || (isset($node->last_health['security']['host_guard']) && ! $node->last_health['security']['host_guard']))
+                                <a class="pill critical" href="{{ route('panel.admin.hypervisors.show', $node) }}#security" style="text-decoration:none">izolacja!</a>
+                            @endif
                         </td>
                         <td class="muted">{{ $node->group?->name ?? '—' }}</td>
                         @foreach ([[$node->cpu_cores_used, $node->cpu_cores_total, ''], [$node->ram_mb_used, $node->ram_mb_total, ' MB'], [$node->disk_gb_used, $node->disk_gb_total, ' GB']] as [$u, $t, $unit])

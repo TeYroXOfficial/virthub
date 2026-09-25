@@ -52,10 +52,15 @@ class GuestOs
             return false;
         }
 
+        // Wartości pochodzą z wnętrza maszyny klienta — przycinamy do kolumn,
+        // a identyfikator zawężamy do znaków spotykanych w os-release.
+        $clip = fn ($v, int $n) => is_string($v) && $v !== '' ? mb_substr(trim($v), 0, $n) : null;
+        $id = $clip($info['id'] ?? null, 40);
+
         $server->forceFill([
-            'guest_os_id' => $info['id'] ?? null,
-            'guest_os_name' => $info['pretty_name'] ?? $info['name'] ?? null,
-            'guest_os_version' => $info['version'] ?? null,
+            'guest_os_id' => $id !== null ? (preg_replace('/[^a-z0-9._-]/', '', strtolower($id)) ?: null) : null,
+            'guest_os_name' => $clip($info['pretty_name'] ?? $info['name'] ?? null, 120),
+            'guest_os_version' => $clip($info['version'] ?? null, 40),
             'guest_os_checked_at' => now(),
         ])->save();
 

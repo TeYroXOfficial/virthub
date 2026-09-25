@@ -44,7 +44,7 @@ class OrderServerRequest extends FormRequest
             'label' => ['nullable', 'string', 'max:100'],
             'location' => ['nullable', 'integer'],
             'ssh_keys' => ['array', 'max:10'],
-            'ssh_keys.*' => ['string', 'max:1000', 'regex:/^(ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp[0-9]+)\s+[A-Za-z0-9+\/=]+/'],
+            'ssh_keys.*' => ['string', 'max:1000', new \App\Rules\SshPublicKey],
         ];
     }
 

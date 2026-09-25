@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import ipaddress
 from enum import Enum
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -143,24 +143,35 @@ class FirewallPolicy(BaseModel):
     outbound: Literal["accept", "drop"] = "accept"
 
 
+# Druga linia obrony (panel sprawdza to samo): wartości trafiają do YAML
+# cloud-init, więc znak nowej linii dopisałby do niego dowolne polecenia.
+HOSTNAME = r"^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
+SSH_KEY = (
+    r"^(ssh-(rsa|ed25519|dss)|ecdsa-sha2-nistp(256|384|521)|sk-(ssh-ed25519|ecdsa-sha2-nistp256)@openssh\.com)"
+    r" [A-Za-z0-9+/]+={0,3}( [^\x00-\x1f\x7f]{1,200})?$"
+)
+SshKey = Annotated[str, Field(pattern=SSH_KEY, max_length=1000)]
+Password = Annotated[str, Field(pattern=r"^[\x21-\x7e]{8,128}$")]
+
+
 class CreateVmRequest(BaseModel):
     server_id: int = Field(description="Identyfikator VPS-a w control plane")
-    hostname: str
+    hostname: str = Field(pattern=HOSTNAME, max_length=253)
     vcpu: int = Field(ge=1, le=128)
     ram_mb: int = Field(ge=256)
     disk_gb: int = Field(ge=1)
     template: str = Field(description="Nazwa pliku obrazu bazowego w katalogu szablonów")
     interfaces: list[NetworkInterfaceSpec] = Field(default_factory=list)
-    ssh_keys: list[str] = Field(default_factory=list)
-    root_password: str | None = Field(default=None, repr=False)
+    ssh_keys: list[SshKey] = Field(default_factory=list, max_length=10)
+    root_password: Password | None = Field(default=None, repr=False)
     nameservers: list[str] = Field(default_factory=lambda: ["1.1.1.1", "9.9.9.9"])
 
 
 class RebuildVmRequest(BaseModel):
     template: str
-    hostname: str | None = None
-    ssh_keys: list[str] = Field(default_factory=list)
-    root_password: str | None = Field(default=None, repr=False)
+    hostname: str | None = Field(default=None, pattern=HOSTNAME, max_length=253)
+    ssh_keys: list[SshKey] = Field(default_factory=list, max_length=10)
+    root_password: Password | None = Field(default=None, repr=False)
     # Adresacja dla cloud-init nowego systemu. Starszy panel jej nie wysyłał —
     # wtedy maszyna KVM stawała bez sieci; kontener bierze ją ze swojej konfiguracji.
     interfaces: list[NetworkInterfaceSpec] | None = None
@@ -293,4 +304,5 @@ class HostHealth(BaseModel):
     firewall_stateful: bool | None = Field(
         default=None, description="Czy zapora śledzi połączenia (moduł nf_conntrack_bridge)",
     )
+    security: dict | None = Field(default=None, description="Stan izolacji kontenerów (węzły LXC)")
     remote_update: bool = Field(default=False, description="Czy węzeł przyjmuje aktualizacje zlecane z panelu")

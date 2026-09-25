@@ -99,7 +99,7 @@ class ServerController extends Controller
         $validated = $request->validate([
             'template' => ['required', Rule::exists(OsTemplate::class, 'id')->where('is_active', true)],
             'ssh_keys' => ['array', 'max:10'],
-            'ssh_keys.*' => ['string', 'max:1000'],
+            'ssh_keys.*' => ['string', 'max:1000', new \App\Rules\SshPublicKey],
             // Przebudowa kasuje dysk bezpowrotnie — wymagamy świadomego
             // potwierdzenia, żeby nie dało się jej wywołać przypadkiem.
             'confirm' => ['accepted'],

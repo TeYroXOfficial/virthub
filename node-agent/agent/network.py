@@ -12,7 +12,9 @@ jeden klient może podszyć się pod adres drugiego albo pod bramę.
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 import subprocess
 
 from .config import Settings
@@ -61,6 +63,9 @@ class NetworkManager:
     FAMILY = "bridge"
     PORTS_MAP = "vm_ports"
 
+    # Bit znacznika pakietów, które przyszły z portu maszyny do samego węzła.
+    GUARD_MARK = 0x08000000
+
     # hook → kierunek dopasowania interfejsu maszyny
     HOOKS = {"forward": ("iifname", "oifname"), "input": ("iifname",), "output": ("oifname",)}
 
@@ -104,6 +109,91 @@ class NetworkManager:
                     f"add rule {self.FAMILY} {self.table} {hook} {match} vmap @{self.PORTS_MAP}\n"
                     for match in matches
                 ))
+            if hook == "input" and self.settings.guard_host and f"{self.GUARD_MARK:#010x}" not in listing:
+                # Na początku łańcucha: reguła „accept" klienta w łańcuchu maszyny
+                # kończy przetwarzanie i znacznik po niej już by nie powstał.
+                self._apply(self.render_guard_mark())
+
+        self._apply(self.render_guard() if self.settings.guard_host else self.render_guard_removal())
+
+    # --- stan (odtwarzanie po restarcie hosta) --------------------------------
+
+    def _state_file(self, server_id: int) -> Path:
+        return self.settings.network_state_dir / f"{server_id}.json"
+
+    def _save_state(self, server_id, interfaces, firewall, policy) -> None:
+        self.settings.network_state_dir.mkdir(parents=True, exist_ok=True)
+        path = self._state_file(server_id)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({
+            "interfaces": [i.model_dump() for i in interfaces],
+            "firewall": [r.model_dump() for r in firewall],
+            "policy": policy.model_dump() if policy is not None else None,
+        }), encoding="utf-8")
+        tmp.replace(path)
+
+    def restore(self) -> int:
+        """Po restarcie hosta tabele nftables są puste — bez tego maszyny
+        chodziłyby bez anty-spoofingu i zapory, dopóki panel nie wyśle
+        konfiguracji ponownie. Odtwarza też ochronę węzła."""
+        if self.settings.is_mock:
+            return 0
+
+        self.ensure_base_table()
+        restored = 0
+        for path in sorted(self.settings.network_state_dir.glob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                self.configure(
+                    int(path.stem),
+                    [NetworkInterfaceSpec(**i) for i in data.get("interfaces", [])],
+                    [FirewallRule(**r) for r in data.get("firewall", [])],
+                    FirewallPolicy(**data["policy"]) if data.get("policy") else None,
+                )
+                restored += 1
+            except Exception:
+                log.exception("Nie udało się odtworzyć reguł sieci z %s", path)
+        return restored
+
+    # --- ochrona węzła przed jego maszynami ----------------------------------
+
+    @property
+    def guard_table(self) -> str:
+        return f"{self.table}_guard"
+
+    def render_guard_mark(self) -> str:
+        """Ramki z portów maszyn skierowane do samego węzła dostają znacznik."""
+        return (
+            f'insert rule {self.FAMILY} {self.table} input iifname "vh*" '
+            f"meta mark set meta mark | {self.GUARD_MARK:#010x}\n"
+        )
+
+    def render_guard(self) -> str:
+        """Maszyna nie nawiąże połączenia z usługami węzła (SSH hosta, agent,
+        panel na bramie NAT…). Przechodzi tylko ping i komunikaty ICMP, ND
+        IPv6 (bez niego brama IPv6 nie działa) oraz odpowiedzi na połączenia
+        otwarte przez sam węzeł. Ruch przez węzeł (NAT, routing) idzie hakiem
+        forward, nie input — tu go nie dotykamy, tylko zdejmujemy znacznik.
+        """
+        t = f"inet {self.guard_table}"
+        mark = f"{self.GUARD_MARK:#010x}"
+        return "\n".join([
+            f"add table {t}",
+            f"add chain {t} input {{ type filter hook input priority filter - 10 ; policy accept ; }}",
+            f"add chain {t} forward {{ type filter hook forward priority filter - 10 ; policy accept ; }}",
+            f"flush chain {t} input",
+            f"flush chain {t} forward",
+            f"add rule {t} input meta mark & {mark} == 0 accept",
+            f"add rule {t} input ct state established,related accept",
+            f"add rule {t} input meta l4proto icmp icmp type {{ echo-request, destination-unreachable, time-exceeded }} accept",
+            f"add rule {t} input meta l4proto ipv6-icmp accept",
+            f"add rule {t} input counter drop",
+            f"add rule {t} forward meta mark set meta mark & {~self.GUARD_MARK & 0xFFFFFFFF:#010x}",
+        ]) + "\n"
+
+    def render_guard_removal(self) -> str:
+        # `add` + `delete` w jednej transakcji: działa, gdy tabeli nie było.
+        return f"add table inet {self.guard_table}\ndelete table inet {self.guard_table}\n"
 
     def configure(
         self,
@@ -116,6 +206,7 @@ class NetworkManager:
         if self.settings.is_mock:
             log.info("[mock] pominięto konfigurację nftables dla maszyny %s", server_id)
             self.nat.configure(server_id, interfaces)
+            self._save_state(server_id, interfaces, firewall, policy)
             return
 
         self.ensure_base_table()
@@ -123,6 +214,7 @@ class NetworkManager:
             server_id, interfaces, firewall, policy, stateful=self.stateful(),
         ))
         self.nat.configure(server_id, interfaces)
+        self._save_state(server_id, interfaces, firewall, policy)
         log.info("Zastosowano %s reguł firewalla dla maszyny %s", len(firewall), server_id)
 
     def stateful(self) -> bool:
@@ -160,6 +252,7 @@ class NetworkManager:
         """Sprząta reguły po usuniętej maszynie — inaczej adres wróciłby do puli
         z cudzymi regułami wciąż aktywnymi."""
         self.nat.teardown(server_id)
+        self._state_file(server_id).unlink(missing_ok=True)
 
         if self.settings.is_mock:
             return
