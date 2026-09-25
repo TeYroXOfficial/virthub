@@ -67,6 +67,14 @@ def server_id_from_name(name: str) -> int:
         raise DriverError(f"Nieoczekiwana nazwa domeny: {name!r}") from exc
 
 
+def apparmor_enabled(path: Path = Path("/sys/module/apparmor/parameters/enabled")) -> bool:
+    """Incus i libvirt zamykają gości profilem AppArmora — bez niego izolacja jest słabsza."""
+    try:
+        return path.read_text().strip().upper().startswith("Y")
+    except OSError:
+        return False
+
+
 class HypervisorDriver(ABC):
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -544,6 +552,7 @@ class LibvirtDriver(HypervisorDriver):
             virtualization="kvm",
             libvirt_connected=connected,
             running_vms=running,
+            security={"apparmor": apparmor_enabled(), "host_guard": self.settings.guard_host},
             **metrics,
         )
 

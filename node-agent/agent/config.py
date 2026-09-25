@@ -79,6 +79,11 @@ class Settings:
     # Bezpieczeństwo protokołu.
     max_clock_skew: int  # sekundy — okno na replay protection
 
+    # Maszyny nie mogą łączyć się z usługami samego węzła (SSH hosta, agent…).
+    guard_host: bool = True
+    # Limit procesów w kontenerze — ochrona węzła przed fork bombą.
+    ct_max_processes: int = 4096
+
     @property
     def is_mock(self) -> bool:
         return self.driver == "mock"
@@ -91,6 +96,11 @@ class Settings:
     def ensure_directories(self) -> None:
         for path in (self.image_dir, self.template_dir, self.seed_dir, self.iso_dir, self.state_db.parent):
             path.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def network_state_dir(self) -> Path:
+        """Reguły sieci maszyn — do odtworzenia po restarcie hosta."""
+        return self.state_db.parent / "network"
 
     @property
     def nat_state_dir(self) -> Path:
@@ -120,6 +130,8 @@ def get_settings() -> Settings:
         state_db=_env_path("VH_STATE_DB", "/var/lib/virthub/agent-state.sqlite3"),
         bridge=_env("VH_BRIDGE", "br0"),
         nat_bridge=_env("VH_NAT_BRIDGE", "vhnat0"),
+        guard_host=_env("VH_GUARD_HOST", "1") not in ("0", "false", "no"),
+        ct_max_processes=int(_env("VH_CT_MAX_PROCESSES", "4096")),
         nft_table=_env("VH_NFT_TABLE", "virthub"),
         vnc_listen=_env("VH_VNC_LISTEN", "127.0.0.1"),
         control_plane_url=_env("VH_CONTROL_PLANE_URL", "").rstrip("/"),

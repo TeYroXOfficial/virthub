@@ -74,6 +74,9 @@ class FakeIncus:
             "name": name, "image": image, "status": "Stopped",
             "config": config, "devices": devices,
         }
+        # Profil default składany z konfiguracją instancji (jak expanded_config).
+        self.instances[name]["expanded_config"] = {**getattr(self, "profile_config", {}), **config}
+        self.instances[name]["expanded_devices"] = {**getattr(self, "profile_devices", {}), **devices}
 
     def _config(self, args):
         if args[0] == "device":
@@ -160,13 +163,21 @@ class FakeIncus:
                 "memory": {"usage": 300 * 1024**2},
                 "network": {"eth0": {"counters": {"bytes_received": 1000, "bytes_sent": 2000}}},
             })
-        return json.dumps({"config": instance["config"], "devices": instance["devices"]})
+        return json.dumps({
+            "config": instance["config"], "devices": instance["devices"],
+            "expanded_config": instance.get("expanded_config", instance["config"]),
+            "expanded_devices": {**instance.get("expanded_devices", {}), **instance["devices"]},
+        })
 
 
 @pytest.fixture()
 def incus(monkeypatch):
     fake = FakeIncus()
     monkeypatch.setattr(lxc_driver, "run", fake)
+    monkeypatch.setattr(
+        lxc_driver, "run_bounded",
+        lambda argv, max_bytes, timeout=60, input=None: fake(argv, timeout=timeout, input=input),
+    )
     return fake
 
 
@@ -194,6 +205,7 @@ def driver(settings, incus):
     drv = lxc_driver.IncusDriver(lxc_settings)
     drv.network = FakeNetwork()   # nft nie istnieje na stacji testowej
     drv.poll_interval = 0
+    drv.subid_files = ()          # stacja testowa: bez /etc/subuid
     return drv
 
 
@@ -484,3 +496,69 @@ def test_system_kontenera_z_os_release(driver, incus):
     assert info.id == "debian"
     assert info.pretty_name == "Debian GNU/Linux 12 (bookworm)"
     assert info.source == "os-release"
+
+
+# --- izolacja od hosta ---------------------------------------------------------
+
+def test_kontener_jest_utwardzony(driver, incus):
+    driver.create_vm(request())
+    config = incus.instances["virthub-42"]["config"]
+
+    assert config["security.privileged"] == "false"
+    assert config["security.nesting"] == "false"
+    assert config["limits.processes"] == "4096", "fork bomb nie może położyć węzła"
+    assert "security.idmap.isolated" not in config, "bez przydziału subuid nie włączamy (Incus odmówiłby)"
+
+
+def test_osobne_zakresy_uid_gdy_host_ma_przydzial(driver, incus, tmp_path):
+    for name in ("subuid", "subgid"):
+        (tmp_path / name).write_text("root:1000000:1000000000\n")
+    driver.subid_files = (tmp_path / "subuid", tmp_path / "subgid")
+
+    driver.create_vm(request())
+
+    assert incus.instances["virthub-42"]["config"]["security.idmap.isolated"] == "true"
+
+
+def test_za_maly_przydzial_uid_nie_wlacza_izolacji(driver, tmp_path):
+    for name in ("subuid", "subgid"):
+        (tmp_path / name).write_text("root:100000:65536\n")
+    driver.subid_files = (tmp_path / "subuid", tmp_path / "subgid")
+    assert driver.idmap_isolation_available() is False
+
+
+def test_niebezpieczny_profil_blokuje_kontener(driver, incus):
+    incus.profile_config = {"raw.lxc": "lxc.apparmor.profile=unconfined"}
+    incus.profile_devices = {"hostroot": {"type": "disk", "source": "/", "path": "/mnt/host"}}
+
+    with pytest.raises(DriverError, match="osłabia izolację") as exc:
+        driver.create_vm(request())
+
+    assert "raw.lxc" in str(exc.value)
+    assert "katalog hosta /" in str(exc.value)
+    assert "virthub-42" not in incus.instances, "kontener sprzątnięty, nie uruchomiony"
+
+
+def test_raport_bezpieczenstwa_w_heartbeat(driver, incus):
+    driver.create_vm(request())
+    incus.instances["virthub-42"]["expanded_devices"]["gpu0"] = {"type": "gpu"}
+
+    security = driver.health().security
+
+    assert security["instance_issues"] == {"virthub-42": ["urządzenie gpu0 (gpu)"]}
+    assert security["max_processes"] == 4096
+    assert "apparmor" in security
+
+
+def test_istniejace_kontenery_dostaja_limit_procesow(driver, incus):
+    driver.create_vm(request())
+    ct = incus.instances["virthub-42"]["config"]
+    del ct["limits.processes"]
+    ct["security.nesting"] = "true"
+    incus.instances["obcy"] = {"name": "obcy", "status": "Running", "config": {}, "devices": {}}
+
+    assert driver.harden_existing() == 1
+    assert ct["limits.processes"] == "4096"
+    assert ct["security.nesting"] == "false"
+    assert incus.instances["obcy"]["config"] == {}, "cudzych kontenerów nie ruszamy"
+    assert driver.harden_existing() == 0

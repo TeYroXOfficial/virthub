@@ -31,7 +31,7 @@ class ServerActionsController extends Controller
 
         $validated = $request->validate([
             'template' => ['required', Rule::exists(OsTemplate::class, 'id')->where('is_active', true)],
-            'ssh_key' => ['nullable', 'string', 'max:1000', 'regex:/^(ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp[0-9]+)\s+[A-Za-z0-9+\/=]+/'],
+            'ssh_key' => ['nullable', 'string', 'max:1000', new \App\Rules\SshPublicKey],
             // Kasuje dysk bezpowrotnie — wymagamy świadomego potwierdzenia.
             'confirm' => ['accepted'],
         ], [

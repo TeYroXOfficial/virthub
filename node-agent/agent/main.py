@@ -109,6 +109,20 @@ async def lifespan(app: FastAPI):
     # Mostek NAT i tabela nftables giną przy restarcie hosta — odtwarzamy je,
     # zanim kolejka ruszy, żeby start maszyny nie trafił na brak mostka.
     try:
+        # Zapora, anty-spoofing i ochrona węzła — przed NAT, bo same go odtwarzają.
+        restored = driver.network.restore()
+        if restored:
+            log.info("Odtworzono reguły sieci dla %s maszyn", restored)
+    except Exception:
+        log.exception("Nie udało się odtworzyć reguł sieci maszyn")
+    if hasattr(driver, "harden_existing"):
+        try:
+            hardened = driver.harden_existing()
+            if hardened:
+                log.info("Utwardzono %s istniejących kontenerów", hardened)
+        except Exception:
+            log.exception("Nie udało się utwardzić istniejących kontenerów")
+    try:
         restored = driver.network.nat.restore()
         if restored:
             log.info("Odtworzono NAT dla %s maszyn", restored)

@@ -225,6 +225,52 @@
     </div>
 
     <div data-tab-panel="info" role="tabpanel" hidden>
+        @php $sec = $node->last_health['security'] ?? null; @endphp
+        <div class="card" id="security">
+            <h3 class="card-title"><x-icon name="shield" :size="16"/> Izolacja maszyn od węzła</h3>
+            @if ($sec === null)
+                <p class="muted">Węzeł nie raportuje stanu izolacji — zaktualizuj agenta.</p>
+            @else
+                <dl class="kv">
+                    <dt>Dostęp maszyn do usług węzła</dt>
+                    <dd>
+                        @if ($sec['host_guard'] ?? false)
+                            <span class="pill ok">zablokowany</span>
+                        @else
+                            <span class="pill critical">otwarty</span> <span class="hint">VH_GUARD_HOST=0 w konfiguracji agenta</span>
+                        @endif
+                    </dd>
+                    <dt>AppArmor</dt>
+                    <dd>
+                        @if ($sec['apparmor'] ?? false)
+                            <span class="pill ok">włączony</span>
+                        @else
+                            <span class="pill warning">wyłączony</span> <span class="hint">goście nie są zamknięci profilem AppArmora</span>
+                        @endif
+                    </dd>
+                    @if (array_key_exists('idmap_isolated', $sec))
+                        <dt>Osobne UID/GID kontenerów</dt>
+                        <dd>
+                            @if ($sec['idmap_isolated'])
+                                <span class="pill ok">tak</span>
+                            @else
+                                <span class="pill warning">nie</span> <span class="hint">zaktualizuj węzeł — aktualizacja ustawi przydział w /etc/subuid</span>
+                            @endif
+                        </dd>
+                        <dt>Limit procesów w kontenerze</dt><dd class="num">{{ $sec['max_processes'] ?? '—' }}</dd>
+                        <dt>Kontenery z osłabioną izolacją</dt>
+                        <dd>
+                            @forelse ($sec['instance_issues'] ?? [] as $instance => $issues)
+                                <div><span class="pill critical">{{ $instance }}</span> {{ implode(', ', $issues) }}</div>
+                            @empty
+                                <span class="pill ok">brak</span>
+                            @endforelse
+                        </dd>
+                    @endif
+                </dl>
+            @endif
+        </div>
+
         <div class="grid grid-2">
             <div class="card">
                 <h3 class="card-title">Połączenie</h3>

@@ -75,6 +75,9 @@ fi
 echo nf_conntrack_bridge > /etc/modules-load.d/virthub.conf
 modprobe nf_conntrack_bridge 2>/dev/null || true
 
+# Węzły kontenerów: osobny zakres UID/GID dla każdego kontenera.
+bash "$AGENT_DIR/scripts/harden-incus.sh" || warn "Nie udało się ustawić przydziału UID/GID dla Incusa"
+
 # --- restart --------------------------------------------------------------------
 
 systemctl restart virthub-agent

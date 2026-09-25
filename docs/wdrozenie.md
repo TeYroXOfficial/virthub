@@ -466,6 +466,22 @@ chown virthub:libvirt ubuntu-24.04.qcow2
 Obrazu bazowego nie wolno usunąć ani nadpisać, dopóki istnieje choć jedna
 maszyna, która go używa — dyski klientów są cienkimi warstwami nad nim.
 
+### Izolacja maszyn od węzła
+
+- **Kontenery** są nieuprzywilejowane (`security.privileged=false`), bez
+  zagnieżdżania, z limitem procesów (`VH_CT_MAX_PROCESSES`, domyślnie 4096)
+  i — gdy root ma przydział w `/etc/subuid`/`/etc/subgid` (ustawia go
+  instalator i aktualizacja węzła) — z osobnym zakresem UID/GID na kontener.
+- Agent **nie uruchomi** kontenera, jeśli profil `default` Incusa dopisuje
+  coś, co osłabia izolację (`raw.lxc`, `security.privileged`, katalog hosta,
+  urządzenia GPU/USB, `proxy`…). Stan widać na stronie węzła → Informacje.
+- **Maszyny nie połączą się z usługami węzła** (SSH hosta, agent, cokolwiek
+  na bramie NAT): tabela `inet virthub_guard` przepuszcza tylko ping/ICMP,
+  ND IPv6 i odpowiedzi na połączenia węzła. Ruch przez węzeł (NAT, routing)
+  działa normalnie. Wyłączenie: `VH_GUARD_HOST=0` w konfiguracji agenta.
+- Po **restarcie węzła** agent sam odtwarza zaporę, anty-spoofing i ochronę
+  węzła z zapisanego stanu (`/var/lib/virthub/network`).
+
 ### Systemy i wersje
 
 Szablony są zgrupowane w systemy (**Administracja → Szablony**): np. „Ubuntu"

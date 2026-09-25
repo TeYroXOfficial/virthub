@@ -32,7 +32,7 @@ from .config import Settings
 from .domain_xml import domain_name
 from .guest_os import parse_os_release
 from .jobs import progress
-from .driver import DriverError, HypervisorDriver, VmNotFound, server_id_from_name, AGENT_VERSION
+from .driver import apparmor_enabled, DriverError, HypervisorDriver, VmNotFound, server_id_from_name, AGENT_VERSION
 from .network import interface_name, mac_address
 from .schemas import (
     GuestOs,
@@ -44,7 +44,7 @@ from .schemas import (
     ResizeVmRequest,
     VmStats,
 )
-from .shell import CommandError, run
+from .shell import CommandError, run, run_bounded
 
 log = logging.getLogger("virthub.lxc")
 
@@ -59,9 +59,28 @@ UUID_KEY = "user.virthub.uuid"
 # dla maszyn wirtualnych). Bez niego klient nie miałby jak się zalogować.
 CONTAINER_PACKAGES = ["openssh-server"]
 
+# Klucze konfiguracji, które osłabiają izolację kontenera od hosta. Panel ich
+# nie ustawia — jeśli pojawią się w konfiguracji (np. dopisane do profilu
+# default), kontener klienta nie zostanie uruchomiony.
+DANGEROUS_CONFIG = {
+    "security.privileged": lambda v: v.lower() == "true",
+    "security.nesting": lambda v: v.lower() == "true",
+    "raw.lxc": bool, "raw.idmap": bool, "raw.apparmor": bool, "raw.seccomp": bool,
+    "linux.kernel_modules": bool,
+    "security.syscalls.intercept.mount": lambda v: v.lower() == "true",
+    "security.syscalls.intercept.bpf": lambda v: v.lower() == "true",
+    "security.syscalls.intercept.mknod": lambda v: v.lower() == "true",
+    "security.syscalls.intercept.setxattr": lambda v: v.lower() == "true",
+}
+# Urządzenia dające kontenerowi dostęp do sprzętu albo plików/gniazd hosta.
+DANGEROUS_DEVICES = {"unix-char", "unix-block", "unix-hotplug", "gpu", "usb", "pci", "infiniband", "tpm", "proxy"}
+# Każdy kontener z osobnym zakresem UID/GID potrzebuje 65536 identyfikatorów.
+IDMAP_BLOCK = 65536
+
 
 # „rootfs: 45% (12.34MB/s)" z metadanych operacji Incusa.
 PROGRESS_RE = re.compile(r"(?P<pct>\d{1,3})%(?:\s*\((?P<speed>[^)]+)\))?")
+
 
 
 class CommandFailed(DriverError):
@@ -81,6 +100,8 @@ class IncusDriver(HypervisorDriver):
 
     # Co ile sekund dopytujemy Incusa o postęp pobierania obrazu.
     poll_interval = 1.0
+    # Skąd czytamy przydział podrzędnych UID/GID roota (osobne zakresy kontenerów).
+    subid_files = (Path("/etc/subuid"), Path("/etc/subgid"))
 
     def __init__(self, settings: Settings):
         super().__init__(settings)
@@ -253,7 +274,7 @@ class IncusDriver(HypervisorDriver):
                 # Nieuprzywilejowany kontener: root w środku nie jest rootem
                 # hosta. To domyślne w Incusie — ustawiamy jawnie, żeby zmiana
                 # domyślnego profilu przez kogoś nie otworzyła hosta klientom.
-                "-c", "security.privileged=false",
+                *self._isolation_args(),
                 *self._cloud_init_args(
                     req.hostname, req.interfaces, req.nameservers,
                     req.ssh_keys, req.root_password, mac,
@@ -262,6 +283,10 @@ class IncusDriver(HypervisorDriver):
                 timeout=600,
             )
             created.append("instance")
+
+            # Profil default mógł dopisać coś, co osłabia izolację — taki
+            # kontener nie wystartuje.
+            self._assert_isolated(name)
 
             # Interfejs z tą samą nazwą i MAC-iem co maszyny KVM — reguły
             # firewalla i anty-spoofingu działają przez to bez zmian.
@@ -297,6 +322,85 @@ class IncusDriver(HypervisorDriver):
             "state": self._state(name),
             "virtualization": "lxc",
         }
+
+    # --- izolacja od hosta ----------------------------------------------------
+
+    def _isolation_args(self) -> list[str]:
+        args = [
+            "-c", "security.privileged=false",
+            # Zagnieżdżone kontenery wymagają poluzowania AppArmora i dostępu
+            # do /proc i /sys hosta — klient ich nie potrzebuje.
+            "-c", "security.nesting=false",
+            # Fork bomb w kontenerze nie może wyczerpać procesów całego węzła.
+            "-c", f"limits.processes={self.settings.ct_max_processes}",
+        ]
+        if self.idmap_isolation_available():
+            # Osobny zakres UID/GID na kontener: root kontenera A nie ma nic
+            # wspólnego z plikami kontenera B, nawet po ucieczce z kontenera.
+            args += ["-c", "security.idmap.isolated=true"]
+        return args
+
+    def harden_existing(self) -> int:
+        """Kontenery utworzone przed utwardzeniem dostają limit procesów (działa
+        od razu) i wyłączone zagnieżdżanie (od następnego startu). Zakresu UID
+        nie zmieniamy pod działającym kontenerem — dostaje go przy reinstalacji."""
+        changed = 0
+        for instance in self._instances():
+            config = instance.get("config") or {}
+            if UUID_KEY not in config:
+                continue  # nie nasz kontener
+            updates = []
+            if "limits.processes" not in config:
+                updates.append(f"limits.processes={self.settings.ct_max_processes}")
+            if config.get("security.nesting", "false").lower() != "false":
+                updates.append("security.nesting=false")
+            if updates:
+                self._incus("config", "set", instance["name"], *updates)
+                changed += 1
+        return changed
+
+    def idmap_isolation_available(self) -> bool:
+        """Czy root ma dość podrzędnych UID/GID na osobny zakres dla każdego kontenera."""
+        if not self.subid_files:
+            return False
+        for path in self.subid_files:
+            try:
+                ranges = [
+                    int(parts[2]) for line in path.read_text().splitlines()
+                    if (parts := line.strip().split(":")) and len(parts) == 3 and parts[0] == "root"
+                ]
+            except (OSError, ValueError):
+                return False
+            if sum(ranges) < IDMAP_BLOCK * 64:
+                return False
+        return True
+
+    def security_issues(self, name: str) -> list[str]:
+        """Ustawienia kontenera (po złożeniu profili), które osłabiają izolację."""
+        instance = self._query(f"/1.0/instances/{name}") or {}
+        config = instance.get("expanded_config") or instance.get("config") or {}
+        devices = instance.get("expanded_devices") or instance.get("devices") or {}
+
+        issues = [
+            f"{key}={value}" for key, value in config.items()
+            if key in DANGEROUS_CONFIG and DANGEROUS_CONFIG[key](str(value))
+        ]
+        for dev_name, dev in devices.items():
+            kind = dev.get("type", "")
+            if kind in DANGEROUS_DEVICES:
+                issues.append(f"urządzenie {dev_name} ({kind})")
+            elif kind == "disk" and dev.get("path") != "/" and dev.get("source"):
+                issues.append(f"katalog hosta {dev.get('source')} zamontowany jako {dev_name}")
+        return issues
+
+    def _assert_isolated(self, name: str) -> None:
+        issues = self.security_issues(name)
+        if issues:
+            raise DriverError(
+                "Kontener nie zostanie uruchomiony — konfiguracja Incusa (profil default) "
+                "osłabia izolację od hosta: " + ", ".join(issues)
+                + ". Usuń te ustawienia z profilu: incus profile edit default."
+            )
 
     def _rollback(self, server_id: int, name: str, created: list[str]) -> None:
         if "network" in created:
@@ -358,6 +462,7 @@ class IncusDriver(HypervisorDriver):
         if interfaces is not None:
             self._incus("config", "set", name, f"cloud-init.network-config={interfaces}")
 
+        self._assert_isolated(name)
         progress("boot", 85)
         self._incus("start", name, timeout=120)
         return {"uuid": uuid, "state": self._state(name), "template": alias}
@@ -368,8 +473,9 @@ class IncusDriver(HypervisorDriver):
         # plików, więc działa też przy zatrzymanym kontenerze.
         for path in ("/etc/os-release", "/usr/lib/os-release"):
             try:
-                text = self._incus("file", "pull", f"{name}{path}", "-", timeout=30)
-            except DriverError:
+                # Plik z wnętrza kontenera — klient może podstawić dowolnie duży.
+                text = run_bounded(["incus", "file", "pull", f"{name}{path}", "-"], max_bytes=65536, timeout=30)
+            except CommandError:
                 continue
             if text.strip():
                 return GuestOs(**parse_os_release(text), source="os-release")
@@ -380,7 +486,12 @@ class IncusDriver(HypervisorDriver):
         if self._state(name) != "running":
             raise DriverError("Kontener musi działać, żeby zmienić hasło — uruchom go i spróbuj ponownie.")
         # Hasło idzie przez stdin, nie przez argumenty — nie widać go w `ps`.
-        self._incus("exec", name, "--", "chpasswd", input=f"root:{password}\n", timeout=60)
+        try:
+            # chpasswd to program z kontenera — jego wyjście ograniczamy.
+            run_bounded(["incus", "exec", name, "--", "chpasswd"], max_bytes=65536,
+                        input=f"root:{password}\n", timeout=60)
+        except CommandError as exc:
+            raise DriverError(f"Nie udało się zmienić hasła w kontenerze: {exc.stderr or exc}") from exc
         return {"uuid": uuid, "state": self._state(name)}
 
     def _current_interfaces(self, name: str) -> str | None:
@@ -517,8 +628,24 @@ class IncusDriver(HypervisorDriver):
             virtualization="lxc",
             libvirt_connected=connected,
             running_vms=running,
+            security=self._security_report() if connected else None,
             **metrics,
         )
+
+    def _security_report(self) -> dict[str, Any]:
+        """Stan izolacji węzła do pokazania w panelu."""
+        issues: dict[str, list[str]] = {}
+        for instance in self._instances():
+            found = self.security_issues(instance["name"])
+            if found:
+                issues[instance["name"]] = found
+        return {
+            "apparmor": apparmor_enabled(),
+            "idmap_isolated": self.idmap_isolation_available(),
+            "host_guard": self.settings.guard_host,
+            "max_processes": self.settings.ct_max_processes,
+            "instance_issues": issues,
+        }
 
 
 def _parse_gib(value: str) -> int | None:
