@@ -585,3 +585,5 @@ details.form-block[open] > summary { margin-bottom: 16px; }
 .os-inline .os-badge svg { width: 14px; height: 14px; }
 .os-title { display: flex; align-items: center; gap: 12px; }
 .os-title .os-badge { width: 34px; height: 34px; }
+.text-critical { color: var(--critical); font-weight: 600; }
+.text-warn { color: var(--warn); font-weight: 600; }

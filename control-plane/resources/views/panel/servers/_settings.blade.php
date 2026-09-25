@@ -123,6 +123,41 @@
         </dl>
     </div>
 
+    @can('manageTraffic', $server)
+        <div class="card" id="traffic-admin">
+            <h3 class="card-title"><x-icon name="network" :size="16"/> Transfer <span class="pill neutral">personel</span></h3>
+            <p class="muted" style="margin-top:0">
+                W tym miesiącu: <strong>{{ \App\Domain\Metrics\Traffic::human($traffic['used']) }}</strong>
+                z {{ \App\Domain\Metrics\Traffic::human($traffic['limit']) }}.
+                @if ($traffic['blocked'])
+                    <span class="pill critical">zablokowana za transfer</span>
+                @endif
+            </p>
+            <div class="grid grid-2">
+                <form method="POST" action="{{ route('panel.servers.traffic', $server) }}">
+                    @csrf
+                    <input type="hidden" name="action" value="limit">
+                    <div class="field">
+                        <label for="bw">Limit miesięczny (GB, 0 = bez limitu)</label>
+                        <input id="bw" name="bandwidth_gb" type="text" inputmode="numeric" value="{{ $server->bandwidth_gb }}">
+                        <div class="hint">Nadpisuje limit z pakietu dla tej maszyny.</div>
+                    </div>
+                    <button class="btn" type="submit">Zapisz limit</button>
+                </form>
+                <form method="POST" action="{{ route('panel.servers.traffic', $server) }}"
+                      onsubmit="return confirm('Wyzerować licznik transferu w tym miesiącu?')">
+                    @csrf
+                    <input type="hidden" name="action" value="reset">
+                    <div class="field">
+                        <label>Licznik bieżącego miesiąca</label>
+                        <p class="hint" style="margin-top:0">Zeruje zużycie; zablokowana za transfer maszyna zostanie odblokowana.</p>
+                    </div>
+                    <button class="btn" type="submit">Wyzeruj licznik</button>
+                </form>
+            </div>
+        </div>
+    @endcan
+
     @if ($user->can('destroy', $server) || $user->can('purge', $server))
         <div class="card danger-zone" id="delete">
             <h3 class="card-title" style="color:var(--critical)">Usuwanie maszyny</h3>

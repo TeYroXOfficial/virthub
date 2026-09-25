@@ -90,6 +90,30 @@ class ServerActionsController extends Controller
         return redirect()->route($route)->with('status', $message);
     }
 
+    /** Personel: limit transferu maszyny albo wyzerowanie licznika. */
+    public function traffic(Request $request, Server $server, \App\Domain\Metrics\Traffic $traffic): RedirectResponse
+    {
+        $this->authorize('manageTraffic', $server);
+
+        $validated = $request->validate([
+            'action' => ['required', Rule::in(['limit', 'reset'])],
+            'bandwidth_gb' => ['required_if:action,limit', 'nullable', 'integer', 'min:0', 'max:10000000'],
+        ]);
+
+        if ($validated['action'] === 'reset') {
+            $traffic->reset($server, $request->user());
+            $message = 'Licznik transferu wyzerowany.';
+        } else {
+            $old = $server->bandwidth_gb;
+            $server->forceFill(['bandwidth_gb' => (int) $validated['bandwidth_gb']])->save();
+            \App\Models\AuditLog::record('server.traffic_limit', $server, ['from' => $old, 'to' => $server->bandwidth_gb], $request->user());
+            $traffic->releaseEligible($server);
+            $message = 'Zapisano limit transferu.';
+        }
+
+        return redirect()->to(route('panel.servers.show', $server).'#traffic-admin')->with('status', $message);
+    }
+
     /** Odczyt systemu z wnętrza maszyny na żądanie (normalnie co kilka godzin). */
     public function detectOs(Server $server, \App\Domain\Provisioning\GuestOs $guestOs): RedirectResponse
     {

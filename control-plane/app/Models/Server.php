@@ -46,6 +46,7 @@ class Server extends Model
             'firewall_locked' => 'boolean',
             'boot_from_iso' => 'boolean',
             'guest_os_checked_at' => 'datetime',
+            'traffic_blocked_at' => 'datetime',
         ];
     }
 

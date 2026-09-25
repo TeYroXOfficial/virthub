@@ -73,7 +73,9 @@
                                 </span>
                                 <div class="hint">
                                     {{ $server->osLabel() ?? 'system nieznany' }} ·
+                                    @php $tu = app(\App\Domain\Metrics\Traffic::class)->usage($server); @endphp
                                     {{ $server->vcpu }} vCPU · {{ round($server->ram_mb / 1024, 1) }} GB · {{ $server->disk_gb }} GB
+                                    · transfer {{ \App\Domain\Metrics\Traffic::human($tu['used']) }}@if ($tu['percent'] !== null) <span class="{{ $tu['percent'] >= 100 ? 'text-critical' : ($tu['percent'] >= 80 ? 'text-warn' : '') }}">({{ str_replace('.', ',', $tu['percent']) }}%)</span>@endif
                                     · {{ $server->created_at->format('d.m.Y') }}@if ($server->label) · {{ $server->label }}@endif
                                 </div>
                             </td>
