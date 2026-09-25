@@ -466,6 +466,17 @@ chown virthub:libvirt ubuntu-24.04.qcow2
 Obrazu bazowego nie wolno usunąć ani nadpisać, dopóki istnieje choć jedna
 maszyna, która go używa — dyski klientów są cienkimi warstwami nad nim.
 
+### Transfer
+
+Panel liczy transfer każdej maszyny w miesiącu kalendarzowym z liczników
+karty sieciowej (co minutę, przy zbieraniu metryk). Jednostki dziesiętne:
+1 GB = 1000³ B. Do limitu z pakietu (`bandwidth_gb`, 0 = bez limitu) liczy
+się ruch w obie strony — `VIRTHUB_TRAFFIC_COUNTING=out` (albo `in`) w `.env`
+panelu zmienia to na jeden kierunek. Po przekroczeniu maszyna zostaje
+zawieszona; 1. dnia miesiąca, po zwiększeniu limitu albo wyzerowaniu
+licznika (strona maszyny → Ustawienia, personel) odblokowuje się sama.
+Zawieszenie za płatność nie jest przy tym zdejmowane.
+
 ### Izolacja maszyn od węzła
 
 - **Kontenery** są nieuprzywilejowane (`security.privileged=false`), bez

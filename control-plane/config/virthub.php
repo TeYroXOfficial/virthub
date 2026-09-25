@@ -92,4 +92,6 @@ return [
         'metrics_retention_days' => (int) env('VIRTHUB_METRICS_RETENTION_DAYS', 30),
     ],
 
+    // Co wlicza się do limitu transferu pakietu: total (obie strony), out, in.
+    'traffic_counting' => env('VIRTHUB_TRAFFIC_COUNTING', 'total'),
 ];

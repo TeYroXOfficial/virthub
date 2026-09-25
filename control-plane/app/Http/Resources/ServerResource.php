@@ -50,6 +50,8 @@ class ServerResource extends JsonResource
                 'checked_at' => $this->guest_os_checked_at,
             ],
             'cpu_model' => $this->hypervisor?->cpuModel(),
+            // Transfer w bieżącym miesiącu, w bajtach (1 GB = 1000³ B).
+            'traffic' => app(\App\Domain\Metrics\Traffic::class)->usage($this->resource),
 
             'ip_addresses' => $this->whenLoaded('ipAddresses', fn () => $this->ipAddresses
                 ->map(fn ($ip) => [

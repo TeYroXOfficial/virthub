@@ -60,6 +60,12 @@ class CollectServerMetrics extends Command
             }
         );
 
+        // Nowy miesiąc, zwiększony limit, wyzerowany licznik — odblokowanie.
+        $released = app(\App\Domain\Metrics\Traffic::class)->releaseEligible();
+        if ($released > 0) {
+            $this->info("Odblokowano {$released} maszyn po limicie transferu.");
+        }
+
         $this->info("Zapisano {$collected} próbek.");
 
         return self::SUCCESS;
@@ -99,5 +105,17 @@ class CollectServerMetrics extends Command
         ]);
 
         $server->forceFill(['last_synced_at' => $now])->save();
+
+        // Liczniki są narastające — przyrost od poprzedniej próbki, nawet
+        // sprzed przerwy, to rzeczywisty ruch (w przeciwieństwie do szybkości).
+        $traffic = app(\App\Domain\Metrics\Traffic::class);
+        $traffic->record(
+            $server,
+            $previous?->only(['net_rx_bytes', 'net_tx_bytes']),
+            $stats,
+        );
+        if ($traffic->enforce($server)) {
+            $this->warn("VPS {$server->id}: przekroczony limit transferu — maszyna zablokowana.");
+        }
     }
 }

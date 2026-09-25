@@ -58,6 +58,7 @@ class PanelController extends Controller
             'isos' => $server->isContainer()
                 ? collect()
                 : app(\App\Domain\Provisioning\IsoLibrary::class)->availableFor($server->hypervisor_id, $request->user()->isStaff()),
+            'traffic' => app(\App\Domain\Metrics\Traffic::class)->usage($server),
             // Hasło startowe pokazujemy raz — po wyświetleniu znika z bazy.
             'rootPassword' => $server->consumeRootPassword(),
         ]);

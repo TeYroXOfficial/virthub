@@ -165,7 +165,26 @@
                     </dd>
                     <dt>Pamięć</dt><dd class="num">{{ round($server->ram_mb / 1024, 1) }} GB</dd>
                     <dt>Dysk</dt><dd class="num">{{ $server->disk_gb }} GB</dd>
-                    <dt>Transfer</dt><dd class="num">{{ $server->bandwidth_gb }} GB / mies.</dd>
+                    <dt>Transfer</dt>
+                    <dd id="traffic">
+                        @php
+                            $T = \App\Domain\Metrics\Traffic::class;
+                            $pct = $traffic['percent'];
+                        @endphp
+                        <span class="num">{{ $T::human($traffic['used']) }}</span>
+                        <span class="muted">z {{ $traffic['limit'] ? $T::human($traffic['limit']) : 'bez limitu' }}</span>
+                        @if ($pct !== null)
+                            <span class="num {{ $pct >= 100 ? 'text-critical' : ($pct >= 80 ? 'text-warn' : '') }}">· {{ str_replace('.', ',', $pct) }}%</span>
+                            <div class="meter {{ $pct >= 80 ? 'hot' : '' }}" style="max-width:240px"><i style="width: {{ $pct }}%"></i></div>
+                        @endif
+                        <div class="hint">
+                            ↓ {{ $T::human($traffic['rx']) }} pobrane · ↑ {{ $T::human($traffic['tx']) }} wysłane
+                            @if ($traffic['counting'] !== 'total')
+                                · do limitu liczy się tylko ruch {{ $traffic['counting'] === 'out' ? 'wychodzący' : 'przychodzący' }}
+                            @endif
+                            <br>Licznik zeruje się {{ \Carbon\Carbon::parse($traffic['resets_at'])->format('d.m.Y') }}.
+                        </div>
+                    </dd>
                     <dt>Szablon</dt><dd>{{ $server->template?->name ?? '—' }}</dd>
                     <dt>Pakiet</dt><dd>{{ $server->package?->name ?? '—' }}</dd>
                     <dt>Utworzona</dt><dd>{{ $server->created_at->format('d.m.Y H:i') }}</dd>

@@ -85,6 +85,12 @@ class ServerPolicy
         return $this->allowed($user, $server, 'servers.delete', destructive: true);
     }
 
+    /** Limit i licznik transferu maszyny — personel obsługujący maszyny. */
+    public function manageTraffic(User $user, Server $server): bool
+    {
+        return $this->staffAccess($user) && ! $user->isSuspended();
+    }
+
     /** Usunięcie tylko z panelu (bez węzła) — wyłącznie administrator. */
     public function purge(User $user, Server $server): bool
     {
