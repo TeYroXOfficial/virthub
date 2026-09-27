@@ -331,6 +331,10 @@ class HostHealth(BaseModel):
     disk_gb_free: int
     running_vms: int
     cpu_model: str | None = Field(default=None, description="Model procesora hosta z /proc/cpuinfo")
+    host_networks: list[dict] | None = Field(
+        default=None,
+        description="Sieci węzła [{interface, network}] — panel nie pozwoli na pulę NAT nachodzącą na nie",
+    )
     public_ipv4: str | None = Field(
         default=None,
         description="Adres, z którego węzeł wychodzi w świat — pod nim klienci łączą się z portami NAT",

@@ -462,4 +462,45 @@ class NetworkPoolsTest extends TestCase
             ->assertStatus(503)
             ->assertJsonPath('message', fn ($m) => str_contains($m, 'adres'));
     }
+
+    public function test_pula_nat_nie_moze_nachodzic_na_siec_wezla(): void
+    {
+        $node = Hypervisor::factory()->create([
+            'last_health' => ['host_networks' => [['interface' => 'eth0', 'network' => '192.168.0.0/24']]],
+        ]);
+
+        try {
+            $this->createPool([
+                'hypervisor_id' => $node->id, 'type' => 'nat',
+                'cidr' => '192.168.0.0/24', 'gateway' => '192.168.0.1',
+            ]);
+            $this->fail('Pula nachodząca na LAN węzła została przyjęta');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('eth0: 192.168.0.0/24', $e->errors()['cidr'][0]);
+        }
+
+        $pool = $this->createPool([
+            'hypervisor_id' => $node->id, 'type' => 'nat',
+            'cidr' => '10.77.0.0/24', 'gateway' => '10.77.0.1',
+        ]);
+        $this->assertSame([], $pool->hostNetworkConflicts());
+    }
+
+    public function test_istniejaca_pula_z_konfliktem_ma_ostrzezenie(): void
+    {
+        $node = Hypervisor::factory()->create();
+        $pool = $this->createPool([
+            'hypervisor_id' => $node->id, 'type' => 'nat',
+            'cidr' => '192.168.0.0/24', 'gateway' => '192.168.0.1',
+        ]);
+        // Agent zgłosił sieci węzła dopiero po utworzeniu puli.
+        $node->forceFill(['last_health' => ['host_networks' => [['interface' => 'eth0', 'network' => '192.168.0.0/16']]]])->save();
+
+        $this->assertSame([['node' => $node->name, 'interface' => 'eth0', 'network' => '192.168.0.0/16']], $pool->fresh()->hostNetworkConflicts());
+
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_ADMIN]))
+            ->get(route('panel.admin.ip-pools'))
+            ->assertOk()
+            ->assertSee('SSH przez porty NAT nie zadziała');
+    }
 }

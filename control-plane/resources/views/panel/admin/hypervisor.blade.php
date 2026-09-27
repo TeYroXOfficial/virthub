@@ -300,6 +300,9 @@
                         <span class="pill neutral">{{ __('IPv:version:nat', ['version' => $pool->version, 'nat' => $pool->isNat() ? __(' · NAT') : '']) }}</span>
                         <span class="muted">{{ $pool->hypervisor_id ? __('węzła') : __('grupy') }}
                             @if ($pool->version === 4) {{ __('· :assigned_count / :addresses_count zajętych', ['assigned_count' => $pool->assigned_count, 'addresses_count' => $pool->addresses_count]) }} @endif</span>
+                        @foreach ($pool->hostNetworkConflicts() as $c)
+                            <div class="hint" style="color:var(--critical)">{{ __('Nachodzi na sieć węzła :node (:interface: :network) — SSH przez porty NAT nie zadziała. Utwórz pulę z inną podsiecią, np. 10.77.0.0/24.', $c) }}</div>
+                        @endforeach
                     </p>
                 @empty
                     <p class="muted">{{ __('Brak pul — węzeł nie dostanie maszyn, dopóki nie przypiszesz mu adresów.') }}</p>
