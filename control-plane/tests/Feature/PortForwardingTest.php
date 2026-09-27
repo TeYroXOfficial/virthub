@@ -177,4 +177,40 @@ class PortForwardingTest extends TestCase
 
         $this->assertDatabaseHas('server_jobs', ['server_id' => $this->server->id, 'action' => 'network']);
     }
+
+    public function test_polaczenie_idzie_na_publiczny_adres_wezla_a_nie_nazwe_hosta(): void
+    {
+        $node = $this->server->hypervisor;
+        $node->forceFill([
+            'hostname' => 'node1',
+            'agent_url' => 'https://127.0.0.1:8443',
+            'last_health' => ['public_ipv4' => '203.0.113.10'],
+        ])->save();
+
+        $this->actingAs($this->owner)->get(route('panel.servers.show', $this->server))
+            ->assertSee('ssh -p 10050 root@203.0.113.10', false)
+            ->assertSee('203.0.113.10:10050')
+            ->assertDontSee('root@node1', false);
+
+        // Ręcznie ustawiony adres węzła ma pierwszeństwo, adres wyjścia puli — jeszcze większe.
+        $node->update(['public_address' => 'node1.example.com']);
+        $this->assertSame('node1.example.com', $this->ip()->natEndpoint());
+
+        $this->ip()->pool->update(['nat_public_address' => '198.51.100.7']);
+        $this->assertSame('198.51.100.7', $this->ip()->natEndpoint());
+    }
+
+    public function test_adres_wezla_bez_zgloszenia_agenta(): void
+    {
+        $node = new Hypervisor(['hostname' => 'node1', 'agent_url' => 'https://node1.example.com:8443']);
+        $this->assertSame('node1.example.com', $node->publicAddress(), 'host z adresu agenta');
+
+        $node->last_health = ['public_ipv4' => '10.0.0.5'];
+        $node->agent_url = 'https://10.0.0.5:8443';
+        $this->assertSame('10.0.0.5', $node->publicAddress(), 'prywatny adres lepszy niż sama nazwa hosta');
+
+        $node->last_health = null;
+        $node->agent_url = null;
+        $this->assertSame('node1', $node->publicAddress());
+    }
 }

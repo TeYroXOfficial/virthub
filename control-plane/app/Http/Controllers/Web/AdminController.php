@@ -145,6 +145,8 @@ class AdminController extends Controller
             'max_servers' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'notes' => ['nullable', 'string', 'max:5000'],
             'cpu_model' => ['nullable', 'string', 'max:120'],
+            // Adres IP albo nazwa domenowa — trafia do poleceń „ssh -p … root@adres".
+            'public_address' => ['nullable', 'string', 'max:255', 'regex:/^(?:[A-Za-z0-9.-]+|[0-9A-Fa-f:]+)$/'],
             'cpu_cores_total' => ['required', 'integer', 'min:1'],
             'ram_mb_total' => ['required', 'integer', 'min:1024'],
             'disk_gb_total' => ['required', 'integer', 'min:10'],
@@ -168,6 +170,7 @@ class AdminController extends Controller
             ...$validated,
             'max_servers' => $validated['max_servers'] ?? null,
             'cpu_model' => isset($validated['cpu_model']) ? trim($validated['cpu_model']) ?: null : null,
+            'public_address' => ($validated['public_address'] ?? null) ?: null,
             'accepts_new_servers' => $request->boolean('accepts_new_servers'),
         ]);
 

@@ -331,6 +331,10 @@ class HostHealth(BaseModel):
     disk_gb_free: int
     running_vms: int
     cpu_model: str | None = Field(default=None, description="Model procesora hosta z /proc/cpuinfo")
+    public_ipv4: str | None = Field(
+        default=None,
+        description="Adres, z którego węzeł wychodzi w świat — pod nim klienci łączą się z portami NAT",
+    )
     build: str | None = Field(default=None, description="Commit kodu agenta (plik VERSION)")
     firewall_stateful: bool | None = Field(
         default=None, description="Czy zapora śledzi połączenia (moduł nf_conntrack_bridge)",

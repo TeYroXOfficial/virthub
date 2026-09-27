@@ -20,6 +20,9 @@ WorkingDirectory=/opt/virthub-agent
 # że brak sysctl nie blokuje startu. IPv6 celowo nie: przekazywanie wyłącza
 # SLAAC na hoście, więc włącza je administrator (docs/wdrozenie.md).
 ExecStartPre=-+/usr/sbin/sysctl -q -w net.ipv4.ip_forward=1
+# ufw i Docker ustawiają FORWARD na DROP — bez tego SSH przez port NAT nie
+# dociera do maszyny (konsola działa, bo idzie przez agenta).
+ExecStartPre=-+/bin/sh /opt/virthub-agent/scripts/nat-forward.sh
 ExecStart=/opt/virthub-agent/.venv/bin/uvicorn agent.main:app --host 127.0.0.1 --port 8899
 Restart=always
 RestartSec=5

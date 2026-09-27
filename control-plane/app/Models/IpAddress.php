@@ -68,6 +68,16 @@ class IpAddress extends Model
     }
 
     /**
+     * Adres, pod którym z zewnątrz widać porty tego adresu za NAT-em:
+     * adres wyjścia puli, a bez niego — publiczny adres węzła maszyny.
+     */
+    public function natEndpoint(): string
+    {
+        return $this->pool?->nat_public_address
+            ?: ($this->server?->hypervisor?->publicAddress() ?? __('adres-węzła'));
+    }
+
+    /**
      * Blok portów adresu za NAT-em i porty, pod którymi z zewnątrz widać
      * SSH (22) i RDP (3389) — patrz PortForwarding.
      *

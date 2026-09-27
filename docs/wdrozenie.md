@@ -678,10 +678,21 @@ numer. Po reinstalacji na inny system usługi stałe przeliczają się same.
 Bloki pul NAT, które mogą trafić na ten sam węzeł, nie mogą się pokrywać — panel
 to sprawdza. Pakiet korzysta z pul NAT, gdy ma `"network_type": "nat"`.
 
+Klienci łączą się z portami pod adresem wyjścia puli (`nat_public_address`),
+a bez niego — pod publicznym adresem węzła: wykrytym przez agenta (adres trasy
+domyślnej) albo ustawionym ręcznie w Ustawieniach węzła → „Adres publiczny”.
+Ustaw go, gdy węzeł stoi za NAT-em dostawcy albo ma kilka adresów.
+
 Uwagi dla węzła:
 
-- jeśli host ma własny firewall z domyślnym `drop` w łańcuchu `forward`
-  (ufw, firewalld), przepuść ruch z i do mostka `vhnat0`;
+- ufw i Docker ustawiają politykę łańcucha iptables `FORWARD` na `DROP` —
+  wtedy konsola działa, ale SSH przez port NAT i internet w maszynie nie.
+  Agent przy każdym starcie dodaje na początek `FORWARD` dwie reguły dla mostka
+  `vhnat0` (`scripts/nat-forward.sh`: ruch z maszyn oraz odpowiedzi i ruch
+  z przekierowanych portów do maszyn). firewalld z backendem nftables trzeba
+  skonfigurować ręcznie (np. dodać `vhnat0` do strefy `trusted`);
+- port z bloku musi być otwarty także w firewallu dostawcy (panel chmury,
+  security group), jeśli węzeł za takim stoi;
 - NAT IPv6 włącza `net.ipv6.conf.all.forwarding`, co wyłącza przyjmowanie
   ogłoszeń routera — host konfigurowany przez SLAAC potrzebuje `accept_ra=2`
   na interfejsie wyjściowym;

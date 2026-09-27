@@ -26,7 +26,7 @@ from typing import Any
 
 from .cloudinit import CloudInitBuilder
 from .console import ConsoleTarget, TerminalTarget, VncTarget
-from .guest_os import cpu_model, from_guest_agent, parse_os_release
+from .guest_os import cpu_model, from_guest_agent, outbound_ipv4, parse_os_release
 from .isos import IsoLibrary
 from .jobs import progress
 from .config import Settings
@@ -155,6 +155,7 @@ class HypervisorDriver(ABC):
             "hostname": socket.gethostname(),
             "cpu_cores_total": psutil.cpu_count(logical=True) or 0,
             "cpu_model": cpu_model(),
+            "public_ipv4": outbound_ipv4(),
             "cpu_load_1m": round(load1, 2),
             "ram_mb_total": mem.total // (1024**2),
             "ram_mb_free": mem.available // (1024**2),
