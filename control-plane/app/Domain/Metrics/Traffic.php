@@ -23,6 +23,9 @@ class Traffic
 {
     public const GB = 1_000_000_000;
 
+    /** Powód zawieszenia za transfer (klucz tłumaczenia, argumenty sprintf). */
+    private const BLOCK_REASON = 'Przekroczono limit transferu: %s z %s. Maszyna zostanie odblokowana %s albo po zwiększeniu limitu.';
+
     public function __construct(private readonly ServerProvisioner $provisioner) {}
 
     public static function periodStart(?\DateTimeInterface $at = null): CarbonImmutable
@@ -116,7 +119,7 @@ class Traffic
 
         $server->forceFill(['traffic_blocked_at' => now()])->save();
         $this->provisioner->suspend($server, sprintf(
-            'Przekroczono limit transferu: %s z %s. Maszyna zostanie odblokowana %s albo po zwiększeniu limitu.',
+            __(self::BLOCK_REASON),
             self::human($usage['used']),
             self::human($usage['limit']),
             CarbonImmutable::parse($usage['resets_at'])->format('d.m.Y'),
@@ -145,13 +148,26 @@ class Traffic
 
             $server->forceFill(['traffic_blocked_at' => null])->save();
             // Zawieszenie za płatność ma pierwszeństwo — zdejmujemy tylko nasze.
-            if ($server->isSuspended() && str_starts_with((string) $server->suspension_reason, 'Przekroczono limit transferu')) {
+            if ($server->isSuspended() && self::isTrafficSuspension((string) $server->suspension_reason)) {
                 $this->provisioner->unsuspend($server);
             }
             $released++;
         }
 
         return $released;
+    }
+
+    /** Powód zawieszenia zapisany przez enforce() — w dowolnym języku panelu. */
+    private static function isTrafficSuspension(string $reason): bool
+    {
+        foreach (array_keys(config('virthub.locales')) as $locale) {
+            $prefix = strstr(__(self::BLOCK_REASON, [], $locale), ':', true);
+            if ($prefix !== false && str_starts_with($reason, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Wyzerowanie licznika bieżącego okresu przez administratora. */

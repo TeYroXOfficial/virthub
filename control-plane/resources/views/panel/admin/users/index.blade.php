@@ -1,52 +1,52 @@
 @extends('layouts.panel')
 
-@section('title', 'Użytkownicy')
+@section('title', __('Użytkownicy'))
 
 @php
-    $roleLabel = ['admin' => 'administrator', 'support' => 'wsparcie', 'customer' => 'klient'];
+    $roleLabel = ['admin' => __('administrator'), 'support' => __('wsparcie'), 'customer' => __('klient')];
     $roleTone = ['admin' => 'critical', 'support' => 'info', 'customer' => 'neutral'];
 @endphp
 
 @section('content')
     <div class="page-header">
         <div>
-            <h1>Użytkownicy</h1>
-            <p class="lede">Konta klientów i personelu, ich uprawnienia, limity i blokady.</p>
+            <h1>{{ __('Użytkownicy') }}</h1>
+            <p class="lede">{{ __('Konta klientów i personelu, ich uprawnienia, limity i blokady.') }}</p>
         </div>
         <div class="actions">
-            <a class="btn btn-primary" href="{{ route('panel.admin.users.create') }}"><x-icon name="plus" :size="16"/> Nowe konto</a>
+            <a class="btn btn-primary" href="{{ route('panel.admin.users.create') }}"><x-icon name="plus" :size="16"/> {{ __('Nowe konto') }}</a>
         </div>
     </div>
 
     <form method="GET" class="card" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end">
         <div class="field" style="flex:1; min-width:220px; margin:0">
-            <label for="q">Szukaj</label>
-            <input id="q" name="q" type="text" value="{{ request('q') }}" placeholder="e-mail albo nazwa">
+            <label for="q">{{ __('Szukaj') }}</label>
+            <input id="q" name="q" type="text" value="{{ request('q') }}" placeholder="{{ __('e-mail albo nazwa') }}">
         </div>
         <div class="field" style="margin:0">
-            <label for="role">Rola</label>
+            <label for="role">{{ __('Rola') }}</label>
             <select id="role" name="role">
-                <option value="">wszystkie</option>
+                <option value="">{{ __('wszystkie') }}</option>
                 @foreach ($roleLabel as $value => $label)
                     <option value="{{ $value }}" @selected(request('role') === $value)>{{ $label }}</option>
                 @endforeach
             </select>
         </div>
         <div class="field" style="margin:0">
-            <label for="status">Stan</label>
+            <label for="status">{{ __('Stan') }}</label>
             <select id="status" name="status">
-                <option value="">wszystkie</option>
-                <option value="suspended" @selected(request('status') === 'suspended')>zablokowane</option>
+                <option value="">{{ __('wszystkie') }}</option>
+                <option value="suspended" @selected(request('status') === 'suspended')>{{ __('zablokowane') }}</option>
             </select>
         </div>
-        <button class="btn" type="submit">Filtruj</button>
+        <button class="btn" type="submit">{{ __('Filtruj') }}</button>
     </form>
 
     <div class="card" style="padding:0">
         <div class="table-wrap">
             <table>
                 <thead>
-                <tr><th>Użytkownik</th><th>Rola</th><th>Maszyny</th><th>Uprawnienia</th><th>Ostatnie logowanie</th><th></th></tr>
+                <tr><th>{{ __('Użytkownik') }}</th><th>{{ __('Rola') }}</th><th>{{ __('Maszyny') }}</th><th>{{ __('Uprawnienia') }}</th><th>{{ __('Ostatnie logowanie') }}</th><th></th></tr>
                 </thead>
                 <tbody>
                 @forelse ($users as $u)
@@ -57,30 +57,30 @@
                         </td>
                         <td>
                             <span class="pill {{ $roleTone[$u->role] ?? 'neutral' }}">{{ $roleLabel[$u->role] ?? $u->role }}</span>
-                            @if ($u->isSuspended()) <span class="pill critical plain">zablokowane</span> @endif
+                            @if ($u->isSuspended()) <span class="pill critical plain">{{ __('zablokowane') }}</span> @endif
                         </td>
                         <td class="num">{{ $u->servers_count }} / {{ $u->isStaff() && $u->max_servers === null ? '∞' : $u->serverLimit() }}</td>
                         <td class="muted">
                             @if ($u->isAdmin())
-                                wszystkie
+                                {{ __('wszystkie') }}
                             @elseif ($u->permissions === null)
-                                domyślne roli
+                                {{ __('domyślne roli') }}
                             @else
-                                własne ({{ count($u->effectivePermissions()) }})
+                                {{ __('własne (:effectivepermissions)', ['effectivepermissions' => count($u->effectivePermissions())]) }}
                             @endif
                             @if ($u->allowed_package_ids !== null)
-                                <div class="hint">pakiety: {{ count($u->allowed_package_ids) }}</div>
+                                <div class="hint">{{ __('pakiety: :allowed_package_ids', ['allowed_package_ids' => count($u->allowed_package_ids)]) }}</div>
                             @endif
                         </td>
-                        <td class="muted">{{ $u->last_login_at?->diffForHumans() ?? 'nigdy' }}</td>
+                        <td class="muted">{{ $u->last_login_at?->diffForHumans() ?? __('nigdy') }}</td>
                         <td style="text-align:right">
                             @if ($manager->canManage(auth()->user(), $u))
-                                <a class="btn btn-sm" href="{{ route('panel.admin.users.edit', $u) }}">Edytuj</a>
+                                <a class="btn btn-sm" href="{{ route('panel.admin.users.edit', $u) }}">{{ __('Edytuj') }}</a>
                             @endif
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="muted">Brak użytkowników spełniających kryteria.</td></tr>
+                    <tr><td colspan="6" class="muted">{{ __('Brak użytkowników spełniających kryteria.') }}</td></tr>
                 @endforelse
                 </tbody>
             </table>

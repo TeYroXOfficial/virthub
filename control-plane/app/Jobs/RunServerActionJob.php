@@ -45,12 +45,12 @@ class RunServerActionJob implements ShouldQueue
             // zostać z rekordem, którego nie da się skasować.
             if ($job->action === 'delete') {
                 app(\App\Domain\Provisioning\ServerCleanup::class)->finalise($server);
-                $job->markDone(['note' => 'Maszyna nie istniała na hypervisorze.']);
+                $job->markDone(['note' => __('Maszyna nie istniała na hypervisorze.')]);
 
                 return;
             }
 
-            $job->markFailed('Maszyna nie jest przypisana do działającego hypervisora.');
+            $job->markFailed(__('Maszyna nie jest przypisana do działającego hypervisora.'));
 
             return;
         }

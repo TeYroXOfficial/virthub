@@ -79,8 +79,8 @@ class IpPoolManager
     {
         if ($pool->addresses()->whereNotNull('server_id')->exists()) {
             throw ValidationException::withMessages([
-                'pool' => "Z puli {$pool->name} korzystają maszyny. Zwolnij adresy albo usuń maszyny, "
-                    .'zanim usuniesz pulę.',
+                'pool' => __('Z puli :name korzystają maszyny. Zwolnij adresy albo usuń maszyny, ', ['name' => $pool->name])
+                    .__('zanim usuniesz pulę.'),
             ]);
         }
 
@@ -103,14 +103,14 @@ class IpPoolManager
         try {
             $cidr = IpMath::normalizeCidr($data['cidr']);
         } catch (\InvalidArgumentException) {
-            $this->fail('cidr', 'Podaj podsieć w notacji CIDR, np. 203.0.113.0/24 albo 2001:db8::/64.');
+            $this->fail('cidr', __('Podaj podsieć w notacji CIDR, np. 203.0.113.0/24 albo 2001:db8::/64.'));
         }
 
         $version = IpMath::parseCidr($cidr)['version'];
         $maxPrefix = $version === 4 ? 32 : 128;
 
         if ((int) $data['prefix'] > $maxPrefix) {
-            $this->fail('prefix', "Maska dla maszyny w IPv{$version} może mieć najwyżej /{$maxPrefix}.");
+            $this->fail('prefix', __('Maska dla maszyny w IPv:version może mieć najwyżej /:maxprefix.', ['version' => $version, 'maxprefix' => $maxPrefix]));
         }
 
         $gateway = $this->address($data['gateway'], $version, 'gateway', 'Brama');
@@ -118,13 +118,13 @@ class IpPoolManager
         if ($type === IpPool::TYPE_NAT) {
             if (! $this->isPrivate($cidr)) {
                 $this->fail('cidr', $version === 4
-                    ? 'Za NAT-em mogą stać tylko sieci prywatne: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 albo 100.64.0.0/10.'
-                    : 'Za NAT-em IPv6 może stać tylko sieć ULA (fc00::/7), np. fd00:10::/64.');
+                    ? __('Za NAT-em mogą stać tylko sieci prywatne: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 albo 100.64.0.0/10.')
+                    : __('Za NAT-em IPv6 może stać tylko sieć ULA (fc00::/7), np. fd00:10::/64.'));
             }
 
             // Brama sieci NAT to adres węzła na mostku — musi leżeć w sieci.
             if (! IpMath::contains($cidr, $gateway)) {
-                $this->fail('gateway', "Brama puli NAT musi leżeć w podsieci {$cidr} — to adres węzła na mostku NAT.");
+                $this->fail('gateway', __('Brama puli NAT musi leżeć w podsieci :cidr — to adres węzła na mostku NAT.', ['cidr' => $cidr]));
             }
         }
 
@@ -132,16 +132,16 @@ class IpPoolManager
         $rangeTo = $this->rangeBound($data['range_to'] ?? null, $cidr, $version, 'range_to');
 
         if ($rangeFrom && $rangeTo && IpMath::compare($rangeFrom, $rangeTo) > 0) {
-            $this->fail('range_to', 'Koniec zakresu nie może być przed jego początkiem.');
+            $this->fail('range_to', __('Koniec zakresu nie może być przed jego początkiem.'));
         }
 
         if ($version === 4 && $rangeFrom && $rangeTo
             && IpMath::offset($rangeFrom, $rangeTo) >= 65536) {
-            $this->fail('range_to', 'Pula IPv4 może liczyć najwyżej 65 536 adresów — podziel ją na mniejsze.');
+            $this->fail('range_to', __('Pula IPv4 może liczyć najwyżej 65 536 adresów — podziel ją na mniejsze.'));
         }
 
         if ($version === 4 && ! $rangeFrom && ! $rangeTo && IpMath::size($cidr) > 65536) {
-            $this->fail('cidr', 'Pula IPv4 może liczyć najwyżej 65 536 adresów (/16). Zawęź zakres.');
+            $this->fail('cidr', __('Pula IPv4 może liczyć najwyżej 65 536 adresów (/16). Zawęź zakres.'));
         }
 
         $nat = $type === IpPool::TYPE_NAT;
@@ -149,12 +149,12 @@ class IpPoolManager
         $portsPerServer = $nat && $version === 4 ? ($data['nat_ports_per_server'] ?? null) : null;
 
         if (($portStart === null) !== ($portsPerServer === null)) {
-            $this->fail('nat_port_start', 'Podaj pierwszy port i liczbę portów na maszynę — albo zostaw oba puste.');
+            $this->fail('nat_port_start', __('Podaj pierwszy port i liczbę portów na maszynę — albo zostaw oba puste.'));
         }
 
         $publicAddress = null;
         if ($nat && ! empty($data['nat_public_address'])) {
-            $publicAddress = $this->address($data['nat_public_address'], $version, 'nat_public_address', 'Adres wyjścia');
+            $publicAddress = $this->address($data['nat_public_address'], $version, 'nat_public_address', __('Adres wyjścia'));
         }
 
         return [
@@ -180,8 +180,8 @@ class IpPoolManager
     {
         if ($pool->isNat() && $pool->nat_port_start && $pool->natPortSpan() === null) {
             $this->fail('nat_ports_per_server', sprintf(
-                'Bloki portów nie mieszczą się poniżej 65535: %d adresów × %d portów od portu %d. '
-                .'Zmniejsz liczbę portów na maszynę albo zawęź zakres adresów.',
+                __('Bloki portów nie mieszczą się poniżej 65535: %d adresów × %d portów od portu %d. ')
+                .__('Zmniejsz liczbę portów na maszynę albo zawęź zakres adresów.'),
                 IpMath::offset($pool->firstAssignable(), $pool->lastAssignable()) + 1,
                 $pool->nat_ports_per_server,
                 $pool->nat_port_start,
@@ -196,7 +196,7 @@ class IpPoolManager
             // Publiczne adresy są unikalne globalnie — nakładająca się pula
             // publiczna to prawie na pewno pomyłka w CIDR. Sieci NAT mogą się
             // powtarzać, ale nie na tym samym węźle (jeden mostek NAT).
-            $this->fail('cidr', "Podsieć nachodzi na pulę {$other->name} ({$other->cidr}, {$other->scopeLabel()}).");
+            $this->fail('cidr', __('Podsieć nachodzi na pulę :name (:cidr, :scopelabel).', ['name' => $other->name, 'cidr' => $other->cidr, 'scopelabel' => $other->scopeLabel()]));
         }
 
         $span = $pool->natPortSpan();
@@ -210,7 +210,7 @@ class IpPoolManager
 
             if ($otherSpan && $span['from'] <= $otherSpan['to'] && $otherSpan['from'] <= $span['to']) {
                 $this->fail('nat_port_start', sprintf(
-                    'Porty %d–%d nachodzą na porty puli %s (%d–%d), która działa na tym samym węźle.',
+                    __('Porty %d–%d nachodzą na porty puli %s (%d–%d), która działa na tym samym węźle.'),
                     $span['from'], $span['to'], $other->name, $otherSpan['from'], $otherSpan['to'],
                 ));
             }
@@ -267,7 +267,7 @@ class IpPoolManager
     private function address(string $value, int $version, string $field, string $label): string
     {
         if (IpMath::version($value) !== $version) {
-            $this->fail($field, "{$label} musi być adresem IPv{$version}, tak jak podsieć puli.");
+            $this->fail($field, __(':label musi być adresem IPv:version, tak jak podsieć puli.', ['label' => $label, 'version' => $version]));
         }
 
         return IpMath::normalize($value);
@@ -282,7 +282,7 @@ class IpPoolManager
         $address = $this->address($value, $version, $field, 'Granica zakresu');
 
         if (! IpMath::contains($cidr, $address)) {
-            $this->fail($field, "Adres {$address} leży poza podsiecią {$cidr}.");
+            $this->fail($field, __('Adres :address leży poza podsiecią :cidr.', ['address' => $address, 'cidr' => $cidr]));
         }
 
         return $address;
@@ -299,7 +299,7 @@ class IpPoolManager
         $list = array_values(array_filter(array_map('trim', $list), fn ($ns) => $ns !== ''));
 
         if (count($list) > 4) {
-            $this->fail('nameservers', 'Podaj najwyżej 4 serwery DNS.');
+            $this->fail('nameservers', __('Podaj najwyżej 4 serwery DNS.'));
         }
 
         foreach ($list as $ns) {

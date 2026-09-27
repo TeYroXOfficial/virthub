@@ -17,8 +17,8 @@ enum Virtualization: string
     public function label(): string
     {
         return match ($this) {
-            self::Kvm => 'Maszyna wirtualna (KVM)',
-            self::Lxc => 'Kontener (LXC)',
+            self::Kvm => __('Maszyna wirtualna (KVM)'),
+            self::Lxc => __('Kontener (LXC)'),
         };
     }
 
@@ -37,10 +37,10 @@ enum Virtualization: string
     public function description(): string
     {
         return match ($this) {
-            self::Kvm => 'Pełna izolacja i własne jądro systemu. Możesz ładować moduły jądra, '
-                .'uruchamiać Dockera i dowolny system.',
-            self::Lxc => 'Lżejszy i szybszy start, współdzielone jądro hosta. Bez własnych modułów '
-                .'jądra; Docker w kontenerze nie jest wspierany.',
+            self::Kvm => __('Pełna izolacja i własne jądro systemu. Możesz ładować moduły jądra, ')
+                .__('uruchamiać Dockera i dowolny system.'),
+            self::Lxc => __('Lżejszy i szybszy start, współdzielone jądro hosta. Bez własnych modułów ')
+                .__('jądra; Docker w kontenerze nie jest wspierany.'),
         };
     }
 }

@@ -94,4 +94,7 @@ return [
 
     // Co wlicza się do limitu transferu pakietu: total (obie strony), out, in.
     'traffic_counting' => env('VIRTHUB_TRAFFIC_COUNTING', 'total'),
+    // Języki panelu. Teksty źródłowe są po polsku; angielskie w lang/en.json.
+    'locales' => ['pl' => 'Polski', 'en' => 'English'],
+    'default_locale' => env('VIRTHUB_LOCALE', 'pl'),
 ];

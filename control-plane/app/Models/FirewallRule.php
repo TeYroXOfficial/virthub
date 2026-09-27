@@ -65,7 +65,7 @@ class FirewallRule extends Model
     public function describe(): string
     {
         $protocol = match ($this->protocol) {
-            'any' => 'cały ruch',
+            'any' => __('cały ruch'),
             'icmp' => 'ICMP (ping)',
             default => strtoupper($this->protocol),
         };
@@ -73,17 +73,17 @@ class FirewallRule extends Model
         $ports = match (true) {
             ! in_array($this->protocol, ['tcp', 'udp'], true) => null,
             $this->port_from && $this->port_to && $this->port_from !== $this->port_to
-                => "porty {$this->port_from}–{$this->port_to}",
-            (bool) $this->port_from => "port {$this->port_from}",
-            default => 'wszystkie porty',
+                => __('porty :from–:to', ['from' => $this->port_from, 'to' => $this->port_to]),
+            (bool) $this->port_from => __('port :port', ['port' => $this->port_from]),
+            default => __('wszystkie porty'),
         };
 
         $peer = $this->direction === 'in'
-            ? ($this->source ? "z {$this->source}" : 'z dowolnego adresu')
-            : ($this->source ? "do {$this->source}" : 'do dowolnego adresu');
+            ? ($this->source ? __('z :source', ['source' => $this->source]) : __('z dowolnego adresu'))
+            : ($this->source ? __('do :source', ['source' => $this->source]) : __('do dowolnego adresu'));
 
-        $verb = $this->action === 'accept' ? 'Zezwól' : 'Zablokuj';
-        $direction = $this->direction === 'in' ? 'przychodzący' : 'wychodzący';
+        $verb = $this->action === 'accept' ? __('Zezwól') : __('Zablokuj');
+        $direction = $this->direction === 'in' ? __('przychodzący') : __('wychodzący');
 
         return "{$verb} ({$direction}): ".implode(', ', array_filter([$protocol, $ports, $peer]));
     }

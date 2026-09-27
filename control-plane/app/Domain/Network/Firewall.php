@@ -112,7 +112,7 @@ class Firewall
 
         if ($server->firewallRules()->count() >= self::MAX_RULES) {
             throw ValidationException::withMessages([
-                'rule' => 'Maszyna może mieć najwyżej '.self::MAX_RULES.' reguł zapory. Połącz zakresy portów albo usuń zbędne.',
+                'rule' => __('Maszyna może mieć najwyżej ').self::MAX_RULES.__(' reguł zapory. Połącz zakresy portów albo usuń zbędne.'),
             ]);
         }
 
@@ -217,7 +217,7 @@ class Firewall
         $portTo = $portFrom !== null ? ($data['port_to'] ?? null) : null;
 
         if ($portTo !== null && (int) $portTo < (int) $portFrom) {
-            throw ValidationException::withMessages(['port_to' => 'Koniec zakresu portów nie może być mniejszy niż początek.']);
+            throw ValidationException::withMessages(['port_to' => __('Koniec zakresu portów nie może być mniejszy niż początek.')]);
         }
 
         $source = trim((string) ($data['source'] ?? ''));
@@ -229,7 +229,7 @@ class Firewall
                     : IpMath::normalize($source);
             } catch (\InvalidArgumentException) {
                 throw ValidationException::withMessages([
-                    'source' => 'Adres musi być adresem IP albo podsiecią CIDR, np. 198.51.100.7 albo 10.0.0.0/8.',
+                    'source' => __('Adres musi być adresem IP albo podsiecią CIDR, np. 198.51.100.7 albo 10.0.0.0/8.'),
                 ]);
             }
         }
@@ -248,7 +248,7 @@ class Firewall
     private function assertCanManage(User $actor, Server $server): void
     {
         if (! $this->canManage($actor, $server)) {
-            throw new AuthorizationException('Zapora tej maszyny została zablokowana przez administratora.');
+            throw new AuthorizationException(__('Zapora tej maszyny została zablokowana przez administratora.'));
         }
     }
 
@@ -258,7 +258,7 @@ class Firewall
         $this->assertCanManage($actor, $server);
 
         if ($rule->isAdminRule() && ! $actor->isStaff()) {
-            throw new AuthorizationException('Tę regułę ustawił administrator — nie możesz jej zmienić.');
+            throw new AuthorizationException(__('Tę regułę ustawił administrator — nie możesz jej zmienić.'));
         }
     }
 

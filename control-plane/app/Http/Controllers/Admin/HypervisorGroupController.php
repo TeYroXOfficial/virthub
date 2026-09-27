@@ -68,7 +68,7 @@ class HypervisorGroupController extends Controller
     {
         $this->groups->delete($group);
 
-        return response()->json(['message' => 'Grupa została usunięta.']);
+        return response()->json(['message' => __('Grupa została usunięta.')]);
     }
 
     /** @return array<string, mixed> */

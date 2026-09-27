@@ -13,7 +13,7 @@ class Hostname implements ValidationRule
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (! is_string($value) || ! preg_match(self::PATTERN, $value)) {
-            $fail('Nazwa hosta musi być poprawną nazwą domenową, np. vps1.mojadomena.pl.');
+            $fail(__('Nazwa hosta musi być poprawną nazwą domenową, np. vps1.mojadomena.pl.'));
         }
     }
 }

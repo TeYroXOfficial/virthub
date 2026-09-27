@@ -21,6 +21,15 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
 });
 
+// Zmiana języka — także przed zalogowaniem (strona logowania).
+Route::post('/locale', function (\Illuminate\Http\Request $request) {
+    $locale = $request->validate(['locale' => ['required', \Illuminate\Validation\Rule::in(array_keys(config('virthub.locales')))]])['locale'];
+    $request->session()->put('locale', $locale);
+    $request->user()?->forceFill(['locale' => $locale])->save();
+
+    return back();
+})->name('locale.switch');
+
 Route::post('/logout', [AuthController::class, 'logout'])
     ->middleware('auth')
     ->name('logout');

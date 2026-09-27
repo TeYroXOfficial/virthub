@@ -10,22 +10,22 @@
 @section('content')
     <div class="page-header">
         <div>
-            <a class="muted" href="{{ route('panel.admin.hypervisors') }}" style="font-size:13px">← Hypervisory</a>
+            <a class="muted" href="{{ route('panel.admin.hypervisors') }}" style="font-size:13px">{{ __('← Hypervisory') }}</a>
             <h1>{{ $node->name }}</h1>
             <div class="meta-line">
                 @if (! $node->enrolled_at)
-                    <span class="pill warning">czeka na instalację</span>
+                    <span class="pill warning">{{ __('czeka na instalację') }}</span>
                 @elseif ($node->status === 'maintenance')
-                    <span class="pill warning">konserwacja</span>
+                    <span class="pill warning">{{ __('konserwacja') }}</span>
                 @else
-                    <span class="pill {{ $node->isOnline() ? 'ok' : 'critical' }}">{{ $node->isOnline() ? 'online' : 'offline' }}</span>
+                    <span class="pill {{ $node->isOnline() ? 'ok' : 'critical' }}">{{ $node->isOnline() ? __('online') : __('offline') }}</span>
                 @endif
                 @if ($node->enrolled_at)
                     <span>{{ $node->virtualization->label() }}</span>
                     <span class="sep">·</span> <span class="mono">{{ $node->hostname }}</span>
                 @endif
                 @if ($node->group)
-                    <span class="sep">·</span> <span>grupa {{ $node->group->name }}</span>
+                    <span class="sep">·</span> <span>{{ __('grupa :name', ['name' => $node->group->name]) }}</span>
                 @endif
             </div>
         </div>
@@ -33,12 +33,12 @@
             @if ($node->enrolled_at)
                 <form method="POST" action="{{ route('panel.admin.hypervisors.check', $node) }}" style="margin:0">
                     @csrf
-                    <button class="btn" type="submit"><x-icon name="refresh" :size="15"/> Sprawdź łączność</button>
+                    <button class="btn" type="submit"><x-icon name="refresh" :size="15"/> {{ __('Sprawdź łączność') }}</button>
                 </form>
             @else
                 <form method="POST" action="{{ route('panel.admin.hypervisors.enrollment', $node) }}" style="margin:0">
                     @csrf
-                    <button class="btn btn-primary" type="submit">Wygeneruj polecenie instalacyjne</button>
+                    <button class="btn btn-primary" type="submit">{{ __('Wygeneruj polecenie instalacyjne') }}</button>
                 </form>
             @endif
         </div>
@@ -47,7 +47,7 @@
     @include('panel.admin._nav')
 
     <div class="grid grid-4" style="margin-bottom:16px">
-        @foreach ([['Procesor', $node->cpu_cores_used, $node->cpu_cores_total, 'vCPU'], ['Pamięć', $node->ram_mb_used, $node->ram_mb_total, 'MB'], ['Dysk', $node->disk_gb_used, $node->disk_gb_total, 'GB']] as [$label, $u, $t, $unit])
+        @foreach ([[__('Procesor'), $node->cpu_cores_used, $node->cpu_cores_total, 'vCPU'], [__('Pamięć'), $node->ram_mb_used, $node->ram_mb_total, 'MB'], [__('Dysk'), $node->disk_gb_used, $node->disk_gb_total, 'GB']] as [$label, $u, $t, $unit])
             <div class="stat">
                 <div class="stat-label">{{ $label }}</div>
                 <div class="stat-value">{{ $pct($u, $t) }}%</div>
@@ -56,36 +56,36 @@
             </div>
         @endforeach
         <div class="stat">
-            <div class="stat-label">Maszyny</div>
+            <div class="stat-label">{{ __('Maszyny') }}</div>
             <div class="stat-value">{{ $node->servers_count }}@if ($node->max_servers !== null)<span class="muted" style="font-size:15px"> / {{ $node->max_servers }}</span>@endif</div>
-            <div class="stat-sub">ostatni kontakt: {{ $node->last_seen_at?->diffForHumans() ?? 'nigdy' }}</div>
+            <div class="stat-sub">{{ __('ostatni kontakt: :nigdy', ['nigdy' => $node->last_seen_at?->diffForHumans() ?? __('nigdy')]) }}</div>
         </div>
     </div>
 
     <nav class="tabs" role="tablist">
-        <button type="button" role="tab" data-tab="servers">Maszyny ({{ $servers->count() }})</button>
-        <button type="button" role="tab" data-tab="settings">Ustawienia</button>
-        <button type="button" role="tab" data-tab="info">Informacje</button>
+        <button type="button" role="tab" data-tab="servers">{{ __('Maszyny (:count)', ['count' => $servers->count()]) }}</button>
+        <button type="button" role="tab" data-tab="settings">{{ __('Ustawienia') }}</button>
+        <button type="button" role="tab" data-tab="info">{{ __('Informacje') }}</button>
     </nav>
 
     <div data-tab-panel="servers" role="tabpanel">
         @if ($servers->isEmpty())
-            <div class="card empty">Na tym węźle nie ma maszyn.</div>
+            <div class="card empty">{{ __('Na tym węźle nie ma maszyn.') }}</div>
         @else
             <form method="POST" action="{{ route('panel.admin.servers.bulk') }}" id="servers-bulk"
-                  onsubmit="return event.submitter?.dataset.confirm ? confirm(event.submitter.dataset.confirm) : confirm('Wykonać operację na zaznaczonych maszynach?')">
+                  onsubmit="return event.submitter?.dataset.confirm ? confirm(event.submitter.dataset.confirm) : confirm(@js(__('Wykonać operację na zaznaczonych maszynach?')))">
                 @csrf
                 <div class="bulk-bar">
-                    <span>Zaznaczone:</span>
-                    <button class="btn btn-sm btn-danger" type="submit" name="action" value="delete">Usuń</button>
+                    <span>{{ __('Zaznaczone:') }}</span>
+                    <button class="btn btn-sm btn-danger" type="submit" name="action" value="delete">{{ __('Usuń') }}</button>
                     @if ($isAdmin)
-                        <button class="btn btn-sm" type="submit" name="action" value="purge">Usuń tylko z panelu</button>
+                        <button class="btn btn-sm" type="submit" name="action" value="purge">{{ __('Usuń tylko z panelu') }}</button>
                     @endif
                 </div>
                 <div class="card" style="padding:0">
                     <div class="table-wrap">
                         <table>
-                            <thead><tr><th style="width:32px"></th><th>Maszyna</th><th>Klient</th><th>Stan</th><th>System</th><th>Adres IP</th><th>Zasoby</th><th></th></tr></thead>
+                            <thead><tr><th style="width:32px"></th><th>{{ __('Maszyna') }}</th><th>{{ __('Klient') }}</th><th>{{ __('Stan') }}</th><th>{{ __('System') }}</th><th>{{ __('Adres IP') }}</th><th>{{ __('Zasoby') }}</th><th></th></tr></thead>
                             <tbody>
                             @foreach ($servers as $server)
                                 <tr>
@@ -95,15 +95,15 @@
                                     <td><span class="pill {{ $server->state->tone() }}">{{ $server->state->label() }}</span></td>
                                     <td class="muted">{{ $server->template?->name ?? '—' }}</td>
                                     <td class="mono">{{ $server->primaryIp()?->address ?? '—' }}</td>
-                                    <td class="num">{{ $server->vcpu }} / {{ round($server->ram_mb / 1024, 1) }} GB / {{ $server->disk_gb }} GB</td>
+                                    <td class="num">{{ __(':vcpu / :ram_mb GB / :disk_gb GB', ['vcpu' => $server->vcpu, 'ram_mb' => round($server->ram_mb / 1024, 1), 'disk_gb' => $server->disk_gb]) }}</td>
                                     <td style="text-align:right; white-space:nowrap">
                                         @can('destroy', $server)
                                             <button class="btn btn-sm btn-danger" type="submit" name="row" value="delete:{{ $server->id }}"
-                                                    data-confirm="Usunąć {{ $server->hostname }} razem z dyskiem?">Usuń</button>
+                                                    data-confirm="{{ __('Usunąć :hostname razem z dyskiem?', ['hostname' => $server->hostname]) }}">{{ __('Usuń') }}</button>
                                         @endcan
                                         @if ($isAdmin)
                                             <button class="btn btn-sm" type="submit" name="row" value="purge:{{ $server->id }}"
-                                                    data-confirm="Usunąć {{ $server->hostname }} TYLKO z panelu?">Z panelu</button>
+                                                    data-confirm="{{ __('Usunąć :hostname TYLKO z panelu?', ['hostname' => $server->hostname]) }}">{{ __('Z panelu') }}</button>
                                         @endif
                                     </td>
                                 </tr>
@@ -119,107 +119,106 @@
     <div data-tab-panel="settings" role="tabpanel" hidden>
         <form method="POST" action="{{ route('panel.admin.hypervisors.update', $node) }}" class="card">
             @csrf @method('PUT')
-            <h3 class="card-title"><x-icon name="node" :size="16"/> Ustawienia węzła</h3>
+            <h3 class="card-title"><x-icon name="node" :size="16"/> {{ __('Ustawienia węzła') }}</h3>
             <div class="grid grid-2">
                 <div class="field">
-                    <label for="n-name">Nazwa</label>
+                    <label for="n-name">{{ __('Nazwa') }}</label>
                     <input id="n-name" name="name" type="text" value="{{ old('name', $node->name) }}" required>
                 </div>
                 <div class="field">
-                    <label for="n-group">Grupa węzłów</label>
+                    <label for="n-group">{{ __('Grupa węzłów') }}</label>
                     <select id="n-group" name="hypervisor_group_id">
-                        <option value="">— bez grupy —</option>
+                        <option value="">{{ __('— bez grupy —') }}</option>
                         @foreach ($groups as $group)
                             <option value="{{ $group->id }}" @selected($node->hypervisor_group_id === $group->id)>{{ $group->name }}</option>
                         @endforeach
                     </select>
-                    <div class="hint">Węzeł korzysta z pul swojej grupy i z pul przypisanych do niego.</div>
+                    <div class="hint">{{ __('Węzeł korzysta z pul swojej grupy i z pul przypisanych do niego.') }}</div>
                 </div>
                 <div class="field">
-                    <label for="n-status">Tryb pracy</label>
+                    <label for="n-status">{{ __('Tryb pracy') }}</label>
                     <select id="n-status" name="status">
-                        <option value="online" @selected($node->status === 'online')>Online</option>
-                        <option value="maintenance" @selected($node->status === 'maintenance')>Konserwacja</option>
-                        <option value="offline" @selected($node->status === 'offline')>Offline</option>
+                        <option value="online" @selected($node->status === 'online')>{{ __('Online') }}</option>
+                        <option value="maintenance" @selected($node->status === 'maintenance')>{{ __('Konserwacja') }}</option>
+                        <option value="offline" @selected($node->status === 'offline')>{{ __('Offline') }}</option>
                     </select>
-                    <div class="hint">Tryb konserwacji nie jest nadpisywany przez heartbeat węzła.</div>
+                    <div class="hint">{{ __('Tryb konserwacji nie jest nadpisywany przez heartbeat węzła.') }}</div>
                 </div>
                 <div class="field">
-                    <label for="n-max">Limit maszyn <span class="muted">(opcjonalnie)</span></label>
-                    <input id="n-max" name="max_servers" type="text" inputmode="numeric" value="{{ old('max_servers', $node->max_servers) }}" placeholder="bez limitu">
-                    <div class="hint">Po osiągnięciu limitu węzeł nie dostaje nowych maszyn.</div>
+                    <label for="n-max">{{ __('Limit maszyn') }} <span class="muted">{{ __('(opcjonalnie)') }}</span></label>
+                    <input id="n-max" name="max_servers" type="text" inputmode="numeric" value="{{ old('max_servers', $node->max_servers) }}" placeholder="{{ __('bez limitu') }}">
+                    <div class="hint">{{ __('Po osiągnięciu limitu węzeł nie dostaje nowych maszyn.') }}</div>
                 </div>
                 <div class="field">
-                    <label for="n-cpu-model">Procesor <span class="muted">(widoczny dla klientów)</span></label>
+                    <label for="n-cpu-model">{{ __('Procesor') }} <span class="muted">{{ __('(widoczny dla klientów)') }}</span></label>
                     <input id="n-cpu-model" name="cpu_model" type="text" maxlength="120" value="{{ old('cpu_model', $node->cpu_model) }}"
-                           placeholder="{{ $node->last_health['cpu_model'] ?? 'np. AMD EPYC 7763' }}">
+                           placeholder="{{ $node->last_health['cpu_model'] ?? __('np. AMD EPYC 7763') }}">
                     <div class="hint">
-                        Puste = wykryty przez węzeł{{ isset($node->last_health['cpu_model']) ? ': '.$node->last_health['cpu_model'] : ' (po aktualizacji agenta)' }}.
+                        {{ __('Puste = wykryty przez węzeł:agenta.', ['agenta' => isset($node->last_health['cpu_model']) ? ': '.$node->last_health['cpu_model'] : __(' (po aktualizacji agenta)')]) }}
                     </div>
                 </div>
                 <div class="field">
-                    <label for="n-cpu">Dostępne vCPU</label>
+                    <label for="n-cpu">{{ __('Dostępne vCPU') }}</label>
                     <input id="n-cpu" name="cpu_cores_total" type="text" inputmode="numeric" value="{{ $node->cpu_cores_total }}" required>
-                    <div class="hint">Zajęte: {{ $node->cpu_cores_used }}. Więcej niż rdzeni fizycznych = overcommit.</div>
+                    <div class="hint">{{ __('Zajęte: :cpu_cores_used. Więcej niż rdzeni fizycznych = overcommit.', ['cpu_cores_used' => $node->cpu_cores_used]) }}</div>
                 </div>
                 <div class="field">
-                    <label for="n-ram">Dostępna pamięć (MB)</label>
+                    <label for="n-ram">{{ __('Dostępna pamięć (MB)') }}</label>
                     <input id="n-ram" name="ram_mb_total" type="text" inputmode="numeric" value="{{ $node->ram_mb_total }}" required>
-                    <div class="hint">Zajęte: {{ $node->ram_mb_used }} MB</div>
+                    <div class="hint">{{ __('Zajęte: :ram_mb_used MB', ['ram_mb_used' => $node->ram_mb_used]) }}</div>
                 </div>
                 <div class="field">
-                    <label for="n-disk">Dostępny dysk (GB)</label>
+                    <label for="n-disk">{{ __('Dostępny dysk (GB)') }}</label>
                     <input id="n-disk" name="disk_gb_total" type="text" inputmode="numeric" value="{{ $node->disk_gb_total }}" required>
-                    <div class="hint">Zajęte: {{ $node->disk_gb_used }} GB</div>
+                    <div class="hint">{{ __('Zajęte: :disk_gb_used GB', ['disk_gb_used' => $node->disk_gb_used]) }}</div>
                 </div>
                 <div class="field">
-                    <label for="n-bridge">Mostek sieciowy</label>
+                    <label for="n-bridge">{{ __('Mostek sieciowy') }}</label>
                     <input id="n-bridge" name="bridge" type="text" value="{{ $node->bridge }}" required>
-                    <div class="hint">Interfejs, do którego podpinane są maszyny.</div>
+                    <div class="hint">{{ __('Interfejs, do którego podpinane są maszyny.') }}</div>
                 </div>
             </div>
             <div class="field">
-                <label for="n-notes">Notatki <span class="muted">(dla personelu)</span></label>
+                <label for="n-notes">{{ __('Notatki') }} <span class="muted">{{ __('(dla personelu)') }}</span></label>
                 <textarea id="n-notes" name="notes" rows="3" placeholder="Dostawca, numer szafy, kontakt do DC…">{{ old('notes', $node->notes) }}</textarea>
             </div>
             <div class="field">
                 <label class="check-line">
                     <input type="checkbox" name="accepts_new_servers" value="1" @checked($node->accepts_new_servers)>
-                    Przyjmuje nowe maszyny
+                    {{ __('Przyjmuje nowe maszyny') }}
                 </label>
                 @if ($node->group && ! $node->group->accepts_new_servers)
-                    <div class="hint">Grupa {{ $node->group->name }} ma wstrzymane przyjmowanie maszyn — to ustawienie jest nadrzędne.</div>
+                    <div class="hint">{{ __('Grupa :name ma wstrzymane przyjmowanie maszyn — to ustawienie jest nadrzędne.', ['name' => $node->group->name]) }}</div>
                 @endif
             </div>
-            <button class="btn btn-primary" type="submit">Zapisz ustawienia</button>
+            <button class="btn btn-primary" type="submit">{{ __('Zapisz ustawienia') }}</button>
         </form>
 
         <div class="card danger-zone">
-            <h3 class="card-title" style="color:var(--critical)">Usuwanie węzła</h3>
+            <h3 class="card-title" style="color:var(--critical)">{{ __('Usuwanie węzła') }}</h3>
             @if ($node->servers_count === 0)
                 <form method="POST" action="{{ route('panel.admin.hypervisors.destroy', $node) }}"
-                      onsubmit="return confirm('Usunąć węzeł {{ $node->name }}?')" class="setting-row">
+                      onsubmit="return confirm(@js(__('Usunąć węzeł :name?', ['name' => $node->name])))" class="setting-row">
                     @csrf @method('DELETE')
-                    <p class="muted setting-text">Węzeł nie ma maszyn — można go usunąć. Agenta na serwerze wyłącz ręcznie.</p>
-                    <button class="btn btn-danger-solid" type="submit">Usuń węzeł</button>
+                    <p class="muted setting-text">{{ __('Węzeł nie ma maszyn — można go usunąć. Agenta na serwerze wyłącz ręcznie.') }}</p>
+                    <button class="btn btn-danger-solid" type="submit">{{ __('Usuń węzeł') }}</button>
                 </form>
             @elseif ($isAdmin)
                 <form method="POST" action="{{ route('panel.admin.hypervisors.destroy', $node) }}"
-                      onsubmit="return confirm('Usunąć węzeł i WSZYSTKIE jego maszyny z panelu?')">
+                      onsubmit="return confirm(@js(__('Usunąć węzeł i WSZYSTKIE jego maszyny z panelu?')))">
                     @csrf @method('DELETE')
                     <input type="hidden" name="purge_servers" value="1">
                     <p class="muted" style="margin-top:0">
-                        Na węźle jest {{ $node->servers_count }} maszyn. Jeśli węzeł już nie istnieje, możesz usunąć go razem z
-                        wpisami maszyn — tylko z panelu, bez kontaktu z węzłem. Adresy IP wrócą do pul.
+                        {{ __('Na węźle jest :servers_count maszyn. Jeśli węzeł już nie istnieje, możesz usunąć go razem z wpisami maszyn — tylko z panelu, bez kontaktu z węzłem. Adresy IP wrócą do pul.', ['servers_count' => $node->servers_count]) }}
                     </p>
                     <div class="field">
-                        <label for="confirm-name">Wpisz <code>{{ $node->name }}</code>, żeby potwierdzić</label>
+                        <label for="confirm-name">{{ __('Wpisz') }} <code>{{ $node->name }}</code>{{ __(', żeby potwierdzić') }}</label>
                         <input id="confirm-name" name="confirm_name" type="text" autocomplete="off" required>
                     </div>
-                    <button class="btn btn-danger-solid" type="submit">Usuń węzeł i jego maszyny z panelu</button>
+                    <button class="btn btn-danger-solid" type="submit">{{ __('Usuń węzeł i jego maszyny z panelu') }}</button>
                 </form>
             @else
-                <p class="muted">Na węźle są maszyny — usuń je najpierw albo poproś administratora.</p>
+                <p class="muted">{{ __('Na węźle są maszyny — usuń je najpierw albo poproś administratora.') }}</p>
             @endif
         </div>
     </div>
@@ -227,43 +226,43 @@
     <div data-tab-panel="info" role="tabpanel" hidden>
         @php $sec = $node->last_health['security'] ?? null; @endphp
         <div class="card" id="security">
-            <h3 class="card-title"><x-icon name="shield" :size="16"/> Izolacja maszyn od węzła</h3>
+            <h3 class="card-title"><x-icon name="shield" :size="16"/> {{ __('Izolacja maszyn od węzła') }}</h3>
             @if ($sec === null)
-                <p class="muted">Węzeł nie raportuje stanu izolacji — zaktualizuj agenta.</p>
+                <p class="muted">{{ __('Węzeł nie raportuje stanu izolacji — zaktualizuj agenta.') }}</p>
             @else
                 <dl class="kv">
-                    <dt>Dostęp maszyn do usług węzła</dt>
+                    <dt>{{ __('Dostęp maszyn do usług węzła') }}</dt>
                     <dd>
                         @if ($sec['host_guard'] ?? false)
-                            <span class="pill ok">zablokowany</span>
+                            <span class="pill ok">{{ __('zablokowany') }}</span>
                         @else
-                            <span class="pill critical">otwarty</span> <span class="hint">VH_GUARD_HOST=0 w konfiguracji agenta</span>
+                            <span class="pill critical">{{ __('otwarty') }}</span> <span class="hint">{{ __('VH_GUARD_HOST=0 w konfiguracji agenta') }}</span>
                         @endif
                     </dd>
-                    <dt>AppArmor</dt>
+                    <dt>{{ __('AppArmor') }}</dt>
                     <dd>
                         @if ($sec['apparmor'] ?? false)
-                            <span class="pill ok">włączony</span>
+                            <span class="pill ok">{{ __('włączony') }}</span>
                         @else
-                            <span class="pill warning">wyłączony</span> <span class="hint">goście nie są zamknięci profilem AppArmora</span>
+                            <span class="pill warning">{{ __('wyłączony') }}</span> <span class="hint">{{ __('goście nie są zamknięci profilem AppArmora') }}</span>
                         @endif
                     </dd>
                     @if (array_key_exists('idmap_isolated', $sec))
-                        <dt>Osobne UID/GID kontenerów</dt>
+                        <dt>{{ __('Osobne UID/GID kontenerów') }}</dt>
                         <dd>
                             @if ($sec['idmap_isolated'])
-                                <span class="pill ok">tak</span>
+                                <span class="pill ok">{{ __('tak') }}</span>
                             @else
-                                <span class="pill warning">nie</span> <span class="hint">zaktualizuj węzeł — aktualizacja ustawi przydział w /etc/subuid</span>
+                                <span class="pill warning">{{ __('nie') }}</span> <span class="hint">{{ __('zaktualizuj węzeł — aktualizacja ustawi przydział w /etc/subuid') }}</span>
                             @endif
                         </dd>
-                        <dt>Limit procesów w kontenerze</dt><dd class="num">{{ $sec['max_processes'] ?? '—' }}</dd>
-                        <dt>Kontenery z osłabioną izolacją</dt>
+                        <dt>{{ __('Limit procesów w kontenerze') }}</dt><dd class="num">{{ $sec['max_processes'] ?? '—' }}</dd>
+                        <dt>{{ __('Kontenery z osłabioną izolacją') }}</dt>
                         <dd>
                             @forelse ($sec['instance_issues'] ?? [] as $instance => $issues)
                                 <div><span class="pill critical">{{ $instance }}</span> {{ implode(', ', $issues) }}</div>
                             @empty
-                                <span class="pill ok">brak</span>
+                                <span class="pill ok">{{ __('brak') }}</span>
                             @endforelse
                         </dd>
                     @endif
@@ -273,41 +272,41 @@
 
         <div class="grid grid-2">
             <div class="card">
-                <h3 class="card-title">Połączenie</h3>
+                <h3 class="card-title">{{ __('Połączenie') }}</h3>
                 <dl class="kv">
-                    <dt>Adres agenta</dt><dd class="mono">{{ $node->agent_url ?? '—' }}</dd>
-                    <dt>Zarejestrowany</dt><dd>{{ $node->enrolled_at?->format('d.m.Y H:i') ?? 'nie' }}</dd>
-                    <dt>Ostatni kontakt</dt><dd>{{ $node->last_seen_at?->diffForHumans() ?? 'nigdy' }}</dd>
-                    <dt>Certyfikat</dt><dd>{{ $node->agent_tls_cert ? 'przypięty (własny węzła)' : 'weryfikacja publicznym urzędem' }}</dd>
-                    <dt>Procesor</dt><dd>{{ $node->cpuModel() ?? '—' }}@if ($node->cpu_model) <span class="hint">(ustawiony ręcznie)</span>@endif</dd>
-                    <dt>Wersja agenta</dt><dd class="mono">{{ \App\Domain\Updates\Updates::short($node->last_health['build'] ?? null) }}</dd>
+                    <dt>{{ __('Adres agenta') }}</dt><dd class="mono">{{ $node->agent_url ?? '—' }}</dd>
+                    <dt>{{ __('Zarejestrowany') }}</dt><dd>{{ $node->enrolled_at?->format('d.m.Y H:i') ?? __('nie') }}</dd>
+                    <dt>{{ __('Ostatni kontakt') }}</dt><dd>{{ $node->last_seen_at?->diffForHumans() ?? __('nigdy') }}</dd>
+                    <dt>{{ __('Certyfikat') }}</dt><dd>{{ $node->agent_tls_cert ? __('przypięty (własny węzła)') : __('weryfikacja publicznym urzędem') }}</dd>
+                    <dt>{{ __('Procesor') }}</dt><dd>{{ $node->cpuModel() ?? '—' }}@if ($node->cpu_model) <span class="hint">{{ __('(ustawiony ręcznie)') }}</span>@endif</dd>
+                    <dt>{{ __('Wersja agenta') }}</dt><dd class="mono">{{ \App\Domain\Updates\Updates::short($node->last_health['build'] ?? null) }}</dd>
                 </dl>
                 @if ($node->notes)
                     <p class="hint" style="white-space:pre-line; margin-top:14px">{{ $node->notes }}</p>
                 @endif
             </div>
             <div class="card">
-                <h3 class="card-title">Pule adresów węzła</h3>
+                <h3 class="card-title">{{ __('Pule adresów węzła') }}</h3>
                 @forelse ($pools as $pool)
                     <p style="margin:0 0 8px">
                         <span class="mono">{{ $pool->name }}</span>
-                        <span class="pill neutral">IPv{{ $pool->version }}{{ $pool->isNat() ? ' · NAT' : '' }}</span>
-                        <span class="muted">{{ $pool->hypervisor_id ? 'węzła' : 'grupy' }}
-                            @if ($pool->version === 4) · {{ $pool->assigned_count }} / {{ $pool->addresses_count }} zajętych @endif</span>
+                        <span class="pill neutral">{{ __('IPv:version:nat', ['version' => $pool->version, 'nat' => $pool->isNat() ? __(' · NAT') : '']) }}</span>
+                        <span class="muted">{{ $pool->hypervisor_id ? __('węzła') : __('grupy') }}
+                            @if ($pool->version === 4) {{ __('· :assigned_count / :addresses_count zajętych', ['assigned_count' => $pool->assigned_count, 'addresses_count' => $pool->addresses_count]) }} @endif</span>
                     </p>
                 @empty
-                    <p class="muted">Brak pul — węzeł nie dostanie maszyn, dopóki nie przypiszesz mu adresów.</p>
+                    <p class="muted">{{ __('Brak pul — węzeł nie dostanie maszyn, dopóki nie przypiszesz mu adresów.') }}</p>
                 @endforelse
-                <a class="btn btn-sm" href="{{ route('panel.admin.ip-pools') }}" style="margin-top:8px">Adresy IP</a>
+                <a class="btn btn-sm" href="{{ route('panel.admin.ip-pools') }}" style="margin-top:8px">{{ __('Adresy IP') }}</a>
             </div>
         </div>
         @if ($node->last_health)
             <details class="form-block card">
-                <summary>Ostatni raport węzła</summary>
+                <summary>{{ __('Ostatni raport węzła') }}</summary>
                 <dl class="kv" style="margin-top:12px">
                     @foreach ($node->last_health as $key => $value)
                         <dt class="mono">{{ $key }}</dt>
-                        <dd class="mono">{{ is_bool($value) ? ($value ? 'tak' : 'nie') : (is_array($value) ? json_encode($value) : $value) }}</dd>
+                        <dd class="mono">{{ is_bool($value) ? ($value ? __('tak') : __('nie')) : (is_array($value) ? json_encode($value) : $value) }}</dd>
                     @endforeach
                 </dl>
             </details>

@@ -40,14 +40,14 @@ enum ServerState: string
     public function label(): string
     {
         return match ($this) {
-            self::Building => 'Tworzenie',
-            self::Running => 'Działa',
-            self::Stopped => 'Zatrzymany',
-            self::Suspended => 'Zawieszony',
-            self::Rebuilding => 'Przebudowa',
-            self::Resizing => 'Zmiana pakietu',
-            self::Deleting => 'Usuwanie',
-            self::Error => 'Błąd',
+            self::Building => __('Tworzenie'),
+            self::Running => __('Działa'),
+            self::Stopped => __('Zatrzymany'),
+            self::Suspended => __('Zawieszony'),
+            self::Rebuilding => __('Przebudowa'),
+            self::Resizing => __('Zmiana pakietu'),
+            self::Deleting => __('Usuwanie'),
+            self::Error => __('Błąd'),
         };
     }
 

@@ -38,7 +38,7 @@ class AgentResultApplier
         }
 
         if ($status === 'failed') {
-            $this->applyFailure($job, $agentState['error'] ?? 'Hypervisor nie podał przyczyny.');
+            $this->applyFailure($job, $agentState['error'] ?? __('Hypervisor nie podał przyczyny.'));
         }
     }
 
@@ -96,7 +96,7 @@ class AgentResultApplier
 
         $server->markState(
             ServerState::Stopped,
-            $error ? "Ostatnia operacja nie powiodła się: {$error}" : null,
+            $error ? __('Ostatnia operacja nie powiodła się: :error', ['error' => $error]) : null,
         );
     }
 
@@ -148,7 +148,7 @@ class AgentResultApplier
         app(IpAllocator::class)->releaseAll($server);
         app(HypervisorSelector::class)->release($server);
 
-        $server->markState(ServerState::Error, 'Nie udało się utworzyć maszyny: '.$error);
+        $server->markState(ServerState::Error, __('Nie udało się utworzyć maszyny: ').$error);
     }
 
     private function applyPowerState(Server $server, array $result): void

@@ -43,12 +43,12 @@ class AgentCallbackController extends Controller
         }
 
         if (! $this->hasValidSignature($request, $job->server->hypervisor->callback_secret)) {
-            Log::warning('Odrzucono callback agenta z nieprawidłowym podpisem', [
+            Log::warning(__('Odrzucono callback agenta z nieprawidłowym podpisem'), [
                 'agent_job_id' => $agentJobId,
                 'ip' => $request->ip(),
             ]);
 
-            return response()->json(['message' => 'Nieprawidłowy podpis.'], 401);
+            return response()->json(['message' => __('Nieprawidłowy podpis.')], 401);
         }
 
         $applier->apply($job, [

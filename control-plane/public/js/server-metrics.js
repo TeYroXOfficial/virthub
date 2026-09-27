@@ -11,6 +11,7 @@
  */
 (function () {
     'use strict';
+    const vhT = (s) => (window.VH_T && window.VH_T[s]) || s;
 
     const root = document.querySelector('[data-server-metrics]');
     if (!root || typeof uPlot === 'undefined') return;
@@ -40,7 +41,7 @@
         if (span <= 172800) return pad(d.getHours()) + ':' + pad(d.getMinutes());
         return pad(d.getDate()) + '.' + pad(d.getMonth() + 1);
     };
-    const fmtWhen = (secs) => new Date(secs * 1000).toLocaleString('pl-PL', {
+    const fmtWhen = (secs) => new Date(secs * 1000).toLocaleString(document.documentElement.lang || 'pl', {
         day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
     });
 
@@ -59,15 +60,15 @@
     };
 
     const METRICS = {
-        cpu: { title: 'Procesor', fmt: fmtPct, max: 100, series: [['cpu_percent', 'CPU', '--series-1']] },
-        ram: { title: 'Pamięć RAM', fmt: fmtMem, series: [['ram_used_mb', 'Użyte', '--series-1']] },
+        cpu: { title: vhT('Procesor'), fmt: fmtPct, max: 100, series: [['cpu_percent', 'CPU', '--series-1']] },
+        ram: { title: vhT('Pamięć RAM'), fmt: fmtMem, series: [['ram_used_mb', vhT('Użyte'), '--series-1']] },
         disk: {
-            title: 'Dysk I/O', fmt: fmtRate,
-            series: [['disk_read_bps', 'Odczyt', '--series-1'], ['disk_write_bps', 'Zapis', '--series-2']],
+            title: vhT('Dysk I/O'), fmt: fmtRate,
+            series: [['disk_read_bps', vhT('Odczyt'), '--series-1'], ['disk_write_bps', vhT('Zapis'), '--series-2']],
         },
         net: {
-            title: 'Sieć', fmt: fmtRate,
-            series: [['net_rx_bps', 'Pobieranie', '--series-1'], ['net_tx_bps', 'Wysyłanie', '--series-2']],
+            title: vhT('Sieć'), fmt: fmtRate,
+            series: [['net_rx_bps', vhT('Pobieranie'), '--series-1'], ['net_tx_bps', vhT('Wysyłanie'), '--series-2']],
         },
     };
 
@@ -111,7 +112,7 @@
                 },
             ],
             series: [
-                { label: 'Czas', value: (u, v) => (v == null ? '—' : fmtWhen(v)) },
+                { label: vhT('Czas'), value: (u, v) => (v == null ? '—' : fmtWhen(v)) },
                 ...m.series.map(([field, label, color]) => ({
                     label,
                     stroke: css(color),
@@ -179,10 +180,10 @@
                 tiles.ram.textContent = fmtMem(data.ram_used_mb) + (ramTotal ? ' / ' + fmtMem(ramTotal) : '');
                 tiles.disk.textContent = '↓ ' + fmtRate(data.disk_read_bps) + '  ↑ ' + fmtRate(data.disk_write_bps);
                 tiles.net.textContent = '↓ ' + fmtRate(data.net_rx_bps) + '  ↑ ' + fmtRate(data.net_tx_bps);
-                setState('na żywo', 'ok');
+                setState(vhT('na żywo'), 'ok');
             } catch (e) {
                 failures++;
-                setState(failures > 2 ? 'brak danych z węzła' : 'łączenie…', failures > 2 ? 'critical' : 'warning');
+                setState(failures > 2 ? vhT('brak danych z węzła') : vhT('łączenie…'), failures > 2 ? 'critical' : 'warning');
             }
         }
 
@@ -210,7 +211,7 @@
                 if (series.cpu_percent[i] == null) continue;
                 const row = document.createElement('tr');
                 [
-                    new Date(series.t[i] * 1000).toLocaleString('pl-PL'),
+                    new Date(series.t[i] * 1000).toLocaleString(document.documentElement.lang || 'pl'),
                     fmtPct(series.cpu_percent[i]),
                     fmtMem(series.ram_used_mb[i]),
                     fmtRate(series.disk_read_bps[i]),
@@ -243,7 +244,7 @@
                 try { localStorage.setItem('vh-metrics-range', range); } catch (e) {}
             } catch (e) {
                 empty.hidden = false;
-                empty.textContent = 'Nie udało się pobrać historii.';
+                empty.textContent = vhT('Nie udało się pobrać historii.');
             }
         }
 

@@ -50,7 +50,7 @@ class BillingIntegrationController extends Controller
 
         if ($existing !== null) {
             return response()->json([
-                'message' => 'Usługa o tym identyfikatorze już istnieje.',
+                'message' => __('Usługa o tym identyfikatorze już istnieje.'),
                 'server_id' => $existing->id,
                 'state' => $existing->state->value,
                 'idempotent' => true,
@@ -69,7 +69,7 @@ class BillingIntegrationController extends Controller
         );
 
         return response()->json([
-            'message' => 'Maszyna jest tworzona.',
+            'message' => __('Maszyna jest tworzona.'),
             'server_id' => $server->id,
             'customer_id' => $user->id,
             'state' => $server->state->value,
@@ -85,7 +85,7 @@ class BillingIntegrationController extends Controller
         ]);
 
         if ($server->isSuspended()) {
-            return response()->json(['message' => 'Usługa jest już zawieszona.', 'idempotent' => true]);
+            return response()->json(['message' => __('Usługa jest już zawieszona.'), 'idempotent' => true]);
         }
 
         $this->provisioner->suspend(
@@ -93,7 +93,7 @@ class BillingIntegrationController extends Controller
             $validated['reason'] ?? 'Zawieszenie zlecone przez system rozliczeniowy.',
         );
 
-        return response()->json(['message' => 'Usługa została zawieszona.'], 202);
+        return response()->json(['message' => __('Usługa została zawieszona.')], 202);
     }
 
     public function unsuspend(string $reference): JsonResponse
@@ -101,12 +101,12 @@ class BillingIntegrationController extends Controller
         $server = $this->findByReference($reference);
 
         if (! $server->isSuspended()) {
-            return response()->json(['message' => 'Usługa nie jest zawieszona.', 'idempotent' => true]);
+            return response()->json(['message' => __('Usługa nie jest zawieszona.'), 'idempotent' => true]);
         }
 
         $this->provisioner->unsuspend($server);
 
-        return response()->json(['message' => 'Usługa została odwieszona.'], 202);
+        return response()->json(['message' => __('Usługa została odwieszona.')], 202);
     }
 
     public function terminate(Request $request, string $reference): JsonResponse
@@ -116,7 +116,7 @@ class BillingIntegrationController extends Controller
         $server = $this->findByReference($reference);
         $this->provisioner->destroy($server);
 
-        return response()->json(['message' => 'Usługa została zgłoszona do usunięcia.'], 202);
+        return response()->json(['message' => __('Usługa została zgłoszona do usunięcia.')], 202);
     }
 
     /**
@@ -134,7 +134,7 @@ class BillingIntegrationController extends Controller
         $user = User::where('email', $validated['customer_email'])->first();
 
         if ($user === null) {
-            return response()->json(['message' => 'Nie znaleziono klienta o tym adresie e-mail.'], 404);
+            return response()->json(['message' => __('Nie znaleziono klienta o tym adresie e-mail.')], 404);
         }
 
         $token = Str::random(64);

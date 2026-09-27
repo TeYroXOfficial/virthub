@@ -41,8 +41,8 @@ class FirewallController extends Controller
                 'comment' => $rule->comment,
                 'description' => $rule->describe(),
             ])->values(),
-            'note' => 'Ruch wychodzący z adresów spoza puli maszyny jest blokowany zawsze '
-                .'i nie da się tego wyłączyć regułą. Reguły administratora są sprawdzane przed regułami klienta.',
+            'note' => __('Ruch wychodzący z adresów spoza puli maszyny jest blokowany zawsze ')
+                .__('i nie da się tego wyłączyć regułą. Reguły administratora są sprawdzane przed regułami klienta.'),
         ]);
     }
 
@@ -54,7 +54,7 @@ class FirewallController extends Controller
 
         return response()->json([
             'policy' => Firewall::policyPayload($server->fresh()),
-            'message' => 'Ustawienia zapory są wdrażane na hypervisorze.',
+            'message' => __('Ustawienia zapory są wdrażane na hypervisorze.'),
         ]);
     }
 
@@ -68,7 +68,7 @@ class FirewallController extends Controller
             'id' => $rule->id,
             'managed_by' => $rule->managed_by,
             'description' => $rule->describe(),
-            'message' => 'Reguła została dodana i jest wdrażana na hypervisorze.',
+            'message' => __('Reguła została dodana i jest wdrażana na hypervisorze.'),
         ], 201);
     }
 
@@ -78,6 +78,6 @@ class FirewallController extends Controller
 
         $this->firewall->deleteRule($server, $request->user(), $rule);
 
-        return response()->json(['message' => 'Reguła została usunięta.']);
+        return response()->json(['message' => __('Reguła została usunięta.')]);
     }
 }

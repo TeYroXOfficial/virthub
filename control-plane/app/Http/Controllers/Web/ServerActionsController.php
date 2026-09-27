@@ -35,8 +35,8 @@ class ServerActionsController extends Controller
             // Kasuje dysk bezpowrotnie — wymagamy świadomego potwierdzenia.
             'confirm' => ['accepted'],
         ], [
-            'ssh_key.regex' => 'Klucz SSH musi być w formacie OpenSSH (ssh-ed25519 AAAA… lub ssh-rsa AAAA…).',
-            'confirm.accepted' => 'Potwierdź, że rozumiesz, że dane na dysku zostaną usunięte.',
+            'ssh_key.regex' => __('Klucz SSH musi być w formacie OpenSSH (ssh-ed25519 AAAA… lub ssh-rsa AAAA…).'),
+            'confirm.accepted' => __('Potwierdź, że rozumiesz, że dane na dysku zostaną usunięte.'),
         ]);
 
         try {
@@ -57,11 +57,11 @@ class ServerActionsController extends Controller
     {
         $this->authorize('destroy', $server);
         $request->validate(['confirm' => ['accepted']], [
-            'confirm.accepted' => 'Potwierdź, że maszyna ma zostać usunięta razem z dyskiem.',
+            'confirm.accepted' => __('Potwierdź, że maszyna ma zostać usunięta razem z dyskiem.'),
         ]);
 
         if ($server->state === \App\Enums\ServerState::Deleting) {
-            return back()->withErrors(['delete' => 'Maszyna jest już usuwana. Jeśli to trwa zbyt długo, administrator może usunąć ją tylko z panelu.']);
+            return back()->withErrors(['delete' => __('Maszyna jest już usuwana. Jeśli to trwa zbyt długo, administrator może usunąć ją tylko z panelu.')]);
         }
 
         $this->provisioner->destroy($server, $request->user());
@@ -73,12 +73,12 @@ class ServerActionsController extends Controller
     {
         $this->authorize('purge', $server);
         $request->validate(['confirm' => ['accepted']], [
-            'confirm.accepted' => 'Potwierdź usunięcie wpisu z panelu.',
+            'confirm.accepted' => __('Potwierdź usunięcie wpisu z panelu.'),
         ]);
 
         $this->provisioner->purge($server, $request->user());
 
-        return $this->afterDelete($request, $server, "Usunięto {$server->hostname} z panelu. Adresy IP i zasoby węzła są wolne.");
+        return $this->afterDelete($request, $server, __('Usunięto :hostname z panelu. Adresy IP i zasoby węzła są wolne.', ['hostname' => $server->hostname]));
     }
 
     private function afterDelete(Request $request, Server $server, string $message): RedirectResponse
@@ -108,7 +108,7 @@ class ServerActionsController extends Controller
             $server->forceFill(['bandwidth_gb' => (int) $validated['bandwidth_gb']])->save();
             \App\Models\AuditLog::record('server.traffic_limit', $server, ['from' => $old, 'to' => $server->bandwidth_gb], $request->user());
             $traffic->releaseEligible($server);
-            $message = 'Zapisano limit transferu.';
+            $message = __('Zapisano limit transferu.');
         }
 
         return redirect()->to(route('panel.servers.show', $server).'#traffic-admin')->with('status', $message);
@@ -124,8 +124,8 @@ class ServerActionsController extends Controller
         return redirect()->to(route('panel.servers.show', $server).'#settings')->with('status', $ok
             ? 'System w maszynie: '.$server->fresh()->guest_os_name.'.'
             : ($server->isContainer()
-                ? 'Nie udało się odczytać systemu kontenera — sprawdź, czy węzeł ma aktualnego agenta.'
-                : 'Nie udało się odczytać systemu — maszyna musi działać i mieć uruchomiony qemu-guest-agent.'));
+                ? __('Nie udało się odczytać systemu kontenera — sprawdź, czy węzeł ma aktualnego agenta.')
+                : __('Nie udało się odczytać systemu — maszyna musi działać i mieć uruchomiony qemu-guest-agent.')));
     }
 
     public function resetPassword(Request $request, Server $server): RedirectResponse
@@ -139,7 +139,7 @@ class ServerActionsController extends Controller
         }
 
         return redirect()->to(route('panel.servers.show', $server).'#password')
-            ->with('status', 'Zmieniam hasło roota — nowe pojawi się na tej stronie za kilka sekund.');
+            ->with('status', __('Zmieniam hasło roota — nowe pojawi się na tej stronie za kilka sekund.'));
     }
 
     /**
@@ -224,8 +224,8 @@ class ServerActionsController extends Controller
         }
 
         $message = $iso === null
-            ? 'Płyta zostanie wysunięta.'
-            : "Montuję {$iso->name}.".($request->boolean('restart') ? ' Maszyna zostanie uruchomiona ponownie.' : ' Zmiana rozruchu zadziała po wyłączeniu i włączeniu maszyny.');
+            ? __('Płyta zostanie wysunięta.')
+            : __('Montuję :name.', ['name' => $iso->name]).($request->boolean('restart') ? __(' Maszyna zostanie uruchomiona ponownie.') : __(' Zmiana rozruchu zadziała po wyłączeniu i włączeniu maszyny.'));
 
         return redirect()->to(route('panel.servers.show', $server).'#iso')->with('status', $message);
     }

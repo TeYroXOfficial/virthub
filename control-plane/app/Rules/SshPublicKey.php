@@ -18,7 +18,7 @@ class SshPublicKey implements ValidationRule
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (! is_string($value) || ! preg_match(self::PATTERN, trim($value))) {
-            $fail('Klucz SSH musi być jedną linią w formacie OpenSSH (ssh-ed25519 AAAA… komentarz).');
+            $fail(__('Klucz SSH musi być jedną linią w formacie OpenSSH (ssh-ed25519 AAAA… komentarz).'));
         }
     }
 }

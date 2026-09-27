@@ -75,7 +75,7 @@ class DownloadIsoJob implements ShouldQueue
     {
         match ($state['status'] ?? null) {
             'done' => self::succeed($download, $state['result'] ?? []),
-            'failed' => self::finish($download, IsoDownload::STATUS_FAILED, $state['error'] ?? 'Węzeł nie podał przyczyny.'),
+            'failed' => self::finish($download, IsoDownload::STATUS_FAILED, $state['error'] ?? __('Węzeł nie podał przyczyny.')),
             // Odświeżony znacznik czasu mówi, że zlecenie żyje.
             default => $download->forceFill([
                 'progress' => $state['progress'] ?? $download->progress,
@@ -91,7 +91,7 @@ class DownloadIsoJob implements ShouldQueue
         $download = IsoDownload::find($this->downloadId);
 
         if ($download?->isInProgress()) {
-            self::finish($download, IsoDownload::STATUS_FAILED, $exception?->getMessage() ?: 'Pobieranie trwało zbyt długo.');
+            self::finish($download, IsoDownload::STATUS_FAILED, $exception?->getMessage() ?: __('Pobieranie trwało zbyt długo.'));
         }
     }
 

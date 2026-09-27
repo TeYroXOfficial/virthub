@@ -1,9 +1,7 @@
 {{-- Grupy węzłów: wspólne pule adresów, lokalizacja do wyboru przy zamówieniu, wstrzymanie sprzedaży. --}}
-<h2 id="groups" class="section-head">Grupy węzłów</h2>
+<h2 id="groups" class="section-head">{{ __('Grupy węzłów') }}</h2>
 <p class="lede">
-    Grupa to zwykle jedna lokalizacja: węzły korzystają z jej pul adresów, a klient może ją wybrać
-    przy zamówieniu, jeśli jest widoczna. Wyłączenie przyjmowania maszyn wstrzymuje sprzedaż na
-    wszystkich węzłach grupy naraz.
+    {{ __('Grupa to zwykle jedna lokalizacja: węzły korzystają z jej pul adresów, a klient może ją wybrać przy zamówieniu, jeśli jest widoczna. Wyłączenie przyjmowania maszyn wstrzymuje sprzedaż na wszystkich węzłach grupy naraz.') }}
 </p>
 
 @php
@@ -18,12 +16,12 @@
 @endphp
 
 <details class="form-block card" @if($groups->isEmpty()) open @endif>
-    <summary>Utwórz grupę</summary>
+    <summary>{{ __('Utwórz grupę') }}</summary>
     <form method="POST" action="{{ route('panel.admin.hypervisor-groups.store') }}" style="margin-top:12px">
         @csrf
         @include('panel.admin._group-fields', ['group' => null, 'f' => $groupFields(null), 'idp' => 'new'])
         @include('panel.admin._group-members', ['group' => null])
-        <button class="btn btn-primary" type="submit">Utwórz grupę</button>
+        <button class="btn btn-primary" type="submit">{{ __('Utwórz grupę') }}</button>
     </form>
 </details>
 
@@ -33,12 +31,12 @@
             <x-icon name="network" :size="16"/> {{ $group->name }}
             <span style="margin-left:auto; display:flex; gap:6px; flex-wrap:wrap">
                 @if ($group->is_public)
-                    <span class="pill ok">widoczna: {{ $group->publicName() }}</span>
+                    <span class="pill ok">{{ __('widoczna: :publicname', ['publicname' => $group->publicName()]) }}</span>
                 @endif
                 @unless ($group->accepts_new_servers)
-                    <span class="pill warning">sprzedaż wstrzymana</span>
+                    <span class="pill warning">{{ __('sprzedaż wstrzymana') }}</span>
                 @endunless
-                <span class="pill neutral">{{ $group->hypervisors->count() }} węzł. · {{ $group->ip_pools_count }} pul</span>
+                <span class="pill neutral">{{ __(':count węzł. · :ip_pools_count pul', ['count' => $group->hypervisors->count(), 'ip_pools_count' => $group->ip_pools_count]) }}</span>
             </span>
         </h3>
         @if ($group->description)
@@ -54,23 +52,23 @@
         @endif
 
         <details class="form-block">
-            <summary>Ustawienia grupy</summary>
+            <summary>{{ __('Ustawienia grupy') }}</summary>
             <form method="POST" action="{{ route('panel.admin.hypervisor-groups.update', $group) }}">
                 @csrf @method('PUT')
                 @include('panel.admin._group-fields', ['group' => $group, 'f' => $groupFields($group), 'idp' => $group->id])
                 @include('panel.admin._group-members', ['group' => $group])
-                <button class="btn btn-primary" type="submit">Zapisz</button>
+                <button class="btn btn-primary" type="submit">{{ __('Zapisz') }}</button>
             </form>
         </details>
 
         @if ($group->ip_pools_count === 0)
             <form method="POST" action="{{ route('panel.admin.hypervisor-groups.destroy', $group) }}"
-                  onsubmit="return confirm('Usunąć grupę {{ $group->name }}? Węzły zostaną bez grupy.')">
+                  onsubmit="return confirm(@js(__('Usunąć grupę :name? Węzły zostaną bez grupy.', ['name' => $group->name])))">
                 @csrf @method('DELETE')
-                <button class="btn btn-sm btn-danger" type="submit">Usuń grupę</button>
+                <button class="btn btn-sm btn-danger" type="submit">{{ __('Usuń grupę') }}</button>
             </form>
         @else
-            <p class="hint">Grupę z pulami adresów można usunąć po usunięciu jej pul.</p>
+            <p class="hint">{{ __('Grupę z pulami adresów można usunąć po usunięciu jej pul.') }}</p>
         @endif
     </div>
 @endforeach

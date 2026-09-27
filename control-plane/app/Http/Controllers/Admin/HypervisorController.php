@@ -64,8 +64,8 @@ class HypervisorController extends Controller
                 'VH_CONTROL_PLANE_URL' => config('app.url'),
                 'VH_BRIDGE' => $hypervisor->bridge,
             ],
-            'note' => 'Skopiuj wartości do /etc/virthub-agent/agent.env na hypervisorze. '
-                .'Nie zobaczysz ich ponownie — zgubione trzeba wygenerować od nowa.',
+            'note' => __('Skopiuj wartości do /etc/virthub-agent/agent.env na hypervisorze. ')
+                .__('Nie zobaczysz ich ponownie — zgubione trzeba wygenerować od nowa.'),
         ], 201);
     }
 
@@ -107,15 +107,15 @@ class HypervisorController extends Controller
     {
         if ($hypervisor->servers()->exists()) {
             return response()->json([
-                'message' => 'Na tym hypervisorze są jeszcze maszyny. Przenieś je lub usuń, '
-                    .'zanim skasujesz węzeł.',
+                'message' => __('Na tym hypervisorze są jeszcze maszyny. Przenieś je lub usuń, ')
+                    .__('zanim skasujesz węzeł.'),
             ], 409);
         }
 
         AuditLog::record('hypervisor.deleted', $hypervisor, ['name' => $hypervisor->name]);
         $hypervisor->delete();
 
-        return response()->json(['message' => 'Hypervisor został usunięty.']);
+        return response()->json(['message' => __('Hypervisor został usunięty.')]);
     }
 
     /** Sprawdzenie łączności na żądanie — bez czekania na cykliczny heartbeat. */
@@ -167,8 +167,8 @@ class HypervisorController extends Controller
                 'VH_AGENT_TOKEN' => $agentToken,
                 'VH_CALLBACK_SECRET' => $callbackSecret,
             ],
-            'note' => 'Wgraj nowe wartości na hypervisor i zrestartuj agenta. '
-                .'Do tego czasu panel nie może zlecać mu zadań.',
+            'note' => __('Wgraj nowe wartości na hypervisor i zrestartuj agenta. ')
+                .__('Do tego czasu panel nie może zlecać mu zadań.'),
         ]);
     }
 

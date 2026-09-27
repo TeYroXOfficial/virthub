@@ -124,8 +124,8 @@ class AdminController extends Controller
     {
         if ($hypervisor->enrolled_at !== null) {
             return back()->withErrors([
-                'enrollment' => "Węzeł {$hypervisor->name} jest już zarejestrowany. "
-                    .'Aby przeinstalować agenta, usuń węzeł i dodaj go ponownie.',
+                'enrollment' => __('Węzeł :name jest już zarejestrowany. ', ['name' => $hypervisor->name])
+                    .__('Aby przeinstalować agenta, usuń węzeł i dodaj go ponownie.'),
             ]);
         }
 
@@ -173,14 +173,14 @@ class AdminController extends Controller
 
         AuditLog::record('hypervisor.updated', $hypervisor, $validated);
 
-        return back()->with('status', "Zapisano ustawienia węzła {$hypervisor->name}.");
+        return back()->with('status', __('Zapisano ustawienia węzła :name.', ['name' => $hypervisor->name]));
     }
 
     public function checkHypervisor(Hypervisor $hypervisor): RedirectResponse
     {
         if ($hypervisor->agent_url === null) {
             return back()->withErrors([
-                'health' => "Węzeł {$hypervisor->name} nie został jeszcze zarejestrowany.",
+                'health' => __('Węzeł :name nie został jeszcze zarejestrowany.', ['name' => $hypervisor->name]),
             ]);
         }
 
@@ -199,7 +199,7 @@ class AdminController extends Controller
         ])->save();
 
         return back()->with('status', sprintf(
-            'Węzeł %s odpowiada: sterownik %s, %d maszyn, wolne %d MB RAM.',
+            __('Węzeł %s odpowiada: sterownik %s, %d maszyn, wolne %d MB RAM.'),
             $hypervisor->name,
             $health['driver'] ?? '?',
             $health['running_vms'] ?? 0,
@@ -212,10 +212,10 @@ class AdminController extends Controller
         // Martwy węzeł z maszynami: administrator może usunąć go razem z ich
         // wpisami w panelu (bez kontaktu z węzłem) — po wpisaniu nazwy węzła.
         if ($request->boolean('purge_servers') && $hypervisor->servers()->exists()) {
-            abort_unless($request->user()->isAdmin(), 403, 'Usunąć węzeł z maszynami może tylko administrator.');
+            abort_unless($request->user()->isAdmin(), 403, __('Usunąć węzeł z maszynami może tylko administrator.'));
 
             if ($request->input('confirm_name') !== $hypervisor->name) {
-                return back()->withErrors(['delete' => 'Wpisz dokładną nazwę węzła, żeby potwierdzić usunięcie razem z maszynami.']);
+                return back()->withErrors(['delete' => __('Wpisz dokładną nazwę węzła, żeby potwierdzić usunięcie razem z maszynami.')]);
             }
 
             foreach ($hypervisor->servers()->get() as $server) {
@@ -225,15 +225,15 @@ class AdminController extends Controller
 
         if ($hypervisor->servers()->exists()) {
             return back()->withErrors([
-                'delete' => "Na węźle {$hypervisor->name} są maszyny. Usuń je najpierw — "
-                    .'skasowanie węzła zostawiłoby je bez opieki.',
+                'delete' => __('Na węźle :name są maszyny. Usuń je najpierw — ', ['name' => $hypervisor->name])
+                    .__('skasowanie węzła zostawiłoby je bez opieki.'),
             ]);
         }
 
         AuditLog::record('hypervisor.deleted', $hypervisor, ['name' => $hypervisor->name]);
         $hypervisor->delete();
 
-        return redirect()->route('panel.admin.hypervisors')->with('status', "Węzeł {$hypervisor->name} został usunięty.");
+        return redirect()->route('panel.admin.hypervisors')->with('status', __('Węzeł :name został usunięty.', ['name' => $hypervisor->name]));
     }
 
     // --- pakiety ------------------------------------------------------------
@@ -273,7 +273,7 @@ class AdminController extends Controller
 
         AuditLog::record('package.created', $package, ['slug' => $package->slug]);
 
-        return back()->with('status', "Pakiet {$package->name} został dodany.");
+        return back()->with('status', __('Pakiet :name został dodany.', ['name' => $package->name]));
     }
 
     public function togglePackage(VpsPackage $package): RedirectResponse
@@ -281,8 +281,8 @@ class AdminController extends Controller
         $package->update(['is_active' => ! $package->is_active]);
 
         return back()->with('status', $package->is_active
-            ? "Pakiet {$package->name} jest znowu dostępny w sprzedaży."
-            : "Pakiet {$package->name} został wycofany ze sprzedaży. Istniejące maszyny działają dalej.");
+            ? __('Pakiet :name jest znowu dostępny w sprzedaży.', ['name' => $package->name])
+            : __('Pakiet :name został wycofany ze sprzedaży. Istniejące maszyny działają dalej.', ['name' => $package->name]));
     }
 
     // --- szablony -----------------------------------------------------------
@@ -347,13 +347,13 @@ class AdminController extends Controller
             'min_disk_gb' => ['required', 'integer', 'min:1'],
         ], [
             'image_file.regex' => $isContainer
-                ? 'Podaj alias obrazu kontenera, np. debian/12/cloud (małe litery, bez prefiksu serwera).'
-                : 'Podaj samą nazwę pliku obrazu, bez ścieżki (np. ubuntu-24.04.qcow2).',
+                ? __('Podaj alias obrazu kontenera, np. debian/12/cloud (małe litery, bez prefiksu serwera).')
+                : __('Podaj samą nazwę pliku obrazu, bez ścieżki (np. ubuntu-24.04.qcow2).'),
         ]);
 
         if ($isContainer && $validated['family'] === 'windows') {
             return back()->withInput()->withErrors([
-                'family' => 'Windows nie działa w kontenerze — kontener dzieli jądro Linuksa z hostem.',
+                'family' => __('Windows nie działa w kontenerze — kontener dzieli jądro Linuksa z hostem.'),
             ]);
         }
 
@@ -369,12 +369,12 @@ class AdminController extends Controller
         if ($template->isContainer()) {
             $queued = $distributor->distribute($template);
 
-            return back()->with('status', "Szablon {$template->name} został dodany. "
-                ."Pobieranie zlecone na {$queued} ".($queued === 1 ? 'węźle' : 'węzłach').' kontenerów.');
+            return back()->with('status', __('Szablon :name został dodany. ', ['name' => $template->name])
+                ."Pobieranie zlecone na {$queued} ".($queued === 1 ? 'węźle' : 'węzłach').__(' kontenerów.'));
         }
 
-        return back()->with('status', "Szablon {$template->name} został dodany. "
-            ."Upewnij się, że plik {$template->image_file} leży w katalogu szablonów na każdym węźle KVM.");
+        return back()->with('status', __('Szablon :name został dodany. ', ['name' => $template->name])
+            .__('Upewnij się, że plik :image_file leży w katalogu szablonów na każdym węźle KVM.', ['image_file' => $template->image_file]));
     }
 
     /** Dodanie szablonu kontenera z katalogu jednym kliknięciem. */
@@ -402,10 +402,10 @@ class AdminController extends Controller
         AuditLog::record('template.created', $template, ['name' => $template->name, 'catalog' => $key]);
         $queued = $distributor->distribute($template);
 
-        return back()->with('status', "Dodano {$template->name}. "
+        return back()->with('status', __('Dodano :name. ', ['name' => $template->name])
             .($queued > 0
-                ? "Pobieranie zlecone na {$queued} ".($queued === 1 ? 'węźle' : 'węzłach').'.'
-                : 'Nie ma jeszcze węzła kontenerów — szablon pobierze się, gdy taki dołączy.'));
+                ? trans_choice('Pobieranie zlecone na :count węźle.|Pobieranie zlecone na :count węzłach.|Pobieranie zlecone na :count węzłach.', $queued)
+                : __('Nie ma jeszcze węzła kontenerów — szablon pobierze się, gdy taki dołączy.')));
     }
 
     public function retryTemplate(OsTemplate $template, TemplateDistributor $distributor): RedirectResponse
@@ -413,8 +413,8 @@ class AdminController extends Controller
         $queued = $distributor->retryFailed($template);
 
         return back()->with('status', $queued > 0
-            ? "Ponowiono pobieranie {$template->name} na {$queued} ".($queued === 1 ? 'węźle' : 'węzłach').'.'
-            : "Szablon {$template->name} nie ma nieudanych pobrań do ponowienia.");
+            ? trans_choice('Ponowiono pobieranie :name na :count węźle.|Ponowiono pobieranie :name na :count węzłach.|Ponowiono pobieranie :name na :count węzłach.', $queued, ['name' => $template->name])
+            : __('Szablon :name nie ma nieudanych pobrań do ponowienia.', ['name' => $template->name]));
     }
 
     public function toggleTemplate(OsTemplate $template, TemplateDistributor $distributor): RedirectResponse
@@ -428,8 +428,8 @@ class AdminController extends Controller
         }
 
         return back()->with('status', $template->is_active
-            ? "Szablon {$template->name} jest znowu dostępny."
-            : "Szablon {$template->name} został wyłączony.");
+            ? __('Szablon :name jest znowu dostępny.', ['name' => $template->name])
+            : __('Szablon :name został wyłączony.', ['name' => $template->name]));
     }
 
     /** Edycja wersji: nazwa, wersja, system (grupa), kolejność, minimalny dysk. */
@@ -454,15 +454,15 @@ class AdminController extends Controller
         $count = $template->servers()->count();
         if ($count > 0) {
             return back()->withErrors([
-                'template' => "Na {$template->name} stoi {$count} maszyn — usuń je albo przeinstaluj na inny system. "
-                    .'Możesz też tylko wyłączyć ten szablon, żeby nie był dostępny do zamówienia.',
+                'template' => __('Na :name stoi :count maszyn — usuń je albo przeinstaluj na inny system. ', ['name' => $template->name, 'count' => $count])
+                    .__('Możesz też tylko wyłączyć ten szablon, żeby nie był dostępny do zamówienia.'),
             ]);
         }
 
         AuditLog::record('template.deleted', $template, ['name' => $template->name]);
         $template->delete();
 
-        return back()->with('status', "Usunięto szablon {$template->name}. Plik obrazu na węzłach usuń ręcznie, jeśli nie jest potrzebny.");
+        return back()->with('status', __('Usunięto szablon :name. Plik obrazu na węzłach usuń ręcznie, jeśli nie jest potrzebny.', ['name' => $template->name]));
     }
 
     /**
@@ -538,20 +538,20 @@ class AdminController extends Controller
         $group->update(['is_active' => ! $group->is_active]);
 
         return back()->with('status', $group->is_active
-            ? "System {$group->name} jest znowu dostępny."
-            : "System {$group->name} został ukryty — żadna jego wersja nie jest dostępna do zamówienia ani reinstalacji.");
+            ? __('System :name jest znowu dostępny.', ['name' => $group->name])
+            : __('System :name został ukryty — żadna jego wersja nie jest dostępna do zamówienia ani reinstalacji.', ['name' => $group->name]));
     }
 
     public function destroyTemplateGroup(OsTemplateGroup $group): RedirectResponse
     {
         if ($group->templates()->exists()) {
-            return back()->withErrors(['group' => "System {$group->name} ma wersje — usuń je albo przenieś do innego systemu."]);
+            return back()->withErrors(['group' => __('System :name ma wersje — usuń je albo przenieś do innego systemu.', ['name' => $group->name])]);
         }
 
         AuditLog::record('template_group.deleted', $group, ['name' => $group->name]);
         $group->delete();
 
-        return back()->with('status', "Usunięto system {$group->name}.");
+        return back()->with('status', __('Usunięto system :name.', ['name' => $group->name]));
     }
 
     /** @return array<string, list<mixed>> */
@@ -587,15 +587,15 @@ class AdminController extends Controller
         ['pool' => $pool, 'imported' => $imported] = $pools->create($validated);
 
         return back()->with('status', $pool->version === 4
-            ? "Zaimportowano {$imported} adresów do puli {$pool->name}."
-            : "Dodano pulę IPv6 {$pool->name}. Adresy będą przydzielane kolejno przy zamówieniach.");
+            ? __('Zaimportowano :imported adresów do puli :name.', ['imported' => $imported, 'name' => $pool->name])
+            : __('Dodano pulę IPv6 :name. Adresy będą przydzielane kolejno przy zamówieniach.', ['name' => $pool->name]));
     }
 
     public function destroyIpPool(IpPool $pool, IpPoolManager $pools): RedirectResponse
     {
         $pools->delete($pool);
 
-        return back()->with('status', "Pula {$pool->name} została usunięta.");
+        return back()->with('status', __('Pula :name została usunięta.', ['name' => $pool->name]));
     }
 
     // --- grupy węzłów -------------------------------------------------------
@@ -617,7 +617,7 @@ class AdminController extends Controller
             $this->groupSettings($request, $validated),
         );
 
-        return back()->with('status', "Utworzono grupę {$group->name}.");
+        return back()->with('status', __('Utworzono grupę :name.', ['name' => $group->name]));
     }
 
     public function updateHypervisorGroup(Request $request, HypervisorGroup $group, HypervisorGroupManager $groups): RedirectResponse
@@ -640,7 +640,7 @@ class AdminController extends Controller
             $this->groupSettings($request, $validated),
         );
 
-        return back()->with('status', "Zapisano grupę {$group->name}.");
+        return back()->with('status', __('Zapisano grupę :name.', ['name' => $group->name]));
     }
 
     /** @return array<string, list<string>> */
@@ -673,7 +673,7 @@ class AdminController extends Controller
     {
         $groups->delete($group);
 
-        return back()->with('status', 'Grupa została usunięta. Węzły działają dalej bez grupy.');
+        return back()->with('status', __('Grupa została usunięta. Węzły działają dalej bez grupy.'));
     }
 
     // --- maszyny ------------------------------------------------------------
@@ -711,7 +711,7 @@ class AdminController extends Controller
             'ids' => ['required', 'array', 'min:1', 'max:200'],
             'ids.*' => ['integer'],
             'action' => ['required', Rule::in(['delete', 'purge'])],
-        ], ['ids.required' => 'Zaznacz co najmniej jedną maszynę.']);
+        ], ['ids.required' => __('Zaznacz co najmniej jedną maszynę.')]);
 
         $done = [];
         $skipped = [];
@@ -732,10 +732,10 @@ class AdminController extends Controller
             $done[] = $server->hostname;
         }
 
-        $message = ($validated['action'] === 'purge' ? 'Usunięto z panelu: ' : 'Zlecono usunięcie: ')
+        $message = ($validated['action'] === 'purge' ? __('Usunięto z panelu: ') : __('Zlecono usunięcie: '))
             .($done === [] ? 'nic' : implode(', ', $done)).'.';
         if ($skipped !== []) {
-            $message .= ' Pominięto (brak uprawnień albo już usuwane): '.implode(', ', $skipped).'.';
+            $message .= __(' Pominięto (brak uprawnień albo już usuwane): ').implode(', ', $skipped).'.';
         }
 
         return back()->with('status', $message);

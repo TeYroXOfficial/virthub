@@ -1,6 +1,6 @@
 @extends('layouts.panel')
 
-@section('title', 'Konsola — '.$server->hostname)
+@section('title', __('Konsola — :hostname', ['hostname' => $server->hostname]))
 
 @if ($enabled && $kind === 'terminal')
     @push('head')
@@ -11,45 +11,43 @@
 @section('content')
     <div class="page-header">
         <div>
-            <h1>Konsola: {{ $server->hostname }}</h1>
+            <h1>{{ __('Konsola: :hostname', ['hostname' => $server->hostname]) }}</h1>
             <p class="lede">
                 @if ($kind === 'vnc')
-                    Ekran maszyny (VNC) — działa nawet wtedy, gdy zepsuta konfiguracja sieci odcięła SSH.
+                    {{ __('Ekran maszyny (VNC) — działa nawet wtedy, gdy zepsuta konfiguracja sieci odcięła SSH.') }}
                 @else
-                    Terminal kontenera — zaloguj się jako <code>root</code> hasłem z panelu.
+                    {{ __('Terminal kontenera — zaloguj się jako') }} <code>root</code> {{ __('hasłem z panelu.') }}
                 @endif
             </p>
         </div>
         <div class="actions">
-            <a class="btn" href="{{ route('panel.servers.show', $server) }}"><x-icon name="arrow-left" :size="16"/> Wróć do maszyny</a>
+            <a class="btn" href="{{ route('panel.servers.show', $server) }}"><x-icon name="arrow-left" :size="16"/> {{ __('Wróć do maszyny') }}</a>
         </div>
     </div>
 
     @if (! $enabled)
         <div class="alert alert-warning">
-            <strong>Przekaźnik konsoli nie jest skonfigurowany na tej instalacji.</strong>
+            <strong>{{ __('Przekaźnik konsoli nie jest skonfigurowany na tej instalacji.') }}</strong>
             <p>
-                Brakuje <code>VIRTHUB_CONSOLE_SECRET</code> w pliku <code>.env</code> panelu.
-                Instalator panelu ustawia go automatycznie razem z usługą <code>virthub-console</code> —
-                uruchom aktualizację panelu jeszcze raz.
+                {{ __('Brakuje') }} <code>VIRTHUB_CONSOLE_SECRET</code> {{ __('w pliku') }} <code>.env</code> {{ __('panelu. Instalator panelu ustawia go automatycznie razem z usługą') }} <code>virthub-console</code> {{ __('— uruchom aktualizację panelu jeszcze raz.') }}
             </p>
         </div>
     @else
         <div class="console-frame" id="console-frame">
             <div class="console-toolbar">
                 @if ($kind === 'vnc')
-                    <button class="btn btn-sm" type="button" id="btn-cad" title="Wyślij Ctrl+Alt+Del">
-                        <x-icon name="keyboard" :size="14"/> Ctrl+Alt+Del
+                    <button class="btn btn-sm" type="button" id="btn-cad" title="{{ __('Wyślij Ctrl+Alt+Del') }}">
+                        <x-icon name="keyboard" :size="14"/> {{ __('Ctrl+Alt+Del') }}
                     </button>
-                    <button class="btn btn-sm" type="button" id="btn-paste" title="Wpisz tekst ze schowka do maszyny">
-                        <x-icon name="copy" :size="14"/> Wklej tekst
+                    <button class="btn btn-sm" type="button" id="btn-paste" title="{{ __('Wpisz tekst ze schowka do maszyny') }}">
+                        <x-icon name="copy" :size="14"/> {{ __('Wklej tekst') }}
                     </button>
                 @endif
-                <button class="btn btn-sm" type="button" id="btn-full"><x-icon name="maximize" :size="14"/> Pełny ekran</button>
+                <button class="btn btn-sm" type="button" id="btn-full"><x-icon name="maximize" :size="14"/> {{ __('Pełny ekran') }}</button>
                 <span class="console-status">
-                    <span class="pill warning" id="console-state">łączenie…</span>
+                    <span class="pill warning" id="console-state">{{ __('łączenie…') }}</span>
                     <button class="btn btn-sm" type="button" id="btn-reconnect" hidden>
-                        <x-icon name="refresh" :size="14"/> Połącz ponownie
+                        <x-icon name="refresh" :size="14"/> {{ __('Połącz ponownie') }}
                     </button>
                 </span>
             </div>
@@ -58,8 +56,7 @@
             </div>
         </div>
         <p class="hint" style="margin-top:10px">
-            Sesja jest jednorazowa — po rozłączeniu albo odświeżeniu strony otwórz konsolę ponownie
-            z widoku maszyny. Ruch idzie szyfrowanym tunelem przez panel; adres węzła nie trafia do przeglądarki.
+            {{ __('Sesja jest jednorazowa — po rozłączeniu albo odświeżeniu strony otwórz konsolę ponownie z widoku maszyny. Ruch idzie szyfrowanym tunelem przez panel; adres węzła nie trafia do przeglądarki.') }}
         </p>
     @endif
 @endsection
@@ -103,13 +100,13 @@
                 rfb.background = '#000';
 
                 rfb.addEventListener('connect', () => {
-                    vhConsoleState('połączono', 'ok');
+                    vhConsoleState(@js(__('połączono')), 'ok');
                     rfb.focus();
                 });
                 rfb.addEventListener('disconnect', (e) => {
-                    vhConsoleState(e.detail.clean ? 'rozłączono' : 'połączenie przerwane', 'critical');
+                    vhConsoleState(e.detail.clean ? @js(__('rozłączono')) : @js(__('połączenie przerwane')), 'critical');
                 });
-                rfb.addEventListener('securityfailure', () => vhConsoleState('odmowa dostępu VNC', 'critical'));
+                rfb.addEventListener('securityfailure', () => vhConsoleState(@js(__('odmowa dostępu VNC')), 'critical'));
 
                 document.getElementById('btn-cad').addEventListener('click', () => rfb.sendCtrlAltDel());
 
@@ -118,7 +115,7 @@
                 document.getElementById('btn-paste').addEventListener('click', async () => {
                     let text = '';
                     try { text = await navigator.clipboard.readText(); } catch (e) {}
-                    if (!text) text = prompt('Tekst do wpisania w maszynie:') || '';
+                    if (!text) text = prompt(@js(__('Tekst do wpisania w maszynie:'))) || '';
                     for (const ch of text) {
                         const code = ch.codePointAt(0);
                         const keysym = ch === '\n' ? 0xff0d : (code < 0x100 ? code : 0x01000000 + code);
@@ -155,14 +152,14 @@
                     };
 
                     ws.onopen = () => {
-                        vhConsoleState('połączono', 'ok');
+                        vhConsoleState(@js(__('połączono')), 'ok');
                         sendSize();
                         term.focus();
                     };
                     ws.onmessage = (event) => term.write(new Uint8Array(event.data));
                     ws.onclose = (event) => {
-                        vhConsoleState(event.reason || 'rozłączono', 'critical');
-                        term.write('\r\n\x1b[90m— połączenie zamknięte —\x1b[0m\r\n');
+                        vhConsoleState(event.reason || @js(__('rozłączono')), 'critical');
+                        term.write('\r\n\x1b[90m' + @js(__('— połączenie zamknięte —')) + '\x1b[0m\r\n');
                     };
 
                     term.onData((data) => {

@@ -69,7 +69,7 @@ class ServerController extends Controller
         $job = $this->provisioner->destroy($server, $request->user());
 
         return response()->json([
-            'message' => 'Maszyna została zgłoszona do usunięcia.',
+            'message' => __('Maszyna została zgłoszona do usunięcia.'),
             'job_id' => $job->id,
         ], 202);
     }
@@ -87,7 +87,7 @@ class ServerController extends Controller
         $job = $this->provisioner->power($server, $validated['action'], $request->user());
 
         return response()->json([
-            'message' => 'Polecenie zostało przekazane do hypervisora.',
+            'message' => __('Polecenie zostało przekazane do hypervisora.'),
             'job_id' => $job->id,
         ], 202);
     }
@@ -113,7 +113,7 @@ class ServerController extends Controller
         );
 
         return response()->json([
-            'message' => 'Rozpoczęto ponowną instalację systemu. Wszystkie dane na dysku zostaną utracone.',
+            'message' => __('Rozpoczęto ponowną instalację systemu. Wszystkie dane na dysku zostaną utracone.'),
             'job_id' => $job->id,
         ], 202);
     }
@@ -133,7 +133,7 @@ class ServerController extends Controller
         );
 
         return response()->json([
-            'message' => 'Zmiana pakietu została zlecona.',
+            'message' => __('Zmiana pakietu została zlecona.'),
             'job_id' => $job->id,
         ], 202);
     }
@@ -146,7 +146,7 @@ class ServerController extends Controller
         $this->authorize('view', $server);
 
         $range = $request->string('range', 'day')->value();
-        abort_unless(array_key_exists($range, ServerMetrics::RANGES), 422, 'Zakres musi być jednym z: hour, day, week.');
+        abort_unless(array_key_exists($range, ServerMetrics::RANGES), 422, __('Zakres musi być jednym z: hour, day, week.'));
 
         return response()->json($metrics->history($server, $range));
     }
@@ -157,13 +157,13 @@ class ServerController extends Controller
         $this->authorize('view', $server);
 
         if (! $server->isRunning() || $server->hypervisor === null || blank($server->agent_uuid)) {
-            return response()->json(['message' => 'Podgląd na żywo jest dostępny tylko dla działającej maszyny.'], 409);
+            return response()->json(['message' => __('Podgląd na żywo jest dostępny tylko dla działającej maszyny.')], 409);
         }
 
         try {
             return response()->json($metrics->live($server));
         } catch (AgentException $e) {
-            return response()->json(['message' => 'Węzeł maszyny nie odpowiada.'], 503);
+            return response()->json(['message' => __('Węzeł maszyny nie odpowiada.')], 503);
         }
     }
 
@@ -201,8 +201,8 @@ class ServerController extends Controller
             'password' => $password,
             'available' => $password !== null,
             'note' => $password === null
-                ? 'Hasło początkowe zostało już wyświetlone. Zresetuj je z poziomu maszyny albo przebuduj system.'
-                : 'Zapisz je teraz — nie zobaczysz go ponownie.',
+                ? __('Hasło początkowe zostało już wyświetlone. Zresetuj je z poziomu maszyny albo przebuduj system.')
+                : __('Zapisz je teraz — nie zobaczysz go ponownie.'),
         ]);
     }
 
@@ -216,7 +216,7 @@ class ServerController extends Controller
 
         if (! $server->isRunning()) {
             return response()->json([
-                'message' => 'Konsola jest dostępna tylko dla działającej maszyny.',
+                'message' => __('Konsola jest dostępna tylko dla działającej maszyny.'),
             ], 409);
         }
 

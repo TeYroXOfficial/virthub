@@ -5,7 +5,7 @@
 @if ($errors->any())
     <div class="alert alert-error" role="alert">
         <div>
-            <strong>Nie udało się wykonać operacji:</strong>
+            <strong>{{ __('Nie udało się wykonać operacji:') }}</strong>
             <ul>
                 @foreach ($errors->all() as $error)
                     <li>{{ $error }}</li>

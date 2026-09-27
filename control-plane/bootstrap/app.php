@@ -33,6 +33,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // „Uruchom" w przeglądarce wymagałby osobnego tokenu.
         $middleware->statefulApi();
 
+        // Język: konto → sesja → przeglądarka → domyślny (VIRTHUB_LOCALE).
+        $middleware->web(append: [\App\Http\Middleware\SetLocale::class]);
+        $middleware->api(append: [\App\Http\Middleware\SetLocale::class]);
+
         // Callback agenta jest podpisany HMAC i przychodzi spoza przeglądarki —
         // token CSRF nie ma tam zastosowania ani sensu.
         $middleware->validateCsrfTokens(except: [

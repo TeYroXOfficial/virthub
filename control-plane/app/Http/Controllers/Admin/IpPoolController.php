@@ -69,8 +69,8 @@ class IpPoolController extends Controller
 
         return response()->json([
             'message' => $pool->version === 4
-                ? "Zaimportowano {$imported} adresów."
-                : 'Dodano pulę IPv6 — adresy będą przydzielane przy zamówieniach.',
+                ? __('Zaimportowano :imported adresów.', ['imported' => $imported])
+                : __('Dodano pulę IPv6 — adresy będą przydzielane przy zamówieniach.'),
             'pool_id' => $pool->id,
             'imported' => $imported,
         ], 201);
@@ -80,7 +80,7 @@ class IpPoolController extends Controller
     {
         $pools->delete($pool);
 
-        return response()->json(['message' => 'Pula została usunięta.']);
+        return response()->json(['message' => __('Pula została usunięta.')]);
     }
 
     public function addresses(Request $request, IpPool $pool): JsonResponse
@@ -109,8 +109,8 @@ class IpPoolController extends Controller
 
         if ($address->is_primary && $address->server_id !== null) {
             return response()->json([
-                'message' => 'To jest główny adres maszyny. Przypisz jej najpierw inny adres '
-                    .'jako główny, zanim zwolnisz ten.',
+                'message' => __('To jest główny adres maszyny. Przypisz jej najpierw inny adres ')
+                    .__('jako główny, zanim zwolnisz ten.'),
             ], 409);
         }
 
@@ -119,7 +119,7 @@ class IpPoolController extends Controller
 
         AuditLog::record('ip.released', $address, ['server_id' => $serverId]);
 
-        return response()->json(['message' => 'Adres wrócił do puli.']);
+        return response()->json(['message' => __('Adres wrócił do puli.')]);
     }
 
     public function updateRdns(Request $request, IpAddress $address): JsonResponse
@@ -131,7 +131,7 @@ class IpPoolController extends Controller
         $address->forceFill(['rdns' => $validated['rdns'] ?? null])->save();
 
         return response()->json([
-            'message' => 'Zapisano rekord PTR. Propagacja u dostawcy może potrwać do kilku godzin.',
+            'message' => __('Zapisano rekord PTR. Propagacja u dostawcy może potrwać do kilku godzin.'),
         ]);
     }
 

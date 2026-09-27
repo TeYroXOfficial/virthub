@@ -1,16 +1,16 @@
 @extends('layouts.panel')
 
-@section('title', 'Moje maszyny')
+@section('title', __('Moje maszyny'))
 
 @section('content')
     <div class="page-header">
         <div>
-            <h1>Moje maszyny</h1>
-            <p class="lede">Serwery na Twoim koncie — stan, adresy i szybki dostęp do zarządzania.</p>
+            <h1>{{ __('Moje maszyny') }}</h1>
+            <p class="lede">{{ __('Serwery na Twoim koncie — stan, adresy i szybki dostęp do zarządzania.') }}</p>
         </div>
         @can('create', \App\Models\Server::class)
             <div class="actions">
-                <a class="btn btn-primary" href="{{ route('panel.servers.create') }}"><x-icon name="plus" :size="16"/> Zamów serwer</a>
+                <a class="btn btn-primary" href="{{ route('panel.servers.create') }}"><x-icon name="plus" :size="16"/> {{ __('Zamów serwer') }}</a>
             </div>
         @endcan
     </div>
@@ -18,21 +18,21 @@
     @if ($servers->isNotEmpty())
         <div class="grid grid-4" style="margin-bottom:20px">
             <div class="stat">
-                <div class="stat-label">Wszystkie</div>
+                <div class="stat-label">{{ __('Wszystkie') }}</div>
                 <div class="stat-value">{{ $servers->count() }}</div>
             </div>
             <div class="stat">
-                <div class="stat-label">Działające</div>
+                <div class="stat-label">{{ __('Działające') }}</div>
                 <div class="stat-value" style="color:var(--ok)">{{ $running }}</div>
             </div>
             <div class="stat">
-                <div class="stat-label">W trakcie operacji</div>
+                <div class="stat-label">{{ __('W trakcie operacji') }}</div>
                 <div class="stat-value" style="color:var(--warn)">{{ $building }}</div>
             </div>
             <div class="stat">
-                <div class="stat-label">Łącznie vCPU / RAM</div>
-                <div class="stat-value">{{ $servers->sum('vcpu') }} <span class="stat-sub">vCPU</span>
-                    · {{ round($servers->sum('ram_mb') / 1024, 1) }} <span class="stat-sub">GB</span></div>
+                <div class="stat-label">{{ __('Łącznie vCPU / RAM') }}</div>
+                <div class="stat-value">{{ $servers->sum('vcpu') }} <span class="stat-sub">{{ __('vCPU') }}</span>
+                    · {{ round($servers->sum('ram_mb') / 1024, 1) }} <span class="stat-sub">{{ __('GB') }}</span></div>
             </div>
         </div>
     @endif
@@ -40,9 +40,9 @@
     @if ($servers->isEmpty())
         <div class="card empty">
             <x-icon name="servers" :size="40"/>
-            <p>Nie masz jeszcze żadnej maszyny.</p>
+            <p>{{ __('Nie masz jeszcze żadnej maszyny.') }}</p>
             @can('create', \App\Models\Server::class)
-                <a class="btn btn-primary" href="{{ route('panel.servers.create') }}">Zamów pierwszy VPS</a>
+                <a class="btn btn-primary" href="{{ route('panel.servers.create') }}">{{ __('Zamów pierwszy VPS') }}</a>
             @endcan
         </div>
     @else
@@ -51,11 +51,11 @@
                 <table>
                     <thead>
                     <tr>
-                        <th>Nazwa hosta</th>
-                        <th>Stan</th>
-                        <th>Adres IP</th>
-                        <th>System</th>
-                        <th>Zasoby</th>
+                        <th>{{ __('Nazwa hosta') }}</th>
+                        <th>{{ __('Stan') }}</th>
+                        <th>{{ __('Adres IP') }}</th>
+                        <th>{{ __('System') }}</th>
+                        <th>{{ __('Zasoby') }}</th>
                         <th></th>
                     </tr>
                     </thead>
@@ -83,11 +83,9 @@
                                 @endif
                             </td>
                             <td class="num">
-                                {{ $server->vcpu }} vCPU ·
-                                {{ round($server->ram_mb / 1024, 1) }} GB ·
-                                {{ $server->disk_gb }} GB
+                                {{ __(':vcpu vCPU · :ram_mb GB · :disk_gb GB', ['vcpu' => $server->vcpu, 'ram_mb' => round($server->ram_mb / 1024, 1), 'disk_gb' => $server->disk_gb]) }}
                             </td>
-                            <td style="text-align:right"><a class="btn btn-sm" href="{{ route('panel.servers.show', $server) }}">Zarządzaj</a></td>
+                            <td style="text-align:right"><a class="btn btn-sm" href="{{ route('panel.servers.show', $server) }}">{{ __('Zarządzaj') }}</a></td>
                         </tr>
                     @endforeach
                     </tbody>
@@ -97,32 +95,31 @@
     @endif
 
     @if ($fleet !== null)
-        <h2>Flota hypervisorów</h2>
+        <h2>{{ __('Flota hypervisorów') }}</h2>
         <div class="grid grid-3">
             @forelse ($fleet as $node)
                 <div class="card">
                     <h3>
                         {{ $node->name }}
                         <span class="pill {{ $node->isOnline() ? 'ok' : 'critical' }}" style="float:right">
-                            {{ $node->isOnline() ? 'online' : $node->status }}
+                            {{ $node->isOnline() ? __('online') : $node->status }}
                         </span>
                     </h3>
                     <dl class="kv">
-                        <dt>Maszyny</dt><dd class="num">{{ $node->servers()->count() }}</dd>
-                        <dt>vCPU</dt><dd class="num">{{ $node->cpu_cores_used }} / {{ $node->cpu_cores_total }}</dd>
-                        <dt>RAM</dt><dd class="num">{{ round($node->ram_mb_used / 1024) }} / {{ round($node->ram_mb_total / 1024) }} GB</dd>
-                        <dt>Dysk</dt><dd class="num">{{ $node->disk_gb_used }} / {{ $node->disk_gb_total }} GB</dd>
+                        <dt>{{ __('Maszyny') }}</dt><dd class="num">{{ $node->servers()->count() }}</dd>
+                        <dt>{{ __('vCPU') }}</dt><dd class="num">{{ $node->cpu_cores_used }} / {{ $node->cpu_cores_total }}</dd>
+                        <dt>{{ __('RAM') }}</dt><dd class="num">{{ __(':ram_mb_used / :ram_mb_total GB', ['ram_mb_used' => round($node->ram_mb_used / 1024), 'ram_mb_total' => round($node->ram_mb_total / 1024)]) }}</dd>
+                        <dt>{{ __('Dysk') }}</dt><dd class="num">{{ __(':disk_gb_used / :disk_gb_total GB', ['disk_gb_used' => $node->disk_gb_used, 'disk_gb_total' => $node->disk_gb_total]) }}</dd>
                     </dl>
                     @php $util = $node->utilisationPercent(); @endphp
                     <div class="meter {{ $util > 80 ? 'hot' : '' }}">
                         <i style="width: {{ min(100, $util) }}%"></i>
                     </div>
-                    <div class="hint">Zajętość {{ $util }}% · ostatni kontakt
-                        {{ $node->last_seen_at?->diffForHumans() ?? 'nigdy' }}</div>
+                    <div class="hint">{{ __('Zajętość :util% · ostatni kontakt :nigdy', ['util' => $util, 'nigdy' => $node->last_seen_at?->diffForHumans() ?? __('nigdy')]) }}</div>
                 </div>
             @empty
                 <div class="card empty">
-                    Brak zarejestrowanych hypervisorów. Dodaj pierwszy przez
+                    {{ __('Brak zarejestrowanych hypervisorów. Dodaj pierwszy przez') }}
                     <code>POST /api/v1/admin/hypervisors</code>.
                 </div>
             @endforelse

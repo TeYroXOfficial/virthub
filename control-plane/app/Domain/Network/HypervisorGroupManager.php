@@ -66,8 +66,8 @@ class HypervisorGroupManager
     {
         if ($group->ipPools()->exists()) {
             throw ValidationException::withMessages([
-                'group' => "Grupa {$group->name} ma pule adresów. Usuń je najpierw — "
-                    .'razem z grupą zniknęłyby adresy działających maszyn.',
+                'group' => __('Grupa :name ma pule adresów. Usuń je najpierw — ', ['name' => $group->name])
+                    .__('razem z grupą zniknęłyby adresy działających maszyn.'),
             ]);
         }
 
@@ -107,8 +107,8 @@ class HypervisorGroupManager
 
         if ($inUse) {
             throw ValidationException::withMessages([
-                $field => "Węzeł {$hypervisor->name} ma maszyny z adresami z puli swojej grupy "
-                    .'— nie może jej opuścić, dopóki te adresy są w użyciu.',
+                $field => __('Węzeł :name ma maszyny z adresami z puli swojej grupy ', ['name' => $hypervisor->name])
+                    .__('— nie może jej opuścić, dopóki te adresy są w użyciu.'),
             ]);
         }
     }

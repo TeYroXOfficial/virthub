@@ -59,8 +59,8 @@ class HypervisorSelector
 
             if ($preferred !== null && $preferred->virtualization !== $type) {
                 throw new NoCapacityException(
-                    "Węzeł {$preferred->name} uruchamia {$preferred->virtualization->label()}, "
-                    ."a zamówienie dotyczy: {$type->label()}."
+                    __('Węzeł :name uruchamia :label, ', ['name' => $preferred->name, 'label' => $preferred->virtualization->label()])
+                    .__('a zamówienie dotyczy: :label.', ['label' => $type->label()])
                 );
             }
 
@@ -73,14 +73,14 @@ class HypervisorSelector
             if ($candidate === null && $accepts !== null
                 && $this->select($server->vcpu, $server->ram_mb, $server->disk_gb, $type) !== null) {
                 throw new NoAddressesException(
-                    "Pula adresów jest wyczerpana: węzły typu {$type->shortLabel()} z wolnymi zasobami "
-                    .'nie mają adresów wymaganych przez pakiet. Dodaj pulę dla węzła albo jego grupy.'
+                    __('Pula adresów jest wyczerpana: węzły typu :shortlabel z wolnymi zasobami ', ['shortlabel' => $type->shortLabel()])
+                    .__('nie mają adresów wymaganych przez pakiet. Dodaj pulę dla węzła albo jego grupy.')
                 );
             }
 
             if ($candidate === null) {
                 throw new NoCapacityException(
-                    "Brak węzła typu {$type->shortLabel()} z wolnymi zasobami na {$server->vcpu} vCPU, "
+                    __('Brak węzła typu :shortlabel z wolnymi zasobami na :vcpu vCPU, ', ['shortlabel' => $type->shortLabel(), 'vcpu' => $server->vcpu])
                     ."{$server->ram_mb} MB RAM i {$server->disk_gb} GB dysku."
                 );
             }
@@ -90,7 +90,7 @@ class HypervisorSelector
 
             if (! $hypervisor->hasCapacityFor($server->vcpu, $server->ram_mb, $server->disk_gb)) {
                 throw new NoCapacityException(
-                    "Hypervisor {$hypervisor->name} nie ma już wolnych zasobów na tę maszynę."
+                    __('Hypervisor :name nie ma już wolnych zasobów na tę maszynę.', ['name' => $hypervisor->name])
                 );
             }
 
