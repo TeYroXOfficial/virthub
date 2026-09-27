@@ -52,6 +52,7 @@ class AgentResultApplier
             'power' => $this->applyPowerState($server, $result),
             'rebuild' => $this->finishRebuild($server->forceFill(['guest_os_id' => null, 'guest_os_name' => null, 'guest_os_version' => null, 'guest_os_checked_at' => null])),
             'resize' => $this->finishResize($server, $job),
+            'cpu_limit' => $server->forceFill(['cpu_limit_percent' => $job->payload['cpu_limit_percent'] ?? null])->save(),
             'delete' => $this->cleanup->finalise($server),
             'snapshot' => $this->finishSnapshot($job, $result),
             'restore' => $server->markState(ServerState::Running),
@@ -176,6 +177,12 @@ class AgentResultApplier
             'build_progress' => 100,
             'last_synced_at' => now(),
         ])->save();
+
+        // Nowy system może mieć inne usługi dostępu (Linux → Windows: RDP)
+        // — przekierowania portów NAT trzeba przeliczyć.
+        if ($server->hasNatAddress()) {
+            app(ServerProvisioner::class)->syncNetwork($server);
+        }
     }
 
     private function finishResize(Server $server, ServerJob $job): void
@@ -186,6 +193,7 @@ class AgentResultApplier
             'vcpu' => $payload['vcpu'] ?? $server->vcpu,
             'ram_mb' => $payload['ram_mb'] ?? $server->ram_mb,
             'disk_gb' => $payload['disk_gb'] ?? $server->disk_gb,
+            'cpu_limit_percent' => array_key_exists('cpu_limit_percent', $payload) ? $payload['cpu_limit_percent'] : $server->cpu_limit_percent,
             'vps_package_id' => $payload['package_id'] ?? $server->vps_package_id,
             'state' => ServerState::Stopped,
             'state_message' => null,

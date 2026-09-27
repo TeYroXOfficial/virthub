@@ -24,6 +24,7 @@ class CatalogController extends Controller
             'slug' => ['nullable', 'string', 'max:100', 'unique:vps_packages,slug'],
             'description' => ['nullable', 'string', 'max:500'],
             'vcpu' => ['required', 'integer', 'min:1', 'max:128'],
+            'cpu_limit_percent' => ['nullable', 'integer', 'min:1', 'lte:'.((int) $request->input('vcpu', 1) * 100)],
             'ram_mb' => ['required', 'integer', 'min:512'],
             'disk_gb' => ['required', 'integer', 'min:5'],
             'bandwidth_gb' => ['required', 'integer', 'min:0'],

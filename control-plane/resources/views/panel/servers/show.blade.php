@@ -158,6 +158,9 @@
                     <dt>{{ __('Procesor') }}</dt>
                     <dd>
                         <span class="num">{{ __(':vcpu vCPU', ['vcpu' => $server->vcpu]) }}</span>
+                        @if ($server->cpu_limit_percent)
+                            <span class="pill neutral plain" title="{{ __('Twardy limit czasu procesora dla całej maszyny') }}">{{ __('limit :percent%', ['percent' => $server->cpu_limit_percent]) }}</span>
+                        @endif
                         @if ($cpu = $server->hypervisor?->cpuModel())
                             <div class="hint">{{ $cpu }}</div>
                         @endif
@@ -202,9 +205,9 @@
                         <dt>{{ __('Brama') }}</dt><dd class="mono">{{ $ip->pool->gateway }}</dd>
                         @if ($ports = $ip->natPorts())
                             <dt>{{ __('Porty') }}</dt>
-                            <dd class="mono">
-                                {{ __(':ssh → 22 (SSH)', ['ssh' => $ports['ssh']]) }}@if($ports['to'] > $ports['from']),
-                                {{ $ports['from'] + 1 }}–{{ $ports['to'] }} (1:1)@endif
+                            <dd>
+                                <span class="mono">{{ $ports['from'] }}–{{ $ports['to'] }}</span>
+                                <a href="#ports" class="muted">{{ __('mapowanie') }}</a>
                             </dd>
                         @endif
                         @if ($ip->rdns)
@@ -220,16 +223,23 @@
                         <p class="hint">
                             {{ __('Maszyna stoi za NAT-em: wychodzi w świat adresem węzła, a z zewnątrz jest osiągalna wyłącznie przez porty powyżej.') }}
                             @if ($ports = $primary->natPorts())
-                                {{ __('Połączenie:') }} <code>ssh -p {{ $ports['ssh'] }} root@{{ $primary->pool->nat_public_address ?: ($server->hypervisor?->hostname ?? __('adres-węzła')) }}</code>{{ __('. Usługę uruchomioną w maszynie na porcie z zakresu :from–:to widać z zewnątrz pod tym samym numerem.', ['from' => $ports['from'] + 1, 'to' => $ports['to']]) }}
+                                @php $natHost = $primary->pool->nat_public_address ?: ($server->hypervisor?->hostname ?? __('adres-węzła')); @endphp
+                                @if ($ports['rdp'])
+                                    <br>{{ __('Pulpit zdalny (RDP):') }} <code>{{ $natHost }}:{{ $ports['rdp'] }}</code>
+                                @endif
+                                @if ($ports['ssh'])
+                                    <br>{{ __('SSH / SFTP:') }} <code>ssh -p {{ $ports['ssh'] }} {{ ($server->osFamily() === 'windows' ? 'Administrator' : 'root').'@'.$natHost }}</code>
+                                @endif
                             @endif
                         </p>
                     @else
-                        <p class="hint">{{ __('Połączenie:') }} <code>ssh root@{{ $primary->address }}</code></p>
+                        <p class="hint">{{ __('Połączenie:') }} <code>ssh {{ 'root@'.$primary->address }}</code></p>
                     @endif
                 @endif
             </div>
         </div>
 
+        @include('panel.servers._ports')
         </div>
 
         <div data-tab-panel="stats" role="tabpanel" hidden>

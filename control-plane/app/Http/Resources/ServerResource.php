@@ -26,6 +26,8 @@ class ServerResource extends JsonResource
 
             'resources' => [
                 'vcpu' => $this->vcpu,
+                // Twardy limit CPU w procentach jednego rdzenia (null = bez limitu).
+                'cpu_limit_percent' => $this->cpu_limit_percent,
                 'ram_mb' => $this->ram_mb,
                 'disk_gb' => $this->disk_gb,
                 'bandwidth_gb' => $this->bandwidth_gb,
@@ -60,9 +62,13 @@ class ServerResource extends JsonResource
                     'primary' => $ip->is_primary,
                     'rdns' => $ip->rdns,
                     'type' => $ip->pool?->type ?? 'public',
-                    // Za NAT-em maszyna jest osiągalna tylko przez te porty:
-                    // ssh → 22, reszta zakresu 1:1.
+                    // Za NAT-em maszyna jest osiągalna tylko przez blok portów;
+                    // port_forwards to pełne mapowanie (usługi stałe, ustawione, 1:1).
                     'nat_ports' => $ip->natPorts(),
+                    'port_forwards' => $ip->natPorts() === null ? [] : array_map(
+                        fn (array $e) => \Illuminate\Support\Arr::except($e, ['id']),
+                        \App\Domain\Network\PortForwarding::mapping($ip, $this->resource),
+                    ),
                 ])->values()),
 
             // Widoczne tylko dla personelu — klient nie musi wiedzieć, na którym

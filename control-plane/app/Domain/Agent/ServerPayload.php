@@ -3,6 +3,7 @@
 namespace App\Domain\Agent;
 
 use App\Domain\Network\Firewall;
+use App\Domain\Network\PortForwarding;
 use App\Models\IpAddress;
 use App\Models\Server;
 
@@ -21,13 +22,13 @@ class ServerPayload
         return $server->ipAddresses()
             ->with('pool')
             ->get()
-            ->map(fn (IpAddress $ip) => self::interface($ip))
+            ->map(fn (IpAddress $ip) => self::interface($ip, $server))
             ->values()
             ->all();
     }
 
     /** @return array<string, mixed> */
-    public static function interface(IpAddress $ip): array
+    public static function interface(IpAddress $ip, ?Server $server = null): array
     {
         $pool = $ip->pool;
         $interface = [
@@ -46,6 +47,11 @@ class ServerPayload
                 'port_from' => $ports['from'] ?? null,
                 'port_to' => $ports['to'] ?? null,
             ];
+            if ($ports !== null) {
+                // Pełne mapowanie bloku: usługi dostępu wg systemu, porty
+                // ustawione przez klienta, reszta 1:1.
+                $interface['nat']['forwards'] = PortForwarding::agentPayload($ip, $server);
+            }
         }
 
         return $interface;
@@ -66,6 +72,7 @@ class ServerPayload
             'server_id' => $server->id,
             'hostname' => $server->hostname,
             'vcpu' => $server->vcpu,
+            'cpu_limit_percent' => $server->cpu_limit_percent,
             'ram_mb' => $server->ram_mb,
             'disk_gb' => $server->disk_gb,
             'template' => $server->template->image_file,

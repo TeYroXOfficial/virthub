@@ -268,6 +268,8 @@ class IncusDriver(HypervisorDriver):
                 "init", f"local:{alias}", name,
                 "--storage", self.pool,
                 "-c", f"limits.cpu={req.vcpu}",
+                *(["-c", f"limits.cpu.allowance={cpu_allowance(req.cpu_limit_percent)}"]
+                  if req.cpu_limit_percent else []),
                 "-c", f"limits.memory={req.ram_mb}MiB",
                 "-c", f"{UUID_KEY}={vm_uuid}",
                 "-c", f"user.virthub.server-id={req.server_id}",
@@ -500,6 +502,18 @@ class IncusDriver(HypervisorDriver):
         instance = self._query(f"/1.0/instances/{name}") or {}
         return (instance.get("config") or {}).get("cloud-init.network-config")
 
+    def set_cpu_limit(self, uuid: str, cpu_limit_percent: int | None) -> dict[str, Any]:
+        """Twardy przydział czasu CPU — działa od razu, bez restartu kontenera."""
+        name = self._name_for(uuid)
+        if cpu_limit_percent:
+            self._incus("config", "set", name, f"limits.cpu.allowance={cpu_allowance(cpu_limit_percent)}")
+        else:
+            try:
+                self._incus("config", "unset", name, "limits.cpu.allowance")
+            except CommandFailed:
+                pass  # klucza nie było — bez limitu, tak jak ma być
+        return {"uuid": uuid, "cpu_limit_percent": cpu_limit_percent}
+
     def resize(self, uuid: str, req: ResizeVmRequest) -> dict[str, Any]:
         name = self._name_for(uuid)
         instance = self._query(f"/1.0/instances/{name}") or {}
@@ -518,6 +532,8 @@ class IncusDriver(HypervisorDriver):
             f"limits.cpu={req.vcpu}",
             f"limits.memory={req.ram_mb}MiB",
         )
+        if "cpu_limit_percent" in req.model_fields_set:
+            self.set_cpu_limit(uuid, req.cpu_limit_percent)
         progress("disk", 75)
         self._incus("config", "device", "set", name, "root", f"size={req.disk_gb}GiB")
         return {"uuid": uuid, "vcpu": req.vcpu, "ram_mb": req.ram_mb, "disk_gb": req.disk_gb}
@@ -646,6 +662,11 @@ class IncusDriver(HypervisorDriver):
             "max_processes": self.settings.ct_max_processes,
             "instance_issues": issues,
         }
+
+
+def cpu_allowance(cpu_limit_percent: int) -> str:
+    """Limit w formacie Incusa: czas CPU na okres 100 ms (twardy, nie udział)."""
+    return f"{cpu_limit_percent}ms/100ms"
 
 
 def _parse_gib(value: str) -> int | None:

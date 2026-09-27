@@ -23,6 +23,7 @@ class Server extends Model
         'hostname',
         'label',
         'vcpu',
+        'cpu_limit_percent',
         'ram_mb',
         'disk_gb',
         'bandwidth_gb',
@@ -80,6 +81,18 @@ class Server extends Model
     public function ipAddresses(): HasMany
     {
         return $this->hasMany(IpAddress::class);
+    }
+
+    /** @return HasMany<NatPortForward, $this> */
+    public function portForwards(): HasMany
+    {
+        return $this->hasMany(NatPortForward::class);
+    }
+
+    /** Czy maszyna ma adres za NAT-em (przekierowania zależą od systemu). */
+    public function hasNatAddress(): bool
+    {
+        return $this->ipAddresses()->whereHas('pool', fn ($q) => $q->where('type', IpPool::TYPE_NAT))->exists();
     }
 
     /** @return HasMany<ServerJob, $this> */

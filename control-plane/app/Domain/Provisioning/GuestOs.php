@@ -57,12 +57,20 @@ class GuestOs
         $clip = fn ($v, int $n) => is_string($v) && $v !== '' ? mb_substr(trim($v), 0, $n) : null;
         $id = $clip($info['id'] ?? null, 40);
 
+        $familyBefore = $server->osFamily();
+
         $server->forceFill([
             'guest_os_id' => $id !== null ? (preg_replace('/[^a-z0-9._-]/', '', strtolower($id)) ?: null) : null,
             'guest_os_name' => $clip($info['pretty_name'] ?? $info['name'] ?? null, 120),
             'guest_os_version' => $clip($info['version'] ?? null, 40),
             'guest_os_checked_at' => now(),
         ])->save();
+
+        // System zainstalowany z ISO może być inny niż szablon (np. Windows)
+        // — usługi dostępu za NAT-em idą za faktycznym systemem.
+        if ($server->osFamily() !== $familyBefore && $server->hasNatAddress()) {
+            app(ServerProvisioner::class)->syncNetwork($server);
+        }
 
         return true;
     }

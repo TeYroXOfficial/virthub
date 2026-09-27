@@ -23,6 +23,12 @@
                     <input id="vcpu" name="vcpu" type="text" value="{{ old('vcpu', 2) }}" required>
                 </div>
                 <div class="field">
+                    <label for="cpu_limit_percent">{{ __('Limit CPU (%)') }} <span class="muted">{{ __('(opcjonalnie)') }}</span></label>
+                    <input id="cpu_limit_percent" name="cpu_limit_percent" type="text" inputmode="numeric"
+                           value="{{ old('cpu_limit_percent') }}" placeholder="{{ __('bez limitu') }}">
+                    <div class="hint">{{ __('Procent jednego rdzenia dla całej maszyny (100 = 1 rdzeń), najwyżej vCPU × 100.') }}</div>
+                </div>
+                <div class="field">
                     <label for="ram_mb">{{ __('RAM (MB)') }}</label>
                     <input id="ram_mb" name="ram_mb" type="text" value="{{ old('ram_mb', 4096) }}" required>
                 </div>
@@ -81,6 +87,9 @@
                         </td>
                         <td class="num">
                             {{ __(':vcpu vCPU · :ramgb GB RAM · :disk_gb GB', ['vcpu' => $package->vcpu, 'ramgb' => $package->ramGb(), 'disk_gb' => $package->disk_gb]) }}
+                            @if ($package->cpu_limit_percent)
+                                <div class="hint">{{ __('limit CPU :percent%', ['percent' => $package->cpu_limit_percent]) }}</div>
+                            @endif
                         </td>
                         <td class="num">{{ __(':bandwidth_gb GB', ['bandwidth_gb' => $package->bandwidth_gb]) }}</td>
                         <td class="num">

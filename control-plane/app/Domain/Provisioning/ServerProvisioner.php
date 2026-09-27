@@ -88,6 +88,7 @@ class ServerProvisioner
                 // Parametry kopiujemy z pakietu — późniejsza zmiana cennika nie
                 // może po cichu przestawić zasobów działającej maszyny.
                 'vcpu' => $package->vcpu,
+                'cpu_limit_percent' => $package->cpu_limit_percent,
                 'ram_mb' => $package->ram_mb,
                 'disk_gb' => $package->disk_gb,
                 'bandwidth_gb' => $package->bandwidth_gb,
@@ -207,6 +208,7 @@ class ServerProvisioner
             'vcpu' => $package->vcpu,
             'ram_mb' => $package->ram_mb,
             'disk_gb' => $package->disk_gb,
+            'cpu_limit_percent' => $package->cpu_limit_percent,
             'package_id' => $package->id,
         ]);
 
@@ -344,6 +346,26 @@ class ServerProvisioner
         ]);
 
         AuditLog::record('server.password_reset', $server, [], $actor);
+        RunServerActionJob::dispatch($job->id);
+
+        return $job;
+    }
+
+    /**
+     * Twardy limit procesora (procent jednego rdzenia, null = bez limitu).
+     * Działa od razu, także na uruchomionej maszynie.
+     */
+    public function setCpuLimit(Server $server, ?int $percent, ?User $actor = null): ServerJob
+    {
+        if ($server->state->isTransitioning()) {
+            throw new \DomainException(
+                __('Na maszynie trwa już operacja (:label). ', ['label' => $server->state->label()])
+                .__('Poczekaj na jej zakończenie.')
+            );
+        }
+
+        $job = $this->createJobRecord($server, 'cpu_limit', $actor, ['cpu_limit_percent' => $percent]);
+        AuditLog::record('server.cpu_limit', $server, ['from' => $server->cpu_limit_percent, 'to' => $percent], $actor);
         RunServerActionJob::dispatch($job->id);
 
         return $job;

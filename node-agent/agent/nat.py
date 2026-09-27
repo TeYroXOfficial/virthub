@@ -36,13 +36,16 @@ SSH_PORT = 22
 def port_forwards(spec: NetworkInterfaceSpec) -> dict[int, int]:
     """Port zewnętrzny → port w maszynie.
 
-    Pierwszy port bloku prowadzi na SSH, reszta 1:1. Mapowanie 1:1 zamiast
-    „10101 → 80" jest celowe: klient widzi w panelu jeden zakres i uruchamia
-    usługę na porcie, który zna, bez tabelki tłumaczeń.
+    Mapowanie przysyła panel (porty stałe dla SSH/RDP i te ustawione przez
+    klienta). Bez niego — starszy panel — pierwszy port bloku prowadzi na
+    SSH, a reszta przechodzi 1:1.
     """
     nat = spec.nat
     if spec.version != 4 or nat is None or nat.port_from is None:
         return {}
+
+    if nat.forwards is not None:
+        return {f.external: f.internal for f in nat.forwards}
 
     forwards = {nat.port_from: SSH_PORT}
     for port in range(nat.port_from + 1, nat.port_to + 1):

@@ -137,6 +137,11 @@ class AgentClient
         return $this->jobId($this->request('POST', "/vm/{$uuid}/resize", $payload));
     }
 
+    public function cpuLimit(string $uuid, ?int $percent): string
+    {
+        return $this->jobId($this->request('PUT', "/vm/{$uuid}/cpu-limit", ['cpu_limit_percent' => $percent]));
+    }
+
     public function delete(string $uuid): string
     {
         return $this->jobId($this->request('DELETE', "/vm/{$uuid}"));

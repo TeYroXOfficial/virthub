@@ -27,13 +27,21 @@ class JobStatus(str, Enum):
     FAILED = "failed"
 
 
+class PortForward(BaseModel):
+    """Port zewnętrzny węzła → port usługi w maszynie (TCP i UDP)."""
+
+    external: int = Field(ge=1, le=65535)
+    internal: int = Field(ge=1, le=65535)
+
+
 class NatSpec(BaseModel):
     """Adres prywatny za NAT-em węzła.
 
     Maszyna stoi na osobnym mostku (bez karty fizycznej), węzeł jest jej bramą
     i wyprowadza ruch na świat swoim adresem. Z zewnątrz maszyna jest osiągalna
-    wyłącznie przez przekierowane porty: pierwszy port bloku trafia na SSH
-    (22), pozostałe przechodzą 1:1 — klient uruchamia usługi na tych numerach.
+    wyłącznie przez przekierowane porty z bloku `port_from`–`port_to`.
+    Mapowanie portów ustala panel (`forwards`); starszy panel go nie wysyłał —
+    wtedy pierwszy port bloku trafia na SSH (22), a pozostałe przechodzą 1:1.
     """
 
     network: str = Field(description="Sieć prywatna za mostkiem NAT, np. 10.10.0.0/24")
@@ -43,6 +51,7 @@ class NatSpec(BaseModel):
     )
     port_from: int | None = Field(default=None, ge=1, le=65535)
     port_to: int | None = Field(default=None, ge=1, le=65535)
+    forwards: list[PortForward] | None = Field(default=None, max_length=1000)
 
     @field_validator("network")
     @classmethod
@@ -61,6 +70,16 @@ class NatSpec(BaseModel):
             raise ValueError("port_from i port_to podaje się razem albo wcale")
         if self.port_from is not None and self.port_to < self.port_from:
             raise ValueError("port_to nie może być mniejszy niż port_from")
+        if self.forwards:
+            if self.port_from is None:
+                raise ValueError("przekierowania wymagają bloku portów")
+            externals = [f.external for f in self.forwards]
+            if len(set(externals)) != len(externals):
+                raise ValueError("port zewnętrzny może prowadzić tylko do jednej usługi")
+            # Węzeł przekierowuje wyłącznie porty z bloku maszyny — inaczej
+            # panel mógłby przejąć port innej maszyny albo samego węzła.
+            if any(not self.port_from <= p <= self.port_to for p in externals):
+                raise ValueError("port zewnętrzny spoza bloku maszyny")
         return self
 
     @property
@@ -154,10 +173,16 @@ SshKey = Annotated[str, Field(pattern=SSH_KEY, max_length=1000)]
 Password = Annotated[str, Field(pattern=r"^[\x21-\x7e]{8,128}$")]
 
 
+# Limit czasu procesora w procentach jednego rdzenia (jak `cpulimit` w
+# Proxmoksie ×100): 150 = półtora rdzenia, niezależnie od liczby vCPU.
+CpuLimit = Annotated[int, Field(ge=1, le=12800)]
+
+
 class CreateVmRequest(BaseModel):
     server_id: int = Field(description="Identyfikator VPS-a w control plane")
     hostname: str = Field(pattern=HOSTNAME, max_length=253)
     vcpu: int = Field(ge=1, le=128)
+    cpu_limit_percent: CpuLimit | None = None
     ram_mb: int = Field(ge=256)
     disk_gb: int = Field(ge=1)
     template: str = Field(description="Nazwa pliku obrazu bazowego w katalogu szablonów")
@@ -209,6 +234,12 @@ class ResizeVmRequest(BaseModel):
     vcpu: int = Field(ge=1, le=128)
     ram_mb: int = Field(ge=256)
     disk_gb: int = Field(ge=1, description="Tylko powiększenie — qcow2 nie kurczy się bezpiecznie")
+    # Pole pominięte (starszy panel) = limit bez zmian; null = bez limitu.
+    cpu_limit_percent: CpuLimit | None = None
+
+
+class CpuLimitRequest(BaseModel):
+    cpu_limit_percent: CpuLimit | None = Field(description="Brak = bez limitu")
 
 
 class PowerRequest(BaseModel):

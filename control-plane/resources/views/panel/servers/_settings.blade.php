@@ -156,6 +156,25 @@
         </div>
     @endcan
 
+    @can('manageResources', $server)
+        <div class="card" id="cpu-limit">
+            <h3 class="card-title"><x-icon name="node" :size="16"/> {{ __('Limit procesora') }} <span class="pill neutral">{{ __('personel') }}</span></h3>
+            <form method="POST" action="{{ route('panel.servers.cpu-limit', $server) }}">
+                @csrf
+                <div class="field" style="max-width:320px">
+                    <label for="cpu-limit-input">{{ __('Limit CPU (% jednego rdzenia)') }}</label>
+                    <input id="cpu-limit-input" name="cpu_limit_percent" type="text" inputmode="numeric"
+                           value="{{ old('cpu_limit_percent', $server->cpu_limit_percent) }}" placeholder="{{ __('bez limitu') }}">
+                    <div class="hint">
+                        {{ __('Twardy limit dla całej maszyny, jak cpulimit w Proxmoksie: 100 = jeden rdzeń, 150 = półtora. Maksymalnie :max (:vcpu vCPU). Puste = bez limitu. Działa od razu, bez restartu.', ['max' => $server->vcpu * 100, 'vcpu' => $server->vcpu]) }}
+                    </div>
+                    @error('cpu_limit_percent') <div class="hint" style="color:var(--critical)">{{ $message }}</div> @enderror
+                </div>
+                <button class="btn" type="submit" @disabled($server->state->isTransitioning())>{{ __('Zapisz limit') }}</button>
+            </form>
+        </div>
+    @endcan
+
     @if ($user->can('destroy', $server) || $user->can('purge', $server))
         <div class="card danger-zone" id="delete">
             <h3 class="card-title" style="color:var(--critical)">{{ __('Usuwanie maszyny') }}</h3>

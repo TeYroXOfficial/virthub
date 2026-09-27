@@ -265,6 +265,10 @@ class NetworkPoolsTest extends TestCase
         $server = $this->serverOn($node);
         $this->allocator->allocate($server, $node, 1, 0, IpPool::TYPE_NAT);
 
+        $payload = ServerPayload::interfaces($server);
+        $forwards = $payload[0]['nat']['forwards'];
+        unset($payload[0]['nat']['forwards']);
+
         $this->assertSame([[
             'address' => '10.10.0.5',
             'prefix' => 24,
@@ -277,7 +281,12 @@ class NetworkPoolsTest extends TestCase
                 'port_from' => 10100,
                 'port_to' => 10119,
             ],
-        ]], ServerPayload::interfaces($server));
+        ]], $payload);
+
+        // Linux: pierwszy port na SSH, reszta bloku 1:1.
+        $this->assertCount(20, $forwards);
+        $this->assertSame(['external' => 10100, 'internal' => 22], $forwards[0]);
+        $this->assertSame(['external' => 10119, 'internal' => 10119], $forwards[19]);
     }
 
     // --- IPv6 ---------------------------------------------------------------

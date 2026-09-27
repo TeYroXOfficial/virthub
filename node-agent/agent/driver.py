@@ -30,7 +30,7 @@ from .guest_os import cpu_model, from_guest_agent, parse_os_release
 from .isos import IsoLibrary
 from .jobs import progress
 from .config import Settings
-from .domain_xml import build_domain_xml, domain_name
+from .domain_xml import CPU_PERIOD_US, build_domain_xml, cpu_quota_us, domain_name
 from .network import NetworkManager, interface_name, mac_address
 from .schemas import (
     GuestOs,
@@ -119,6 +119,10 @@ class HypervisorDriver(ABC):
 
     def reset_password(self, uuid: str, password: str) -> dict[str, Any]:
         raise DriverError("Ten węzeł nie obsługuje zmiany hasła.")
+
+    def set_cpu_limit(self, uuid: str, cpu_limit_percent: int | None) -> dict[str, Any]:
+        """Twardy limit procesora (procent jednego rdzenia), od razu i na stałe."""
+        raise DriverError("Ten węzeł nie obsługuje limitu procesora.")
 
     def guest_os(self, uuid: str) -> GuestOs:
         """System zainstalowany w maszynie (może różnić się od szablonu — np. po instalacji z ISO)."""
@@ -247,6 +251,7 @@ class LibvirtDriver(HypervisorDriver):
                 uuid=vm_uuid,
                 vcpu=req.vcpu,
                 ram_mb=req.ram_mb,
+                cpu_limit_percent=req.cpu_limit_percent,
                 disk_path=str(disk),
                 seed_path=str(seed),
                 bridge=bridge,
@@ -384,7 +389,31 @@ class LibvirtDriver(HypervisorDriver):
         except libvirt.libvirtError as exc:
             raise DriverError(f"Nie udało się zmienić zasobów maszyny: {exc}") from exc
 
+        if "cpu_limit_percent" in req.model_fields_set:
+            self._apply_cpu_limit(domain, req.cpu_limit_percent)
+
         return {"uuid": uuid, "vcpu": req.vcpu, "ram_mb": req.ram_mb, "disk_gb": req.disk_gb}
+
+    def set_cpu_limit(self, uuid: str, cpu_limit_percent: int | None) -> dict[str, Any]:
+        self._apply_cpu_limit(self._domain(uuid), cpu_limit_percent)
+        return {"uuid": uuid, "cpu_limit_percent": cpu_limit_percent}
+
+    @staticmethod
+    def _apply_cpu_limit(domain: Any, cpu_limit_percent: int | None) -> None:
+        """Ta sama wartość co `<cputune>` w XML — dla działającej maszyny także
+        na żywo, bez restartu (cgroup cpu.max całej domeny)."""
+        import libvirt
+
+        flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+        if domain.isActive():
+            flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
+        try:
+            domain.setSchedulerParametersFlags(
+                {"global_period": CPU_PERIOD_US, "global_quota": cpu_quota_us(cpu_limit_percent)},
+                flags,
+            )
+        except libvirt.libvirtError as exc:
+            raise DriverError(f"Nie udało się ustawić limitu procesora: {exc}") from exc
 
     def delete(self, uuid: str) -> dict[str, Any]:
         import libvirt
@@ -643,6 +672,7 @@ class MockDriver(HypervisorDriver):
             "server_id": req.server_id,
             "state": "running",
             "vcpu": req.vcpu,
+            "cpu_limit_percent": req.cpu_limit_percent,
             "ram_mb": req.ram_mb,
             "disk_gb": req.disk_gb,
             "template": req.template,
@@ -696,8 +726,19 @@ class MockDriver(HypervisorDriver):
                 "Zmiana pakietu wymaga zatrzymanej maszyny — zatrzymaj VPS i ponów operację."
             )
         record.update(vcpu=req.vcpu, ram_mb=req.ram_mb, disk_gb=req.disk_gb)
+        if "cpu_limit_percent" in req.model_fields_set:
+            record["cpu_limit_percent"] = req.cpu_limit_percent
         self._save(data)
         return {"uuid": uuid, **{k: record[k] for k in ("vcpu", "ram_mb", "disk_gb")}}
+
+    def set_cpu_limit(self, uuid: str, cpu_limit_percent: int | None) -> dict[str, Any]:
+        data = self._load()
+        record = data.get(uuid)
+        if record is None:
+            raise VmNotFound(uuid)
+        record["cpu_limit_percent"] = cpu_limit_percent
+        self._save(data)
+        return {"uuid": uuid, "cpu_limit_percent": cpu_limit_percent}
 
     def delete(self, uuid: str) -> dict[str, Any]:
         data = self._load()

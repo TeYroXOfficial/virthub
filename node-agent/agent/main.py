@@ -36,6 +36,7 @@ from .schemas import (
     PowerRequest,
     RebuildVmRequest,
     ResizeVmRequest,
+    CpuLimitRequest,
     SnapshotRequest,
     VmStats,
 )
@@ -65,6 +66,9 @@ def _handlers() -> dict[str, Any]:
         "power": lambda p: driver.power(p["uuid"], PowerRequest(**p["body"]).action),
         "rebuild": lambda p: driver.rebuild(p["uuid"], RebuildVmRequest(**p["body"])),
         "resize": lambda p: driver.resize(p["uuid"], ResizeVmRequest(**p["body"])),
+        "cpu_limit": lambda p: driver.set_cpu_limit(
+            p["uuid"], CpuLimitRequest(**p["body"]).cpu_limit_percent
+        ),
         "delete": lambda p: _delete_vm(p["uuid"]),
         "snapshot": lambda p: driver.snapshot(p["uuid"], p["body"]["name"]),
         "restore": lambda p: driver.restore(p["uuid"], p["body"]["name"]),
@@ -268,6 +272,18 @@ async def rebuild(uuid: str, req: RebuildVmRequest) -> JobAccepted:
     return JobAccepted(job_id=job_id)
 
 
+@app.put(
+    "/vm/{uuid}/cpu-limit",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def cpu_limit(uuid: str, req: CpuLimitRequest) -> JobAccepted:
+    job_id = jobs.enqueue("cpu_limit", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
 @app.post(
     "/vm/{uuid}/resize",
     response_model=JobAccepted,
@@ -276,7 +292,9 @@ async def rebuild(uuid: str, req: RebuildVmRequest) -> JobAccepted:
     tags=["vm"],
 )
 async def resize(uuid: str, req: ResizeVmRequest) -> JobAccepted:
-    job_id = jobs.enqueue("resize", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    # exclude_unset: pominięty limit CPU (starszy panel) ma zostać bez zmian,
+    # a nie zamienić się w „bez limitu" po odtworzeniu ładunku z kolejki.
+    job_id = jobs.enqueue("resize", {"uuid": uuid, "body": req.model_dump(exclude_unset=True)}, uuid=uuid)
     return JobAccepted(job_id=job_id)
 
 
