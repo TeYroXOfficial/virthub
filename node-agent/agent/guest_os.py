@@ -41,6 +41,23 @@ def from_guest_agent(info: dict) -> dict[str, str | None]:
     }
 
 
+def outbound_ipv4(probe: str = "1.1.1.1") -> str | None:
+    """Adres IPv4, którym węzeł wychodzi w świat (trasa domyślna).
+
+    `connect` na gnieździe UDP tylko wybiera trasę i adres źródłowy — nie
+    wysyła żadnego pakietu. Pod tym adresem klienci łączą się z portami
+    maszyn za NAT-em, gdy pula nie ma własnego adresu publicznego.
+    """
+    import socket
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect((probe, 53))
+            return sock.getsockname()[0]
+    except OSError:
+        return None
+
+
 def cpu_model(cpuinfo: Path = Path("/proc/cpuinfo")) -> str | None:
     """Nazwa procesora hosta, np. „AMD EPYC 7763 64-Core Processor"."""
     try:

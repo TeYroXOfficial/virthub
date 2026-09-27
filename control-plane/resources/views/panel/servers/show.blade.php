@@ -223,7 +223,7 @@
                         <p class="hint">
                             {{ __('Maszyna stoi za NAT-em: wychodzi w świat adresem węzła, a z zewnątrz jest osiągalna wyłącznie przez porty powyżej.') }}
                             @if ($ports = $primary->natPorts())
-                                @php $natHost = $primary->pool->nat_public_address ?: ($server->hypervisor?->hostname ?? __('adres-węzła')); @endphp
+                                @php $natHost = $primary->natEndpoint(); @endphp
                                 @if ($ports['rdp'])
                                     <br>{{ __('Pulpit zdalny (RDP):') }} <code>{{ $natHost }}:{{ $ports['rdp'] }}</code>
                                 @endif

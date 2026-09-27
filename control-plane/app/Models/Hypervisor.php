@@ -23,6 +23,7 @@ class Hypervisor extends Model
         'hypervisor_group_id',
         'name',
         'hostname',
+        'public_address',
         'agent_url',
         'agent_token',
         'callback_secret',
@@ -151,6 +152,34 @@ class Hypervisor extends Model
         ], fn ($r) => $r !== null);
 
         return $ratios === [] ? 0 : (int) round(max($ratios) * 100);
+    }
+
+    /**
+     * Adres, pod którym klienci łączą się z portami NAT maszyn na tym węźle.
+     *
+     * Kolejność: ustawiony przez administratora → publiczny adres wyjścia
+     * zgłoszony przez agenta → host z adresu agenta → adres wyjścia, nawet
+     * prywatny (węzeł za NAT-em dostawcy) → nazwa hosta. Sama nazwa hosta
+     * (np. „node1") zwykle nie rozwiązuje się w DNS klienta, więc jest
+     * ostatnią deską ratunku.
+     */
+    public function publicAddress(): ?string
+    {
+        $reported = $this->last_health['public_ipv4'] ?? null;
+        $reported = is_string($reported) && filter_var($reported, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) ? $reported : null;
+        $isPublic = fn (?string $ip) => $ip !== null
+            && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
+
+        $agentHost = $this->agent_url ? parse_url($this->agent_url, PHP_URL_HOST) : null;
+        $agentHost = is_string($agentHost) ? trim($agentHost, '[]') : null;
+        $agentUsable = $agentHost !== null && $agentHost !== 'localhost'
+            && (! filter_var($agentHost, FILTER_VALIDATE_IP) || $isPublic($agentHost));
+
+        return $this->public_address
+            ?: ($isPublic($reported) ? $reported : null)
+            ?: ($agentUsable ? $agentHost : null)
+            ?: $reported
+            ?: $this->hostname;
     }
 
     /** Procesor pokazywany klientom: ustawiony przez administratora albo wykryty przez agenta. */

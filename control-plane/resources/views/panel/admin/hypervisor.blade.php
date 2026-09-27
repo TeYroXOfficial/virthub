@@ -158,6 +158,12 @@
                     </div>
                 </div>
                 <div class="field">
+                    <label for="n-public">{{ __('Adres publiczny') }} <span class="muted">{{ __('(dla portów NAT)') }}</span></label>
+                    <input id="n-public" name="public_address" type="text" maxlength="255" value="{{ old('public_address', $node->public_address) }}"
+                           placeholder="{{ $node->last_health['public_ipv4'] ?? __('np. 203.0.113.10') }}">
+                    <div class="hint">{{ __('Pod tym adresem klienci łączą się z portami maszyn za NAT-em (ssh -p …). Puste = wykryty przez węzeł. Ustaw, gdy węzeł stoi za NAT-em dostawcy albo ma kilka adresów.') }}</div>
+                </div>
+                <div class="field">
                     <label for="n-cpu">{{ __('Dostępne vCPU') }}</label>
                     <input id="n-cpu" name="cpu_cores_total" type="text" inputmode="numeric" value="{{ $node->cpu_cores_total }}" required>
                     <div class="hint">{{ __('Zajęte: :cpu_cores_used. Więcej niż rdzeni fizycznych = overcommit.', ['cpu_cores_used' => $node->cpu_cores_used]) }}</div>
@@ -275,6 +281,7 @@
                 <h3 class="card-title">{{ __('Połączenie') }}</h3>
                 <dl class="kv">
                     <dt>{{ __('Adres agenta') }}</dt><dd class="mono">{{ $node->agent_url ?? '—' }}</dd>
+                    <dt>{{ __('Adres publiczny') }}</dt><dd class="mono">{{ $node->publicAddress() ?? '—' }}@if ($node->public_address) <span class="hint">{{ __('(ustawiony ręcznie)') }}</span>@endif</dd>
                     <dt>{{ __('Zarejestrowany') }}</dt><dd>{{ $node->enrolled_at?->format('d.m.Y H:i') ?? __('nie') }}</dd>
                     <dt>{{ __('Ostatni kontakt') }}</dt><dd>{{ $node->last_seen_at?->diffForHumans() ?? __('nigdy') }}</dd>
                     <dt>{{ __('Certyfikat') }}</dt><dd>{{ $node->agent_tls_cert ? __('przypięty (własny węzła)') : __('weryfikacja publicznym urzędem') }}</dd>

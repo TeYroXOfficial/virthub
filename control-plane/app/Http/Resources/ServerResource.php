@@ -65,6 +65,8 @@ class ServerResource extends JsonResource
                     // Za NAT-em maszyna jest osiągalna tylko przez blok portów;
                     // port_forwards to pełne mapowanie (usługi stałe, ustawione, 1:1).
                     'nat_ports' => $ip->natPorts(),
+                    // Adres, pod którym z zewnątrz widać porty z nat_ports.
+                    'nat_endpoint' => $ip->natPorts() === null ? null : $ip->natEndpoint(),
                     'port_forwards' => $ip->natPorts() === null ? [] : array_map(
                         fn (array $e) => \Illuminate\Support\Arr::except($e, ['id']),
                         \App\Domain\Network\PortForwarding::mapping($ip, $this->resource),

@@ -261,3 +261,26 @@ def test_pakiety_wlaczaja_aktualizacje_listy():
 def test_ssh_startuje_w_rodzinie_debiana_i_rhel():
     user_data = render_user_data("vps.example.com", [], None)
     assert "enable --now ssh" in user_data and "enable --now sshd" in user_data
+
+
+# --- adres publiczny węzła ------------------------------------------------------
+
+def test_adres_wyjscia_wezla_to_poprawny_ipv4_albo_brak():
+    import ipaddress
+
+    from agent.guest_os import outbound_ipv4
+
+    address = outbound_ipv4()
+    assert address is None or ipaddress.ip_address(address).version == 4
+
+
+def test_brak_trasy_nie_wywraca_heartbeatu(monkeypatch):
+    import socket
+
+    from agent.guest_os import outbound_ipv4
+
+    def no_route(self, *args):
+        raise OSError("Network is unreachable")
+
+    monkeypatch.setattr(socket.socket, "connect", no_route)
+    assert outbound_ipv4() is None

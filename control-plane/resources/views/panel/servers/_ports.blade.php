@@ -3,7 +3,7 @@
     use App\Domain\Network\PortForwarding as PF;
     $natIps = $server->ipAddresses->filter(fn ($ip) => $ip->natPorts() !== null);
     $canEdit = auth()->user()->can('firewall', $server);
-    $host = fn ($ip) => $ip->pool->nat_public_address ?: ($server->hypervisor?->hostname ?? __('adres-węzła'));
+    $host = fn ($ip) => $ip->natEndpoint();
 @endphp
 
 @if ($natIps->isNotEmpty())
