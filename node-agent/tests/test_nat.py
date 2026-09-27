@@ -124,6 +124,11 @@ def test_tabela_nat_ma_maskarade_i_przekierowania(settings):
     assert "dnat ip to udp dport map @fwd4" in rules
     assert "ip saddr @nets4 ip daddr != @nets4 masquerade" in rules
     assert "ip6 saddr @nets6 ip6 daddr != @nets6 masquerade" in rules
+    local = manager.render_local_rules()
+    assert "hook output" in base
+    assert "output meta nfproto ipv4 fib daddr type local dnat ip to tcp dport map @fwd4" in local
+    assert "ip saddr @nets4 ip daddr @nets4 ct status dnat masquerade" in local
+    assert local.count(manager.HAIRPIN_MARK) == 3, "znacznik pozwala dołożyć reguły raz, także na starszych węzłach"
     # Adres wyjścia z mapy musi wygrać z maskaradą, więc stoi przed nią.
     assert rules.index("snat ip to ip saddr map @snat4") < rules.index("ip daddr != @nets4 masquerade")
 
