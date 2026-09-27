@@ -128,7 +128,7 @@
                     </div>
                 </div>
                 <p class="hint" style="margin:0">
-                    {{ __('Każdy adres dostaje stały blok portów wyliczony z jego pozycji w podsieci: adres .5 przy starcie 10000 i 20 portach ma porty 10100–10119. Pierwszy port bloku prowadzi na SSH (22), pozostałe przechodzą 1:1. Porty dotyczą IPv4; pula NAT IPv6 daje tylko ruch wychodzący.') }}
+                    {{ __('Każdy adres dostaje stały blok portów wyliczony z jego pozycji w podsieci: adres .5 przy starcie 10000 i 10 portach ma porty 10050–10059. Pierwsze porty bloku są na stałe przypisane do dostępu wg systemu: Linux — SSH/SFTP (22), Windows — RDP (3389) i SSH/SFTP (22). Pozostałe klient kieruje na dowolne porty w maszynie, nieustawione przechodzą 1:1. Porty dotyczą IPv4; pula NAT IPv6 daje tylko ruch wychodzący.') }}
                 </p>
             </fieldset>
 

@@ -47,6 +47,29 @@ def test_pierwszy_port_prowadzi_na_ssh_reszta_jeden_do_jednego():
     }
 
 
+def test_panel_ustala_mapowanie_portow():
+    spec = nat_iface(port_from=10100, port_to=10109, forwards=[
+        {"external": 10100, "internal": 3389},
+        {"external": 10101, "internal": 22},
+        {"external": 10105, "internal": 80},
+    ])
+    assert port_forwards(spec) == {10100: 3389, 10101: 22, 10105: 80}
+
+
+def test_pusta_lista_przekierowan_zamyka_wszystkie_porty():
+    assert port_forwards(nat_iface(forwards=[])) == {}
+
+
+@pytest.mark.parametrize("forwards", [
+    [{"external": 10099, "internal": 22}],   # przed blokiem
+    [{"external": 10105, "internal": 22}],   # za blokiem (10100–10104)
+    [{"external": 10100, "internal": 22}, {"external": 10100, "internal": 80}],
+])
+def test_przekierowanie_poza_blokiem_albo_zdublowane_jest_odrzucane(forwards):
+    with pytest.raises(ValidationError):
+        nat_iface(forwards=forwards)
+
+
 def test_ipv6_za_nat_nie_dostaje_przekierowan():
     assert port_forwards(nat6_iface()) == {}
 

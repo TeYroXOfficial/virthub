@@ -92,6 +92,8 @@ class FakeIncus:
             for pair in args[2:]:
                 key, value = pair.split("=", 1)
                 self.instances[name]["config"][key] = value
+        elif args[0] == "unset":
+            self.instances[args[1]]["config"].pop(args[2], None)
 
     def _start(self, args):
         self.instances[args[0]]["status"] = "Running"
@@ -356,6 +358,29 @@ def test_zmiana_pakietu(driver, incus):
     assert ct["config"]["limits.cpu"] == "8"
     assert ct["config"]["limits.memory"] == "8192MiB"
     assert ct["devices"]["root"]["size"] == "80GiB"
+
+
+def test_limit_procesora_kontenera(driver, incus):
+    uuid = driver.create_vm(request(vcpu=4, cpu_limit_percent=150))["uuid"]
+    ct = incus.instances["virthub-42"]
+    assert ct["config"]["limits.cpu.allowance"] == "150ms/100ms"
+
+    driver.set_cpu_limit(uuid, 50)
+    assert ct["config"]["limits.cpu.allowance"] == "50ms/100ms"
+
+    driver.set_cpu_limit(uuid, None)
+    assert "limits.cpu.allowance" not in ct["config"]
+
+
+def test_zmiana_pakietu_bez_pola_limitu_nie_rusza_limitu(driver, incus):
+    uuid = driver.create_vm(request(cpu_limit_percent=80))["uuid"]
+    ct = incus.instances["virthub-42"]
+
+    driver.resize(uuid, ResizeVmRequest(vcpu=2, ram_mb=2048, disk_gb=20))
+    assert ct["config"]["limits.cpu.allowance"] == "80ms/100ms"
+
+    driver.resize(uuid, ResizeVmRequest(vcpu=2, ram_mb=2048, disk_gb=20, cpu_limit_percent=None))
+    assert "limits.cpu.allowance" not in ct["config"]
 
 
 def test_nie_da_sie_zmniejszyc_dysku(driver, incus):

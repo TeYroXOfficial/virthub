@@ -92,6 +92,12 @@ class ServerPolicy
     }
 
     /** Usunięcie tylko z panelu (bez węzła) — wyłącznie administrator. */
+    /** Personel: twardy limit procesora maszyny. */
+    public function manageResources(User $user, Server $server): bool
+    {
+        return $this->staffAccess($user) && ! $user->isSuspended();
+    }
+
     public function purge(User $user, Server $server): bool
     {
         return ! $user->isSuspended() && $user->isAdmin();

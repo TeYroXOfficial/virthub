@@ -663,7 +663,18 @@ maskaradę (albo SNAT na `nat_public_address`) w tabeli nftables `inet virthub_n
 ```
 
 Każdy adres dostaje stały blok portów wyliczony z pozycji w sieci: `10.10.0.5`
-→ porty 10100–10119. Pierwszy port bloku prowadzi na SSH (22), pozostałe 1:1.
+→ porty 10100–10119 (przy 10 portach na maszynę: 10050–10059). Pierwsze porty
+bloku są na stałe przypisane do dostępu, zależnie od systemu maszyny (odczytanego
+z maszyny, a bez odczytu — z szablonu):
+
+| System  | 1. port bloku     | 2. port bloku     |
+|---------|-------------------|-------------------|
+| Linux   | SSH / SFTP (22)   | —                 |
+| Windows | RDP (3389)        | SSH / SFTP (22)   |
+
+Pozostałe porty klient kieruje w panelu (Przegląd → Przekierowania portów) na
+dowolny port w maszynie, np. 10103 → 80. Nieustawione przechodzą 1:1 na ten sam
+numer. Po reinstalacji na inny system usługi stałe przeliczają się same.
 Bloki pul NAT, które mogą trafić na ten sam węzeł, nie mogą się pokrywać — panel
 to sprawdza. Pakiet korzysta z pul NAT, gdy ma `"network_type": "nat"`.
 
@@ -676,6 +687,16 @@ Uwagi dla węzła:
   na interfejsie wyjściowym;
 - po restarcie hosta agent odtwarza mostek i przekierowania z
   `/var/lib/virthub/nat/` przy starcie usługi.
+
+#### Limit procesora
+
+Pakiet może mieć `cpu_limit_percent` — twardy limit czasu procesora dla całej
+maszyny w procentach jednego rdzenia, jak `cpulimit` w Proxmoksie ×100
+(150 = półtora rdzenia, najwyżej vCPU × 100). Personel może go zmienić dla
+pojedynczej maszyny w zakładce Ustawienia. Zmiana działa od razu, bez restartu:
+KVM dostaje `<cputune><global_quota>` (cgroup całej domeny), a kontener
+`limits.cpu.allowance` (np. `150ms/100ms`). Zmiana pakietu ustawia limit nowego
+pakietu.
 
 ### 5. Sprawdź łączność
 

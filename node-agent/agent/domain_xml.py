@@ -16,6 +16,7 @@ def build_domain_xml(
     uuid: str,
     vcpu: int,
     ram_mb: int,
+    cpu_limit_percent: int | None = None,
     disk_path: str,
     seed_path: str | None,
     bridge: str,
@@ -98,7 +99,7 @@ def build_domain_xml(
   <memory unit='MiB'>{ram_mb}</memory>
   <currentMemory unit='MiB'>{ram_mb}</currentMemory>
   <vcpu placement='static'>{vcpu}</vcpu>
-  <os>
+{cputune_xml(cpu_limit_percent)}  <os>
     <type arch='x86_64' machine='q35'>hvm</type>
     <boot dev='hd'/>
   </os>
@@ -121,6 +122,30 @@ def build_domain_xml(
   </devices>
 </domain>
 """
+
+
+CPU_PERIOD_US = 100_000
+
+
+def cpu_quota_us(cpu_limit_percent: int | None) -> int:
+    """Przydział czasu CPU całej maszyny na okres 100 ms (−1 = bez limitu)."""
+    return cpu_limit_percent * CPU_PERIOD_US // 100 if cpu_limit_percent else -1
+
+
+def cputune_xml(cpu_limit_percent: int | None) -> str:
+    """Twardy limit procesora dla całej domeny — suma wszystkich vCPU.
+
+    `global_quota` (a nie `quota` na vCPU): 150% to półtora rdzenia niezależnie
+    od tego, na ile vCPU gość rozłoży obciążenie.
+    """
+    if not cpu_limit_percent:
+        return ""
+    return (
+        "  <cputune>\n"
+        f"    <global_period>{CPU_PERIOD_US}</global_period>\n"
+        f"    <global_quota>{cpu_quota_us(cpu_limit_percent)}</global_quota>\n"
+        "  </cputune>\n"
+    )
 
 
 def domain_name(server_id: int) -> str:

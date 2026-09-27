@@ -24,6 +24,7 @@ class CatalogController extends Controller
                 'ram_gb' => $package->ramGb(),
                 'disk_gb' => $package->disk_gb,
                 'bandwidth_gb' => $package->bandwidth_gb,
+                'cpu_limit_percent' => $package->cpu_limit_percent,
                 'ip_count' => $package->ip_count,
                 'ipv6_count' => $package->ipv6_count,
                 'network_type' => $package->network_type,

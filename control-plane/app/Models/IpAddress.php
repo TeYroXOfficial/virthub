@@ -68,15 +68,19 @@ class IpAddress extends Model
     }
 
     /**
-     * Przekierowane porty adresu za NAT-em: pierwszy prowadzi na SSH (22),
-     * pozostałe 1:1 na te same numery w maszynie.
+     * Blok portów adresu za NAT-em i porty, pod którymi z zewnątrz widać
+     * SSH (22) i RDP (3389) — patrz PortForwarding.
      *
-     * @return array{from: int, to: int, ssh: int}|null
+     * @return array{from: int, to: int, ssh: ?int, rdp: ?int}|null
      */
     public function natPorts(): ?array
     {
         $ports = $this->pool?->natPortsFor($this->address);
 
-        return $ports === null ? null : [...$ports, 'ssh' => $ports['from']];
+        return $ports === null ? null : [
+            ...$ports,
+            'ssh' => \App\Domain\Network\PortForwarding::externalFor($this, 22),
+            'rdp' => \App\Domain\Network\PortForwarding::externalFor($this, 3389),
+        ];
     }
 }

@@ -94,6 +94,10 @@ class IpAllocator
 
     public function release(IpAddress $address): void
     {
+        // Przekierowania należą do maszyny — następny właściciel adresu
+        // dostaje czysty blok portów.
+        \App\Models\NatPortForward::query()->where('ip_address_id', $address->id)->delete();
+
         $address->forceFill([
             'server_id' => null,
             // Adres puli grupy wraca do grupy, adres puli węzła zostaje przy węźle.

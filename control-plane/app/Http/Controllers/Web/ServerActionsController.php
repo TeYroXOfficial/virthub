@@ -102,7 +102,7 @@ class ServerActionsController extends Controller
 
         if ($validated['action'] === 'reset') {
             $traffic->reset($server, $request->user());
-            $message = 'Licznik transferu wyzerowany.';
+            $message = __('Licznik transferu wyzerowany.');
         } else {
             $old = $server->bandwidth_gb;
             $server->forceFill(['bandwidth_gb' => (int) $validated['bandwidth_gb']])->save();
@@ -112,6 +112,27 @@ class ServerActionsController extends Controller
         }
 
         return redirect()->to(route('panel.servers.show', $server).'#traffic-admin')->with('status', $message);
+    }
+
+    /** Personel: twardy limit procesora (procent jednego rdzenia; puste = bez limitu). */
+    public function cpuLimit(Request $request, Server $server): RedirectResponse
+    {
+        $this->authorize('manageResources', $server);
+
+        $validated = $request->validate([
+            'cpu_limit_percent' => ['nullable', 'integer', 'min:1', 'max:'.($server->vcpu * 100)],
+        ], [
+            'cpu_limit_percent.max' => __('Limit nie może przekraczać :max% (:vcpu vCPU × 100%).', ['max' => $server->vcpu * 100, 'vcpu' => $server->vcpu]),
+        ]);
+
+        try {
+            $this->provisioner->setCpuLimit($server, $validated['cpu_limit_percent'] ?? null, $request->user());
+        } catch (\DomainException $e) {
+            return redirect()->to(route('panel.servers.show', $server).'#cpu-limit')->withErrors(['cpu_limit_percent' => $e->getMessage()]);
+        }
+
+        return redirect()->to(route('panel.servers.show', $server).'#cpu-limit')
+            ->with('status', __('Limit procesora trafi na węzeł w ciągu kilku sekund — bez restartu maszyny.'));
     }
 
     /** Odczyt systemu z wnętrza maszyny na żądanie (normalnie co kilka godzin). */

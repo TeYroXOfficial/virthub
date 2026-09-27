@@ -16,6 +16,7 @@ class VpsPackage extends Model
         'slug',
         'description',
         'vcpu',
+        'cpu_limit_percent',
         'ram_mb',
         'disk_gb',
         'bandwidth_gb',
@@ -33,6 +34,7 @@ class VpsPackage extends Model
             'is_active' => 'boolean',
             'ip_count' => 'integer',
             'ipv6_count' => 'integer',
+            'cpu_limit_percent' => 'integer',
         ];
     }
 

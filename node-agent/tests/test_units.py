@@ -41,6 +41,16 @@ def test_xml_domeny_jest_poprawnym_dokumentem():
     assert root.findtext("memory") == "4096"
 
 
+def test_bez_limitu_procesora_nie_ma_cputune():
+    assert _domain().find("cputune") is None
+
+
+def test_limit_procesora_obejmuje_cala_domene():
+    tune = _domain(cpu_limit_percent=150).find("cputune")
+    assert tune.findtext("global_period") == "100000"
+    assert tune.findtext("global_quota") == "150000", "150% = półtora rdzenia na całą maszynę"
+
+
 def test_dysk_uzywa_virtio_i_zwalnia_miejsce_po_trim():
     root = _domain()
     disk = root.find("./devices/disk[@device='disk']")

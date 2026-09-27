@@ -90,6 +90,21 @@ def test_zmiana_pakietu_wymaga_zatrzymanej_maszyny(client, template):
     assert job["result"]["vcpu"] == 4
 
 
+def test_limit_procesora_przez_api(client, template):
+    uuid = create_vm(client, template, server_id=1010, cpu_limit_percent=150)["result"]["uuid"]
+
+    response = client.put(f"/vm/{uuid}/cpu-limit", json={"cpu_limit_percent": 50})
+    assert response.status_code == 202, response.text
+    job = wait_for_job(client, response.json()["job_id"])
+    assert job["status"] == "done", job.get("error")
+    assert job["result"]["cpu_limit_percent"] == 50
+
+    job = wait_for_job(client, client.put(f"/vm/{uuid}/cpu-limit", json={"cpu_limit_percent": None}).json()["job_id"])
+    assert job["result"]["cpu_limit_percent"] is None
+
+    assert client.put(f"/vm/{uuid}/cpu-limit", json={"cpu_limit_percent": 0}).status_code == 422
+
+
 def test_usuniecie_vps_sprzata_dysk(client, template, settings):
     uuid = create_vm(client, template, server_id=1005)["result"]["uuid"]
     disk = settings.image_dir / "virthub-1005.qcow2"
