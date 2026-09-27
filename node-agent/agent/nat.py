@@ -101,6 +101,7 @@ def port_forwards(spec: NetworkInterfaceSpec) -> dict[int, int]:
 
 class NatManager:
     FAMILY = "inet"
+    HAIRPIN_MARK = "vh-local-dnat"
 
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -224,6 +225,9 @@ class NatManager:
         listing = run(["nft", "list", "table", self.FAMILY, self.table])
         if "@fwd4" not in listing:
             self._apply(self.render_base_rules())
+        # Dokładane osobno — węzły z wcześniejszą wersją mają już reguły bazowe.
+        if self.HAIRPIN_MARK not in listing:
+            self._apply(self.render_local_rules())
 
     # --- generowanie reguł (czyste funkcje, testowalne bez nft) --------------
 
@@ -238,6 +242,7 @@ class NatManager:
             f"add map {t} fwd4 {{ type inet_service : ipv4_addr . inet_service ; }}\n"
             f"add chain {t} prerouting {{ type nat hook prerouting priority dstnat ; policy accept ; }}\n"
             f"add chain {t} postrouting {{ type nat hook postrouting priority srcnat ; policy accept ; }}\n"
+            f"add chain {t} output {{ type nat hook output priority -100 ; policy accept ; }}\n"
         )
 
     def render_base_rules(self) -> str:
@@ -255,6 +260,24 @@ class NatManager:
             f"add rule {t} postrouting ip saddr @nets4 ip daddr != @nets4 masquerade",
             f"add rule {t} postrouting ip6 saddr @nets6 ip6 daddr != @nets6 snat ip6 to ip6 saddr map @snat6",
             f"add rule {t} postrouting ip6 saddr @nets6 ip6 daddr != @nets6 masquerade",
+        ]
+        return "\n".join(rules) + "\n"
+
+    def render_local_rules(self) -> str:
+        """Porty NAT osiągalne także z samego węzła i z innych maszyn.
+
+        Ruch wysłany przez węzeł nie przechodzi przez prerouting, więc
+        `ssh -p 10040 <adres węzła>` uruchomione na węźle trafiało w pustkę.
+        Maszyna łącząca się z adresem publicznym węzła (hairpin) dostawała
+        odpowiedź wprost od sąsiada z mostka, z nieznanego adresu — maskarada
+        kieruje odpowiedź z powrotem przez węzeł.
+        """
+        t = f"{self.FAMILY} {self.table}"
+        c = f'comment "{self.HAIRPIN_MARK}"'
+        rules = [
+            f"add rule {t} output meta nfproto ipv4 fib daddr type local dnat ip to tcp dport map @fwd4 {c}",
+            f"add rule {t} output meta nfproto ipv4 fib daddr type local dnat ip to udp dport map @fwd4 {c}",
+            f"insert rule {t} postrouting ip saddr @nets4 ip daddr @nets4 ct status dnat masquerade {c}",
         ]
         return "\n".join(rules) + "\n"
 
