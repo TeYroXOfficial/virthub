@@ -1,25 +1,22 @@
 @extends('layouts.panel')
 
-@section('title', 'Zamów VPS')
+@section('title', __('Zamów VPS'))
 
 @section('content')
-    <h1>Zamów nowy VPS</h1>
-    <p class="lede">Maszyna będzie gotowa zwykle w minutę od złożenia zamówienia.</p>
+    <h1>{{ __('Zamów nowy VPS') }}</h1>
+    <p class="lede">{{ __('Maszyna będzie gotowa zwykle w minutę od złożenia zamówienia.') }}</p>
 
     <form method="POST" action="{{ route('panel.servers.store') }}">
         @csrf
 
         <div class="card">
-            <h3>Pakiet zasobów</h3>
+            <h3>{{ __('Pakiet zasobów') }}</h3>
             <div class="field">
-                <label for="package">Wybierz pakiet</label>
+                <label for="package">{{ __('Wybierz pakiet') }}</label>
                 <select id="package" name="package" required>
                     @foreach ($packages as $package)
                         <option value="{{ $package->slug }}" @selected(old('package') === $package->slug)>
-                            {{ $package->name }} — {{ $package->vcpu }} vCPU,
-                            {{ $package->ramGb() }} GB RAM,
-                            {{ $package->disk_gb }} GB dysku,
-                            {{ $package->bandwidth_gb }} GB transferu
+                            {{ __(':name — :vcpu vCPU, :ramgb GB RAM, :disk_gb GB dysku, :bandwidth_gb GB transferu', ['name' => $package->name, 'vcpu' => $package->vcpu, 'ramgb' => $package->ramGb(), 'disk_gb' => $package->disk_gb, 'bandwidth_gb' => $package->bandwidth_gb]) }}
                         </option>
                     @endforeach
                 </select>
@@ -27,11 +24,10 @@
         </div>
 
         <div class="card">
-            <h3>System operacyjny</h3>
+            <h3>{{ __('System operacyjny') }}</h3>
             @if ($osChoices->isEmpty())
                 <p class="muted">
-                    W tej chwili nie ma dostępnego systemu do zamówienia. Spróbuj za chwilę
-                    albo skontaktuj się z obsługą.
+                    {{ __('W tej chwili nie ma dostępnego systemu do zamówienia. Spróbuj za chwilę albo skontaktuj się z obsługą.') }}
                 </p>
             @else
                 @error('template') <div class="alert alert-error"><div>{{ $message }}</div></div> @enderror
@@ -50,10 +46,10 @@
 
         @if ($locations->isNotEmpty())
             <div class="card">
-                <h3>Lokalizacja</h3>
+                <h3>{{ __('Lokalizacja') }}</h3>
                 <div class="field" style="margin-bottom:0">
                     <select id="location" name="location">
-                        <option value="">Dowolna — wybierzemy najmniej obciążoną</option>
+                        <option value="">{{ __('Dowolna — wybierzemy najmniej obciążoną') }}</option>
                         @foreach ($locations as $location)
                             <option value="{{ $location->id }}" @selected((int) old('location') === $location->id)>{{ $location->publicName() }}</option>
                         @endforeach
@@ -64,36 +60,35 @@
         @endif
 
         <div class="card">
-            <h3>Konfiguracja maszyny</h3>
+            <h3>{{ __('Konfiguracja maszyny') }}</h3>
 
             <div class="field">
-                <label for="hostname">Nazwa hosta</label>
+                <label for="hostname">{{ __('Nazwa hosta') }}</label>
                 <input id="hostname" name="hostname" type="text" value="{{ old('hostname') }}"
-                       placeholder="vps1.mojadomena.pl" required>
-                <div class="hint">Trafia do konfiguracji systemu gościa. Musi być poprawną nazwą domenową.</div>
+                       placeholder="{{ __('vps1.mojadomena.pl') }}" required>
+                <div class="hint">{{ __('Trafia do konfiguracji systemu gościa. Musi być poprawną nazwą domenową.') }}</div>
             </div>
 
             <div class="field">
-                <label for="label">Nazwa własna <span class="muted">(opcjonalnie)</span></label>
+                <label for="label">{{ __('Nazwa własna') }} <span class="muted">{{ __('(opcjonalnie)') }}</span></label>
                 <input id="label" name="label" type="text" value="{{ old('label') }}"
-                       placeholder="Serwer produkcyjny sklepu">
-                <div class="hint">Widoczna tylko dla Ciebie, ułatwia rozpoznanie maszyny na liście.</div>
+                       placeholder="{{ __('Serwer produkcyjny sklepu') }}">
+                <div class="hint">{{ __('Widoczna tylko dla Ciebie, ułatwia rozpoznanie maszyny na liście.') }}</div>
             </div>
 
             <div class="field">
-                <label for="ssh_key">Klucz publiczny SSH <span class="muted">(opcjonalnie)</span></label>
+                <label for="ssh_key">{{ __('Klucz publiczny SSH') }} <span class="muted">{{ __('(opcjonalnie)') }}</span></label>
                 <textarea id="ssh_key" name="ssh_keys[]" rows="3"
                           placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... twoj@komputer">{{ old('ssh_keys.0') }}</textarea>
                 <div class="hint">
-                    Możesz zostawić puste. Hasło roota generujemy zawsze i pokazujemy na stronie
-                    maszyny zaraz po zamówieniu — zapisz je, po utworzeniu maszyny zniknie z panelu.
+                    {{ __('Możesz zostawić puste. Hasło roota generujemy zawsze i pokazujemy na stronie maszyny zaraz po zamówieniu — zapisz je, po utworzeniu maszyny zniknie z panelu.') }}
                 </div>
             </div>
         </div>
 
         <div class="btn-row">
-            <button class="btn btn-primary" type="submit">Zamawiam i tworzę maszynę</button>
-            <a class="btn" href="{{ route('panel.dashboard') }}">Anuluj</a>
+            <button class="btn btn-primary" type="submit">{{ __('Zamawiam i tworzę maszynę') }}</button>
+            <a class="btn" href="{{ route('panel.dashboard') }}">{{ __('Anuluj') }}</a>
         </div>
     </form>
 

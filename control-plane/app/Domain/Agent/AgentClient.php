@@ -169,7 +169,7 @@ class AgentClient
     {
         if (! isset($response['job_id'])) {
             throw new AgentException(
-                "Agent {$this->hypervisor->name} nie zwrócił identyfikatora zadania."
+                __('Agent :name nie zwrócił identyfikatora zadania.', ['name' => $this->hypervisor->name])
             );
         }
 
@@ -198,7 +198,7 @@ class AgentClient
             $response = $request->send($method, $this->hypervisor->agent_url.$path);
         } catch (ConnectionException $e) {
             throw new AgentException(
-                "Hypervisor {$this->hypervisor->name} jest nieosiągalny: {$e->getMessage()}",
+                __('Hypervisor :name jest nieosiągalny: :getmessage', ['name' => $this->hypervisor->name, 'getmessage' => $e->getMessage()]),
                 previous: $e,
             );
         }
@@ -216,7 +216,7 @@ class AgentClient
         // generycznego „błąd serwera", bo to on wie, co konkretnie zawiodło.
         $detail = $response->json('detail') ?? $response->body();
 
-        Log::warning('Agent odrzucił żądanie', [
+        Log::warning(__('Agent odrzucił żądanie'), [
             'hypervisor' => $this->hypervisor->id,
             'request' => "{$method} {$path}",
             'status' => $response->status(),
@@ -224,7 +224,7 @@ class AgentClient
         ]);
 
         throw new AgentException(
-            "Hypervisor {$this->hypervisor->name} odrzucił operację: {$detail}",
+            __('Hypervisor :name odrzucił operację: :detail', ['name' => $this->hypervisor->name, 'detail' => $detail]),
             status: $response->status(),
         );
     }

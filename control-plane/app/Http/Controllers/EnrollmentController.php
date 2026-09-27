@@ -108,7 +108,7 @@ class EnrollmentController extends Controller
 
         if (! str_contains($validated['tls_cert'], 'BEGIN CERTIFICATE')) {
             return response()->json([
-                'message' => 'Przesłany certyfikat nie jest w formacie PEM.',
+                'message' => __('Przesłany certyfikat nie jest w formacie PEM.'),
             ], 422);
         }
 

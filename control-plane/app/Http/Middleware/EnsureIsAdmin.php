@@ -28,7 +28,7 @@ class EnsureIsAdmin
         };
 
         if (! $allowed || $user->isSuspended()) {
-            abort(403, 'Nie masz uprawnień do tej części panelu.');
+            abort(403, __('Nie masz uprawnień do tej części panelu.'));
         }
 
         return $next($request);

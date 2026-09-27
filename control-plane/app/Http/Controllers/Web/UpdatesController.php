@@ -41,7 +41,7 @@ class UpdatesController extends Controller
 
         AuditLog::record('panel.update_requested', null, ['target' => $this->updates->latest()['sha'] ?? null]);
 
-        return back()->with('status', 'Zlecono aktualizację panelu. Potrwa kilka minut — w tym czasie panel może chwilowo nie odpowiadać.');
+        return back()->with('status', __('Zlecono aktualizację panelu. Potrwa kilka minut — w tym czasie panel może chwilowo nie odpowiadać.'));
     }
 
     public function updateNode(Hypervisor $hypervisor): RedirectResponse
@@ -49,7 +49,7 @@ class UpdatesController extends Controller
         $error = $this->requestNodeUpdate($hypervisor);
 
         return $error === null
-            ? back()->with('status', "Zlecono aktualizację węzła {$hypervisor->name}.")
+            ? back()->with('status', __('Zlecono aktualizację węzła :name.', ['name' => $hypervisor->name]))
             : back()->withErrors(['update' => $error]);
     }
 
@@ -72,9 +72,9 @@ class UpdatesController extends Controller
         $redirect = back();
 
         if ($requested !== []) {
-            $redirect = $redirect->with('status', 'Zlecono aktualizację węzłów: '.implode(', ', $requested).'.');
+            $redirect = $redirect->with('status', __('Zlecono aktualizację węzłów: ').implode(', ', $requested).'.');
         } elseif ($errors === []) {
-            $redirect = $redirect->with('status', 'Wszystkie węzły mają już najnowszą wersję.');
+            $redirect = $redirect->with('status', __('Wszystkie węzły mają już najnowszą wersję.'));
         }
 
         return $errors === [] ? $redirect : $redirect->withErrors($errors);
@@ -88,7 +88,7 @@ class UpdatesController extends Controller
                 try {
                     $status = (new AgentClient($node))->updateStatus();
                 } catch (AgentException $e) {
-                    $status = ['state' => 'unreachable', 'message' => 'Węzeł nie odpowiada.'];
+                    $status = ['state' => 'unreachable', 'message' => __('Węzeł nie odpowiada.')];
                 }
 
                 return ['id' => $node->id, ...$status];
@@ -107,7 +107,7 @@ class UpdatesController extends Controller
             (new AgentClient($node))->requestUpdate();
         } catch (AgentException $e) {
             return $e->status === 404
-                ? "Węzeł {$node->name} ma agenta sprzed zdalnych aktualizacji — zaktualizuj go raz ręcznie (update-node.sh)."
+                ? __('Węzeł :name ma agenta sprzed zdalnych aktualizacji — zaktualizuj go raz ręcznie (update-node.sh).', ['name' => $node->name])
                 : $e->getMessage();
         }
 

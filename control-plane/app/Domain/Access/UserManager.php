@@ -88,7 +88,7 @@ class UserManager
         $this->assertRoleAllowed($actor, $data['role']);
 
         if ($actor->is($target) && $data['role'] !== $target->role) {
-            throw ValidationException::withMessages(['role' => 'Nie możesz zmienić roli własnego konta.']);
+            throw ValidationException::withMessages(['role' => __('Nie możesz zmienić roli własnego konta.')]);
         }
 
         if ($target->isAdmin() && $data['role'] !== User::ROLE_ADMIN) {
@@ -120,7 +120,7 @@ class UserManager
         $this->assertCanManage($actor, $target);
 
         if ($actor->is($target)) {
-            throw ValidationException::withMessages(['user' => 'Nie możesz zablokować własnego konta.']);
+            throw ValidationException::withMessages(['user' => __('Nie możesz zablokować własnego konta.')]);
         }
 
         if ($target->isAdmin()) {
@@ -162,12 +162,12 @@ class UserManager
         $this->assertCanManage($actor, $target);
 
         if ($actor->is($target)) {
-            throw ValidationException::withMessages(['user' => 'Nie możesz usunąć własnego konta.']);
+            throw ValidationException::withMessages(['user' => __('Nie możesz usunąć własnego konta.')]);
         }
 
         if ($target->servers()->exists()) {
             throw ValidationException::withMessages([
-                'user' => "Konto {$target->email} ma maszyny. Usuń je albo przenieś na inne konto, zanim usuniesz użytkownika.",
+                'user' => __('Konto :email ma maszyny. Usuń je albo przenieś na inne konto, zanim usuniesz użytkownika.', ['email' => $target->email]),
             ]);
         }
 
@@ -205,14 +205,14 @@ class UserManager
     private function assertCanManage(User $actor, User $target): void
     {
         if (! $this->canManage($actor, $target)) {
-            throw new AuthorizationException('Konta personelu może zmieniać tylko administrator.');
+            throw new AuthorizationException(__('Konta personelu może zmieniać tylko administrator.'));
         }
     }
 
     private function assertRoleAllowed(User $actor, string $role): void
     {
         if (! in_array($role, $this->assignableRoles($actor), true)) {
-            throw new AuthorizationException('Nie możesz nadać tej roli.');
+            throw new AuthorizationException(__('Nie możesz nadać tej roli.'));
         }
     }
 
@@ -226,7 +226,7 @@ class UserManager
 
         if (! $others) {
             throw ValidationException::withMessages([
-                'user' => 'To ostatni aktywny administrator — panel zostałby bez nikogo, kto nim zarządza.',
+                'user' => __('To ostatni aktywny administrator — panel zostałby bez nikogo, kto nim zarządza.'),
             ]);
         }
     }

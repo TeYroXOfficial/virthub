@@ -93,8 +93,8 @@ class Updates
             // systemd go nie odebrał — np. jednostka .path jest wyłączona.
             if (time() - (int) @filemtime("{$dir}/request") > self::STALL_AFTER) {
                 $status['state'] = 'stalled';
-                $status['message'] = 'Usługa aktualizacji nie odebrała zlecenia. Uruchom raz na serwerze panelu: '
-                    .'sudo bash /opt/virthub/infra/update-panel.sh — naprawi usługę i zaktualizuje panel.';
+                $status['message'] = __('Usługa aktualizacji nie odebrała zlecenia. Uruchom raz na serwerze panelu: ')
+                    .__('sudo bash /opt/virthub/infra/update-panel.sh — naprawi usługę i zaktualizuje panel.');
             } else {
                 $status['state'] = 'queued';
             }
@@ -113,13 +113,13 @@ class Updates
     {
         if (! $this->panelUpdatesEnabled()) {
             throw new \RuntimeException(
-                'Zdalna aktualizacja panelu nie jest włączona. Uruchom raz instalator panelu '
-                .'w najnowszej wersji — założy usługę virthub-panel-update.'
+                __('Zdalna aktualizacja panelu nie jest włączona. Uruchom raz instalator panelu ')
+                .__('w najnowszej wersji — założy usługę virthub-panel-update.')
             );
         }
 
         if (in_array($this->panelStatus()['state'], ['queued', 'running'], true)) {
-            throw new \RuntimeException('Aktualizacja panelu już trwa.');
+            throw new \RuntimeException(__('Aktualizacja panelu już trwa.'));
         }
 
         file_put_contents(

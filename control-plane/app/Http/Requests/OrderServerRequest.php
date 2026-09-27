@@ -67,8 +67,8 @@ class OrderServerRequest extends FormRequest
             if (! ($user->isStaff() && $user->max_servers === null)) {
                 $limit = $user->serverLimit();
                 if ($user->servers()->count() >= $limit) {
-                    $validator->errors()->add('package', "Osiągnięto limit {$limit} maszyn na koncie. "
-                        .'Napisz do nas, jeśli potrzebujesz go zwiększyć.');
+                    $validator->errors()->add('package', __('Osiągnięto limit :limit maszyn na koncie. ', ['limit' => $limit])
+                        .__('Napisz do nas, jeśli potrzebujesz go zwiększyć.'));
 
                     return;
                 }
@@ -76,21 +76,21 @@ class OrderServerRequest extends FormRequest
 
             $template = OsTemplate::with('group')->find($this->integer('template'));
             if ($template?->group !== null && ! $template->group->is_active) {
-                $validator->errors()->add('template', "System {$template->group->name} nie jest teraz dostępny.");
+                $validator->errors()->add('template', __('System :name nie jest teraz dostępny.', ['name' => $template->group->name]));
 
                 return;
             }
 
             $location = $this->location();
             if ($this->filled('location') && $location === null) {
-                $validator->errors()->add('location', 'Wybrana lokalizacja nie jest dostępna.');
+                $validator->errors()->add('location', __('Wybrana lokalizacja nie jest dostępna.'));
 
                 return;
             }
 
             $package = VpsPackage::where('slug', $this->string('package'))->first();
             if ($package !== null && ! $user->mayOrderPackage($package)) {
-                $validator->errors()->add('package', "Pakiet {$package->name} nie jest dostępny dla Twojego konta.");
+                $validator->errors()->add('package', __('Pakiet :name nie jest dostępny dla Twojego konta.', ['name' => $package->name]));
             }
         }];
     }
@@ -98,10 +98,10 @@ class OrderServerRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'hostname.regex' => 'Nazwa hosta musi być poprawną nazwą domenową, np. vps1.mojadomena.pl.',
-            'ssh_keys.*.regex' => 'Klucz SSH musi być w formacie OpenSSH (ssh-ed25519 AAAA... lub ssh-rsa AAAA...).',
-            'package.exists' => 'Wybrany pakiet nie istnieje albo nie jest już dostępny.',
-            'template.exists' => 'Wybrany system operacyjny nie jest dostępny.',
+            'hostname.regex' => __('Nazwa hosta musi być poprawną nazwą domenową, np. vps1.mojadomena.pl.'),
+            'ssh_keys.*.regex' => __('Klucz SSH musi być w formacie OpenSSH (ssh-ed25519 AAAA... lub ssh-rsa AAAA...).'),
+            'package.exists' => __('Wybrany pakiet nie istnieje albo nie jest już dostępny.'),
+            'template.exists' => __('Wybrany system operacyjny nie jest dostępny.'),
         ];
     }
 

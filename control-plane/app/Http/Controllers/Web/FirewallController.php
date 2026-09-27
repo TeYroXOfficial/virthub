@@ -28,7 +28,7 @@ class FirewallController extends Controller
             'locked' => $request->boolean('locked'),
         ]);
 
-        return $this->done($server, 'Zapisano ustawienia zapory. Zmiana trafi na węzeł w ciągu kilku sekund.');
+        return $this->done($server, __('Zapisano ustawienia zapory. Zmiana trafi na węzeł w ciągu kilku sekund.'));
     }
 
     public function store(Request $request, Server $server): RedirectResponse
@@ -37,7 +37,7 @@ class FirewallController extends Controller
 
         $this->firewall->addRule($server, $request->user(), $request->validate(Firewall::ruleRules()));
 
-        return $this->done($server, 'Reguła została dodana.');
+        return $this->done($server, __('Reguła została dodana.'));
     }
 
     public function preset(Request $request, Server $server, string $preset): RedirectResponse
@@ -46,7 +46,7 @@ class FirewallController extends Controller
 
         $this->firewall->addPreset($server, $request->user(), $preset);
 
-        return $this->done($server, 'Dodano reguły: '.Firewall::PRESETS[$preset]['label'].'.');
+        return $this->done($server, __('Dodano reguły: ').__(Firewall::PRESETS[$preset]['label']).'.');
     }
 
     public function destroy(Request $request, Server $server, FirewallRule $rule): RedirectResponse
@@ -55,7 +55,7 @@ class FirewallController extends Controller
 
         $this->firewall->deleteRule($server, $request->user(), $rule);
 
-        return $this->done($server, 'Reguła została usunięta.');
+        return $this->done($server, __('Reguła została usunięta.'));
     }
 
     public function toggle(Request $request, Server $server, FirewallRule $rule): RedirectResponse
@@ -64,7 +64,7 @@ class FirewallController extends Controller
 
         $this->firewall->toggleRule($server, $request->user(), $rule);
 
-        return $this->done($server, $rule->fresh()->enabled ? 'Reguła włączona.' : 'Reguła wyłączona.');
+        return $this->done($server, $rule->fresh()->enabled ? __('Reguła włączona.') : __('Reguła wyłączona.'));
     }
 
     public function move(Request $request, Server $server, FirewallRule $rule, string $direction): RedirectResponse
@@ -74,7 +74,7 @@ class FirewallController extends Controller
 
         $this->firewall->moveRule($server, $request->user(), $rule, $direction);
 
-        return $this->done($server, 'Zmieniono kolejność reguł.');
+        return $this->done($server, __('Zmieniono kolejność reguł.'));
     }
 
     private function done(Server $server, string $message): RedirectResponse

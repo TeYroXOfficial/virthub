@@ -35,7 +35,7 @@ class AuthController extends Controller
             $seconds = RateLimiter::availableIn($key);
 
             throw ValidationException::withMessages([
-                'email' => "Za dużo prób logowania. Spróbuj ponownie za {$seconds} s.",
+                'email' => __('Za dużo prób logowania. Spróbuj ponownie za :seconds s.', ['seconds' => $seconds]),
             ]);
         }
 
@@ -43,7 +43,7 @@ class AuthController extends Controller
             RateLimiter::hit($key, 300);
 
             throw ValidationException::withMessages([
-                'email' => 'Nieprawidłowy e-mail lub hasło.',
+                'email' => __('Nieprawidłowy e-mail lub hasło.'),
             ]);
         }
 
@@ -51,7 +51,7 @@ class AuthController extends Controller
             Auth::logout();
 
             throw ValidationException::withMessages([
-                'email' => 'To konto jest zawieszone. Skontaktuj się z obsługą.',
+                'email' => __('To konto jest zawieszone. Skontaktuj się z obsługą.'),
             ]);
         }
 

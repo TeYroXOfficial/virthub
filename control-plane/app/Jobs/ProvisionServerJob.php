@@ -49,7 +49,7 @@ class ProvisionServerJob implements ShouldQueue
         $hypervisor = $server->hypervisor;
 
         if ($hypervisor === null) {
-            $this->fail($job, 'Maszyna nie ma przypisanego hypervisora.', $selector, $ips);
+            $this->fail($job, __('Maszyna nie ma przypisanego hypervisora.'), $selector, $ips);
 
             return;
         }
@@ -95,7 +95,7 @@ class ProvisionServerJob implements ShouldQueue
 
         $server->markState(
             ServerState::Error,
-            'Nie udało się utworzyć maszyny: '.$message,
+            __('Nie udało się utworzyć maszyny: ').$message,
         );
         $job->markFailed($message);
 

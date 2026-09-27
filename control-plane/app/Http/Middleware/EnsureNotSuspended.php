@@ -21,7 +21,7 @@ class EnsureNotSuspended
             $request->session()->regenerateToken();
 
             return redirect()->route('login')->withErrors([
-                'email' => 'To konto zostało zablokowane. Skontaktuj się z obsługą.',
+                'email' => __('To konto zostało zablokowane. Skontaktuj się z obsługą.'),
             ]);
         }
 

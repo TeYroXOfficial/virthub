@@ -4,7 +4,7 @@ namespace Tests\Unit;
 
 use App\Domain\Network\IpMath;
 use InvalidArgumentException;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class IpMathTest extends TestCase
 {

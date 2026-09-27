@@ -44,21 +44,21 @@ class SnapshotController extends Controller
 
         if ($server->backups()->count() >= self::MAX_PER_SERVER) {
             return response()->json([
-                'message' => 'Osiągnięto limit '.self::MAX_PER_SERVER
-                    .' kopii dla tej maszyny. Usuń starą kopię, aby zrobić nową.',
+                'message' => __('Osiągnięto limit ').self::MAX_PER_SERVER
+                    .__(' kopii dla tej maszyny. Usuń starą kopię, aby zrobić nową.'),
             ], 422);
         }
 
         if ($server->backups()->where('name', $validated['name'])->exists()) {
             return response()->json([
-                'message' => 'Kopia o tej nazwie już istnieje.',
+                'message' => __('Kopia o tej nazwie już istnieje.'),
             ], 422);
         }
 
         $job = $this->provisioner->snapshot($server, $validated['name'], $request->user());
 
         return response()->json([
-            'message' => 'Tworzenie kopii zostało zlecone.',
+            'message' => __('Tworzenie kopii zostało zlecone.'),
             'job_id' => $job->id,
         ], 202);
     }
@@ -76,7 +76,7 @@ class SnapshotController extends Controller
         $job = $this->provisioner->restore($server, $backup, $request->user());
 
         return response()->json([
-            'message' => 'Przywracanie kopii zostało zlecone. Maszyna zostanie zrestartowana.',
+            'message' => __('Przywracanie kopii zostało zlecone. Maszyna zostanie zrestartowana.'),
             'job_id' => $job->id,
         ], 202);
     }
@@ -91,6 +91,6 @@ class SnapshotController extends Controller
 
         $backup->delete();
 
-        return response()->json(['message' => 'Kopia została usunięta z listy.']);
+        return response()->json(['message' => __('Kopia została usunięta z listy.')]);
     }
 }

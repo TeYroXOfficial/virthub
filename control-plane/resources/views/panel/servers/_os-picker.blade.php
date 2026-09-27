@@ -5,9 +5,9 @@
     $current = $current ?? null;
     $selectedKey = $osChoices->first(fn ($c) => $c['templates']->contains('id', $selected))['key'] ?? null;
 @endphp
-<div class="os-picker" data-os-picker>
+<div class="os-picker" data-os-picker data-needs-choice="{{ __('Wybierz system operacyjny.') }}">
     <input type="hidden" name="template" value="{{ $selected ?: '' }}" data-os-value>
-    <div class="os-grid" role="radiogroup" aria-label="System operacyjny">
+    <div class="os-grid" role="radiogroup" aria-label="{{ __('System operacyjny') }}">
         @foreach ($osChoices as $choice)
             @php
                 $mixed = $choice['templates']->pluck('virtualization')->unique()->count() > 1;
@@ -20,7 +20,7 @@
                 <div class="os-card-body">
                     <span class="os-name">{{ $choice['name'] }}</span>
                     @if ($choice['templates']->count() > 1)
-                        <select class="os-version" data-os-version aria-label="Wersja {{ $choice['name'] }}">
+                        <select class="os-version" data-os-version aria-label="{{ __('Wersja :name', ['name' => $choice['name']]) }}">
                             @foreach ($choice['templates'] as $t)
                                 <option value="{{ $t->id }}" @selected($picked->id === $t->id)>
                                     {{ $t->versionLabel() }}@if($mixed) ({{ $t->virtualization->shortLabel() }})@endif
@@ -33,7 +33,7 @@
                         </span>
                     @endif
                     @if ($current && ($now = $choice['templates']->firstWhere('id', $current)))
-                        <span class="os-current-note">obecnie: {{ $now->versionLabel() }}</span>
+                        <span class="os-current-note">{{ __('obecnie: :versionlabel', ['versionlabel' => $now->versionLabel()]) }}</span>
                     @endif
                 </div>
             </div>

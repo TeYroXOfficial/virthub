@@ -110,6 +110,6 @@ class PanelController extends Controller
 
         return redirect()
             ->route('panel.servers.show', $server)
-            ->with('status', 'Maszyna jest tworzona. Zwykle trwa to około minuty.');
+            ->with('status', __('Maszyna jest tworzona. Zwykle trwa to około minuty.'));
     }
 }

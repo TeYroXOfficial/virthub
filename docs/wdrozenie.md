@@ -309,7 +309,13 @@ CACHE_STORE=redis
 SESSION_DRIVER=redis
 
 VIRTHUB_BRAND=NazwaTwojejFirmy
+VIRTHUB_LOCALE=pl
 ```
+
+`VIRTHUB_LOCALE` to język domyślny panelu (`pl` albo `en`). Każdy użytkownik
+może go zmienić przełącznikiem PL/EN w menu bocznym albo na stronie logowania —
+wybór jest zapamiętywany na jego koncie. Bez wyboru panel dopasowuje się do
+języka przeglądarki.
 
 `APP_DEBUG=false` jest obowiązkowe — przy `true` strona błędu pokazuje
 zawartość `.env`, łącznie z hasłem do bazy i kluczem aplikacji.

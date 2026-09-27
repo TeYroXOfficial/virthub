@@ -28,7 +28,7 @@ class IsoLibrary
         $filename = Str::slug($data['name']).'.iso';
 
         if (IsoImage::where('filename', $filename)->exists()) {
-            throw ValidationException::withMessages(['name' => 'Obraz o takiej nazwie już jest w bibliotece.']);
+            throw ValidationException::withMessages(['name' => __('Obraz o takiej nazwie już jest w bibliotece.')]);
         }
 
         $iso = IsoImage::create([
@@ -79,7 +79,7 @@ class IsoLibrary
     {
         if ($iso->servers()->exists()) {
             throw ValidationException::withMessages([
-                'iso' => "Obraz {$iso->name} jest zamontowany w maszynach — wysuń go najpierw.",
+                'iso' => __('Obraz :name jest zamontowany w maszynach — wysuń go najpierw.', ['name' => $iso->name]),
             ]);
         }
 

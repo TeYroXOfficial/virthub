@@ -25,7 +25,7 @@ class ConsoleController extends Controller
         $this->authorize('console', $server);
 
         if (! $server->isRunning()) {
-            return back()->withErrors(['console' => 'Konsola jest dostępna tylko dla działającej maszyny.']);
+            return back()->withErrors(['console' => __('Konsola jest dostępna tylko dla działającej maszyny.')]);
         }
 
         return redirect()->route('console.show', [
@@ -37,7 +37,7 @@ class ConsoleController extends Controller
     {
         $ticket = $this->sessions->takeTicket($token);
 
-        abort_if($ticket === null, 410, 'Bilet konsoli wygasł. Otwórz konsolę ponownie z panelu.');
+        abort_if($ticket === null, 410, __('Bilet konsoli wygasł. Otwórz konsolę ponownie z panelu.'));
 
         $server = Server::findOrFail($ticket['server_id']);
 

@@ -1,82 +1,81 @@
 @extends('layouts.panel')
 
-@section('title', 'Administracja')
+@section('title', __('Administracja'))
 
 @section('content')
-    <h1>Administracja</h1>
-    <p class="lede">Stan floty, maszyn i zasobów.</p>
+    <h1>{{ __('Administracja') }}</h1>
+    <p class="lede">{{ __('Stan floty, maszyn i zasobów.') }}</p>
 
     @include('panel.admin._nav')
 
     <div class="grid grid-3">
         <div class="card">
-            <h3>Maszyny</h3>
+            <h3>{{ __('Maszyny') }}</h3>
             <p style="font-size:28px; margin:0; font-variant-numeric: tabular-nums;">{{ $serversTotal }}</p>
             {{-- Warunek w wyrażeniu, nie dyrektywą: Blade nie kompiluje @if
                  przyklejonego do poprzedzającego słowa i zostawia go w treści. --}}
             <p class="hint">
-                {{ $serversRunning }} działa{{ $serversBroken ? ", {$serversBroken} wymaga uwagi" : '' }}
+                {{ __(':serversrunning działa:uwagi', ['serversrunning' => $serversRunning, 'uwagi' => $serversBroken ? __(', :count wymaga uwagi', ['count' => $serversBroken]) : '']) }}
             </p>
         </div>
         <div class="card">
-            <h3>Klienci</h3>
+            <h3>{{ __('Klienci') }}</h3>
             <p style="font-size:28px; margin:0; font-variant-numeric: tabular-nums;">{{ $customers }}</p>
-            <p class="hint">konta z rolą klienta</p>
+            <p class="hint">{{ __('konta z rolą klienta') }}</p>
         </div>
         <div class="card">
-            <h3>Wolne adresy IP</h3>
+            <h3>{{ __('Wolne adresy IP') }}</h3>
             <p style="font-size:28px; margin:0; font-variant-numeric: tabular-nums;">{{ $addressesFree }}</p>
-            <p class="hint">z {{ $addressesTotal }} w pulach</p>
+            <p class="hint">{{ __('z :addressestotal w pulach', ['addressestotal' => $addressesTotal]) }}</p>
             @if ($addressesTotal > 0 && $addressesFree < 5)
-                <p class="hint" style="color: var(--warn)">Pula na wyczerpaniu — zaimportuj kolejną.</p>
+                <p class="hint" style="color: var(--warn)">{{ __('Pula na wyczerpaniu — zaimportuj kolejną.') }}</p>
             @endif
         </div>
     </div>
 
-    <h2>Flota</h2>
+    <h2>{{ __('Flota') }}</h2>
     @forelse ($hypervisors as $node)
         <div class="card">
             <h3>
                 {{ $node->name }}
                 <span class="pill {{ $node->isOnline() ? 'ok' : ($node->enrolled_at ? 'critical' : 'warning') }}"
                       style="float:right">
-                    {{ $node->isOnline() ? 'online' : ($node->enrolled_at ? $node->status : 'czeka na instalację') }}
+                    {{ $node->isOnline() ? __('online') : ($node->enrolled_at ? $node->status : __('czeka na instalację')) }}
                 </span>
             </h3>
 
             @if ($node->enrolled_at === null)
                 <p class="muted">
-                    Węzeł dodany, ale agent nie został jeszcze zainstalowany.
-                    Wygeneruj polecenie instalacyjne na
-                    <a href="{{ route('panel.admin.hypervisors') }}">liście hypervisorów</a>.
+                    {{ __('Węzeł dodany, ale agent nie został jeszcze zainstalowany. Wygeneruj polecenie instalacyjne na') }}
+                    <a href="{{ route('panel.admin.hypervisors') }}">{{ __('liście hypervisorów') }}</a>.
                 </p>
             @else
                 <dl class="kv">
-                    <dt>Rodzaj</dt><dd>{{ $node->virtualization->label() }}</dd>
-                    <dt>Adres</dt><dd class="mono">{{ $node->agent_url }}</dd>
-                    <dt>Maszyny</dt><dd class="num">{{ $node->servers_count }}</dd>
-                    <dt>vCPU</dt><dd class="num">{{ $node->cpu_cores_used }} / {{ $node->cpu_cores_total }}</dd>
-                    <dt>RAM</dt><dd class="num">{{ round($node->ram_mb_used / 1024) }} / {{ round($node->ram_mb_total / 1024) }} GB</dd>
-                    <dt>Dysk</dt><dd class="num">{{ $node->disk_gb_used }} / {{ $node->disk_gb_total }} GB</dd>
-                    <dt>Ostatni kontakt</dt><dd>{{ $node->last_seen_at?->diffForHumans() ?? 'nigdy' }}</dd>
+                    <dt>{{ __('Rodzaj') }}</dt><dd>{{ $node->virtualization->label() }}</dd>
+                    <dt>{{ __('Adres') }}</dt><dd class="mono">{{ $node->agent_url }}</dd>
+                    <dt>{{ __('Maszyny') }}</dt><dd class="num">{{ $node->servers_count }}</dd>
+                    <dt>{{ __('vCPU') }}</dt><dd class="num">{{ $node->cpu_cores_used }} / {{ $node->cpu_cores_total }}</dd>
+                    <dt>{{ __('RAM') }}</dt><dd class="num">{{ __(':ram_mb_used / :ram_mb_total GB', ['ram_mb_used' => round($node->ram_mb_used / 1024), 'ram_mb_total' => round($node->ram_mb_total / 1024)]) }}</dd>
+                    <dt>{{ __('Dysk') }}</dt><dd class="num">{{ __(':disk_gb_used / :disk_gb_total GB', ['disk_gb_used' => $node->disk_gb_used, 'disk_gb_total' => $node->disk_gb_total]) }}</dd>
+                    <dt>{{ __('Ostatni kontakt') }}</dt><dd>{{ $node->last_seen_at?->diffForHumans() ?? __('nigdy') }}</dd>
                 </dl>
                 @php $util = $node->utilisationPercent(); @endphp
                 <div class="meter {{ $util > 80 ? 'hot' : '' }}"><i style="width: {{ min(100, $util) }}%"></i></div>
-                <div class="hint">Zajętość {{ $util }}%</div>
+                <div class="hint">{{ __('Zajętość :util%', ['util' => $util]) }}</div>
             @endif
         </div>
     @empty
         <div class="card empty">
-            <p>Nie masz jeszcze żadnego hypervisora. Bez niego nie da się utworzyć maszyny.</p>
-            <a class="btn btn-primary" href="{{ route('panel.admin.hypervisors') }}">Dodaj pierwszy węzeł</a>
+            <p>{{ __('Nie masz jeszcze żadnego hypervisora. Bez niego nie da się utworzyć maszyny.') }}</p>
+            <a class="btn btn-primary" href="{{ route('panel.admin.hypervisors') }}">{{ __('Dodaj pierwszy węzeł') }}</a>
         </div>
     @endforelse
 
-    <h2>Ostatnie zdarzenia</h2>
+    <h2>{{ __('Ostatnie zdarzenia') }}</h2>
     <div class="card" style="padding:0">
         <div class="table-wrap">
             <table>
-                <thead><tr><th>Zdarzenie</th><th>Kto</th><th>Czego dotyczy</th><th>Kiedy</th></tr></thead>
+                <thead><tr><th>{{ __('Zdarzenie') }}</th><th>{{ __('Kto') }}</th><th>{{ __('Czego dotyczy') }}</th><th>{{ __('Kiedy') }}</th></tr></thead>
                 <tbody>
                 @forelse ($recentLogs as $log)
                     <tr>
@@ -88,7 +87,7 @@
                         <td class="muted">{{ $log->created_at->diffForHumans() }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="4" class="muted">Brak zdarzeń.</td></tr>
+                    <tr><td colspan="4" class="muted">{{ __('Brak zdarzeń.') }}</td></tr>
                 @endforelse
                 </tbody>
             </table>

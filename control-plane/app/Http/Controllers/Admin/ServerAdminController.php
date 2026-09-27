@@ -42,7 +42,7 @@ class ServerAdminController extends Controller
         $job = $this->provisioner->suspend($server, $validated['reason'], $request->user());
 
         return response()->json([
-            'message' => 'Maszyna została zawieszona i jest zatrzymywana.',
+            'message' => __('Maszyna została zawieszona i jest zatrzymywana.'),
             'job_id' => $job->id,
         ], 202);
     }
@@ -52,7 +52,7 @@ class ServerAdminController extends Controller
         $job = $this->provisioner->unsuspend($server, $request->user());
 
         return response()->json([
-            'message' => 'Maszyna została odwieszona i jest uruchamiana.',
+            'message' => __('Maszyna została odwieszona i jest uruchamiana.'),
             'job_id' => $job->id,
         ], 202);
     }

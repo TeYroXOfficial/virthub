@@ -24,8 +24,8 @@ class SsoController extends Controller
 
         if ($payload === null) {
             return redirect()->route('login')->withErrors([
-                'email' => 'Link logowania wygasł lub został już użyty. '
-                    .'Wróć do panelu rozliczeniowego i kliknij ponownie.',
+                'email' => __('Link logowania wygasł lub został już użyty. ')
+                    .__('Wróć do panelu rozliczeniowego i kliknij ponownie.'),
             ]);
         }
 
@@ -33,7 +33,7 @@ class SsoController extends Controller
 
         if ($user === null || $user->isSuspended()) {
             return redirect()->route('login')->withErrors([
-                'email' => 'To konto jest niedostępne. Skontaktuj się z obsługą.',
+                'email' => __('To konto jest niedostępne. Skontaktuj się z obsługą.'),
             ]);
         }
 

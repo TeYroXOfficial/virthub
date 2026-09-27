@@ -23,20 +23,20 @@ final class IpMath
         $parts = explode('/', trim($cidr));
 
         if (count($parts) !== 2 || ! ctype_digit($parts[1])) {
-            throw new InvalidArgumentException("Nieprawidłowa podsieć CIDR: {$cidr}.");
+            throw new InvalidArgumentException(__('Nieprawidłowa podsieć CIDR: :cidr.', ['cidr' => $cidr]));
         }
 
         $binary = @inet_pton($parts[0]);
 
         if ($binary === false) {
-            throw new InvalidArgumentException("Nieprawidłowy adres sieci: {$parts[0]}.");
+            throw new InvalidArgumentException(__('Nieprawidłowy adres sieci: :parts.', ['parts' => $parts[0]]));
         }
 
         $version = strlen($binary) === 4 ? 4 : 6;
         $bits = (int) $parts[1];
 
         if ($bits > strlen($binary) * 8) {
-            throw new InvalidArgumentException("Prefiks /{$bits} jest za długi dla IPv{$version}.");
+            throw new InvalidArgumentException(__('Prefiks /:bits jest za długi dla IPv:version.', ['bits' => $bits, 'version' => $version]));
         }
 
         return [
@@ -72,7 +72,7 @@ final class IpMath
         $binary = @inet_pton($address);
 
         if ($binary === false) {
-            throw new InvalidArgumentException("Nieprawidłowy adres IP: {$address}.");
+            throw new InvalidArgumentException(__('Nieprawidłowy adres IP: :address.', ['address' => $address]));
         }
 
         return inet_ntop($binary);
@@ -103,7 +103,7 @@ final class IpMath
     public static function add(string $base, int $offset): string
     {
         if ($offset < 0) {
-            throw new InvalidArgumentException('Przesunięcie adresu nie może być ujemne.');
+            throw new InvalidArgumentException(__('Przesunięcie adresu nie może być ujemne.'));
         }
 
         $binary = inet_pton($base);
@@ -116,7 +116,7 @@ final class IpMath
         }
 
         if ($carry > 0) {
-            throw new InvalidArgumentException('Przesunięcie wychodzi poza przestrzeń adresową.');
+            throw new InvalidArgumentException(__('Przesunięcie wychodzi poza przestrzeń adresową.'));
         }
 
         return inet_ntop($binary);

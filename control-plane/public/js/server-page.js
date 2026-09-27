@@ -4,6 +4,7 @@
  */
 (() => {
     'use strict';
+    const vhT = (s) => (window.VH_T && window.VH_T[s]) || s;
 
     // --- zakładki -----------------------------------------------------------
     const tabs = [...document.querySelectorAll('[data-tab]')];
@@ -47,7 +48,7 @@
         modal.querySelector('[data-reinstall-form]')?.addEventListener('submit', (e) => {
             const submit = e.target.querySelector('button[type=submit]');
             submit.disabled = true;
-            submit.textContent = 'Uruchamiam reinstalację…';
+            submit.textContent = vhT('Uruchamiam reinstalację…');
         });
     }
 
@@ -84,9 +85,9 @@
         // Etapy węzła, które nie mają własnego kroku na liście.
         const aliases = { download: 'image', prepare: keys[0], stop: keys[0] };
         const details = {
-            pending: 'Zlecenie czeka w kolejce panelu…',
-            queued: 'Węzeł przyjął zlecenie — zaraz zacznie.',
-            download: 'Węzeł pobiera obraz systemu. Przy pierwszym użyciu tego systemu może to potrwać kilka minut.',
+            pending: vhT('Zlecenie czeka w kolejce panelu…'),
+            queued: vhT('Węzeł przyjął zlecenie — zaraz zacznie.'),
+            download: vhT('Węzeł pobiera obraz systemu. Przy pierwszym użyciu tego systemu może to potrwać kilka minut.'),
         };
 
         let node = null;          // { stage, percent, since } z ostatniego odpytania
@@ -113,7 +114,7 @@
                 const inStage = (Date.now() - node.since) / 1000;
                 target = base + (cap - base) * (1 - Math.exp(-inStage / 25));
                 sub.textContent = node.stage === 'download' && node.detail
-                    ? 'Węzeł pobiera obraz systemu: ' + node.detail
+                    ? vhT('Węzeł pobiera obraz systemu: ') + node.detail
                     : details[node.stage] || steps[current].textContent.trim() + '…';
             } else {
                 let acc = 0;
@@ -149,7 +150,7 @@
             progress.querySelector('[data-orb-icon]').innerHTML = ok
                 ? '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
                 : '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
-            progress.querySelector('[data-progress-title]').textContent = ok ? 'Gotowe! Serwer działa.' : 'Operacja nie powiodła się';
+            progress.querySelector('[data-progress-title]').textContent = ok ? vhT('Gotowe! Serwer działa.') : vhT('Operacja nie powiodła się');
             sub.textContent = message;
             setTimeout(() => location.reload(), ok ? 1400 : 3000);
         };
@@ -162,7 +163,7 @@
             if (node) node.detail = job.stage_detail;
             if (data.transitioning) return true;
             const failed = data.state === 'error' || job.status === 'failed';
-            finish(!failed, failed ? (job.error || 'Szczegóły pojawią się na stronie.') : 'Odświeżam panel…');
+            finish(!failed, failed ? (job.error || vhT('Szczegóły pojawią się na stronie.')) : vhT('Odświeżam panel…'));
             return false;
         });
     }

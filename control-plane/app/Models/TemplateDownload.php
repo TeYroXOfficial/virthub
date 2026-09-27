@@ -48,10 +48,10 @@ class TemplateDownload extends Model
     public function label(): string
     {
         return match ($this->status) {
-            self::STATUS_QUEUED => 'w kolejce',
-            self::STATUS_DOWNLOADING => 'pobieranie',
-            self::STATUS_READY => 'gotowy',
-            self::STATUS_FAILED => 'błąd',
+            self::STATUS_QUEUED => __('w kolejce'),
+            self::STATUS_DOWNLOADING => __('pobieranie'),
+            self::STATUS_READY => __('gotowy'),
+            self::STATUS_FAILED => __('błąd'),
             default => $this->status,
         };
     }

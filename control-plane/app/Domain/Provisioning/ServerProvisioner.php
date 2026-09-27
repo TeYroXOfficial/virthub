@@ -69,8 +69,8 @@ class ServerProvisioner
 
         if ($location !== null && ! $this->locationHasCapacity($location, $package, $template)) {
             throw new NoCapacityException(
-                "W lokalizacji {$location->publicName()} nie ma teraz wolnych zasobów dla tego pakietu. "
-                .'Wybierz inną lokalizację albo spróbuj później.'
+                __('W lokalizacji :publicname nie ma teraz wolnych zasobów dla tego pakietu. ', ['publicname' => $location->publicName()])
+                .__('Wybierz inną lokalizację albo spróbuj później.')
             );
         }
 
@@ -158,9 +158,9 @@ class ServerProvisioner
 
         if ($template->virtualization !== $server->virtualization) {
             throw new \DomainException(
-                "Nie da się przebudować maszyny typu {$server->virtualization->shortLabel()} "
+                __('Nie da się przebudować maszyny typu :shortlabel ', ['shortlabel' => $server->virtualization->shortLabel()])
                 ."z szablonu {$template->name} ({$template->virtualization->shortLabel()}). "
-                .'Wybierz szablon tego samego typu.'
+                .__('Wybierz szablon tego samego typu.')
             );
         }
 
@@ -188,14 +188,14 @@ class ServerProvisioner
 
         if ($server->isRunning()) {
             throw new \DomainException(
-                'Zmiana pakietu wymaga zatrzymanej maszyny. Zatrzymaj VPS i ponów operację.'
+                __('Zmiana pakietu wymaga zatrzymanej maszyny. Zatrzymaj VPS i ponów operację.')
             );
         }
 
         if ($package->disk_gb < $server->disk_gb) {
             throw new \DomainException(
-                "Nie da się zmniejszyć dysku z {$server->disk_gb} GB do {$package->disk_gb} GB — "
-                .'wybierz pakiet z dyskiem nie mniejszym niż obecny.'
+                __('Nie da się zmniejszyć dysku z :disk_gb GB do :disk_gb2 GB — ', ['disk_gb' => $server->disk_gb, 'disk_gb2' => $package->disk_gb])
+                .__('wybierz pakiet z dyskiem nie mniejszym niż obecny.')
             );
         }
 
@@ -210,7 +210,7 @@ class ServerProvisioner
             'package_id' => $package->id,
         ]);
 
-        $server->markState(ServerState::Resizing, 'Trwa zmiana parametrów maszyny.');
+        $server->markState(ServerState::Resizing, __('Trwa zmiana parametrów maszyny.'));
         AuditLog::record('server.resize', $server, ['package' => $package->slug], $actor);
         RunServerActionJob::dispatch($job->id);
 
@@ -221,7 +221,7 @@ class ServerProvisioner
     {
         $job = $this->createJobRecord($server, 'delete', $actor);
 
-        $server->markState(ServerState::Deleting, 'Maszyna jest usuwana.');
+        $server->markState(ServerState::Deleting, __('Maszyna jest usuwana.'));
         AuditLog::record('server.delete', $server, ['hostname' => $server->hostname], $actor);
         RunServerActionJob::dispatch($job->id);
 
@@ -241,7 +241,7 @@ class ServerProvisioner
             $server->jobs()
                 ->whereNotIn('status', [ServerJob::STATUS_DONE, ServerJob::STATUS_FAILED])
                 ->get()
-                ->each(fn (ServerJob $job) => $job->markFailed('Anulowane — maszynę usunięto z panelu.'));
+                ->each(fn (ServerJob $job) => $job->markFailed(__('Anulowane — maszynę usunięto z panelu.')));
 
             AuditLog::record('server.purged', $server, [
                 'hostname' => $server->hostname,
@@ -281,7 +281,7 @@ class ServerProvisioner
 
         if (! $backup->isRestorable()) {
             throw new \DomainException(
-                "Kopia {$backup->name} nie jest gotowa do przywrócenia (status: {$backup->status})."
+                __('Kopia :name nie jest gotowa do przywrócenia (status: :status).', ['name' => $backup->name, 'status' => $backup->status])
             );
         }
 
@@ -305,11 +305,11 @@ class ServerProvisioner
         $this->assertAcceptsCommands($server);
 
         if ($server->isContainer()) {
-            throw new \DomainException('Kontener nie ma napędu CD — obrazy ISO są tylko dla maszyn KVM.');
+            throw new \DomainException(__('Kontener nie ma napędu CD — obrazy ISO są tylko dla maszyn KVM.'));
         }
 
         if ($iso !== null && ! $iso->isReadyOn($server->hypervisor_id)) {
-            throw new \DomainException("Obraz {$iso->name} nie jest jeszcze pobrany na węzeł tej maszyny.");
+            throw new \DomainException(__('Obraz :name nie jest jeszcze pobrany na węzeł tej maszyny.', ['name' => $iso->name]));
         }
 
         $job = $this->createJobRecord($server, 'iso', $actor, [
@@ -336,7 +336,7 @@ class ServerProvisioner
         $this->assertAcceptsCommands($server);
 
         if (! $server->isRunning()) {
-            throw new \DomainException('Uruchom maszynę — hasło zmienia się w działającym systemie.');
+            throw new \DomainException(__('Uruchom maszynę — hasło zmienia się w działającym systemie.'));
         }
 
         $job = $this->createJobRecord($server, 'password', $actor, [
@@ -393,14 +393,14 @@ class ServerProvisioner
     {
         if ($server->isSuspended()) {
             throw new \DomainException(
-                'Maszyna jest zawieszona. Skontaktuj się z obsługą, aby ją odwiesić.'
+                __('Maszyna jest zawieszona. Skontaktuj się z obsługą, aby ją odwiesić.')
             );
         }
 
         if ($server->state->isTransitioning()) {
             throw new \DomainException(
-                "Na maszynie trwa już operacja ({$server->state->label()}). "
-                .'Poczekaj na jej zakończenie.'
+                __('Na maszynie trwa już operacja (:label). ', ['label' => $server->state->label()])
+                .__('Poczekaj na jej zakończenie.')
             );
         }
     }
@@ -419,7 +419,7 @@ class ServerProvisioner
 
         if (! $hypervisor->hasCapacityFor(max(0, $deltaCpu), max(0, $deltaRam), max(0, $deltaDisk))) {
             throw new NoCapacityException(
-                "Hypervisor {$hypervisor->name} nie ma zasobów na powiększenie tej maszyny."
+                __('Hypervisor :name nie ma zasobów na powiększenie tej maszyny.', ['name' => $hypervisor->name])
             );
         }
 

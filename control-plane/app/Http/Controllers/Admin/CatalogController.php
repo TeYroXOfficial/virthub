@@ -73,15 +73,15 @@ class CatalogController extends Controller
             $package->update(['is_active' => false]);
 
             return response()->json([
-                'message' => 'Pakiet jest używany przez istniejące maszyny, więc został '
-                    .'wyłączony ze sprzedaży zamiast usunięty.',
+                'message' => __('Pakiet jest używany przez istniejące maszyny, więc został ')
+                    .__('wyłączony ze sprzedaży zamiast usunięty.'),
             ]);
         }
 
         AuditLog::record('package.deleted', $package, ['slug' => $package->slug]);
         $package->delete();
 
-        return response()->json(['message' => 'Pakiet został usunięty.']);
+        return response()->json(['message' => __('Pakiet został usunięty.')]);
     }
 
     // --- szablony -----------------------------------------------------------
@@ -126,7 +126,7 @@ class CatalogController extends Controller
         $template->update(['is_active' => false]);
 
         return response()->json([
-            'message' => 'Szablon został wyłączony. Maszyny na nim postawione działają dalej.',
+            'message' => __('Szablon został wyłączony. Maszyny na nim postawione działają dalej.'),
         ]);
     }
 }

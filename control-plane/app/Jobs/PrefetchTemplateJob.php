@@ -84,7 +84,7 @@ class PrefetchTemplateJob implements ShouldQueue
     {
         match ($state['status'] ?? null) {
             'done' => self::finish($download, TemplateDownload::STATUS_READY),
-            'failed' => self::finish($download, TemplateDownload::STATUS_FAILED, $state['error'] ?? 'Węzeł nie podał przyczyny.'),
+            'failed' => self::finish($download, TemplateDownload::STATUS_FAILED, $state['error'] ?? __('Węzeł nie podał przyczyny.')),
             // Odświeżony znacznik czasu mówi dystrybutorowi, że zlecenie żyje —
             // inaczej po dwóch godzinach uznałby je za zgubione i zlecił drugie.
             default => $download->forceFill([
@@ -105,7 +105,7 @@ class PrefetchTemplateJob implements ShouldQueue
             self::finish(
                 $download,
                 TemplateDownload::STATUS_FAILED,
-                $exception?->getMessage() ?: 'Pobieranie trwało zbyt długo.',
+                $exception?->getMessage() ?: __('Pobieranie trwało zbyt długo.'),
             );
         }
     }

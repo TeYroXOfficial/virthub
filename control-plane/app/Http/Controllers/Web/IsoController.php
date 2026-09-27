@@ -28,31 +28,31 @@ class IsoController extends Controller
             'url' => ['required', 'url:http,https', 'max:2000'],
             'sha256' => ['nullable', 'regex:/^[0-9a-fA-F]{64}$/'],
             'is_public' => ['sometimes', 'boolean'],
-        ], ['sha256.regex' => 'Suma SHA-256 to 64 znaki szesnastkowe.']);
+        ], ['sha256.regex' => __('Suma SHA-256 to 64 znaki szesnastkowe.')]);
 
         $iso = $this->library->add([...$data, 'is_public' => $request->boolean('is_public')], $request->user());
 
-        return back()->with('status', "Dodano {$iso->name} — węzły KVM pobierają obraz.");
+        return back()->with('status', __('Dodano :name — węzły KVM pobierają obraz.', ['name' => $iso->name]));
     }
 
     public function retry(IsoImage $iso): RedirectResponse
     {
         $queued = $this->library->distribute($iso, retryFailed: true);
 
-        return back()->with('status', $queued ? "Ponowiono pobieranie na {$queued} węzłach." : 'Wszystkie węzły mają już ten obraz albo go pobierają.');
+        return back()->with('status', $queued ? __('Ponowiono pobieranie na :queued węzłach.', ['queued' => $queued]) : __('Wszystkie węzły mają już ten obraz albo go pobierają.'));
     }
 
     public function toggle(IsoImage $iso): RedirectResponse
     {
         $iso->update(['is_public' => ! $iso->is_public]);
 
-        return back()->with('status', $iso->is_public ? "{$iso->name} jest widoczny dla klientów." : "{$iso->name} jest teraz tylko dla personelu.");
+        return back()->with('status', $iso->is_public ? __(':name jest widoczny dla klientów.', ['name' => $iso->name]) : "{$iso->name} jest teraz tylko dla personelu.");
     }
 
     public function destroy(Request $request, IsoImage $iso): RedirectResponse
     {
         $this->library->delete($iso, $request->user());
 
-        return back()->with('status', "Usunięto {$iso->name}.");
+        return back()->with('status', __('Usunięto :name.', ['name' => $iso->name]));
     }
 }

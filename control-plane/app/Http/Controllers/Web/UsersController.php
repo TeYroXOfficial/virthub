@@ -55,7 +55,7 @@ class UsersController extends Controller
 
     public function edit(Request $request, User $user): View
     {
-        abort_unless($this->users->canManage($request->user(), $user), 403, 'Konta personelu może zmieniać tylko administrator.');
+        abort_unless($this->users->canManage($request->user(), $user), 403, __('Konta personelu może zmieniać tylko administrator.'));
 
         return $this->form($request, $user);
     }
@@ -65,14 +65,14 @@ class UsersController extends Controller
         $data = $request->validate($this->users->rules($request->user(), $user));
         $this->users->update($request->user(), $user, $data);
 
-        return back()->with('status', 'Zapisano zmiany konta.');
+        return back()->with('status', __('Zapisano zmiany konta.'));
     }
 
     public function suspend(Request $request, User $user): RedirectResponse
     {
         $this->users->suspend($request->user(), $user);
 
-        return back()->with('status', "Konto {$user->email} zostało zablokowane — użytkownik zostanie wylogowany.");
+        return back()->with('status', __('Konto :email zostało zablokowane — użytkownik zostanie wylogowany.', ['email' => $user->email]));
     }
 
     public function unsuspend(Request $request, User $user): RedirectResponse
@@ -87,7 +87,7 @@ class UsersController extends Controller
         $password = $this->users->resetPassword($request->user(), $user);
 
         return back()
-            ->with('status', 'Ustawiono nowe hasło. Przekaż je użytkownikowi — nie zobaczysz go ponownie.')
+            ->with('status', __('Ustawiono nowe hasło. Przekaż je użytkownikowi — nie zobaczysz go ponownie.'))
             ->with('generated_password', $password);
     }
 
@@ -95,7 +95,7 @@ class UsersController extends Controller
     {
         $this->users->delete($request->user(), $user);
 
-        return redirect()->route('panel.admin.users')->with('status', "Usunięto konto {$user->email}.");
+        return redirect()->route('panel.admin.users')->with('status', __('Usunięto konto :email.', ['email' => $user->email]));
     }
 
     private function form(Request $request, User $user): View

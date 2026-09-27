@@ -24,7 +24,7 @@ class ConsoleRedeemController extends Controller
 
         $params = $sessions->redeem($session);
 
-        abort_if($params === null, 410, 'Sesja konsoli wygasła albo została już użyta.');
+        abort_if($params === null, 410, __('Sesja konsoli wygasła albo została już użyta.'));
 
         return response()->json($params);
     }

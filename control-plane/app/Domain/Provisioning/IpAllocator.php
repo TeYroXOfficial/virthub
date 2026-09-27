@@ -193,7 +193,7 @@ class IpAllocator
 
         if ($picked->count() < $count) {
             throw new NoAddressesException(sprintf(
-                'Pule %s IPv4 węzła %s są wyczerpane: potrzeba %d, wolnych jest %d.',
+                __('Pule %s IPv4 węzła %s są wyczerpane: potrzeba %d, wolnych jest %d.'),
                 $type === IpPool::TYPE_NAT ? 'NAT' : 'publiczne',
                 $hypervisor->name,
                 $count,
@@ -234,7 +234,7 @@ class IpAllocator
 
         if ($picked->count() < $count) {
             throw new NoAddressesException(sprintf(
-                'Brak wolnych adresów IPv6 (%s) dla węzła %s: potrzeba %d, dostępnych %d.',
+                __('Brak wolnych adresów IPv6 (%s) dla węzła %s: potrzeba %d, dostępnych %d.'),
                 $type === IpPool::TYPE_NAT ? 'NAT' : 'publicznych',
                 $hypervisor->name,
                 $count,

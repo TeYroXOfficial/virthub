@@ -74,6 +74,6 @@ final class Permissions
 
     public static function label(string $key): string
     {
-        return (self::SERVER + self::ADMIN)[$key][0] ?? $key;
+        return __((self::SERVER + self::ADMIN)[$key][0] ?? $key);
     }
 }

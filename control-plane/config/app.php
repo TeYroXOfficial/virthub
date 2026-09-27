@@ -78,7 +78,9 @@ return [
     |
     */
 
-    'locale' => env('APP_LOCALE', 'en'),
+    // Język domyślny panelu (także dla poleceń i kolejki, gdzie nie ma
+    // przeglądarki ani użytkownika) — patrz virthub.default_locale.
+    'locale' => env('VIRTHUB_LOCALE', 'pl'),
 
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 
