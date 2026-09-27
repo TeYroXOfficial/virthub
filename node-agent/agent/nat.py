@@ -33,6 +33,52 @@ log = logging.getLogger("virthub.nat")
 SSH_PORT = 22
 
 
+def host_networks(listing: str | None = None) -> list[dict[str, str]]:
+    """Sieci, w których węzeł ma własne adresy (poza loopbackiem, mostkiem NAT
+    i interfejsami maszyn), np. [{"interface": "eth0", "network": "192.168.0.0/24"}].
+
+    Sieć NAT nie może na nie nachodzić: węzeł miałby dwie trasy do tej samej
+    sieci i odpowiedzi maszyn szłyby złym interfejsem — konsola działa, SSH
+    przez port NAT i internet w maszynie nie.
+    """
+    if listing is None:
+        try:
+            listing = run(["ip", "-j", "addr", "show"])
+        except (CommandError, OSError):
+            return []
+    try:
+        links = json.loads(listing or "[]")
+    except ValueError:
+        return []
+
+    networks: list[dict[str, str]] = []
+    for link in links:
+        name = link.get("ifname", "")
+        if name == "lo" or name.startswith("vh"):
+            continue
+        for info in link.get("addr_info", []) or []:
+            if info.get("scope") != "global" or "local" not in info:
+                continue
+            try:
+                net = ipaddress.ip_interface(f"{info['local']}/{info.get('prefixlen', 32)}").network
+            except ValueError:
+                continue
+            entry = {"interface": name, "network": str(net)}
+            if entry not in networks:
+                networks.append(entry)
+    return networks
+
+
+def conflicting_network(network: str, networks: list[dict[str, str]]) -> dict[str, str] | None:
+    """Sieć węzła, na którą nachodzi sieć NAT (albo None)."""
+    nat = ipaddress.ip_network(network, strict=False)
+    for entry in networks:
+        other = ipaddress.ip_network(entry["network"], strict=False)
+        if other.version == nat.version and other.overlaps(nat):
+            return entry
+    return None
+
+
 def port_forwards(spec: NetworkInterfaceSpec) -> dict[int, int]:
     """Port zewnętrzny → port w maszynie.
 
@@ -71,6 +117,7 @@ class NatManager:
         if not nat or self.settings.is_mock:
             return
 
+        self.assert_no_host_conflict(nat)
         self._ensure_bridge()
         for gateway in self.render_bridge_addresses(nat):
             run(["ip", "addr", "replace", gateway, "dev", self.bridge])
@@ -81,6 +128,21 @@ class NatManager:
             # przekazywanie wyłącza przyjmowanie ogłoszeń routera, chyba że
             # interfejs wyjściowy ma accept_ra=2 (opisane w docs/wdrozenie.md).
             self._require_sysctl("/proc/sys/net/ipv6/conf/all/forwarding", "net.ipv6.conf.all.forwarding")
+
+    def assert_no_host_conflict(self, interfaces: list[NetworkInterfaceSpec]) -> None:
+        networks = host_networks()
+        for spec in interfaces:
+            if spec.nat is None:
+                continue
+            clash = conflicting_network(spec.nat.network, networks)
+            if clash:
+                raise CommandError(
+                    ["ip", "addr"], 1,
+                    f"Sieć NAT {spec.nat.network} nachodzi na sieć węzła {clash['network']} "
+                    f"(interfejs {clash['interface']}) — ruch maszyn szedłby złym interfejsem. "
+                    f"Zmień podsieć puli NAT w panelu na nieużywaną na węźle (np. 10.77.0.0/24) "
+                    f"i przeinstaluj maszynę albo przydziel jej nowy adres.",
+                )
 
     def configure(self, server_id: int, interfaces: list[NetworkInterfaceSpec]) -> None:
         """Podmienia NAT maszyny: sieci, adres wyjścia i przekierowane porty."""

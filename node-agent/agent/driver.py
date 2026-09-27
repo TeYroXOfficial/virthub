@@ -31,6 +31,7 @@ from .isos import IsoLibrary
 from .jobs import progress
 from .config import Settings
 from .domain_xml import CPU_PERIOD_US, build_domain_xml, cpu_quota_us, domain_name
+from .nat import host_networks
 from .network import NetworkManager, interface_name, mac_address
 from .schemas import (
     GuestOs,
@@ -156,6 +157,7 @@ class HypervisorDriver(ABC):
             "cpu_cores_total": psutil.cpu_count(logical=True) or 0,
             "cpu_model": cpu_model(),
             "public_ipv4": outbound_ipv4(),
+            "host_networks": [] if self.settings.is_mock else host_networks(),
             "cpu_load_1m": round(load1, 2),
             "ram_mb_total": mem.total // (1024**2),
             "ram_mb_free": mem.available // (1024**2),

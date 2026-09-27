@@ -165,6 +165,9 @@
                             @if ($pool->nat_public_address)
                                 <div class="hint mono">{{ __('wyjście :nat_public_address', ['nat_public_address' => $pool->nat_public_address]) }}</div>
                             @endif
+                            @foreach ($pool->hostNetworkConflicts() as $c)
+                                <div class="hint" style="color:var(--critical)">{{ __('Nachodzi na sieć węzła :node (:interface: :network) — SSH przez porty NAT nie zadziała. Utwórz pulę z inną podsiecią, np. 10.77.0.0/24.', $c) }}</div>
+                            @endforeach
                         </td>
                         <td class="muted">{{ $pool->scopeLabel() }}</td>
                         <td class="mono">{{ $pool->cidr }}</td>

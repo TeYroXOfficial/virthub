@@ -244,3 +244,45 @@ def test_wylaczone_przekazywanie_bez_uprawnien_mowi_co_zrobic(tmp_path):
         NatManager._require_sysctl(str(missing_dir), "net.ipv4.ip_forward")
     assert "sysctl" in str(exc.value)
     assert "90-virthub.conf" in str(exc.value)
+
+
+# --- zderzenie z sieciami węzła ---------------------------------------------------
+
+IP_ADDR_JSON = """[
+ {"ifname": "lo", "addr_info": [{"family": "inet", "local": "127.0.0.1", "prefixlen": 8, "scope": "host"}]},
+ {"ifname": "eth0", "addr_info": [
+    {"family": "inet", "local": "192.168.0.10", "prefixlen": 24, "scope": "global"},
+    {"family": "inet6", "local": "fe80::1", "prefixlen": 64, "scope": "link"}]},
+ {"ifname": "vhnat0", "addr_info": [{"family": "inet", "local": "10.10.0.1", "prefixlen": 24, "scope": "global"}]},
+ {"ifname": "vh12", "addr_info": []}
+]"""
+
+
+def test_sieci_wezla_bez_loopbacku_mostka_nat_i_link_local():
+    from agent.nat import host_networks
+
+    assert host_networks(IP_ADDR_JSON) == [{"interface": "eth0", "network": "192.168.0.0/24"}]
+
+
+def test_siec_nat_nachodzaca_na_lan_wezla_jest_wykrywana():
+    from agent.nat import conflicting_network, host_networks
+
+    networks = host_networks(IP_ADDR_JSON)
+    assert conflicting_network("192.168.0.0/24", networks) == {"interface": "eth0", "network": "192.168.0.0/24"}
+    assert conflicting_network("192.168.0.0/16", networks) is not None
+    assert conflicting_network("10.77.0.0/24", networks) is None
+
+
+def test_przygotowanie_odmawia_sieci_nat_z_lanu_wezla(settings, monkeypatch):
+    from agent import nat as nat_module
+    from agent.shell import CommandError
+
+    manager = NatManager(dataclasses.replace(settings, driver="libvirt"))
+    monkeypatch.setattr(nat_module, "host_networks", lambda: [{"interface": "eth0", "network": "192.168.0.0/24"}])
+    iface = NetworkInterfaceSpec(
+        address="192.168.0.2", prefix=24, gateway="192.168.0.1", mode="nat",
+        nat={"network": "192.168.0.0/24", "port_from": 10000, "port_to": 10009},
+    )
+
+    with pytest.raises(CommandError, match="nachodzi na sieć węzła 192.168.0.0/24"):
+        manager.prepare([iface])

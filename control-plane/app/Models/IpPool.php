@@ -194,6 +194,44 @@ class IpPool extends Model
         return $first && $last ? ['from' => $first['from'], 'to' => $last['to']] : null;
     }
 
+    /**
+     * Sieci węzłów puli, na które nachodzi ta sieć NAT (zgłoszone przez agentów).
+     * Taka pula psuje trasowanie: węzeł ma dwie trasy do tej samej sieci.
+     *
+     * @return list<array{node: string, interface: string, network: string}>
+     */
+    public function hostNetworkConflicts(): array
+    {
+        if (! $this->isNat()) {
+            return [];
+        }
+
+        $nodes = $this->isGroupPool()
+            ? Hypervisor::query()->where('hypervisor_group_id', $this->hypervisor_group_id)->get()
+            : Hypervisor::query()->whereKey($this->hypervisor_id)->get();
+
+        $conflicts = [];
+        foreach ($nodes as $node) {
+            foreach ($node->last_health['host_networks'] ?? [] as $entry) {
+                $network = $entry['network'] ?? null;
+                if (! is_string($network) || ! str_contains($network, '/')) {
+                    continue;
+                }
+                try {
+                    $overlaps = IpMath::contains($network, IpMath::networkAddress($this->cidr))
+                        || IpMath::contains($this->cidr, IpMath::networkAddress($network));
+                } catch (\Throwable) {
+                    continue; // inna wersja IP albo niepoprawny wpis
+                }
+                if ($overlaps) {
+                    $conflicts[] = ['node' => $node->name, 'interface' => (string) ($entry['interface'] ?? '?'), 'network' => $network];
+                }
+            }
+        }
+
+        return $conflicts;
+    }
+
     /** @return list<string> */
     public function nameserverList(): array
     {

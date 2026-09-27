@@ -188,6 +188,10 @@ class IpPoolManager
             ));
         }
 
+        if ($conflict = $pool->hostNetworkConflicts()[0] ?? null) {
+            $this->fail('cidr', __('Podsieć nachodzi na sieć węzła :node (:interface: :network) — ruch maszyn szedłby złym interfejsem. Wybierz sieć prywatną nieużywaną na węźle, np. 10.77.0.0/24.', $conflict));
+        }
+
         foreach ($this->neighbours($pool) as $other) {
             if ($other->version !== $pool->version || ! $this->overlaps($pool->cidr, $other->cidr)) {
                 continue;
