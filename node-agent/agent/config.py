@@ -90,6 +90,9 @@ class Settings:
     # hosta, a te bywają nieosiągalne z kontenera (stub systemd-resolved
     # 127.0.0.53, same adresy IPv6 w sieci IPv4).
     apps_dns: tuple[str, ...] = ("1.1.1.1", "1.0.0.1")
+    # SFTP do plików aplikacji (logowanie hasłem z panelu). 0 wyłącza.
+    sftp_port: int = 2022
+    sftp_listen: str = "0.0.0.0"
 
     @property
     def is_mock(self) -> bool:
@@ -142,6 +145,8 @@ def get_settings() -> Settings:
         apps_dir=_env_path("VH_APPS_DIR", "/var/lib/virthub/apps"),
         apps_network=_env("VH_APPS_NETWORK", "virthub_apps"),
         apps_dns=tuple(a.strip() for a in _env("VH_APPS_DNS", "1.1.1.1,1.0.0.1").split(",") if a.strip()),
+        sftp_port=_env_int("VH_SFTP_PORT", 2022),
+        sftp_listen=_env("VH_SFTP_LISTEN", "0.0.0.0"),
         nft_table=_env("VH_NFT_TABLE", "virthub"),
         vnc_listen=_env("VH_VNC_LISTEN", "127.0.0.1"),
         control_plane_url=_env("VH_CONTROL_PLANE_URL", "").rstrip("/"),

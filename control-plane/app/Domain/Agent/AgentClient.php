@@ -100,9 +100,9 @@ class AgentClient
      *
      * @return array{url: string, headers: array<string, string>, ca_pem: ?string}
      */
-    public function consoleConnection(string $uuid): array
+    public function consoleConnection(string $uuid, ?string $path = null): array
     {
-        $path = "/vm/{$uuid}/console";
+        $path ??= "/vm/{$uuid}/console";
         $timestamp = (string) time();
 
         return [
@@ -113,6 +113,12 @@ class AgentClient
             ],
             'ca_pem' => $this->hypervisor->agent_tls_cert ?: null,
         ];
+    }
+
+    /** Konsola aplikacji na żywo (wyjście strumieniem, polecenia, statystyki). */
+    public function appConsoleConnection(string $uuid): array
+    {
+        return $this->consoleConnection($uuid, "/apps/{$uuid}/console");
     }
 
     // --- operacje (zwracają identyfikator zadania po stronie agenta) --------

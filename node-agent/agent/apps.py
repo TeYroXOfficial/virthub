@@ -451,6 +451,7 @@ class AppManager:
                 "docker_version": version.get("Version"),
                 "apps": len(containers),
                 "running": sum(1 for c in containers if c.status == "running"),
+                "sftp_port": self.settings.sftp_port or None,
             }
         except Exception as exc:
             return {"available": False, "error": str(exc)[:300]}

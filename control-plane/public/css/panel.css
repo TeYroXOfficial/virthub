@@ -604,13 +604,11 @@ details.form-block[open] > summary { margin-bottom: 16px; }
     background: var(--accent-soft); color: var(--accent); }
 .copyable { cursor: copy; }
 .install-error { white-space: pre-wrap; font-size: 12.5px; max-height: 220px; overflow: auto; margin: 8px 0; }
-.app-console {
-    background: #0b0f14; color: #d5dde6; border-radius: var(--radius); border: 1px solid var(--border);
-    font: 13px/1.5 "JetBrains Mono", "Cascadia Code", Consolas, monospace;
-    height: calc(100vh - 380px); min-height: 360px; overflow: auto; padding: 12px 14px; white-space: pre-wrap; word-break: break-word;
-}
-.app-console .sys { color: #7fb4ff; }
-.app-console .err { color: #ff8a8a; }
+.app-console-frame { background: #0b0f14; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.app-console-frame:fullscreen { border-radius: 0; display: flex; flex-direction: column; }
+.app-console-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid #1c2530; }
+.app-console { height: calc(100vh - 420px); min-height: 360px; padding: 8px 4px 8px 12px; }
+.app-console-frame:fullscreen .app-console { flex: 1; height: auto; }
 .console-input { display: flex; gap: 8px; margin-top: 10px; }
 .console-input input { flex: 1; font-family: "JetBrains Mono", Consolas, monospace; }
 .app-stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 16px; }

@@ -29,6 +29,7 @@ os.environ.update(
     VH_STATE_DB=str(Path(_tmp) / "state.sqlite3"),
     VH_APPS_DIR=str(Path(_tmp) / "apps"),
     VH_APPS_NETWORK="virthub_apps_test",
+    VH_SFTP_PORT="0",
     VH_CONTROL_PLANE_URL="",
     VH_CALLBACK_SECRET="",
 )

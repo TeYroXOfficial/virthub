@@ -24,6 +24,9 @@ return [
 
     'console_secret' => env('VIRTHUB_CONSOLE_SECRET'),
 
+    // Port SFTP aplikacji na węzłach (VH_SFTP_PORT agenta) — pokazywany klientom.
+    'apps_sftp_port' => (int) env('VIRTHUB_APPS_SFTP_PORT', 2022),
+
     /*
     |--------------------------------------------------------------------------
     | Aktualizacje

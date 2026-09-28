@@ -6,6 +6,7 @@ use App\Domain\Agent\AgentException;
 use App\Domain\Apps\AppPayload;
 use App\Domain\Apps\AppProvisioner;
 use App\Domain\Apps\VariableRules;
+use App\Domain\Console\ConsoleSessions;
 use App\Http\Controllers\Controller;
 use App\Models\AppEgg;
 use App\Models\AppPlan;
@@ -162,6 +163,26 @@ class AppController extends Controller
         } catch (\DomainException|AgentException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         }
+    }
+
+    /**
+     * Jednorazowa sesja konsoli na żywo (WebSocket przez przekaźnik panelu).
+     * Skrypt konsoli prosi o nową przy każdym (ponownym) połączeniu.
+     */
+    public function consoleSession(AppServer $app, ConsoleSessions $sessions): JsonResponse
+    {
+        $this->authorize('operate', $app);
+        $app->load('hypervisor');
+
+        if (! ConsoleSessions::enabled()) {
+            return response()->json(['enabled' => false, 'message' => __('Przekaźnik konsoli nie jest skonfigurowany — konsola działa w trybie odpytywania.')], 409);
+        }
+
+        if ($app->hypervisor === null || $app->isSuspended() || $app->status === AppServer::STATUS_DELETING) {
+            return response()->json(['enabled' => true, 'message' => __('Konsola jest niedostępna dla tej aplikacji.')], 409);
+        }
+
+        return response()->json(['enabled' => true, 'path' => '/console-ws/'.$sessions->openAppSession($app)]);
     }
 
     public function command(Request $request, AppServer $app): JsonResponse

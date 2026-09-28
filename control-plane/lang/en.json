@@ -1310,5 +1310,16 @@
     "— wysuń płytę —": "— eject disc —",
     "…albo wklej JSON": "…or paste JSON",
     "← Hypervisory": "← Hypervisors",
-    "↓ :rx pobrane · ↑ :tx wysłane": "↓ :rx downloaded · ↑ :tx uploaded"
+    "↓ :rx pobrane · ↑ :tx wysłane": "↓ :rx downloaded · ↑ :tx uploaded",
+    "Odrzucono logowanie SFTP z nieprawidłowym podpisem węzła": "Rejected an SFTP login with an invalid node signature",
+    "Przekaźnik konsoli nie jest skonfigurowany — konsola działa w trybie odpytywania.": "The console relay is not configured — the console runs in polling mode.",
+    "Konsola jest niedostępna dla tej aplikacji.": "The console is not available for this application.",
+    "SFTP": "SFTP",
+    "twoje hasło do panelu": "your panel password",
+    "Połącz się dowolnym klientem SFTP (FileZilla, WinSCP) — zobaczysz pliki aplikacji jak w zakładce Pliki. Większe paczki wgrywaj tą drogą.": "Connect with any SFTP client (FileZilla, WinSCP) to see the application's files, just like in the Files tab. Upload larger bundles this way.",
+    "Otwórz w kliencie SFTP": "Open in SFTP client",
+    "odświeżanie co 1,5 s": "refreshing every 1.5 s",
+    "Połączenie z konsolą przerwane — łączę ponownie…": "Console connection lost — reconnecting…",
+    "Aplikacja nie działa — uruchom ją, żeby wysłać polecenie.": "The application is not running — start it to send a command.",
+    "Host": "Host"
 }

@@ -3,6 +3,7 @@
 namespace App\Domain\Console;
 
 use App\Domain\Agent\AgentClient;
+use App\Models\AppServer;
 use App\Models\Server;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
@@ -57,7 +58,20 @@ class ConsoleSessions
     }
 
     /**
-     * @return array{url: string, headers: array<string, string>, ca_pem: ?string, kind: string, server_id: int}|null
+     * Sesja konsoli aplikacji — bez biletu: strona aplikacji prosi o nią
+     * zwykłym żądaniem z sesji panelu (z autoryzacją) przy każdym połączeniu.
+     */
+    public function openAppSession(AppServer $app): string
+    {
+        $session = Str::random(64);
+
+        Cache::put("console-session:{$session}", ['app_id' => $app->id], now()->addSeconds(self::TTL));
+
+        return $session;
+    }
+
+    /**
+     * @return array{url: string, headers: array<string, string>, ca_pem: ?string, kind: string, server_id?: int, app_id?: int}|null
      */
     public function redeem(string $session): ?array
     {
@@ -65,6 +79,20 @@ class ConsoleSessions
 
         if ($data === null) {
             return null;
+        }
+
+        if (isset($data['app_id'])) {
+            $app = AppServer::with('hypervisor')->find($data['app_id']);
+
+            if ($app === null || $app->hypervisor === null || $app->isSuspended()) {
+                return null;
+            }
+
+            return [
+                ...(new AgentClient($app->hypervisor))->appConsoleConnection($app->uuid),
+                'kind' => 'app',
+                'app_id' => $app->id,
+            ];
         }
 
         $server = Server::with('hypervisor')->find($data['server_id']);

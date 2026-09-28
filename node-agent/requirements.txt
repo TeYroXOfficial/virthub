@@ -5,6 +5,8 @@ httpx==0.28.1
 psutil==6.1.1
 # Aplikacje (serwery gier, boty) — klient API Dockera, jak w Wings.
 docker==7.1.0
+# SFTP do plików aplikacji (logowanie hasłem z panelu).
+asyncssh==2.21.0
 
 # Powiązań libvirt celowo tu nie ma. Pakiet z PyPI kompiluje się wobec
 # systemowego libvirt i wywala się, gdy libvirt jest nowszy od powiązań
