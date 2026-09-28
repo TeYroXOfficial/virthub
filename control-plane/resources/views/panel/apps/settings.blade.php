@@ -118,7 +118,12 @@
             @csrf
             <div class="setting-text">
                 <h3>{{ __('Reinstalacja') }}</h3>
-                <p class="muted">{{ __('Ponownie uruchamia skrypt instalacyjny szablonu (np. pobiera serwer w wersji ze zmiennych). Twoje pliki zostają, ale skrypt może nadpisać część z nich.') }}</p>
+                <p class="muted">{{ __('Ponownie uruchamia skrypt instalacyjny szablonu (np. pobiera serwer w wersji ze zmiennych). Bez zaznaczonych opcji Twoje pliki zostają, ale skrypt może nadpisać część z nich.') }}</p>
+                @if ($app->isMinecraft())
+                    <label class="check-line"><input type="checkbox" name="wipe[]" value="world"> {{ __('Usuń świat (świeży start)') }}</label>
+                    <label class="check-line"><input type="checkbox" name="wipe[]" value="plugins"> {{ __('Usuń pluginy i mody (plugins/, mods/)') }}</label>
+                @endif
+                <label class="check-line"><input type="checkbox" name="wipe[]" value="all"> {{ __('Wyczyść wszystkie pliki (instalacja od zera)') }}</label>
                 <label class="check-line"><input type="checkbox" name="confirm" value="1" required> {{ __('Rozumiem') }}</label>
             </div>
             <button class="btn" type="submit" @disabled($app->isInstalling() || $app->isSuspended())><x-icon name="refresh" :size="15"/> {{ __('Reinstaluj') }}</button>

@@ -39,6 +39,9 @@ class InstallAppJob implements ShouldQueue
         $job->forceFill(['status' => AppJob::STATUS_RUNNING])->save();
         $client = new AgentClient($app->hypervisor);
         $spec = AppPayload::spec($app);
+        if ($job->action === 'reinstall' && ! empty($job->payload['wipe'])) {
+            $spec['reinstall_wipe'] = $job->payload['wipe'];
+        }
 
         try {
             $agentJobId = $job->action === 'reinstall'

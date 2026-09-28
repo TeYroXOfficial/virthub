@@ -49,7 +49,8 @@
                             </label>
                         @endforeach
                     </div>
-                    <label class="check-line"><input type="checkbox" name="wipe_world" value="1"> {{ __('Usuń też świat (świeży start)') }}</label>
+                    <label class="check-line"><input type="checkbox" name="wipe_world" value="1"> {{ __('Usuń świat (świeży start)') }}</label>
+                    <label class="check-line"><input type="checkbox" name="wipe_plugins" value="1" @checked(in_array($app->minecraft['platform'] ?? ($app->egg?->builtin_key === 'minecraft-paper' ? 'paper' : null), ['paper', 'purpur'], true))> {{ __('Usuń pluginy (plugins/) — serwer z modami ich nie wczyta') }}</label>
                     <label class="check-line"><input type="checkbox" name="eula" value="1" required> {!! __('Akceptuję :eula', ['eula' => '<a href="https://aka.ms/MinecraftEULA" target="_blank" rel="noopener">EULA Minecrafta</a>']) !!}</label>
                     <p class="hint">{{ __('Panel sam dobierze loader i wersję Javy. Świat, server.properties i listy graczy zostają.') }}</p>
                     @can('operate', $app)

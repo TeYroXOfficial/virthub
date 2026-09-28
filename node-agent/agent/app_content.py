@@ -37,7 +37,7 @@ from urllib.parse import urljoin, urlsplit
 import httpx
 from pydantic import BaseModel, Field
 
-from .apps import AppError, AppFiles
+from .apps import AppError, AppFiles, wipe_paths, world_names
 from .jobs import progress
 from .schemas import AppSpec
 
@@ -303,7 +303,9 @@ class ContentInstaller:
             self.log(f"Rozpakowano {count} plików ({step.label or 'archiwum'})")
 
     def delete(self, step: ContentStep) -> None:
-        """Ścieżki do usunięcia; ostatni człon może mieć wzorzec (forge-*.jar)."""
+        """Ścieżki do usunięcia; ostatni człon może mieć wzorzec (forge-*.jar),
+        „@world” to świat z level-name w server.properties."""
+        plain = []
         for path in step.paths:
             try:
                 parts = self.files.parts(path)
@@ -315,9 +317,13 @@ class ContentInstaller:
                         if fnmatch.fnmatch(entry["name"], parts[-1]):
                             self.files.delete(f"{parent}/{entry['name']}" if parent else entry["name"])
                 else:
-                    self.files.delete(path)
+                    plain.append(path)
             except AppError:
                 pass  # brak katalogu nadrzędnego — nie ma czego usuwać
+        worlds = world_names(self.files) if "@world" in plain else []
+        removed = wipe_paths(self.files, plain)
+        if worlds:
+            self.log(f"Usunięto świat: {', '.join(r for r in removed if r in worlds) or 'brak'}")
 
     def write(self, step: ContentStep) -> None:
         assert step.path is not None and step.content is not None

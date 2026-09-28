@@ -112,21 +112,31 @@ class AppProvisioner
 
     // --- instalacja --------------------------------------------------------------
 
-    public function reinstall(AppServer $app, ?User $actor = null): AppJob
+    public const WIPE_OPTIONS = ['world' => '@world', 'plugins' => ['plugins', 'mods'], 'all' => '*'];
+
+    /**
+     * @param  list<string>  $wipe  co usunąć przed skryptem: world, plugins, all
+     */
+    public function reinstall(AppServer $app, ?User $actor = null, array $wipe = []): AppJob
     {
         $this->assertUsable($app, allowFailed: true);
+        $paths = [];
+        foreach (array_intersect(array_keys(self::WIPE_OPTIONS), $wipe) as $option) {
+            array_push($paths, ...(array) self::WIPE_OPTIONS[$option]);
+        }
         $app->forceFill(['status' => AppServer::STATUS_INSTALLING, 'status_message' => null])->save();
-        AuditLog::record('app.reinstall', $app, [], $actor);
+        AuditLog::record('app.reinstall', $app, ['wipe' => array_values($wipe)], $actor);
 
-        return $this->dispatch($app, 'reinstall', $actor);
+        return $this->dispatch($app, 'reinstall', $actor, $paths ? ['wipe' => in_array('*', $paths, true) ? ['*'] : $paths] : null);
     }
 
-    private function dispatch(AppServer $app, string $action, ?User $actor): AppJob
+    private function dispatch(AppServer $app, string $action, ?User $actor, ?array $payload = null): AppJob
     {
         $job = AppJob::query()->create([
             'app_server_id' => $app->id,
             'user_id' => $actor?->id,
             'action' => $action,
+            'payload' => $payload,
             'status' => AppJob::STATUS_QUEUED,
         ]);
         InstallAppJob::dispatch($job->id);

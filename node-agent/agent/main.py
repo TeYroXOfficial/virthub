@@ -16,6 +16,13 @@ from fastapi import Depends, FastAPI, HTTPException, WebSocket, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
+try:
+    from docker import errors as docker_errors  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover — węzeł bez aplikacji
+    class docker_errors:  # type: ignore[no-redef]
+        class DockerException(Exception):
+            pass
+
 from .app_console import bridge_app
 from .app_content import AppContentRequest
 from .app_guard import AppGuard, findings_payload
@@ -220,6 +227,15 @@ async def _app_error(_, exc: AppError):
 @app.exception_handler(DriverError)
 async def _driver_error(_, exc: DriverError):
     return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(docker_errors.DockerException)
+async def _docker_error(_, exc: Exception):
+    # Błąd Dockera (brak obrazu, odrzucony profil, brak miejsca) — panel ma
+    # pokazać przyczynę, a nie gołe „Internal Server Error”.
+    detail = getattr(exc, "explanation", None) or str(exc)
+    log.warning("Błąd Dockera: %s", detail)
+    return JSONResponse(status_code=409, content={"detail": f"Docker: {detail}"[:1000]})
 
 
 @app.exception_handler(ConfigError)

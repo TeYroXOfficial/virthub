@@ -69,11 +69,13 @@ class AppContentController extends Controller
             'project' => ['required', 'string', 'max:100'],
             'version' => ['required', 'string', 'max:100'],
             'wipe_world' => ['nullable', 'boolean'],
+            'wipe_plugins' => ['nullable', 'boolean'],
             'eula' => ['accepted'],
         ], ['eula.accepted' => __('Zaakceptuj EULA Minecrafta, żeby zainstalować serwer.')]);
 
         return $this->queued(fn () => $this->content->queueModpack(
             $app, $data['source'], $data['project'], $data['version'], (bool) ($data['wipe_world'] ?? false), $request->user(),
+            (bool) ($data['wipe_plugins'] ?? false),
         ), $app, __('Instalacja modpacka rozpoczęta — postęp widać w konsoli.'));
     }
 
@@ -85,11 +87,13 @@ class AppContentController extends Controller
             'mc' => ['required', 'string', 'regex:/^\d+\.\d+(\.\d+)?$/'],
             'loader_version' => ['nullable', 'string', 'max:40', 'regex:/^[A-Za-z0-9._+-]+$/'],
             'wipe_world' => ['nullable', 'boolean'],
+            'wipe_plugins' => ['nullable', 'boolean'],
             'eula' => ['accepted'],
         ], ['eula.accepted' => __('Zaakceptuj EULA Minecrafta, żeby zainstalować serwer.')]);
 
         return $this->queued(fn () => $this->content->queueLoader(
             $app, $data['loader'], $data['mc'], $data['loader_version'] ?? null, (bool) ($data['wipe_world'] ?? false), $request->user(),
+            (bool) ($data['wipe_plugins'] ?? false),
         ), $app, __('Instalacja serwera rozpoczęta — postęp widać w konsoli.'));
     }
 

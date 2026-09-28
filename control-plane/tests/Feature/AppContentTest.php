@@ -7,6 +7,7 @@ use App\Domain\Apps\AppProvisioner;
 use App\Domain\Apps\Content\ContentManager;
 use App\Domain\Apps\Content\Loaders;
 use App\Domain\Apps\EggImporter;
+use App\Jobs\InstallAppJob;
 use App\Jobs\InstallContentJob;
 use App\Models\AppAddon;
 use App\Models\AppEgg;
@@ -415,7 +416,8 @@ class AppContentTest extends TestCase
         $this->assertSame(['delete', 'download', 'download', 'download', 'extract', 'write', 'write', 'write'], $ops);
         $this->assertStringContainsString('Pominięto 1 plików tylko dla klienta', $request['steps'][7]['label']);
         $this->assertContains('mods', $request['steps'][0]['paths']);
-        $this->assertNotContains('world', $request['steps'][0]['paths']);
+        $this->assertNotContains('@world', $request['steps'][0]['paths']);
+        $this->assertNotContains('plugins', $request['steps'][0]['paths']);
         $paths = array_column($request['steps'], 'path');
         $this->assertContains('fabric-server-launch.jar', $paths);
         $this->assertContains('mods/lithium.jar', $paths);
@@ -438,15 +440,72 @@ class AppContentTest extends TestCase
         $this->fakeApis();
 
         $this->actingAs($this->customer)->post(route('panel.apps.loader.install', $this->paper), [
-            'loader' => 'forge', 'mc' => '1.20.1', 'wipe_world' => '1', 'eula' => '1',
+            'loader' => 'forge', 'mc' => '1.20.1', 'wipe_world' => '1', 'wipe_plugins' => '1', 'eula' => '1',
         ])->assertRedirect();
         $this->runQueued();
 
         $steps = $this->agentRequests[0]['steps'];
-        $this->assertContains('world', $steps[0]['paths']);
+        $this->assertContains('@world', $steps[0]['paths']);
+        $this->assertContains('plugins', $steps[0]['paths']);
+        $this->assertStringContainsString('razem ze światem', $steps[0]['label']);
         $java = collect($steps)->firstWhere('op', 'java');
         $this->assertSame(['-jar', 'forge-installer.jar', '--installServer'], $java['args']);
         $this->assertStringContainsString('forge-1.20.1-47.2.0-installer.jar', collect($steps)->firstWhere('path', 'forge-installer.jar')['url']);
+    }
+
+    public function test_reinstalacja_z_usunieciem_swiata_i_pluginow(): void
+    {
+        $specs = [];
+        Http::fake(['node.test:8443/apps/*/reinstall' => function (Request $r) use (&$specs) {
+            $specs[] = $r->data();
+
+            return Http::response(['job_id' => 'agent-re'], 202);
+        }]);
+        AppAddon::query()->create([
+            'app_server_id' => $this->paper->id, 'kind' => 'plugin', 'source' => 'modrinth', 'project_id' => 'LUCK',
+            'version_id' => 'v-old', 'name' => 'LuckPerms', 'version' => '5.3.0', 'filename' => 'LuckPerms-5.3.0.jar',
+        ]);
+        $this->paper->forceFill(['minecraft' => ['platform' => 'paper', 'mc' => '1.20.1']])->save();
+
+        $this->actingAs($this->customer)->get(route('panel.apps.settings', $this->paper))
+            ->assertOk()->assertSee('name="wipe[]" value="world"', false)->assertSee('value="plugins"', false);
+
+        $this->actingAs($this->customer)->post(route('panel.apps.reinstall', $this->paper), ['confirm' => '1', 'wipe' => ['nope']])
+            ->assertSessionHasErrors('wipe.0');
+        $this->actingAs($this->customer)->post(route('panel.apps.reinstall', $this->paper), ['confirm' => '1', 'wipe' => ['world', 'plugins']])
+            ->assertRedirect(route('panel.apps.show', $this->paper));
+
+        $job = AppJob::query()->latest('id')->firstOrFail();
+        $this->assertSame(['wipe' => ['@world', 'plugins', 'mods']], $job->payload);
+        (new InstallAppJob($job->id))->handle(app(AppJobApplier::class));
+        $this->assertSame(['@world', 'plugins', 'mods'], $specs[0]['reinstall_wipe']);
+
+        $this->agentResult($job);
+        $app = $this->paper->fresh();
+        $this->assertTrue($app->isReady());
+        $this->assertSame(0, $app->addons()->count());
+        $this->assertSame(['platform' => 'paper'], $app->minecraft);
+    }
+
+    public function test_reinstalacja_bez_opcji_niczego_nie_kasuje(): void
+    {
+        $specs = [];
+        Http::fake(['node.test:8443/apps/*/reinstall' => function (Request $r) use (&$specs) {
+            $specs[] = $r->data();
+
+            return Http::response(['job_id' => 'agent-re'], 202);
+        }]);
+        $this->actingAs($this->customer)->post(route('panel.apps.reinstall', $this->paper), ['confirm' => '1', 'wipe' => ['all', 'world']]);
+        $job = AppJob::query()->latest('id')->firstOrFail();
+        $this->assertSame(['wipe' => ['*']], $job->payload); // całość i tak obejmuje świat
+
+        $job->forceFill(['status' => AppJob::STATUS_DONE])->save();
+        AppServer::query()->whereKey($this->paper->id)->update(['status' => AppServer::STATUS_READY]);
+        $this->actingAs($this->customer)->post(route('panel.apps.reinstall', $this->paper), ['confirm' => '1'])->assertSessionHasNoErrors()->assertSessionMissing('error');
+        $job = AppJob::query()->latest('id')->firstOrFail();
+        $this->assertNull($job->payload);
+        (new InstallAppJob($job->id))->handle(app(AppJobApplier::class));
+        $this->assertArrayNotHasKey('reinstall_wipe', $specs[0]);
     }
 
     public function test_starsza_wersja_gry_wymaga_usuniecia_swiata(): void
