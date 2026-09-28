@@ -46,7 +46,7 @@ fi
 warn "DNS hosta jest wolny albo nie działa — naprawiam"
 
 # Które z obecnych serwerów odpowiadają (zapytanie UDP, 1,5 s)?
-current=$(awk '/^nameserver/ {print $2}' /etc/resolv.conf 2>/dev/null | tr '\n' ' ')
+current=$(awk '/^nameserver/ {print $2}' "${VH_RESOLV_CONF:-/etc/resolv.conf}" 2>/dev/null | tr '\n' ' ')
 alive=$(python3 - $current <<'PYEOF'
 import random, socket, struct, sys
 
@@ -79,24 +79,41 @@ for s in $current; do
 done
 [ -n "$dead" ] && warn "Nie odpowiadają:${dead}"
 
-target=$(readlink -f /etc/resolv.conf 2>/dev/null || echo /etc/resolv.conf)
+# glibc używa najwyżej 3 serwerów, po kolei — działające muszą być na początku.
+servers=$(echo "$servers" | tr ' ' '\n' | head -n 3 | tr '\n' ' ')
+servers="${servers% }"
+
+RESOLV_CONF="${VH_RESOLV_CONF:-/etc/resolv.conf}"
+RESOLVCONF_HEAD="${VH_RESOLVCONF_HEAD:-/etc/resolvconf/resolv.conf.d/head}"
+target=$(readlink -f "$RESOLV_CONF" 2>/dev/null || echo "$RESOLV_CONF")
+
 if [ "$target" = /run/systemd/resolve/stub-resolv.conf ] && systemctl is-active --quiet systemd-resolved; then
     # systemd-resolved: serwery w drop-inie, stub 127.0.0.53 zostaje.
     mkdir -p /etc/systemd/resolved.conf.d
     printf '[Resolve]\nDNS=%s\nFallbackDNS=1.0.0.1 149.112.112.112\n' "$servers" > /etc/systemd/resolved.conf.d/virthub-dns.conf
     systemctl restart systemd-resolved
     ok "systemd-resolved: DNS=$servers"
+elif command -v resolvconf >/dev/null 2>&1 && [ -d "$(dirname "$RESOLVCONF_HEAD")" ]; then
+    # resolvconf (Debian z ifupdown, np. Hetzner) generuje resolv.conf sam —
+    # ręczna zmiana by zniknęła. Działające serwery idą do „head”, czyli na
+    # początek pliku; martwe (np. IPv6 bez IPv6 na moście) spadają poza
+    # trzy serwery, których używa glibc.
+    {
+        echo "# VirtHub: fix-dns.sh — działające serwery DNS przed tymi z interfejsów"
+        for s in $servers; do echo "nameserver $s"; done
+        echo "options timeout:2 attempts:2"
+    } > "$RESOLVCONF_HEAD"
+    resolvconf -u
+    ok "resolvconf: $servers (w $RESOLVCONF_HEAD)"
 else
-    cp -aL /etc/resolv.conf "/etc/resolv.conf.virthub-$(date +%s)" 2>/dev/null || true
-    # Dowiązanie (np. resolvconf) zastępujemy zwykłym plikiem — inaczej
-    # zmiana zniknęłaby przy następnym podniesieniu interfejsu.
-    [ -L /etc/resolv.conf ] && rm -f /etc/resolv.conf
+    cp -aL "$RESOLV_CONF" "$RESOLV_CONF.virthub-$(date +%s)" 2>/dev/null || true
+    [ -L "$RESOLV_CONF" ] && rm -f "$RESOLV_CONF"
     {
         echo "# VirtHub: fix-dns.sh — martwe serwery usunięte, zapasowe dopisane"
         for s in $servers; do echo "nameserver $s"; done
         echo "options timeout:2 attempts:2"
-    } > /etc/resolv.conf
-    ok "/etc/resolv.conf: $servers"
+    } > "$RESOLV_CONF"
+    ok "$RESOLV_CONF: $servers"
 fi
 
 if dns_slow; then
