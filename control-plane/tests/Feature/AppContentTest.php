@@ -508,6 +508,38 @@ class AppContentTest extends TestCase
         $this->assertArrayNotHasKey('reinstall_wipe', $specs[0]);
     }
 
+    public function test_czysty_paper_i_purpur_jako_server_jar(): void
+    {
+        $sha = str_repeat('c', 64);
+        $this->fakeApis([
+            'fill.papermc.io/v3/projects/paper/versions/1.20.1/builds' => Http::response([
+                ['id' => 197, 'channel' => 'BETA', 'downloads' => ['server:default' => ['name' => 'paper-197.jar', 'url' => 'https://fill-data.papermc.io/paper-197.jar', 'size' => 5, 'checksums' => ['sha256' => $sha]]]],
+                ['id' => 196, 'channel' => 'STABLE', 'downloads' => ['server:default' => ['name' => 'paper-196.jar', 'url' => 'https://fill-data.papermc.io/paper-196.jar', 'size' => 5, 'checksums' => ['sha256' => $sha]]]],
+            ]),
+            'api.purpurmc.org/v2/purpur/1.20.1' => Http::response(['builds' => ['latest' => '2062', 'all' => ['2061', '2062']]]),
+        ]);
+
+        $this->actingAs($this->customer)->get(route('panel.apps.modpacks', $this->paper))->assertOk()->assertSee('<option value="paper"', false);
+        $this->actingAs($this->customer)->post(route('panel.apps.loader.install', $this->paper), ['loader' => 'paper', 'mc' => '1.20.1', 'eula' => '1'])
+            ->assertRedirect();
+        $job = $this->runQueued();
+        $steps = $this->agentRequests[0]['steps'];
+        $this->assertNotContains('plugins', $steps[0]['paths']);
+        $jar = collect($steps)->firstWhere('path', 'server.jar');
+        $this->assertSame('https://fill-data.papermc.io/paper-196.jar', $jar['url']); // stabilny, nie beta
+        $this->assertSame($sha, $jar['sha256']);
+        $this->agentResult($job);
+        $app = $this->paper->fresh();
+        $this->assertSame('paper', $app->minecraft['platform']);
+        $this->assertSame('196', $app->minecraft['loader_version']);
+        $this->assertSame('plugin', (new \App\Domain\Apps\Content\ServerProfile($app))->addonKind());
+
+        $this->actingAs($this->customer)->post(route('panel.apps.loader.install', $this->paper), ['loader' => 'purpur', 'mc' => '1.20.1', 'eula' => '1']);
+        $this->runQueued();
+        $jar = collect($this->agentRequests[1]['steps'])->firstWhere('path', 'server.jar');
+        $this->assertSame('https://api.purpurmc.org/v2/purpur/1.20.1/2062/download', $jar['url']);
+    }
+
     public function test_starsza_wersja_gry_wymaga_usuniecia_swiata(): void
     {
         $this->fakeApis();

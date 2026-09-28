@@ -46,7 +46,7 @@
                         <div class="field">
                             <label for="l-loader">{{ __('Loader') }}</label>
                             <select id="l-loader" name="loader">
-                                @foreach (['neoforge' => 'NeoForge', 'forge' => 'Forge', 'fabric' => 'Fabric', 'quilt' => 'Quilt', 'vanilla' => 'Vanilla'] as $key => $name)
+                                @foreach (['paper' => 'Paper', 'purpur' => 'Purpur', 'neoforge' => 'NeoForge', 'forge' => 'Forge', 'fabric' => 'Fabric', 'quilt' => 'Quilt', 'vanilla' => 'Vanilla'] as $key => $name)
                                     <option value="{{ $key }}" @selected(old('loader', $platform) === $key)>{{ $name }}</option>
                                 @endforeach
                             </select>
@@ -65,7 +65,7 @@
                         </div>
                     </div>
                     <label class="check-line"><input type="checkbox" name="wipe_world" value="1"> {{ __('Usuń świat (świeży start)') }}</label>
-                    <label class="check-line"><input type="checkbox" name="wipe_plugins" value="1" @checked(in_array($app->minecraft['platform'] ?? ($app->egg?->builtin_key === 'minecraft-paper' ? 'paper' : null), ['paper', 'purpur'], true))> {{ __('Usuń pluginy (plugins/) — serwer z modami ich nie wczyta') }}</label>
+                    <label class="check-line"><input type="checkbox" name="wipe_plugins" value="1"> {{ __('Usuń pluginy (plugins/)') }}</label>
                     <label class="check-line"><input type="checkbox" name="eula" value="1" required> {!! __('Akceptuję :eula', ['eula' => '<a href="https://aka.ms/MinecraftEULA" target="_blank" rel="noopener">EULA Minecrafta</a>']) !!}</label>
                     <button class="btn" type="submit" style="margin-top:8px" @disabled(! $app->acceptsCommands())>{{ __('Zainstaluj serwer') }}</button>
                 </form>
