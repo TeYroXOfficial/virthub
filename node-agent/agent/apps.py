@@ -48,6 +48,7 @@ log = logging.getLogger("virthub.apps")
 CONTAINER_PREFIX = "vh-app-"
 LABEL = "virthub.app"
 SPEC_LABEL = "virthub.spec"
+DNS_LABEL = "virthub.dns"
 DATA_MOUNT = "/home/container"
 INSTALL_TIMEOUT = 45 * 60
 STOP_TIMEOUT = 30
@@ -613,6 +614,7 @@ class AppManager:
             mem_limit=f"{max(spec.memory_mb, 1024)}m",
             pids_limit=4096,
             labels={LABEL: spec.uuid, "virthub.role": "installer"},
+            dns=self._dns(),
             detach=True,
             auto_remove=False,
             working_dir="/mnt/server",
@@ -637,7 +639,15 @@ class AppManager:
         code = int(result.get("StatusCode", 1))
         if code != 0:
             tail = log_file.read_bytes()[-800:].decode("utf-8", errors="replace").strip()
-            raise AppError(f"Skrypt instalacyjny zakończył się kodem {code}. Ostatnie linie:\n{tail}")
+            hint = ""
+            if re.search(r"resolve host|name resolution|bad address", tail, re.I):
+                hint = (
+                    f"\n\nKontener nie rozwiązuje nazw (DNS: {', '.join(self.settings.apps_dns) or 'z hosta'}). "
+                    f"Sprawdź na węźle: docker run --rm --network {self.settings.apps_network} alpine nslookup github.com "
+                    "— jeśli nie działa, ruch wychodzący kontenerów (port 53) blokuje firewall; serwery DNS "
+                    "zmienisz w VH_APPS_DNS w /etc/virthub-agent/agent.env."
+                )
+            raise AppError(f"Skrypt instalacyjny zakończył się kodem {code}. Ostatnie linie:\n{tail}{hint}")
         progress("script", 65, "skrypt zakończony")
 
     @staticmethod
@@ -659,6 +669,9 @@ class AppManager:
         }
         env.update(spec.environment)
         return env
+
+    def _dns(self) -> list[str] | None:
+        return list(self.settings.apps_dns) or None
 
     def _create(self, spec: AppSpec) -> Any:
         ports: dict[str, Any] = {}
@@ -682,7 +695,8 @@ class AppManager:
             security_opt=["no-new-privileges"],
             stdin_open=True,
             tty=True,
-            labels={LABEL: spec.uuid, SPEC_LABEL: spec_hash(spec)},
+            labels={LABEL: spec.uuid, SPEC_LABEL: spec_hash(spec), DNS_LABEL: ",".join(self.settings.apps_dns)},
+            dns=self._dns(),
             log_config={"type": "json-file", "config": {"max-size": "5m", "max-file": "2"}},
             restart_policy={"Name": "no"},
             detach=True,
@@ -750,7 +764,9 @@ class AppManager:
             container.reload()
             if container.status == "running":
                 return
-            if container.labels.get(SPEC_LABEL) != spec_hash(spec):
+            # Nowa specyfikacja albo zmieniony DNS węzła — kontener od nowa.
+            if (container.labels.get(SPEC_LABEL) != spec_hash(spec)
+                    or container.labels.get(DNS_LABEL, "") != ",".join(self.settings.apps_dns)):
                 container.remove(force=True)
                 container = None
         if container is None:

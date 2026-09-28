@@ -600,6 +600,11 @@ Jak to działa na węźle:
   to `SERVER_PORT`, a pliki konfiguracyjne z eggu (np. `server-port`
   w `server.properties`) agent ustawia przed każdym startem;
 - dysk — przekroczony limit blokuje start (jak w Wings);
+- DNS — kontenery dostają `1.1.1.1` i `1.0.0.1` (jak w Wings), bo resolvery
+  hosta bywają z kontenera nieosiągalne (stub systemd-resolved `127.0.0.53`,
+  same adresy IPv6). Inne serwery ustawisz w `VH_APPS_DNS` w
+  `/etc/virthub-agent/agent.env` (lista po przecinku, puste = DNS z hosta);
+  test: `docker run --rm --network virthub_apps alpine nslookup github.com`;
 - pliki — agent obsługuje je przez deskryptory z `O_NOFOLLOW`, więc
   dowiązania symboliczne i `..` nie wyprowadzą poza katalog aplikacji.
 

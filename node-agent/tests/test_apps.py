@@ -230,6 +230,7 @@ def test_pelny_cykl_aplikacji(manager, monkeypatch):
     assert "no-new-privileges" in host["SecurityOpt"]
     assert host["PortBindings"]["30123/tcp"][0]["HostPort"] == "30123"
     assert container.attrs["Config"]["User"] == f"{os.getuid()}:{os.getgid()}"
+    assert host["Dns"] == ["1.1.1.1", "1.0.0.1"], "DNS jak w Wings — resolvery hosta bywają nieosiągalne"
     assert b"port=30123" in files.read("config.properties"), "config.files zastosowane przed startem"
 
     ready = _wait_for(lambda: [l for l in manager.logs(spec.uuid)["lines"] if "gotowy na porcie 30123" in l])
