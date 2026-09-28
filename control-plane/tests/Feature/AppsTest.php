@@ -67,7 +67,7 @@ class AppsTest extends TestCase
 
     public function test_wbudowane_eggi_sa_zaimportowane_z_konfiguracja(): void
     {
-        $this->assertSame(4, AppEgg::count());
+        $this->assertSame(5, AppEgg::count());
         $paper = $this->paper();
         $this->assertSame('game', $paper->category);
         $this->assertSame('stop', $paper->stop_command);
@@ -77,7 +77,7 @@ class AppsTest extends TestCase
 
         // Ponowny import odświeża zamiast dublować.
         app(EggImporter::class)->importBuiltin();
-        $this->assertSame(4, AppEgg::count());
+        $this->assertSame(5, AppEgg::count());
     }
 
     public function test_import_eggu_pterodactyla_v1_i_odrzucenie_smieci(): void

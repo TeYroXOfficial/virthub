@@ -16,11 +16,11 @@ class AppJob extends Model
 
     public const STATUS_FAILED = 'failed';
 
-    protected $fillable = ['app_server_id', 'user_id', 'action', 'status', 'agent_job_id', 'error', 'finished_at'];
+    protected $fillable = ['app_server_id', 'user_id', 'action', 'payload', 'status', 'agent_job_id', 'error', 'finished_at'];
 
     protected function casts(): array
     {
-        return ['finished_at' => 'datetime'];
+        return ['finished_at' => 'datetime', 'payload' => 'array'];
     }
 
     /** @return BelongsTo<AppServer, $this> */

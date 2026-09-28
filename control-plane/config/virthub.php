@@ -29,6 +29,10 @@ return [
 
     // Aplikacja, w której węzeł wykrył PteroVM/proot/QEMU, koparkę albo
     // zdalną powłokę, jest automatycznie zawieszana (false = tylko zgłoszenie).
+    // Klucz API CurseForge (darmowy: console.curseforge.com) — bez niego
+    // modpacki i pluginy z CurseForge są ukryte; Modrinth, FTB i Hangar działają bez klucza.
+    'curseforge_api_key' => env('VIRTHUB_CURSEFORGE_API_KEY'),
+
     'apps_abuse_suspend' => (bool) env('VIRTHUB_APPS_ABUSE_SUSPEND', true),
 
     /*

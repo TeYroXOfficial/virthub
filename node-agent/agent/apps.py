@@ -603,6 +603,103 @@ class AppManager:
             with self._lock:
                 self._installing.discard(spec.uuid)
 
+    # --- treść: modpacki, loadery, pluginy, mody --------------------------------
+
+    def content(self, uuid: str, request: Any) -> dict[str, Any]:
+        """Kroki z panelu (app_content.py). Modpack/loader zatrzymuje aplikację
+        i pokazuje postęp w konsoli jak instalacja; plugin idzie w tle."""
+        from .app_content import ContentInstaller
+
+        if request.spec is not None:
+            if request.spec.uuid != uuid:
+                raise AppError("Specyfikacja dotyczy innej aplikacji.")
+            self.save_spec(request.spec)
+        if request.exclusive:
+            with self._lock:
+                if uuid in self._installing:
+                    raise AppError("Na tej aplikacji trwa już instalacja.")
+                self._installing.add(uuid)
+        log_file = self.install_log_file(uuid)
+        try:
+            if request.exclusive:
+                spec = self.load_spec(uuid)
+                existing = self._container(uuid)
+                if existing is not None:
+                    existing.reload()
+                    if existing.status == "running":
+                        progress("stop", 2)
+                        self._stop_container(existing, spec, timeout=STOP_TIMEOUT)
+                    existing.remove(force=True)
+                out = log_file.open("w", encoding="utf-8")
+            else:
+                out = None
+
+            def line(text: str) -> None:
+                log.info("Aplikacja %s: %s", uuid, text)
+                if out is not None:
+                    out.write(text.rstrip("\n") + "\n")
+                    out.flush()
+
+            try:
+                line(f"[VirtHub] {request.label}")
+                result = ContentInstaller(self, uuid, request, line).run()
+            except Exception as exc:
+                line(f"[VirtHub] Błąd: {exc}")
+                raise
+            finally:
+                if out is not None:
+                    out.close()
+            self._usage_cache.pop(uuid, None)
+            return {"uuid": uuid, **result}
+        finally:
+            if request.exclusive:
+                with self._lock:
+                    self._installing.discard(uuid)
+
+    def run_java(self, spec: AppSpec, args: list[str], line: Any, timeout: int) -> None:
+        """Instalator loadera (Forge/NeoForge/Quilt) w obrazie aplikacji, jako
+        użytkownik aplikacji, z jej zabezpieczeniami i siecią."""
+        self._pull(spec.image, "image", 85, 88)
+        self._network()
+        container = self.client.containers.run(
+            spec.image,
+            entrypoint=["java"],
+            command=args,
+            name=f"{CONTAINER_PREFIX}{spec.uuid}-content",
+            user=f"{self.uid}:{self.gid}",
+            working_dir=DATA_MOUNT,
+            environment=self._environment(spec),
+            mounts=self._mounts([(str(self.data_dir(spec.uuid)), DATA_MOUNT, False)]),
+            tmpfs={"/tmp": "rw,exec,nosuid,size=512m"},
+            network=self.settings.apps_network,
+            mem_limit=f"{max(spec.memory_mb, 2048)}m",
+            pids_limit=4096,
+            cap_drop=CAP_DROP,
+            security_opt=security_options(self.settings),
+            labels={LABEL: spec.uuid, "virthub.role": "installer"},
+            dns=self._dns(),
+            detach=True,
+        )
+        deadline = time.time() + timeout
+        buffer = b""
+        try:
+            for chunk in container.logs(stream=True, follow=True):
+                buffer += chunk
+                *lines, buffer = buffer.split(b"\n")
+                for raw in lines:
+                    line(raw.decode("utf-8", errors="replace"))
+                if time.time() > deadline:
+                    container.kill()
+                    raise AppError("Instalator loadera działał za długo i został przerwany.")
+            code = int(container.wait(timeout=60).get("StatusCode", 1))
+        finally:
+            try:
+                container.remove(force=True)
+            except Exception:
+                pass
+        if code != 0:
+            raise AppError(f"Instalator loadera zakończył się kodem {code} — szczegóły w konsoli.")
+
     def _run_installer(self, spec: AppSpec, log_file: Path) -> None:
         assert spec.install is not None
         self._pull(spec.install.image, "installer", 5, 25)

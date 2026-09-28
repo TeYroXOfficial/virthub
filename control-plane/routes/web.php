@@ -76,6 +76,16 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
         Route::post('/{app}/command', 'command')->name('command');
         Route::post('/{app}/console', 'consoleSession')->name('console');
     });
+    Route::prefix('/apps/{app}')->name('apps.')->controller(\App\Http\Controllers\Web\AppContentController::class)->group(function () {
+        Route::get('/modpacks', 'modpacks')->name('modpacks');
+        Route::get('/modpacks/{source}/{project}', 'modpack')->where(['source' => '[a-z]+', 'project' => '[A-Za-z0-9._-]+'])->name('modpacks.show');
+        Route::post('/modpacks', 'installModpack')->middleware('throttle:10,1')->name('modpacks.install');
+        Route::post('/loader', 'installLoader')->middleware('throttle:10,1')->name('loader.install');
+        Route::get('/addons', 'addons')->name('addons');
+        Route::get('/addons/{source}/{project}', 'addon')->where(['source' => '[a-z]+', 'project' => '[A-Za-z0-9._-]+'])->name('addons.show');
+        Route::post('/addons', 'installAddon')->middleware('throttle:30,1')->name('addons.install');
+        Route::delete('/addons/{addon}', 'removeAddon')->name('addons.destroy');
+    });
     Route::prefix('/apps/{app}/files')->name('apps.files')->controller(\App\Http\Controllers\Web\AppFilesController::class)->group(function () {
         Route::get('/', 'index');
         Route::get('/edit', 'edit')->name('.edit');

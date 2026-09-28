@@ -15,6 +15,15 @@ class AppJobApplier
             return;
         }
 
+        if (in_array($job->action, \App\Domain\Apps\Content\ContentManager::ACTIONS, true)) {
+            $status = $state['status'] ?? 'failed';
+            if (in_array($status, ['done', 'failed'], true)) {
+                app(\App\Domain\Apps\Content\ContentManager::class)->applyResult($job, $status === 'done', $state['error'] ?? __('Węzeł nie podał przyczyny.'));
+            }
+
+            return;
+        }
+
         match ($state['status'] ?? 'failed') {
             'done' => $this->succeed($job),
             'failed' => $this->fail($job, $state['error'] ?? __('Węzeł nie podał przyczyny.')),

@@ -45,12 +45,20 @@
 @endif
 
 <nav class="tabs" aria-label="{{ __('Sekcje aplikacji') }}">
-    @foreach ([
-        'console' => [__('Konsola'), route('panel.apps.show', $app)],
-        'files' => [__('Pliki'), route('panel.apps.files', $app)],
-        'startup' => [__('Uruchamianie'), route('panel.apps.startup', $app)],
-        'settings' => [__('Ustawienia'), route('panel.apps.settings', $app)],
-    ] as $key => [$label, $url])
+    @php
+        $tabs = [
+            'console' => [__('Konsola'), route('panel.apps.show', $app)],
+            'files' => [__('Pliki'), route('panel.apps.files', $app)],
+        ];
+        if ($app->isMinecraft()) {
+            $tabs['modpacks'] = [__('Modpacki'), route('panel.apps.modpacks', $app)];
+            $addonKind = (new \App\Domain\Apps\Content\ServerProfile($app))->addonKind();
+            $tabs['addons'] = [$addonKind === 'mod' ? __('Mody') : __('Pluginy'), route('panel.apps.addons', $app)];
+        }
+        $tabs['startup'] = [__('Uruchamianie'), route('panel.apps.startup', $app)];
+        $tabs['settings'] = [__('Ustawienia'), route('panel.apps.settings', $app)];
+    @endphp
+    @foreach ($tabs as $key => [$label, $url])
         <a href="{{ $url }}" @if ($tab === $key) aria-current="page" @endif>{{ $label }}</a>
     @endforeach
 </nav>

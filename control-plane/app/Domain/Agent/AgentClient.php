@@ -237,6 +237,12 @@ class AgentClient
     }
 
     /** Operacje na plikach: list, read, write, mkdir, delete, rename, decompress. */
+    /** Modpack, loader, plugin albo mod — lista kroków dla agenta (zadanie w kolejce). */
+    public function appContent(string $uuid, array $request): string
+    {
+        return $this->jobId($this->request('POST', "/apps/{$uuid}/content", $request, timeout: 60));
+    }
+
     public function appFiles(string $uuid, string $operation, array $body): array
     {
         return $this->request('POST', "/apps/{$uuid}/files/{$operation}", $body, timeout: 120);

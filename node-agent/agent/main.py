@@ -17,6 +17,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
 from .app_console import bridge_app
+from .app_content import AppContentRequest
 from .app_guard import AppGuard, findings_payload
 from .panel import signed_post
 from .apps import AppError, AppManager, AppNotFound
@@ -125,6 +126,7 @@ reporter = CallbackReporter(settings, jobs)
 apps = AppManager(settings)
 app_jobs = JobQueue(settings, {
     "app_install": lambda p: apps.install(AppSpec(**p["spec"]), reinstall=bool(p.get("reinstall"))),
+    "app_content": lambda p: apps.content(p["uuid"], AppContentRequest(**p["request"])),
 }, name="virthub-app-jobs")
 sftp = SftpService(settings, apps, settings.sftp_port, settings.sftp_listen)
 
@@ -570,6 +572,21 @@ async def app_reinstall(uuid: str, spec: AppSpec) -> JobAccepted:
     if spec.uuid != uuid:
         raise HTTPException(status_code=422, detail="UUID w ścieżce i w specyfikacji się różnią.")
     job_id = app_jobs.enqueue("app_install", {"spec": spec.model_dump(), "reinstall": True}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.post(
+    "/apps/{uuid}/content",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["apps"],
+)
+async def app_content(uuid: str, req: AppContentRequest) -> JobAccepted:
+    """Modpack, loader, plugin albo mod — lista kroków rozwiązana przez panel."""
+    if not apps.data_dir(uuid).is_dir():
+        raise HTTPException(status_code=404, detail=f"Aplikacja {uuid} nie istnieje na tym węźle.")
+    job_id = app_jobs.enqueue("app_content", {"uuid": uuid, "request": req.model_dump()}, uuid=uuid)
     return JobAccepted(job_id=job_id)
 
 

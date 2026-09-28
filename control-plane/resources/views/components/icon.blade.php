@@ -24,6 +24,12 @@
         @case('list')
             <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
             @break
+        @case('search')
+            <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+            @break
+        @case('puzzle')
+            <path d="M15.4 4.6a2 2 0 1 0-3.4-1.4v1.8H8a1 1 0 0 0-1 1v4H5.2a2 2 0 1 0 0 4H7v4a1 1 0 0 0 1 1h4v-1.8a2 2 0 1 1 4 0V21h3a1 1 0 0 0 1-1v-4h-1.8a2 2 0 1 1 0-4H20V8a1 1 0 0 0-1-1h-4V5.2c0-.2.1-.4.4-.6z"/>
+            @break
         @case('package')
             <path d="M16.5 9.4 7.5 4.2M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>
             @break

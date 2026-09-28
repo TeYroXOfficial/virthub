@@ -1,0 +1,51 @@
+{
+    "_comment": "Wbudowany egg VirtHub — serwer Minecraft z modami (modpacki z Modrinth, CurseForge, FTB; loadery Forge/NeoForge/Fabric/Quilt).",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-10-02T00:00:00+00:00",
+    "name": "Minecraft: modpack / mody",
+    "author": "virthub@localhost",
+    "description": "Serwer z modpackiem albo własnym zestawem modów. Paczkę (Modrinth, CurseForge, Feed The Beast) albo czysty loader Forge, NeoForge, Fabric lub Quilt instalujesz jednym kliknięciem w zakładce Modpacki — panel dobiera wersję Javy.",
+    "features": [
+        "eula",
+        "java_version",
+        "modpacks"
+    ],
+    "docker_images": {
+        "Java 21": "ghcr.io/pterodactyl/yolks:java_21",
+        "Java 25": "ghcr.io/pterodactyl/yolks:java_25",
+        "Java 17": "ghcr.io/pterodactyl/yolks:java_17",
+        "Java 11": "ghcr.io/pterodactyl/yolks:java_11",
+        "Java 8": "ghcr.io/pterodactyl/yolks:java_8"
+    },
+    "file_denylist": [],
+    "startup": "bash start.sh",
+    "config": {
+        "files": "{\"server.properties\":{\"parser\":\"properties\",\"find\":{\"server-ip\":\"0.0.0.0\",\"server-port\":\"{{server.build.default.port}}\",\"query.port\":\"{{server.build.default.port}}\"}},\"eula.txt\":{\"parser\":\"properties\",\"find\":{\"eula\":\"{{server.build.env.EULA}}\"}}}",
+        "startup": "{\"done\":\")! For help, type \"}",
+        "logs": "{}",
+        "stop": "stop"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/ash\n# Serwer z modami — właściwą paczkę albo loader instaluje się w zakładce Modpacki.\nset -e\ncd /mnt/server\ncat > start.sh <<'VHSTART'\n#!/bin/bash\n# VirtHub: start serwera Minecraft z loaderem (Forge, NeoForge, Fabric, Quilt, vanilla).\n# Plik jest nadpisywany przy instalacji modpacka albo loadera.\nJAVA_OPTS=\"-Xms128M -XX:MaxRAMPercentage=95.0 -Dterminal.jline=false -Dterminal.ansi=true\"\n[ -f user_jvm_args.txt ] && JAVA_OPTS=\"$JAVA_OPTS @user_jvm_args.txt\"\nARGS=$(find libraries -name unix_args.txt 2>/dev/null | head -n 1)\nif [ -n \"$ARGS\" ]; then\n    exec java $JAVA_OPTS @\"$ARGS\" nogui \"$@\"\nfi\nfor JAR in fabric-server-launch.jar quilt-server-launch.jar; do\n    [ -f \"$JAR\" ] && exec java $JAVA_OPTS -jar \"$JAR\" nogui \"$@\"\ndone\nJAR=$(ls forge-*.jar neoforge-*.jar 2>/dev/null | grep -v installer | head -n 1)\n[ -n \"$JAR\" ] && exec java $JAVA_OPTS -jar \"$JAR\" nogui \"$@\"\nif [ -f server.jar ]; then\n    exec java $JAVA_OPTS -jar server.jar nogui \"$@\"\nfi\necho \"[VirtHub] Brak serwera do uruchomienia — zainstaluj modpack albo loader w zakładce Modpacki.\"\nexit 1\nVHSTART\nchmod +x start.sh\n[ -f server.properties ] || printf \"server-port=%s\\nquery.port=%s\\n\" \"$SERVER_PORT\" \"$SERVER_PORT\" > server.properties\necho \"Gotowe. Wybierz modpack albo loader (Forge, NeoForge, Fabric, Quilt) w zakładce Modpacki.\"\n",
+            "container": "ghcr.io/pterodactyl/installers:alpine",
+            "entrypoint": "ash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Akceptacja EULA",
+            "description": "Zaakceptuj EULA Minecrafta (https://aka.ms/MinecraftEULA) — bez tego serwer się nie uruchomi.",
+            "env_variable": "EULA",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:true,false",
+            "field_type": "text"
+        }
+    ],
+    "virthub_category": "game"
+}
