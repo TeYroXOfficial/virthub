@@ -81,7 +81,7 @@
 
     @if ($rootPassword)
         <div class="alert alert-info">
-            <strong>{{ __('Hasło roota — zapisz je teraz.') }}</strong>
+            <strong>{{ $server->osFamily() === 'windows' ? __('Hasło Administratora — zapisz je teraz.') : __('Hasło roota — zapisz je teraz.') }}</strong>
             <p style="margin:8px 0 0">
                 @if ($inProgress)
                     {{ __('Hasło zadziała, gdy system się uruchomi. Widać je do końca operacji — potem zniknie z panelu.') }}
@@ -233,7 +233,11 @@
                             @endif
                         </p>
                     @else
-                        <p class="hint">{{ __('Połączenie:') }} <code>ssh {{ 'root@'.$primary->address }}</code></p>
+                        @if ($server->osFamily() === 'windows')
+                            <p class="hint">{{ __('Pulpit zdalny (RDP):') }} <code>{{ $primary->address }}</code> · {{ __('użytkownik') }} <code>Administrator</code></p>
+                        @else
+                            <p class="hint">{{ __('Połączenie:') }} <code>ssh {{ 'root@'.$primary->address }}</code></p>
+                        @endif
                     @endif
                 @endif
             </div>

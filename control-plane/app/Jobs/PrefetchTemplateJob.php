@@ -27,7 +27,10 @@ class PrefetchTemplateJob implements ShouldQueue
     /** Duży obraz przez wolne łącze potrafi się ściągać długo, ale nie w nieskończoność. */
     public function retryUntil(): \DateTimeInterface
     {
-        return now()->addHours(2);
+        // Budowa Windows (instalacja, aktualizacje, sysprep) trwa godzinami.
+        $built = TemplateDownload::with('template')->find($this->downloadId)?->template?->isBuilt();
+
+        return now()->addHours($built ? 12 : 2);
     }
 
     public function handle(): void
@@ -43,11 +46,13 @@ class PrefetchTemplateJob implements ShouldQueue
         try {
             if ($download->agent_job_id === null) {
                 $template = $download->template;
-                $jobId = $template->isContainer()
-                    ? $client->prefetchImage($template->image_file)
-                    : $client->downloadTemplate($template->image_file, $template->source_url, $template->checksum_url
+                $jobId = match (true) {
+                    $template->isContainer() => $client->prefetchImage($template->image_file),
+                    $template->isBuilt() => $client->buildTemplate($template->buildRequest()),
+                    default => $client->downloadTemplate($template->image_file, $template->source_url, $template->checksum_url
                         ? app(\App\Domain\Provisioning\CloudImageChecksum::class)->resolve($template->source_url, $template->checksum_url)
-                        : []);
+                        : []),
+                };
 
                 $download->forceFill([
                     'agent_job_id' => $jobId,

@@ -331,6 +331,12 @@ class AdminController extends Controller
                     'added' => $templates->contains(fn (OsTemplate $t) => ! $t->isContainer()
                         && $t->image_file === $entry['file'] && $t->source_url !== null),
                 ]),
+            'builds' => collect(config('virthub.template_builds'))
+                ->map(fn (array $recipe, string $key) => [
+                    ...$recipe,
+                    'key' => $key,
+                    'template' => $templates->first(fn (OsTemplate $t) => $t->build_recipe === $key),
+                ]),
             'kvmNodes' => Hypervisor::query()
                 ->where('virtualization', Virtualization::Kvm->value)
                 ->whereNotNull('enrolled_at')
@@ -455,6 +461,55 @@ class AdminController extends Controller
             .($queued > 0
                 ? trans_choice('Pobieranie zlecone na :count węźle.|Pobieranie zlecone na :count węzłach.|Pobieranie zlecone na :count węzłach.', $queued)
                 : __('Nie ma jeszcze węzła KVM — obraz pobierze się, gdy taki dołączy.')));
+    }
+
+    /**
+     * Szablon Windows Server budowany Packerem na każdym węźle KVM — z ISO
+     * retail/SPLA administratora albo z wersji ewaluacyjnej Microsoftu.
+     */
+    public function buildTemplate(Request $request, string $key, TemplateDistributor $distributor): RedirectResponse
+    {
+        $recipe = config("virthub.template_builds.{$key}");
+        abort_if($recipe === null, 404);
+
+        $data = $request->validate([
+            'evaluation' => ['nullable', 'boolean'],
+            'iso_url' => ['nullable', 'required_unless:evaluation,1', 'url:http,https', 'max:2000'],
+            'iso_sha256' => ['nullable', 'regex:/^[0-9a-fA-F]{64}$/'],
+        ], ['iso_url.required_unless' => __('Podaj adres ISO Windows (retail/SPLA) albo zaznacz wersję ewaluacyjną.')]);
+        $evaluation = (bool) ($data['evaluation'] ?? false);
+
+        $template = OsTemplate::query()->firstOrNew(['image_file' => $recipe['file'], 'virtualization' => Virtualization::Kvm->value]);
+        if (! $template->exists) {
+            $template->fill([
+                'name' => $recipe['name'].($evaluation ? ' (Evaluation)' : ''),
+                'family' => 'windows',
+                'version' => $recipe['edition'],
+                'min_disk_gb' => $recipe['min_disk_gb'] ?? 30,
+            ]);
+        }
+        $template->fill([
+            'build_recipe' => $key,
+            'build_options' => array_filter([
+                'evaluation' => $evaluation,
+                'iso_url' => $evaluation ? null : $data['iso_url'],
+                'iso_sha256' => $evaluation ? null : (isset($data['iso_sha256']) ? strtolower($data['iso_sha256']) : null),
+            ], fn ($v) => $v !== null),
+            // cloudbase-init w obrazie ustawia hasło Administratora i sieć przy pierwszym starcie.
+            'cloud_init_support' => true,
+            'is_active' => true,
+        ])->save();
+
+        // Ponowna budowa po zmianie ISO: węzły bez gotowego obrazu budują od nowa.
+        $template->downloads()->where('status', 'failed')->delete();
+
+        AuditLog::record('template.build', $template, ['recipe' => $key, 'evaluation' => $evaluation], $request->user());
+        $queued = $distributor->distribute($template);
+
+        return back()->with('status', __('Zlecono budowę :name. ', ['name' => $template->name])
+            .($queued > 0
+                ? trans_choice('Budowa trwa zwykle 1–3 godziny na :count węźle.|Budowa trwa zwykle 1–3 godziny na :count węzłach.|Budowa trwa zwykle 1–3 godziny na :count węzłach.', $queued)
+                : __('Nie ma jeszcze węzła KVM — obraz zbuduje się, gdy taki dołączy.')));
     }
 
     public function retryTemplate(OsTemplate $template, TemplateDistributor $distributor): RedirectResponse

@@ -10,6 +10,19 @@ from __future__ import annotations
 from xml.sax.saxutils import escape
 
 
+# Windows: oświecenia Hyper-V (mniej przerwań, szybszy zegar i blokady) — bez
+# nich Windows w KVM działa zauważalnie wolniej.
+HYPERV = """    <hyperv mode='custom'>
+      <relaxed state='on'/>
+      <vapic state='on'/>
+      <spinlocks state='on' retries='8191'/>
+      <vpindex state='on'/>
+      <synic state='on'/>
+      <stimer state='on'/>
+    </hyperv>
+"""
+
+
 def build_domain_xml(
     *,
     name: str,
@@ -24,6 +37,7 @@ def build_domain_xml(
     interface_target: str,
     vnc_listen: str,
     vnc_password: str,
+    windows: bool = False,
 ) -> str:
     """Zwraca XML domeny gotowy do `virsh define`.
 
@@ -106,13 +120,13 @@ def build_domain_xml(
   <features>
     <acpi/>
     <apic/>
-  </features>
+{HYPERV if windows else ""}  </features>
   <cpu mode='host-passthrough' check='none'/>
-  <clock offset='utc'>
+  <clock offset='{"localtime" if windows else "utc"}'>
     <timer name='rtc' tickpolicy='catchup'/>
     <timer name='pit' tickpolicy='delay'/>
     <timer name='hpet' present='no'/>
-  </clock>
+{"    <timer name='hypervclock' present='yes'/>" + chr(10) if windows else ""}  </clock>
   <on_poweroff>destroy</on_poweroff>
   <on_reboot>restart</on_reboot>
   <on_crash>restart</on_crash>

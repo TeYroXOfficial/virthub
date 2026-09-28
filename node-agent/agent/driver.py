@@ -118,7 +118,7 @@ class HypervisorDriver(ABC):
     def console_target(self, uuid: str) -> ConsoleTarget:
         """Dokąd prowadzi konsola maszyny: gniazdo VNC albo polecenie terminala."""
 
-    def reset_password(self, uuid: str, password: str) -> dict[str, Any]:
+    def reset_password(self, uuid: str, password: str, username: str = "root") -> dict[str, Any]:
         raise DriverError("Ten węzeł nie obsługuje zmiany hasła.")
 
     def set_cpu_limit(self, uuid: str, cpu_limit_percent: int | None) -> dict[str, Any]:
@@ -243,6 +243,7 @@ class LibvirtDriver(HypervisorDriver):
                 ssh_keys=req.ssh_keys,
                 root_password=req.root_password,
                 mac=mac,
+                os_type=req.os_type,
             )
             created.append("seed")
 
@@ -262,6 +263,7 @@ class LibvirtDriver(HypervisorDriver):
                 interface_target=target,
                 vnc_listen=self.settings.vnc_listen,
                 vnc_password=vnc_password,
+                windows=req.os_type == "windows",
             )
 
             domain = self.conn.defineXML(xml)
@@ -363,6 +365,7 @@ class LibvirtDriver(HypervisorDriver):
             ssh_keys=req.ssh_keys,
             root_password=req.root_password,
             mac=mac_address(server_id),
+            os_type=req.os_type,
         )
 
         progress("boot", 85)
@@ -542,7 +545,7 @@ class LibvirtDriver(HypervisorDriver):
             raise DriverError(f"qemu-guest-agent w maszynie nie odpowiada: {exc}") from exc
         return GuestOs(**from_guest_agent(info), source="guest-agent")
 
-    def reset_password(self, uuid: str, password: str) -> dict[str, Any]:
+    def reset_password(self, uuid: str, password: str, username: str = "root") -> dict[str, Any]:
         import libvirt
 
         domain = self._domain(uuid)
@@ -551,7 +554,7 @@ class LibvirtDriver(HypervisorDriver):
         try:
             # Przez qemu-guest-agent w gościu: hasło nie przechodzi przez sieć
             # ani przez linię poleceń.
-            domain.setUserPassword("root", password, 0)
+            domain.setUserPassword(username, password, 0)
         except libvirt.libvirtError as exc:
             raise DriverError(
                 "Nie udało się zmienić hasła — w maszynie musi działać qemu-guest-agent "
@@ -667,6 +670,7 @@ class MockDriver(HypervisorDriver):
             ssh_keys=req.ssh_keys,
             root_password=req.root_password,
             mac=mac_address(req.server_id),
+            os_type=req.os_type,
         )
 
         record = {
@@ -813,7 +817,7 @@ class MockDriver(HypervisorDriver):
         pretty = f"{family.capitalize()} {version}".strip() if family != "ubuntu" else f"Ubuntu {version} LTS"
         return GuestOs(id=family, name=family.capitalize(), version=version or None, pretty_name=pretty, source="os-release")
 
-    def reset_password(self, uuid: str, password: str) -> dict[str, Any]:
+    def reset_password(self, uuid: str, password: str, username: str = "root") -> dict[str, Any]:
         data = self._load()
         record = data.get(uuid)
         if record is None:

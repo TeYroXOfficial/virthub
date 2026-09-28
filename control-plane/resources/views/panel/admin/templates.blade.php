@@ -286,6 +286,48 @@
         </div>
     </div>
 
+    {{-- KVM: Windows Server budowany Packerem na węzłach ---------------------- --}}
+    <div class="card">
+        <h3>{{ __('Windows Server — budowa na węzłach') }}</h3>
+        <p>
+            {{ __('Każdy węzeł KVM instaluje Windows z ISO, konfiguruje go (sterowniki virtio, cloudbase-init, RDP) i zapisuje gotowy szablon. Pliki instalacji pochodzą z publicznego repozytorium VirtFusion (Packer). Budowa trwa zwykle 1–3 godziny.') }}
+        </p>
+        <p class="hint">
+            {{ __('Podaj adres ISO z Twojej licencji (SPLA/retail) — węzły pobiorą go same. Obraz nie zawiera klucza licencji: klient aktywuje system własnym kluczem albo Twoim serwerem KMS po instalacji.') }}
+        </p>
+        @error('iso_url') <div class="alert alert-error">{{ $message }}</div> @enderror
+        @foreach ($builds as $build)
+            <form method="POST" action="{{ route('panel.admin.templates.build', $build['key']) }}" class="setting-row" style="margin-top:12px; align-items:flex-end"
+                  data-confirm="{{ __('Zbudować :name na wszystkich węzłach KVM? Każdy węzeł zajmie na czas budowy 4 rdzenie i 4 GB RAM.', ['name' => $build['name']]) }}">
+                @csrf
+                <div class="setting-text" style="flex:1">
+                    <h3>{{ $build['name'] }}
+                        @if ($build['template'])
+                            <span class="pill {{ $build['template']->downloads->contains('status', 'ready') ? 'ok' : 'neutral' }}">
+                                {{ $build['template']->downloads->contains('status', 'ready') ? __('zbudowany') : __('zlecony') }}
+                            </span>
+                        @endif
+                    </h3>
+                    <div class="grid-compact">
+                        <div class="field">
+                            <label for="b-iso-{{ $build['key'] }}">{{ __('Adres ISO (retail/SPLA)') }}</label>
+                            <input id="b-iso-{{ $build['key'] }}" name="iso_url" type="url" placeholder="https://…/windows-server-{{ $build['edition'] }}.iso"
+                                   value="{{ old('iso_url', $build['template']?->build_options['iso_url'] ?? '') }}">
+                        </div>
+                        <div class="field">
+                            <label for="b-sha-{{ $build['key'] }}">{{ __('SHA-256 ISO (opcjonalnie)') }}</label>
+                            <input id="b-sha-{{ $build['key'] }}" name="iso_sha256" type="text" maxlength="64" class="mono"
+                                   value="{{ old('iso_sha256', $build['template']?->build_options['iso_sha256'] ?? '') }}">
+                        </div>
+                    </div>
+                    <label class="check-line"><input type="checkbox" name="evaluation" value="1" @checked($build['template']?->build_options['evaluation'] ?? false)>
+                        {{ __('Wersja ewaluacyjna od Microsoftu (180 dni, do testów) — bez własnego ISO') }}</label>
+                </div>
+                <button class="btn btn-primary" type="submit">{{ $build['template'] ? __('Zbuduj na brakujących węzłach') : __('Zbuduj') }}</button>
+            </form>
+        @endforeach
+    </div>
+
     {{-- KVM: obrazy qcow2 wgrywane na węzły ---------------------------------- --}}
     <div class="card">
         <h3>{{ __('Szablony maszyn wirtualnych (KVM)') }}</h3>

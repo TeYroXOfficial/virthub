@@ -190,6 +190,8 @@ class CreateVmRequest(BaseModel):
     ssh_keys: list[SshKey] = Field(default_factory=list, max_length=10)
     root_password: Password | None = Field(default=None, repr=False)
     nameservers: list[str] = Field(default_factory=lambda: ["1.1.1.1", "9.9.9.9"])
+    # Windows: nośnik config-2 dla cloudbase-init zamiast NoCloud i ustawienia domeny pod Windows.
+    os_type: Literal["linux", "windows"] = "linux"
 
 
 class RebuildVmRequest(BaseModel):
@@ -201,6 +203,7 @@ class RebuildVmRequest(BaseModel):
     # wtedy maszyna KVM stawała bez sieci; kontener bierze ją ze swojej konfiguracji.
     interfaces: list[NetworkInterfaceSpec] | None = None
     nameservers: list[str] | None = None
+    os_type: Literal["linux", "windows"] = "linux"
 
 
 ISO_NAME = r"^[a-z0-9][a-z0-9._-]{0,80}\.iso$"
@@ -223,6 +226,28 @@ class TemplateDownloadRequest(BaseModel):
     sha512: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{128}$")
 
 
+class TemplateBuildRequest(BaseModel):
+    """Budowa szablonu Windows Server Packerem (pliki instalacji VirtFusion)."""
+
+    name: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,80}\.qcow2$")
+    edition: Literal["2019", "2022", "2025"]
+    evaluation: bool = False
+    iso_url: str = Field(pattern=r"^https?://[^\s]{3,2000}$", description="ISO Windows: retail/SPLA albo ewaluacyjne")
+    iso_sha256: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{64}$")
+    virtio_url: str = Field(
+        default="https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.262-2/virtio-win-0.1.262.iso",
+        pattern=r"^https://[^\s]{3,2000}$",
+    )
+    files_url: str = Field(
+        default="https://bitbucket.org/virtfusion-public/packer/get/master.zip",
+        pattern=r"^https://[^\s]{3,2000}$",
+    )
+    disk_gb: int = Field(default=20, ge=14, le=200)
+    cpus: int = Field(default=4, ge=1, le=32)
+    memory_mb: int = Field(default=4096, ge=2048, le=65536)
+    kms_key: str | None = Field(default=None, pattern=r"^[A-Z0-9]{5}(-[A-Z0-9]{5}){4}$")
+
+
 class IsoMountRequest(BaseModel):
     """Płyta w wirtualnym napędzie maszyny KVM i kolejność rozruchu."""
 
@@ -237,6 +262,7 @@ class PasswordResetRequest(BaseModel):
     # Drukowalne ASCII bez spacji: hasło trafia do chpasswd jako „root:hasło",
     # więc znak nowej linii pozwoliłby dopisać zmianę hasła innego konta.
     password: str = Field(pattern=r"^[\x21-\x7e]{8,128}$")
+    username: Literal["root", "Administrator"] = "root"
 
 
 class ResizeVmRequest(BaseModel):

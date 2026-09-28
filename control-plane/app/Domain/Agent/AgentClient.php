@@ -64,10 +64,19 @@ class AgentClient
         return $this->request('DELETE', '/images/iso/'.rawurlencode($filename));
     }
 
-    /** Nowe hasło roota w działającym systemie (qemu-guest-agent / incus exec). */
-    public function resetPassword(string $uuid, string $password): string
+    /** Nowe hasło roota (albo Administratora w Windows) w działającym systemie. */
+    public function resetPassword(string $uuid, string $password, string $username = 'root'): string
     {
-        return $this->jobId($this->request('POST', "/vm/{$uuid}/password", ['password' => $password]));
+        return $this->jobId($this->request('POST', "/vm/{$uuid}/password", array_filter([
+            'password' => $password,
+            'username' => $username === 'root' ? null : $username,
+        ])));
+    }
+
+    /** @param  array<string, mixed>  $recipe */
+    public function buildTemplate(array $recipe): string
+    {
+        return $this->jobId($this->request('POST', '/templates/build', $recipe));
     }
 
     /** Płyta w maszynie i kolejność rozruchu; restart = zastosuj od razu. */
