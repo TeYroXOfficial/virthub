@@ -251,7 +251,7 @@ td.num, .num { font-variant-numeric: tabular-nums; }
 
 label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-2); }
 .hint { font-size: 12.5px; color: var(--muted); font-weight: 400; margin-top: 5px; line-height: 1.5; }
-input[type=text], input[type=email], input[type=password], input[type=number], select, textarea {
+input[type=text], input[type=search], input[type=email], input[type=password], input[type=number], select, textarea {
     width: 100%; padding: 9px 12px;
     border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
     background: var(--surface-2); color: var(--text);
@@ -637,7 +637,7 @@ details.form-block[open] > summary { margin-bottom: 16px; }
 .catalog-search input[type=search] { flex: 1; min-width: 180px; }
 .catalog-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .catalog-card { display: flex; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); text-decoration: none; min-width: 0; }
-.catalog-card:hover { border-color: var(--accent); }
+.catalog-card:hover { border-color: var(--accent); text-decoration: none; }
 .catalog-card img, .catalog-icon { width: 48px; height: 48px; border-radius: 10px; flex: none; object-fit: cover; background: var(--surface-3); display: grid; place-items: center; color: var(--muted); }
 .catalog-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .catalog-body strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

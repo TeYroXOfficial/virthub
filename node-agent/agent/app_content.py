@@ -289,7 +289,7 @@ class ContentInstaller:
                 with archive.open(info) as src:
                     self.files._write_stream(name, src)
                 count += 1
-            self.log(f"Rozpakowano {count} plików z {step.label or 'archiwum'}")
+            self.log(f"Rozpakowano {count} plików ({step.label or 'archiwum'})")
 
     def delete(self, step: ContentStep) -> None:
         """Ścieżki do usunięcia; ostatni człon może mieć wzorzec (forge-*.jar)."""

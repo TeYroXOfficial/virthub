@@ -633,6 +633,37 @@ Port zmienisz w `VH_SFTP_PORT` w `/etc/virthub-agent/agent.env` (`0` wyłącza
 SFTP, `VH_SFTP_LISTEN` to adres nasłuchu) — wtedy ustaw ten sam port w `.env`
 panelu: `VIRTHUB_APPS_SFTP_PORT`.
 
+**Modpacki, pluginy i mody jednym kliknięciem.** Aplikacje Minecraft mają
+zakładki *Modpacki* i *Pluginy* (Paper) albo *Mody* (Forge, NeoForge, Fabric,
+Quilt):
+
+- modpacki z **Modrinth** (.mrpack), **Feed The Beast** i **CurseForge** —
+  panel sam dobiera loader, jego wersję i Javę (1.16 → 8, 1.17–1.20.4 → 17,
+  1.20.5+ → 21, 26.x → 25), przełącza aplikację na egg „Minecraft: modpack /
+  mody” i instaluje paczkę; świat, `server.properties` i listy graczy zostają
+  (opcja „Usuń też świat” daje świeży start). Pliki tylko dla klienta są
+  pomijane (Modrinth `env.server`, FTB `clientonly`); z CurseForge panel
+  bierze server pack autora, jeśli jest;
+- czysty serwer: vanilla, Fabric, Quilt, Forge albo NeoForge w wybranej wersji
+  (instalatory Forge/NeoForge/Quilt działają w kontenerze z obrazem aplikacji);
+- pluginy z **Modrinth**, **Hangar** i **CurseForge**, mody z **Modrinth**
+  i **CurseForge** — lista pokazuje tylko wersje zgodne z serwerem (wersja
+  gry + platforma), wymagane zależności instalują się same, jest
+  sprawdzanie aktualizacji i usuwanie.
+
+Każdy plik agent pobiera tylko przez https, z weryfikacją SHA-1/SHA-256/
+SHA-512 i rozmiaru, bez adresów prywatnych (także po przekierowaniach), w
+limicie dysku aplikacji. Postęp instalacji modpacka i loadera widać na żywo w
+konsoli. Panel nie pozwala zejść na starszą wersję gry bez usunięcia świata
+(Minecraft nie wczyta nowszego świata).
+
+CurseForge wymaga darmowego klucza API: załóż go w
+[console.curseforge.com](https://console.curseforge.com) i wpisz w `.env`
+panelu jako `VIRTHUB_CURSEFORGE_API_KEY=` — bez klucza to źródło jest ukryte,
+a Modrinth, FTB i Hangar działają od razu. Część autorów na CurseForge blokuje
+pobieranie przez zewnętrzne aplikacje — panel mówi wtedy, których modów to
+dotyczy (wybierz wersję z server packiem albo wgraj je przez SFTP).
+
 **Ochrona przed nadużyciami (PteroVM i podobne).** Aplikacje to serwery gier
 i boty, nie VPS-y. „Eggi VPS” (PteroVM, Pterodactyl-VPS-Egg itp.) uruchamiają
 w kontenerze cały system przez proot albo QEMU, żeby dać klientowi roota,

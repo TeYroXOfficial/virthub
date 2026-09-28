@@ -11,8 +11,9 @@ use App\Models\AppServer;
  * neoforge, quilt) i wersja gry — od tego zależy zgodność pluginów i modów.
  *
  * Źródła po kolei: zapis w panelu (po instalacji modpacka/loadera), plik
- * `.virthub-version` z instalacji eggu, `version_history.json` Papera,
- * zmienna MINECRAFT_VERSION. Znalezioną wersję zapamiętujemy.
+ * `.virthub-version` z instalacji eggu, `version_history.json` starszego
+ * Papera, katalog `versions/` (paperclip), zmienna MINECRAFT_VERSION.
+ * Znalezioną wersję zapamiętujemy.
  */
 class ServerProfile
 {
@@ -106,6 +107,17 @@ class ServerProfile
                 if (preg_match('/\(MC: (\d+\.\d+(?:\.\d+)?)\)/', $content, $m)) {
                     return $m[1];
                 }
+            }
+            // Paperclip rozpakowuje serwer do versions/<wersja gry>/.
+            try {
+                $names = collect($client->appFiles($this->app->uuid, 'list', ['path' => 'versions'])['entries'] ?? [])
+                    ->filter(fn ($e) => ($e['directory'] ?? false) && preg_match('/^\d+\.\d+(\.\d+)?$/', (string) $e['name']))
+                    ->pluck('name')->sort('version_compare')->values();
+                if ($names->isNotEmpty()) {
+                    return (string) $names->last();
+                }
+            } catch (AgentException) {
+                // brak katalogu — serwer jeszcze nie startował
             }
         }
 

@@ -18,7 +18,7 @@
             <h3 class="card-title">{{ __('Na serwerze') }}</h3>
             @if ($modpack)
                 <div class="content-hero">
-                    @if ($modpack['icon']) <img src="{{ $modpack['icon'] }}" alt="" referrerpolicy="no-referrer"> @endif
+                    @if ($modpack['icon']) <img src="{{ $modpack['icon'] }}" alt="" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'"> @endif
                     <div>
                         <strong>{{ $modpack['name'] }}</strong> <span class="muted">{{ $modpack['version'] }}</span><br>
                         <span class="muted">{{ $platformNames[$platform] ?? $platform }} · Minecraft {{ $mc }}

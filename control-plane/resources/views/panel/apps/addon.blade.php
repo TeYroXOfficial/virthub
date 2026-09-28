@@ -15,7 +15,7 @@
     @if ($project)
         <div class="card">
             <div class="content-hero">
-                @if ($project['icon']) <img src="{{ $project['icon'] }}" alt="" referrerpolicy="no-referrer"> @endif
+                @if ($project['icon']) <img src="{{ $project['icon'] }}" alt="" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'"> @endif
                 <div>
                     <h2 style="margin:0">{{ $project['name'] }}</h2>
                     <span class="muted">{{ $sourceName }}@if ($project['author']) · {{ $project['author'] }}@endif

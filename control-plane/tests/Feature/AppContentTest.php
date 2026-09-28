@@ -316,6 +316,22 @@ class AppContentTest extends TestCase
         $this->assertStringContainsString('forge-1.20.1-47.2.0-installer.jar', collect($steps)->firstWhere('path', 'forge-installer.jar')['url']);
     }
 
+    public function test_starsza_wersja_gry_wymaga_usuniecia_swiata(): void
+    {
+        $this->fakeApis();
+        $this->paper->forceFill(['minecraft' => ['platform' => 'paper', 'mc' => '26.2']])->save();
+
+        $this->actingAs($this->customer)->post(route('panel.apps.loader.install', $this->paper), ['loader' => 'fabric', 'mc' => '1.20.1', 'eula' => '1']);
+        $job = $this->runQueued();
+        $this->assertSame(AppJob::STATUS_FAILED, $job->status);
+        $this->assertStringContainsString('Usuń też świat', $job->error);
+        $this->assertTrue($this->paper->fresh()->isReady());
+        $this->assertSame([], $this->agentRequests);
+
+        $this->actingAs($this->customer)->post(route('panel.apps.loader.install', $this->paper), ['loader' => 'fabric', 'mc' => '1.20.1', 'eula' => '1', 'wipe_world' => '1']);
+        $this->assertSame(AppJob::STATUS_RUNNING, $this->runQueued()->status);
+    }
+
     public function test_nieudana_instalacja_modpacka_nie_psuje_aplikacji(): void
     {
         $this->fakeApis(['api.modrinth.com/v2/version/brak' => Http::response(['error' => 'not_found'], 404)]);

@@ -26,7 +26,7 @@
         @foreach ($results['items'] as $item)
             <a class="catalog-card" href="{{ route($showRoute, [$app, $item['source'], $item['id']]) }}">
                 @if ($item['icon'])
-                    <img src="{{ $item['icon'] }}" alt="" loading="lazy" referrerpolicy="no-referrer">
+                    <img src="{{ $item['icon'] }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">
                 @else
                     <span class="catalog-icon"><x-icon name="package" :size="22"/></span>
                 @endif

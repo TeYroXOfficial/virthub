@@ -1457,5 +1457,7 @@
     "Trwa instalacja": "Installation in progress",
     "modpack": "modpack",
     "postęp w konsoli": "progress in the console",
-    "Instalacja nie powiodła się": "Installation failed"
+    "Instalacja nie powiodła się": "Installation failed",
+    "Przygotowuję instalację…": "Preparing the installation…",
+    "Świat jest z Minecrafta :current, a :target to starsza wersja — nie wczyta go. Zaznacz „Usuń też świat” albo wybierz wersję :current lub nowszą.": "The world is from Minecraft :current and :target is an older version — it cannot load it. Tick “Also delete the world” or pick version :current or newer."
 }

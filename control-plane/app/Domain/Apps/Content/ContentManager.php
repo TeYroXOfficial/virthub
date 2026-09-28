@@ -162,6 +162,14 @@ class ContentManager
             $label = __('Instalacja serwera :loader :version', ['loader' => ucfirst($p['loader']), 'version' => $p['mc']]);
         }
 
+        // Minecraft nie obniża wersji świata — starszy serwer by go nie wczytał.
+        $current = $app->minecraft['mc'] ?? null;
+        if ($current && ! ($p['wipe_world'] ?? false) && version_compare($plan['mc'], $current, '<')) {
+            throw new ContentException(__('Świat jest z Minecrafta :current, a :target to starsza wersja — nie wczyta go. Zaznacz „Usuń też świat” albo wybierz wersję :current lub nowszą.', [
+                'current' => $current, 'target' => $plan['mc'],
+            ]));
+        }
+
         $loader = $this->loaders->steps($plan['loader'], $plan['mc'], $plan['loader_version']);
         $cleanup = Loaders::SERVER_FILES;
         if ($p['wipe_world'] ?? false) {
@@ -206,6 +214,11 @@ class ContentManager
     private function switchToModdedEgg(AppServer $app, int $java): void
     {
         $egg = $app->egg?->hasFeature('modpacks') ? $app->egg : AppEgg::query()->where('builtin_key', 'minecraft-modded')->first();
+        if ($egg === null) {
+            // Panel zaktualizowany, a szablony jeszcze nie — wgrywamy wbudowane.
+            app(\App\Domain\Apps\EggImporter::class)->importBuiltin();
+            $egg = AppEgg::query()->where('builtin_key', 'minecraft-modded')->first();
+        }
         if ($egg === null) {
             throw new ContentException(__('Brakuje wbudowanego szablonu „Minecraft: modpack / mody” — administrator wgrywa go w Administracja → Aplikacje → Szablony.'));
         }
@@ -360,6 +373,11 @@ class ContentManager
             'payload' => $payload, 'status' => AppJob::STATUS_QUEUED,
         ]);
         AuditLog::record('app.content', $app, ['action' => $action] + array_intersect_key($payload, array_flip(['source', 'project_id', 'version_id', 'loader', 'mc', 'name'])), $actor);
+        if ($action !== 'addon') {
+            // Od razu „instalacja” — zasilanie zablokowane, konsola czeka na log.
+            // Błąd przygotowania (applyResult) przywraca stan „gotowa”.
+            $app->forceFill(['status' => AppServer::STATUS_INSTALLING, 'status_message' => __('Przygotowuję instalację…')])->save();
+        }
         InstallContentJob::dispatch($job->id);
 
         return $job;
