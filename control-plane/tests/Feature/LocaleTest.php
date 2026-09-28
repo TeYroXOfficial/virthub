@@ -123,4 +123,14 @@ class LocaleTest extends TestCase
             $this->assertSame(substr_count($pl, '%'), substr_count($translated, '%'), "Formaty w: {$pl}");
         }
     }
+
+    public function test_liczebniki_po_polsku_nie_biora_form_angielskich(): void
+    {
+        app()->setLocale('pl');
+        $this->assertSame('2 porty', trans_choice(':count port|:count porty|:count portów', 2));
+        $this->assertSame('5 portów', trans_choice(':count port|:count porty|:count portów', 5));
+
+        app()->setLocale('en');
+        $this->assertSame('2 ports', trans_choice(':count port|:count porty|:count portów', 2));
+    }
 }

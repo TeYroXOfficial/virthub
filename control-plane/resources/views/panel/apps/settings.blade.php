@@ -1,0 +1,104 @@
+@extends('layouts.panel')
+
+@section('title', __('Ustawienia — :name', ['name' => $app->name]))
+
+@section('content')
+    @include('panel.apps._header')
+
+    <div class="grid grid-2">
+        <div class="card">
+            <h3 class="card-title">{{ __('Informacje') }}</h3>
+            <dl class="kv">
+                <dt>{{ __('Szablon') }}</dt><dd>{{ $app->egg?->name }}</dd>
+                <dt>{{ __('Plan') }}</dt><dd>{{ $app->plan?->name ?? '—' }}</dd>
+                <dt>{{ __('Zasoby') }}</dt>
+                <dd>{{ __(':memory MB RAM · :disk MB dysku', ['memory' => $app->memory_mb, 'disk' => $app->disk_mb]) }}
+                    · {{ $app->cpu_percent ? __('procesor: :percent% rdzenia', ['percent' => $app->cpu_percent]) : __('procesor bez limitu') }}</dd>
+                <dt>{{ __('Porty') }}</dt>
+                <dd class="mono">
+                    @foreach ($app->allocations as $allocation)
+                        {{ $app->hypervisor?->publicAddress() }}:{{ $allocation->port }}@if ($allocation->is_primary) <span class="pill neutral plain">{{ __('główny') }}</span>@endif<br>
+                    @endforeach
+                </dd>
+                <dt>{{ __('Identyfikator') }}</dt><dd class="mono">{{ $app->uuid }}</dd>
+                <dt>{{ __('Utworzona') }}</dt><dd>{{ $app->created_at->format('d.m.Y H:i') }}</dd>
+            </dl>
+        </div>
+
+        <div class="card">
+            <h3 class="card-title">{{ __('Nazwa') }}</h3>
+            <form method="POST" action="{{ route('panel.apps.rename', $app) }}">
+                @csrf @method('PUT')
+                <div class="field"><input type="text" name="name" maxlength="60" required value="{{ old('name', $app->name) }}" aria-label="{{ __('Nazwa') }}"></div>
+                <button class="btn" type="submit">{{ __('Zmień nazwę') }}</button>
+            </form>
+        </div>
+    </div>
+
+    @can('manage', $app)
+        <div class="card" style="margin-top:16px">
+            <h3 class="card-title">{{ __('Zasoby i zawieszenie') }} <span class="pill neutral">{{ __('personel') }}</span></h3>
+            <form method="POST" action="{{ route('panel.admin.apps.resources', $app) }}">
+                @csrf @method('PUT')
+                <div class="grid-compact">
+                    <div class="field"><label for="r-mem">{{ __('RAM (MB)') }}</label><input id="r-mem" name="memory_mb" type="text" inputmode="numeric" value="{{ $app->memory_mb }}"></div>
+                    <div class="field"><label for="r-cpu">{{ __('Procesor (%)') }}</label><input id="r-cpu" name="cpu_percent" type="text" inputmode="numeric" value="{{ $app->cpu_percent }}" placeholder="0"></div>
+                    <div class="field"><label for="r-disk">{{ __('Dysk (MB)') }}</label><input id="r-disk" name="disk_mb" type="text" inputmode="numeric" value="{{ $app->disk_mb }}"></div>
+                </div>
+                @error('memory_mb') <div class="hint" style="color:var(--critical)">{{ $message }}</div> @enderror
+                <button class="btn" type="submit">{{ __('Zapisz zasoby') }}</button>
+            </form>
+            <form method="POST" action="{{ route('panel.admin.apps.suspend', $app) }}" class="setting-row" style="margin-top:16px">
+                @csrf
+                @if ($app->isSuspended())
+                    <p class="setting-text muted">{{ __('Aplikacja jest zawieszona: :reason', ['reason' => $app->suspension_reason]) }}</p>
+                    <button class="btn" type="submit">{{ __('Odwieś') }}</button>
+                @else
+                    <div class="setting-text field" style="margin:0"><input type="text" name="reason" maxlength="255" placeholder="{{ __('Powód zawieszenia (opcjonalnie)') }}" aria-label="{{ __('Powód zawieszenia') }}"></div>
+                    <button class="btn btn-danger" type="submit">{{ __('Zawieś i zatrzymaj') }}</button>
+                @endif
+            </form>
+        </div>
+    @endcan
+
+    <div class="card danger-zone" style="margin-top:16px">
+        <h3 class="card-title" style="color:var(--critical)">{{ __('Strefa niebezpieczna') }}</h3>
+        @error('confirm') <div class="alert alert-error">{{ $message }}</div> @enderror
+
+        <form method="POST" action="{{ route('panel.apps.reinstall', $app) }}" class="setting-row"
+              onsubmit="return confirm(@js(__('Uruchomić instalację ponownie? Skrypt eggu może nadpisać pliki.')))">
+            @csrf
+            <div class="setting-text">
+                <h3>{{ __('Reinstalacja') }}</h3>
+                <p class="muted">{{ __('Ponownie uruchamia skrypt instalacyjny szablonu (np. pobiera serwer w wersji ze zmiennych). Twoje pliki zostają, ale skrypt może nadpisać część z nich.') }}</p>
+                <label class="check-line"><input type="checkbox" name="confirm" value="1" required> {{ __('Rozumiem') }}</label>
+            </div>
+            <button class="btn" type="submit" @disabled($app->isInstalling() || $app->isSuspended())><x-icon name="refresh" :size="15"/> {{ __('Reinstaluj') }}</button>
+        </form>
+
+        @can('destroy', $app)
+            <form method="POST" action="{{ route('panel.apps.destroy', $app) }}" class="setting-row" style="margin-top:16px"
+                  onsubmit="return confirm(@js(__('Usunąć :name razem ze wszystkimi plikami? Tej operacji nie da się cofnąć.', ['name' => $app->name])))">
+                @csrf @method('DELETE')
+                <div class="setting-text">
+                    <h3>{{ __('Usunięcie aplikacji') }}</h3>
+                    <p class="muted">{{ __('Kasuje kontener i wszystkie pliki na węźle, zwalnia porty.') }}</p>
+                    <label class="check-line"><input type="checkbox" name="confirm" value="1" required> {{ __('Rozumiem, że pliki zostaną bezpowrotnie usunięte') }}</label>
+                </div>
+                <button class="btn btn-danger-solid" type="submit"><x-icon name="trash" :size="15"/> {{ __('Usuń aplikację') }}</button>
+            </form>
+        @endcan
+
+        @if (auth()->user()->isAdmin() && auth()->user()->can('manage', $app))
+            <form method="POST" action="{{ route('panel.admin.apps.purge', $app) }}" class="setting-row" style="margin-top:16px"
+                  onsubmit="return confirm(@js(__('Usunąć wpis TYLKO z panelu? Panel nie skontaktuje się z węzłem.')))">
+                @csrf
+                <div class="setting-text">
+                    <h3>{{ __('Usuń tylko z panelu') }}</h3>
+                    <p class="muted">{{ __('Dla aplikacji, których węzeł już nie istnieje albo nie odpowiada. Pliki na węźle zostają.') }}</p>
+                </div>
+                <button class="btn btn-danger" type="submit">{{ __('Usuń z panelu') }}</button>
+            </form>
+        @endif
+    </div>
+@endsection

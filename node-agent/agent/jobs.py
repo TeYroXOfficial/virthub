@@ -68,7 +68,9 @@ class JobQueue:
         self,
         settings: Settings,
         handlers: dict[str, Callable[[dict[str, Any]], dict[str, Any]]],
+        name: str = "virthub-jobs",
     ):
+        self.name = name
         self.settings = settings
         self.handlers = handlers
         self._pending: queue.Queue[str] = queue.Queue()
@@ -109,7 +111,7 @@ class JobQueue:
         # z wątkiem, który natychmiast kończy pętlę, i zadania wisiałyby w „queued".
         self._stop.clear()
         self._recover_interrupted()
-        self._worker = threading.Thread(target=self._run, name="virthub-jobs", daemon=True)
+        self._worker = threading.Thread(target=self._run, name=self.name, daemon=True)
         self._worker.start()
         log.info("Wątek roboczy kolejki zadań wystartował")
 
@@ -127,13 +129,17 @@ class JobQueue:
         zepsuło stanu — dlatego np. create_vm sprząta po sobie przy błędzie.
         """
         with self._connect() as conn:
+            # Każda kolejka (maszyny, aplikacje) wznawia tylko swoje akcje —
+            # dzielą bazę, ale nie wątek roboczy.
+            actions = sorted(self.handlers)
+            marks = ", ".join("?" for _ in actions)
             rows = conn.execute(
-                "SELECT job_id FROM jobs WHERE status IN (?, ?)",
-                (JobStatus.RUNNING.value, JobStatus.QUEUED.value),
+                f"SELECT job_id FROM jobs WHERE status IN (?, ?) AND action IN ({marks})",
+                (JobStatus.RUNNING.value, JobStatus.QUEUED.value, *actions),
             ).fetchall()
             conn.execute(
-                "UPDATE jobs SET status = ? WHERE status = ?",
-                (JobStatus.QUEUED.value, JobStatus.RUNNING.value),
+                f"UPDATE jobs SET status = ? WHERE status = ? AND action IN ({marks})",
+                (JobStatus.QUEUED.value, JobStatus.RUNNING.value, *actions),
             )
         for row in rows:
             self._pending.put(row["job_id"])

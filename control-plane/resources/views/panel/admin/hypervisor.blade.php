@@ -197,6 +197,33 @@
                     <div class="hint">{{ __('Grupa :name ma wstrzymane przyjmowanie maszyn — to ustawienie jest nadrzędne.', ['name' => $node->group->name]) }}</div>
                 @endif
             </div>
+            <fieldset class="field" style="border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px">
+                <legend style="padding:0 6px; font-weight:650">{{ __('Aplikacje (serwery gier, boty)') }}</legend>
+                <label class="check-line">
+                    <input type="checkbox" name="apps_enabled" value="1" @checked(old('apps_enabled', $node->apps_enabled))>
+                    {{ __('Uruchamiaj aplikacje na tym węźle') }}
+                </label>
+                <div class="grid-compact" style="margin-top:10px">
+                    <div class="field">
+                        <label for="n-app-from">{{ __('Porty od') }}</label>
+                        <input id="n-app-from" name="app_port_start" type="text" inputmode="numeric" value="{{ old('app_port_start', $node->app_port_start) }}" placeholder="25565">
+                    </div>
+                    <div class="field">
+                        <label for="n-app-to">{{ __('Porty do') }}</label>
+                        <input id="n-app-to" name="app_port_end" type="text" inputmode="numeric" value="{{ old('app_port_end', $node->app_port_end) }}" placeholder="25665">
+                    </div>
+                </div>
+                @php $appsHealth = $node->last_health['apps'] ?? null; @endphp
+                <div class="hint">
+                    {{ __('Każda aplikacja dostaje porty z tego zakresu (TCP i UDP) na adresie węzła. Porty bloków NAT maszyn są pomijane.') }}
+                    @if ($appsHealth['available'] ?? false)
+                        <br><span class="pill ok plain">{{ __('Docker :version', ['version' => $appsHealth['docker_version'] ?? '?']) }}</span>
+                    @else
+                        <br><span class="pill warning plain">{{ __('Docker niedostępny') }}</span>
+                        {{ __('Zainstaluj go na węźle:') }} <code>curl -sSL https://raw.githubusercontent.com/{{ config('virthub.update_repo', 'TeYroXOfficial/virthub') }}/main/infra/update-node.sh | sudo VH_APPS=1 bash</code>
+                    @endif
+                </div>
+            </fieldset>
             <button class="btn btn-primary" type="submit">{{ __('Zapisz ustawienia') }}</button>
         </form>
 

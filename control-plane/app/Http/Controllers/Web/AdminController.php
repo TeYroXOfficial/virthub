@@ -153,6 +153,9 @@ class AdminController extends Controller
             'bridge' => ['required', 'string', 'max:32'],
             'hypervisor_group_id' => ['nullable', 'integer', 'exists:hypervisor_groups,id'],
             'accepts_new_servers' => ['boolean'],
+            'apps_enabled' => ['boolean'],
+            'app_port_start' => ['nullable', 'integer', 'min:1024', 'max:65535', 'required_with:app_port_end'],
+            'app_port_end' => ['nullable', 'integer', 'min:1024', 'max:65535', 'gte:app_port_start', 'required_with:app_port_start'],
             'status' => ['required', Rule::in([
                 Hypervisor::STATUS_ONLINE,
                 Hypervisor::STATUS_OFFLINE,
@@ -172,6 +175,7 @@ class AdminController extends Controller
             'cpu_model' => isset($validated['cpu_model']) ? trim($validated['cpu_model']) ?: null : null,
             'public_address' => ($validated['public_address'] ?? null) ?: null,
             'accepts_new_servers' => $request->boolean('accepts_new_servers'),
+            'apps_enabled' => $request->boolean('apps_enabled'),
         ]);
 
         AuditLog::record('hypervisor.updated', $hypervisor, $validated);

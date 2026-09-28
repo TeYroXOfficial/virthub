@@ -1,0 +1,84 @@
+{
+    "_comment": "Egg wbudowany w VirtHub (format Pterodactyla PTDL_v2).",
+    "meta": {
+        "version": "PTDL_v2"
+    },
+    "exported_at": "2026-09-28T00:00:00+00:00",
+    "name": "Bot Discord: Node.js",
+    "author": "virthub@local",
+    "description": "Bot (np. discord.js) z repozytorium Git albo wgranych plików.",
+    "virthub_category": "bot",
+    "features": [],
+    "docker_images": {
+        "Node.js 22": "ghcr.io/parkervcp/yolks:nodejs_22",
+        "Node.js 20": "ghcr.io/parkervcp/yolks:nodejs_20",
+        "Node.js 18": "ghcr.io/parkervcp/yolks:nodejs_18"
+    },
+    "file_denylist": [],
+    "startup": "if [[ -d .git ]] && [[ \"{{AUTO_UPDATE}}\" == \"1\" ]]; then git pull; fi; if [[ -n \"${NODE_PACKAGES}\" ]]; then npm install ${NODE_PACKAGES}; fi; if [[ -f /home/container/package.json ]]; then npm install --omit=dev; fi; node /home/container/{{MAIN_FILE}}",
+    "config": {
+        "files": "{}",
+        "startup": "{\"done\": \"Bot\"}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/ash\n# Bot Discord (Node.js) — kod z repozytorium Git albo przykładowy bot do podmiany.\ncd /mnt/server\nif [ -n \"$GIT_ADDRESS\" ]; then\n    if [ -d .git ]; then git pull; else\n        if [ -n \"$BRANCH\" ]; then git clone --single-branch --branch \"$BRANCH\" \"$GIT_ADDRESS\" . ; else git clone \"$GIT_ADDRESS\" . ; fi\n    fi || { echo \"Nie udało się pobrać repozytorium $GIT_ADDRESS\"; exit 1; }\nelif [ ! -f \"$MAIN_FILE\" ]; then\n    cat > \"$MAIN_FILE\" <<'JS'\n// Przykładowy bot — podmień ten plik na swój kod (zakładka Pliki) albo ustaw repozytorium Git.\n// Token trzymaj w pliku .env albo w zmiennej, nie w kodzie.\nconsole.log('Bot działa. Wgraj swój kod albo ustaw repozytorium Git w zakładce Uruchamianie.');\nprocess.stdin.on('data', (d) => console.log('> ' + d.toString().trim()));\nsetInterval(() => {}, 1 << 30);\nJS\nfi\necho \"Instalacja zakończona.\"\n",
+            "container": "ghcr.io/pterodactyl/installers:alpine",
+            "entrypoint": "ash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Repozytorium Git",
+            "description": "Adres repozytorium z kodem (opcjonalnie). Puste = wgrywasz pliki sam.",
+            "env_variable": "GIT_ADDRESS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Gałąź",
+            "description": "Gałąź repozytorium (puste = domyślna).",
+            "env_variable": "BRANCH",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:100",
+            "field_type": "text"
+        },
+        {
+            "name": "Automatyczna aktualizacja",
+            "description": "1 = git pull przy każdym starcie.",
+            "env_variable": "AUTO_UPDATE",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Plik startowy",
+            "description": "Plik uruchamiany przy starcie.",
+            "env_variable": "MAIN_FILE",
+            "default_value": "index.js",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:100",
+            "field_type": "text"
+        },
+        {
+            "name": "Dodatkowe pakiety npm",
+            "description": "Pakiety instalowane przy starcie, np. discord.js dotenv.",
+            "env_variable": "NODE_PACKAGES",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:500",
+            "field_type": "text"
+        }
+    ]
+}

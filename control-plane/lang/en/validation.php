@@ -195,6 +195,40 @@ return [
     |
     */
 
-    'attributes' => [],
+    'attributes' => [
+        // Bez tej listy (przy polskim języku zapasowym) angielskie komunikaty
+        // brałyby polskie nazwy pól z lang/pl/validation.php.
+        'name' => 'name',
+        'email' => 'email',
+        'password' => 'password',
+        'hostname' => 'hostname',
+        'label' => 'label',
+        'package' => 'package',
+        'template' => 'system',
+        'location' => 'location',
+        'ssh_key' => 'SSH key',
+        'ssh_keys' => 'SSH keys',
+        'ssh_keys.*' => 'SSH key',
+        'role' => 'role',
+        'confirm' => 'confirmation',
+        'confirm_name' => 'confirmation name',
+        'version' => 'version',
+        'image_file' => 'image file',
+        'min_disk_gb' => 'minimum disk',
+        'bandwidth_gb' => 'transfer limit',
+        'max_servers' => 'machine limit',
+        'cpu_model' => 'CPU',
+        'notes' => 'notes',
+        'description' => 'description',
+        'url' => 'URL',
+        'port_from' => 'port',
+        'port_to' => 'end port',
+        'source' => 'address',
+        'network' => 'network',
+        'gateway' => 'gateway',
+        'vcpu' => 'vCPU',
+        'ram_mb' => 'memory',
+        'disk_gb' => 'disk',
+    ],
 
 ];

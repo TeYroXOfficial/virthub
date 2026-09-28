@@ -34,6 +34,8 @@ class ReconcileServerJobs extends Command
             ->limit(200)
             ->get();
 
+        $this->reconcileApps($staleSeconds);
+
         if ($jobs->isEmpty()) {
             return self::SUCCESS;
         }
@@ -70,5 +72,39 @@ class ReconcileServerJobs extends Command
         $this->info("Uzgodniono {$applied} z {$jobs->count()} zadań.");
 
         return self::SUCCESS;
+    }
+
+    /** To samo dla instalacji aplikacji — callback mógł nie dotrzeć. */
+    private function reconcileApps(int $staleSeconds): void
+    {
+        $applier = app(\App\Domain\Apps\AppJobApplier::class);
+        $jobs = \App\Models\AppJob::query()
+            ->whereIn('status', [\App\Models\AppJob::STATUS_QUEUED, \App\Models\AppJob::STATUS_RUNNING])
+            ->whereNotNull('agent_job_id')
+            ->where('updated_at', '<=', now()->subSeconds($staleSeconds))
+            ->with('server.hypervisor')
+            ->limit(100)
+            ->get();
+
+        foreach ($jobs as $job) {
+            $hypervisor = $job->server?->hypervisor;
+            if ($hypervisor === null) {
+                $applier->fail($job, __('Aplikacja nie jest przypisana do węzła.'));
+
+                continue;
+            }
+            try {
+                $state = (new AgentClient($hypervisor))->job($job->agent_job_id);
+            } catch (AgentException $e) {
+                $this->warn("Zadanie aplikacji {$job->id}: {$e->getMessage()}");
+
+                continue;
+            }
+            if (in_array($state['status'] ?? '', ['done', 'failed'], true)) {
+                $applier->apply($job, $state);
+            } else {
+                $job->touch();
+            }
+        }
     }
 }

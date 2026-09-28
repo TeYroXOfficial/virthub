@@ -21,6 +21,7 @@
         $nav = [
             ['panel.dashboard', __('Moje maszyny'), 'servers', 'panel.dashboard', null],
             ['panel.servers.create', __('Zamów serwer'), 'plus', 'panel.servers.create', 'servers.order'],
+            ['panel.apps.index', __('Aplikacje'), 'gamepad', 'panel.apps.*', 'apps.order'],
         ];
         // Działy administracji widoczne tylko z odpowiednim uprawnieniem.
         $adminNav = [
@@ -32,6 +33,7 @@
             ['panel.admin.packages', __('Pakiety'), 'package', 'panel.admin.packages', 'admin.packages'],
             ['panel.admin.templates', __('Szablony'), 'disc', 'panel.admin.templates', 'admin.templates'],
             ['panel.admin.isos', __('Obrazy ISO'), 'disc', 'panel.admin.isos', 'admin.templates'],
+            ['panel.admin.apps', __('Aplikacje'), 'gamepad', 'panel.admin.apps*', 'admin.apps'],
             ['panel.admin.updates', __('Aktualizacje'), 'refresh', 'panel.admin.updates*', 'admin.updates'],
         ];
     @endphp

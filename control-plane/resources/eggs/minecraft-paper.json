@@ -1,0 +1,67 @@
+{
+    "_comment": "Egg wbudowany w VirtHub (format Pterodactyla PTDL_v2).",
+    "meta": {
+        "version": "PTDL_v2"
+    },
+    "exported_at": "2026-09-28T00:00:00+00:00",
+    "name": "Minecraft: Paper",
+    "author": "virthub@local",
+    "description": "Wydajny serwer Minecraft z obsługą pluginów Bukkit/Spigot/Paper.",
+    "virthub_category": "game",
+    "features": [
+        "eula",
+        "java_version"
+    ],
+    "docker_images": {
+        "Java 25": "ghcr.io/pterodactyl/yolks:java_25",
+        "Java 21": "ghcr.io/pterodactyl/yolks:java_21",
+        "Java 17": "ghcr.io/pterodactyl/yolks:java_17"
+    },
+    "file_denylist": [],
+    "startup": "java -Xms128M -XX:MaxRAMPercentage=95.0 -Dterminal.jline=false -Dterminal.ansi=true -jar {{SERVER_JARFILE}}",
+    "config": {
+        "files": "{\"server.properties\": {\"parser\": \"properties\", \"find\": {\"server-ip\": \"0.0.0.0\", \"server-port\": \"{{server.build.default.port}}\", \"query.port\": \"{{server.build.default.port}}\"}}, \"eula.txt\": {\"parser\": \"properties\", \"find\": {\"eula\": \"{{server.build.env.EULA}}\"}}}",
+        "startup": "{\"done\": \")! For help, type \"}",
+        "logs": "{}",
+        "stop": "stop"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/ash\n# Paper — pobiera najnowszą stabilną kompilację wskazanej wersji z API PaperMC (v3).\nset -e\ncd /mnt/server\nAPI=https://fill.papermc.io/v3/projects/paper\nUA=\"VirtHub (+https://github.com/TeYroXOfficial/virthub)\"\nif [ -z \"$MINECRAFT_VERSION\" ] || [ \"$MINECRAFT_VERSION\" = \"latest\" ]; then\n    VERSIONS=$(curl -fsSL -A \"$UA\" \"$API\" | jq -r '.versions | to_entries | map(.value) | flatten | .[]' | grep -Ev -- '-(rc|pre)')\nelse\n    VERSIONS=\"$MINECRAFT_VERSION\"\nfi\nURL=\"\"\nfor V in $VERSIONS; do\n    URL=$(curl -fsSL -A \"$UA\" \"$API/versions/$V/builds\" | jq -r 'map(select(.channel==\"STABLE\")) | .[0].downloads[\"server:default\"].url // empty')\n    if [ -n \"$URL\" ]; then echo \"Wersja $V\"; break; fi\ndone\nif [ -z \"$URL\" ]; then echo \"Nie znaleziono stabilnej kompilacji Papera dla: $MINECRAFT_VERSION\"; exit 1; fi\necho \"Pobieram $URL\"\ncurl -fsSL -A \"$UA\" -o \"$SERVER_JARFILE\" \"$URL\"\n[ -f server.properties ] || printf 'server-port=%s\\nquery.port=%s\\n' \"$SERVER_PORT\" \"$SERVER_PORT\" > server.properties\necho \"Instalacja zakończona.\"\n",
+            "container": "ghcr.io/pterodactyl/installers:alpine",
+            "entrypoint": "ash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Wersja Minecrafta",
+            "description": "Np. 1.21.11 albo latest (najnowsza stabilna).",
+            "env_variable": "MINECRAFT_VERSION",
+            "default_value": "latest",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:30",
+            "field_type": "text"
+        },
+        {
+            "name": "Plik serwera",
+            "description": "Nazwa pliku .jar uruchamianego przez serwer.",
+            "env_variable": "SERVER_JARFILE",
+            "default_value": "server.jar",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|regex:/^([\\w\\d._-]+)(\\.jar)$/",
+            "field_type": "text"
+        },
+        {
+            "name": "Akceptacja EULA Minecrafta",
+            "description": "Wpisz true, jeśli akceptujesz https://aka.ms/MinecraftEULA — bez tego serwer się nie uruchomi.",
+            "env_variable": "EULA",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:true,false",
+            "field_type": "text"
+        }
+    ]
+}

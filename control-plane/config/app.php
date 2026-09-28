@@ -82,7 +82,10 @@ return [
     // przeglądarki ani użytkownika) — patrz virthub.default_locale.
     'locale' => env('VIRTHUB_LOCALE', 'pl'),
 
-    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
+    // Polski to język źródłowy (teksty w kodzie są kluczami tłumaczeń) —
+    // brakujące tłumaczenie ma wracać do niego, a nie do angielskiego.
+    // Inaczej trans_choice() w polskim panelu brał formy z lang/en.json.
+    'fallback_locale' => 'pl',
 
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
 

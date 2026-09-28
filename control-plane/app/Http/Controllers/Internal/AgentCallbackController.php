@@ -36,7 +36,11 @@ class AgentCallbackController extends Controller
             ->where('agent_job_id', $agentJobId)
             ->first();
 
-        if ($job === null || $job->server?->hypervisor === null) {
+        if ($job === null) {
+            return $this->appCallback($request, $agentJobId, $payload);
+        }
+
+        if ($job->server?->hypervisor === null) {
             // 404 mówi agentowi „przestań to wysyłać" — zadanie nie istnieje
             // po naszej stronie i ponawianie niczego nie zmieni.
             return response()->json(['message' => 'Nieznane zadanie.'], 404);
@@ -54,6 +58,29 @@ class AgentCallbackController extends Controller
         $applier->apply($job, [
             'status' => $payload['status'] ?? 'failed',
             'result' => $payload['result'] ?? null,
+            'error' => $payload['error'] ?? null,
+        ]);
+
+        return response()->json(['message' => 'Przyjęto.']);
+    }
+
+    /** Wynik zadania aplikacji (instalacja, reinstalacja) — ta sama ochrona podpisem. */
+    private function appCallback(Request $request, string $agentJobId, array $payload): JsonResponse
+    {
+        $job = \App\Models\AppJob::with('server.hypervisor')->where('agent_job_id', $agentJobId)->first();
+
+        if ($job === null || $job->server?->hypervisor === null) {
+            return response()->json(['message' => 'Nieznane zadanie.'], 404);
+        }
+
+        if (! $this->hasValidSignature($request, $job->server->hypervisor->callback_secret)) {
+            Log::warning(__('Odrzucono callback agenta z nieprawidłowym podpisem'), ['agent_job_id' => $agentJobId, 'ip' => $request->ip()]);
+
+            return response()->json(['message' => __('Nieprawidłowy podpis.')], 401);
+        }
+
+        app(\App\Domain\Apps\AppJobApplier::class)->apply($job, [
+            'status' => $payload['status'] ?? 'failed',
             'error' => $payload['error'] ?? null,
         ]);
 

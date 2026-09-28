@@ -88,6 +88,9 @@ return [
         // przed wyczerpaniem floty przez pojedyncze konto (albo skrypt).
         'servers_per_customer' => (int) env('VIRTHUB_SERVERS_PER_CUSTOMER', 10),
 
+        // Ile aplikacji (serwerów gier, botów) może mieć jeden klient.
+        'apps_per_customer' => (int) env('VIRTHUB_APPS_PER_CUSTOMER', 10),
+
         // Retencja próbek telemetrii w dniach.
         'metrics_retention_days' => (int) env('VIRTHUB_METRICS_RETENTION_DAYS', 30),
     ],

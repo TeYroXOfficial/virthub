@@ -83,6 +83,10 @@ fi
 echo nf_conntrack_bridge > /etc/modules-load.d/virthub.conf
 modprobe nf_conntrack_bridge 2>/dev/null || true
 
+# Aplikacje (serwery gier, boty): Docker instalujemy tylko z VH_APPS=1, a na
+# węźle, który już go ma, pilnujemy grupy docker i katalogu aplikacji.
+bash "$AGENT_DIR/scripts/setup-apps.sh" || warn "Nie udało się przygotować Dockera dla aplikacji"
+
 # Węzły kontenerów: osobny zakres UID/GID dla każdego kontenera.
 bash "$AGENT_DIR/scripts/harden-incus.sh" || warn "Nie udało się ustawić przydziału UID/GID dla Incusa"
 
