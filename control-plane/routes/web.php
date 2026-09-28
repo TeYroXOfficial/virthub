@@ -74,6 +74,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
         Route::get('/{app}/logs', 'logs')->name('logs');
         Route::post('/{app}/power', 'power')->name('power');
         Route::post('/{app}/command', 'command')->name('command');
+        Route::post('/{app}/console', 'consoleSession')->name('console');
     });
     Route::prefix('/apps/{app}/files')->name('apps.files')->controller(\App\Http\Controllers\Web\AppFilesController::class)->group(function () {
         Route::get('/', 'index');

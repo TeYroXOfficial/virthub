@@ -315,3 +315,96 @@ def test_api_aplikacji(client, manager, monkeypatch):
     assert client.post(f"/apps/{spec.uuid}/power", json={"action": "kill"}).json()["state"] == "offline"
     assert client.delete(f"/apps/{spec.uuid}").json()["deleted"] is True
     assert client.get(f"/apps/{spec.uuid}/status").json()["state"] == "missing"
+
+
+def test_konsola_na_zywo_przez_websocket(client, manager, monkeypatch):
+    """Konsola WS: zaległe linie, strumień na żywo, polecenia, statystyki i restart."""
+    import json as jsonlib
+
+    from agent import main
+    from test_console import signed_headers
+
+    monkeypatch.setattr(main, "apps", manager)
+    spec = _spec()
+    manager.install(spec)
+    manager.power(spec.uuid, "start")
+    assert _wait_for(lambda: "gotowy" in "\n".join(manager.logs(spec.uuid)["lines"]))
+
+    path = f"/apps/{spec.uuid}/console"
+    with pytest.raises(Exception):
+        with client.websocket_connect(path) as ws:  # bez podpisu
+            ws.receive_bytes()
+
+    events: list[dict] = []
+
+    def read_until(ws, needle: str, limit: int = 60) -> tuple[str, list[dict]]:
+        out = ""
+        for _ in range(limit):
+            message = ws.receive()
+            if message.get("bytes"):
+                out += message["bytes"].decode()
+            elif message.get("text"):
+                events.append(jsonlib.loads(message["text"]))
+            if needle in out:
+                return out, events
+        pytest.fail(f"Nie doczekano się {needle!r}: {out!r}")
+
+    with client.websocket_connect(path, headers=signed_headers(path)) as ws:
+        out, _ = read_until(ws, "gotowy na porcie 30123")
+        assert "\r\n" in out
+
+        ws.send_text(jsonlib.dumps({"type": "command", "command": "na-zywo"}))
+        out, _ = read_until(ws, "komenda: na-zywo")
+        assert "gotowy" not in out  # strumień nie powtarza zaległych linii
+
+        # Restart: konsola czeka na nowy start i dosyła wyjście nowego procesu.
+        manager.power(spec.uuid, "restart")
+        out, _ = read_until(ws, "gotowy na porcie 30123")
+        assert "zamykam" in out
+        read_until_status = [e for e in events if e.get("type") == "status"]
+        for _ in range(10):
+            if read_until_status:
+                break
+            message = ws.receive()
+            if message.get("text"):
+                read_until_status.append(jsonlib.loads(message["text"]))
+        states = {e.get("state") for e in read_until_status}
+        assert "running" in states
+
+        manager.power(spec.uuid, "kill")
+        ws.send_text(jsonlib.dumps({"type": "command", "command": "nikt"}))
+        for _ in range(20):
+            message = ws.receive()
+            if message.get("text") and jsonlib.loads(message["text"]).get("type") == "error":
+                break
+        else:
+            pytest.fail("Brak błędu dla polecenia do zatrzymanej aplikacji")
+    manager.delete(spec.uuid)
+
+
+def test_konsola_pokazuje_instalacje_na_zywo(client, manager, monkeypatch):
+    import threading
+
+    from agent import main
+    from test_console import signed_headers
+
+    monkeypatch.setattr(main, "apps", manager)
+    script = "#!/bin/ash\necho krok-1\nsleep 3\necho krok-2\nsleep 1\n"
+    spec = _spec(install={"image": "ghcr.io/pterodactyl/installers:alpine", "entrypoint": "ash", "script": script})
+    manager.save_spec(spec)
+    manager.data_dir(spec.uuid).mkdir(parents=True, exist_ok=True)
+    worker = threading.Thread(target=manager.install, args=(spec,))
+    worker.start()
+    assert _wait_for(lambda: spec.uuid in manager._installing)
+
+    path = f"/apps/{spec.uuid}/console"
+    with client.websocket_connect(path, headers=signed_headers(path)) as ws:
+        out = ""
+        for _ in range(200):
+            message = ws.receive()
+            out += (message.get("bytes") or b"").decode()
+            if "krok-2" in out:
+                break
+        assert "krok-1" in out and "krok-2" in out
+    worker.join(120)
+    manager.delete(spec.uuid)

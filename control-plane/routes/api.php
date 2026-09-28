@@ -116,6 +116,11 @@ Route::prefix('v1')->group(function () {
 Route::post('/internal/agent/job-result', AgentCallbackController::class)
     ->name('internal.agent.job-result');
 
+// SFTP aplikacji: agent sprawdza hasło użytkownika panelu (podpis sekretem węzła).
+Route::post('/internal/agent/sftp-auth', \App\Http\Controllers\Internal\SftpAuthController::class)
+    ->middleware('throttle:120,1')
+    ->name('internal.agent.sftp-auth');
+
 // Przekaźnik konsoli (console-proxy/) wymienia jednorazową sesję na parametry
 // połączenia z agentem. Uwierzytelnienie wspólnym sekretem w kontrolerze.
 Route::post('/internal/console/{session}', ConsoleRedeemController::class)

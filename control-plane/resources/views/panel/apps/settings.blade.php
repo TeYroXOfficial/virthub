@@ -26,6 +26,26 @@
         </div>
 
         <div class="card">
+            <h3 class="card-title">{{ __('SFTP') }}</h3>
+            @php($sftpHost = $app->hypervisor?->publicAddress())
+            @php($sftpUser = $app->sftpUsername(auth()->user()))
+            @php($sftpPort = config('virthub.apps_sftp_port'))
+            @php($sftpUrl = 'sftp://'.$sftpUser.'@'.$sftpHost.':'.$sftpPort)
+            <dl class="kv">
+                <dt>{{ __('Host') }}</dt>
+                <dd class="mono copyable" title="{{ __('Kliknij, żeby skopiować') }}" data-copy="{{ $sftpHost }}">{{ $sftpHost ?? '?' }}</dd>
+                <dt>{{ __('Port') }}</dt><dd class="mono">{{ $sftpPort }}</dd>
+                <dt>{{ __('Użytkownik') }}</dt>
+                <dd class="mono copyable" title="{{ __('Kliknij, żeby skopiować') }}" data-copy="{{ $sftpUser }}">{{ $sftpUser }}</dd>
+                <dt>{{ __('Hasło') }}</dt><dd>{{ __('twoje hasło do panelu') }}</dd>
+            </dl>
+            <p class="hint">{{ __('Połącz się dowolnym klientem SFTP (FileZilla, WinSCP) — zobaczysz pliki aplikacji jak w zakładce Pliki. Większe paczki wgrywaj tą drogą.') }}</p>
+            @if ($sftpHost)
+                <a class="btn btn-sm" href="{{ $sftpUrl }}">{{ __('Otwórz w kliencie SFTP') }}</a>
+            @endif
+        </div>
+
+        <div class="card">
             <h3 class="card-title">{{ __('Nazwa') }}</h3>
             <form method="POST" action="{{ route('panel.apps.rename', $app) }}">
                 @csrf @method('PUT')

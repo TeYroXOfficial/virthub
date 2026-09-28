@@ -110,7 +110,7 @@ class Proxy:
                 open_timeout=15,
                 ping_interval=20,
             ) as agent:
-                log.info("Konsola %s maszyny %s otwarta", params.get("kind"), params.get("server_id"))
+                log.info("Konsola %s (%s) otwarta", params.get("kind"), params.get("server_id") or params.get("app_id"))
                 tasks = [
                     asyncio.create_task(pipe(client, agent)),
                     asyncio.create_task(pipe(agent, client)),

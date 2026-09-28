@@ -16,6 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, WebSocket, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
+from .app_console import bridge_app
 from .apps import AppError, AppManager, AppNotFound
 from .config import ConfigError, get_settings
 from .console import bridge as console_bridge
@@ -23,6 +24,7 @@ from .driver import DriverError, VmNotFound, build_driver
 from .isos import IsoError
 from .jobs import JobQueue
 from .reporter import CallbackReporter
+from .sftp import SftpService
 from .schemas import (
     GuestOs,
     CreateVmRequest,
@@ -122,6 +124,7 @@ apps = AppManager(settings)
 app_jobs = JobQueue(settings, {
     "app_install": lambda p: apps.install(AppSpec(**p["spec"]), reinstall=bool(p.get("reinstall"))),
 }, name="virthub-app-jobs")
+sftp = SftpService(settings, apps, settings.sftp_port, settings.sftp_listen)
 
 
 @asynccontextmanager
@@ -152,11 +155,18 @@ async def lifespan(app: FastAPI):
     jobs.start()
     app_jobs.start()
     reporter.start()
+    # SFTP tylko tam, gdzie są aplikacje — węzeł bez Dockera nie otwiera portu.
+    if settings.sftp_port and settings.apps_dir.is_dir():
+        try:
+            await sftp.start()
+        except Exception:
+            log.exception("Nie udało się uruchomić SFTP aplikacji")
     log.info(
         "Agent gotowy (driver=%s, bridge=%s, obrazy=%s)",
         settings.driver, settings.bridge, settings.image_dir,
     )
     yield
+    sftp.stop()
     reporter.stop()
     app_jobs.stop()
     jobs.stop()
@@ -571,6 +581,34 @@ async def app_power(uuid: str, req: AppPowerRequest) -> dict[str, Any]:
 async def app_command(uuid: str, req: AppCommandRequest) -> dict[str, Any]:
     await run_in_threadpool(apps.command, uuid, req.command)
     return {"sent": True}
+
+
+@app.websocket("/apps/{uuid}/console")
+async def app_console(websocket: WebSocket, uuid: str) -> None:
+    """Konsola aplikacji na żywo — wyjście strumieniem, polecenia i statystyki.
+
+    Podpis jak przy konsoli maszyny (GET, pusta treść); łączy się tylko
+    przekaźnik panelu z jednorazową sesją.
+    """
+    error = check_signature(
+        websocket.headers.get("x-vh-signature", ""),
+        websocket.headers.get("x-vh-timestamp", ""),
+        "GET",
+        websocket.url.path,
+        b"",
+    )
+    if error is not None:
+        log.warning("Odrzucono połączenie konsoli aplikacji: %s", error)
+        await websocket.close(code=1008)
+        return
+    if not apps.data_dir(uuid).is_dir() and uuid not in apps._installing:
+        await websocket.close(code=1008, reason="Aplikacja nie istnieje na tym węźle.")
+        return
+
+    requested = websocket.scope.get("subprotocols") or []
+    await websocket.accept(subprotocol="binary" if "binary" in requested else None)
+    log.info("Otwarto konsolę aplikacji %s", uuid)
+    await bridge_app(websocket, apps, uuid)
 
 
 @app.post("/apps/{uuid}/logs", dependencies=[Depends(require_control_plane)], tags=["apps"])

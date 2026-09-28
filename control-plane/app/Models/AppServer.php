@@ -112,6 +112,12 @@ class AppServer extends Model
         return $this->isReady() && ! $this->isSuspended() && $this->hypervisor !== null;
     }
 
+    /** Login SFTP: identyfikator użytkownika panelu i początek UUID aplikacji (jak w Wings). */
+    public function sftpUsername(User $user): string
+    {
+        return 'u'.$user->id.'.'.substr($this->uuid, 0, 8);
+    }
+
     /** Adres do połączenia: publiczny adres węzła i główny port. */
     public function address(): ?string
     {

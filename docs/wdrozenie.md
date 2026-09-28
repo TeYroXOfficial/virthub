@@ -555,7 +555,7 @@ tej wersji mają go od startu; w starszych trzeba go doinstalować
 Oprócz VPS-ów węzeł może uruchamiać **aplikacje**: serwery gier, boty Discord
 i inne usługi w kontenerach Dockera. Agent działa wtedy jak Wings: instaluje
 aplikację skryptem z szablonu, uruchamia ją z limitami, wystawia porty,
-przekazuje konsolę (logi i polecenia) i pliki.
+przekazuje konsolę na żywo (WebSocket), pliki i SFTP.
 
 Szablony to **eggi w formacie Pterodactyla** (PTDL_v1 i PTDL_v2), więc działają
 gotowe eggi społeczności (np. pelican-eggs, parkervcp/eggs) z tymi samymi
@@ -583,7 +583,7 @@ bot Discord Node.js i bot Discord Python.
    dysk, liczba portów).
 
 Klient zamawia aplikację w zakładce **Aplikacje** (uprawnienie „Zamawianie
-aplikacji”). Strona aplikacji ma konsolę z zasilaniem i statystykami, menedżer
+aplikacji”). Strona aplikacji ma konsolę na żywo z zasilaniem i statystykami, menedżer
 plików (edycja, wgrywanie do 50 MB, katalogi, rozpakowywanie zip/tar),
 zmienne i wersję środowiska (obraz Dockera) oraz reinstalację i usunięcie.
 Personel zmienia zasoby, zawiesza i odwiesza aplikacje.
@@ -607,6 +607,31 @@ Jak to działa na węźle:
   test: `docker run --rm --network virthub_apps alpine nslookup github.com`;
 - pliki — agent obsługuje je przez deskryptory z `O_NOFOLLOW`, więc
   dowiązania symboliczne i `..` nie wyprowadzą poza katalog aplikacji.
+
+**Konsola na żywo.** Wyjście aplikacji płynie przez WebSocket tym samym
+przekaźnikiem co konsola VPS (`virthub-console`): przeglądarka → nginx panelu
+→ przekaźnik → agent (`/apps/<uuid>/console`, podpis HMAC). Widać log
+instalacji w trakcie, start, restart i polecenia bez odświeżania, a stan, CPU,
+RAM i dysk odświeżają się co 2 s. Bez skonfigurowanego przekaźnika
+(`VIRTHUB_CONSOLE_SECRET`) konsola sama przechodzi na odpytywanie co 1,5 s.
+
+**SFTP.** Agent wystawia serwer SFTP (domyślnie port **2022/tcp** na wszystkich
+adresach węzła) — otwórz go w firewallu węzła i dostawcy. Klient loguje się:
+
+- host: publiczny adres węzła, port 2022,
+- użytkownik: `u<id użytkownika>.<8 znaków UUID aplikacji>` (widać w
+  Ustawieniach aplikacji, np. `u2.72c35e5c`),
+- hasło: hasło do panelu.
+
+Agent nie zna haseł — pyta panel (`POST /api/internal/agent/sftp-auth`, podpis
+sekretem węzła), czy ten użytkownik może zarządzać aplikacją; nieudane próby są
+limitowane. Po zalogowaniu `/` to katalog aplikacji: te same zabezpieczenia co w
+menedżerze plików (`O_NOFOLLOW`, bez `..`, bez tworzenia dowiązań), zapis
+blokuje przekroczony limit dysku, powłoki i przekierowań portów nie ma. Klucz
+hosta (`/var/lib/virthub/sftp_host_ed25519`) powstaje przy pierwszym starcie.
+Port zmienisz w `VH_SFTP_PORT` w `/etc/virthub-agent/agent.env` (`0` wyłącza
+SFTP, `VH_SFTP_LISTEN` to adres nasłuchu) — wtedy ustaw ten sam port w `.env`
+panelu: `VIRTHUB_APPS_SFTP_PORT`.
 
 Uwaga: Docker ładuje moduł `br_netfilter` i ustawia politykę `FORWARD` na
 `DROP`. Agent przy starcie (`scripts/nat-forward.sh`) przepuszcza ruch mostków

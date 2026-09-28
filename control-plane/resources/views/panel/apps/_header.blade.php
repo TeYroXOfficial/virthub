@@ -54,3 +54,11 @@
         <a href="{{ $url }}" @if ($tab === $key) aria-current="page" @endif>{{ $label }}</a>
     @endforeach
 </nav>
+
+@push('scripts')
+    <script>
+        document.querySelectorAll('[data-copy]').forEach((el) => el.addEventListener('click', () => {
+            if (navigator.clipboard) navigator.clipboard.writeText(el.dataset.copy);
+        }));
+    </script>
+@endpush
