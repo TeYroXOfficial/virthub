@@ -63,7 +63,7 @@
                             </form>
                             @if ($egg->servers_count === 0)
                                 <form method="POST" action="{{ route('panel.admin.apps.eggs.destroy', $egg) }}" style="display:inline"
-                                      onsubmit="return confirm(@js(__('Usunąć szablon :name?', ['name' => $egg->name])))">
+                                      data-confirm="{{ __('Usunąć szablon :name?', ['name' => $egg->name]) }}">
                                     @csrf @method('DELETE')
                                     <button class="btn btn-sm btn-danger" type="submit">{{ __('Usuń') }}</button>
                                 </form>

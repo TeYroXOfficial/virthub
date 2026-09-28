@@ -195,7 +195,7 @@
                                         <button class="btn btn-sm" type="submit">{{ $rule->enabled ? __('Wyłącz') : __('Włącz') }}</button>
                                     </form>
                                     <form method="POST" action="{{ route('panel.servers.firewall.destroy', [$server, $rule]) }}" style="margin:0"
-                                          onsubmit="return confirm(@js(__('Usunąć regułę?')))">
+                                          data-confirm="{{ __('Usunąć regułę?') }}">
                                         @csrf @method('DELETE')
                                         <button class="btn btn-sm btn-danger" type="submit">{{ __('Usuń') }}</button>
                                     </form>

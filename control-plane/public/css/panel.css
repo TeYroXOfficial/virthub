@@ -458,6 +458,10 @@ details.form-block[open] > summary { margin-bottom: 16px; }
 .modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
 .modal-more summary { cursor: pointer; font-size: 13.5px; color: var(--text-2); }
 .modal-more textarea { margin-top: 8px; }
+/* Potwierdzenia i pytania (vh-dialog.js) zamiast confirm()/prompt() */
+.vh-dialog { width: min(460px, calc(100vw - 32px)); }
+.vh-dialog .modal-head p { font-size: 14px; line-height: 1.5; color: var(--text-2); white-space: pre-line; }
+.vh-dialog .vh-dialog-input { width: 100%; }
 
 .os-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); padding: 2px; }
 .modal .os-grid { max-height: 46vh; overflow: auto; }

@@ -119,7 +119,7 @@
             <details class="form-block card" style="margin-top:16px">
                 <summary>{{ __('Operacja utknęła? Opcje administratora') }}</summary>
                 <form method="POST" action="{{ route('panel.servers.purge', $server) }}" style="margin-top:12px"
-                      onsubmit="return confirm(@js(__('Usunąć wpis TYLKO z panelu? Panel nie skontaktuje się z węzłem.')))">
+                      data-confirm="{{ __('Usunąć wpis TYLKO z panelu? Panel nie skontaktuje się z węzłem.') }}">
                     @csrf
                     <p class="muted" style="margin-top:0">
                         {{ __('Usuwa maszynę z panelu bez kontaktu z węzłem i zwalnia jej adresy IP. Jeśli maszyna istnieje na węźle, trzeba ją tam skasować ręcznie.') }}
@@ -390,7 +390,7 @@
 
             try {
                 if (button.dataset.action === 'force-off'
-                    && !confirm(@js(__('Odciąć zasilanie? Niezapisane dane w maszynie przepadną.')))) {
+                    && !(await vhConfirm(@js(__('Odciąć zasilanie? Niezapisane dane w maszynie przepadną.')), { danger: true, okLabel: @js(__('Odetnij zasilanie')) }))) {
                     button.disabled = false;
                     button.innerHTML = original;
                     return;
@@ -410,7 +410,7 @@
                 const payload = await response.json();
 
                 if (!response.ok) {
-                    alert(payload.message ?? __('Nie udało się wykonać operacji.'));
+                    await vhAlert(payload.message ?? @js(__('Nie udało się wykonać operacji.')));
                     button.disabled = false;
                     button.innerHTML = original;
                     return;
@@ -418,7 +418,7 @@
 
                 location.reload();
             } catch (error) {
-                alert(@js(__('Brak połączenia z panelem. Sprawdź sieć i spróbuj ponownie.')));
+                await vhAlert(@js(__('Brak połączenia z panelem. Sprawdź sieć i spróbuj ponownie.')));
                 button.disabled = false;
                 button.innerHTML = original;
             }
@@ -426,6 +426,7 @@
     </script>
     @push('scripts')
         <script src="{{ asset('js/os-picker.js') }}?v={{ @filemtime(public_path('js/os-picker.js')) }}"></script>
+        <script src="{{ asset('js/progress-panel.js') }}?v={{ @filemtime(public_path('js/progress-panel.js')) }}"></script>
         <script src="{{ asset('js/server-page.js') }}?v={{ @filemtime(public_path('js/server-page.js')) }}"></script>
     @endpush
 @endsection

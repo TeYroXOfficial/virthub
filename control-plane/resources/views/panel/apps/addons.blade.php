@@ -55,7 +55,7 @@
                                 <td style="text-align:right">
                                     @can('operate', $app)
                                         <form method="POST" action="{{ route('panel.apps.addons.destroy', [$app, $addon]) }}"
-                                              onsubmit="return confirm(@js(__('Usunąć :name z serwera?', ['name' => $addon->name])))">
+                                              data-confirm="{{ __('Usunąć :name z serwera?', ['name' => $addon->name]) }}">
                                             @csrf @method('DELETE')
                                             <button class="btn btn-sm btn-danger" type="submit" title="{{ __('Usuń') }}"><x-icon name="trash" :size="14"/></button>
                                         </form>

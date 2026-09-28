@@ -3,17 +3,20 @@
 namespace App\Http\Controllers\Web;
 
 use App\Domain\Agent\AgentException;
+use App\Domain\Apps\AppJobApplier;
 use App\Domain\Apps\AppPayload;
 use App\Domain\Apps\AppProvisioner;
 use App\Domain\Apps\VariableRules;
 use App\Domain\Console\ConsoleSessions;
 use App\Http\Controllers\Controller;
 use App\Models\AppEgg;
+use App\Models\AppJob;
 use App\Models\AppPlan;
 use App\Models\AppServer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -132,7 +135,55 @@ class AppController extends Controller
             }
         }
 
+        $data['job'] = $this->jobProgress($app);
+        // Wynik mógł właśnie zostać zastosowany — stan panelu po nim.
+        $data['status'] = $app->status;
+        $data['status_label'] = $app->statusLabel();
+
         return response()->json($data);
+    }
+
+    /**
+     * Etap i procent instalacji (aplikacji, modpacka, loadera) z węzła — dla
+     * paska postępu. Gdy węzeł skończył, a callback jeszcze nie dotarł,
+     * stosujemy wynik od razu (jak przy maszynach).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function jobProgress(AppServer $app): ?array
+    {
+        $job = $app->jobs()->whereIn('action', ['install', 'reinstall', 'modpack', 'loader'])->first();
+        if ($job === null) {
+            return null;
+        }
+
+        $agent = null;
+        if (! $job->isFinished() && $job->agent_job_id && $app->hypervisor) {
+            $agent = Cache::remember("agent-job:{$job->agent_job_id}", now()->addSeconds(2), function () use ($app, $job) {
+                try {
+                    return $this->apps->client($app)->job($job->agent_job_id);
+                } catch (AgentException) {
+                    return null;
+                }
+            });
+            if (in_array($agent['status'] ?? null, ['done', 'failed'], true)) {
+                app(AppJobApplier::class)->apply($job, $agent);
+                $job->refresh();
+                $app->refresh();
+            }
+        }
+
+        return [
+            'id' => $job->id,
+            'action' => $job->action,
+            'status' => $job->status,
+            'finished' => $job->isFinished(),
+            'error' => $job->status === AppJob::STATUS_FAILED ? $job->error : null,
+            'elapsed' => (int) $job->created_at->diffInSeconds(now(), true),
+            'stage' => $job->isFinished() ? null : ($agent['stage'] ?? ($job->agent_job_id ? 'queued' : 'pending')),
+            'stage_progress' => $job->isFinished() ? 100 : ($agent['progress'] ?? null),
+            'stage_detail' => $job->isFinished() ? null : ($agent['detail'] ?? null),
+        ];
     }
 
     public function logs(Request $request, AppServer $app): JsonResponse

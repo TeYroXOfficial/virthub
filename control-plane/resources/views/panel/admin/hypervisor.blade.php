@@ -73,7 +73,7 @@
             <div class="card empty">{{ __('Na tym węźle nie ma maszyn.') }}</div>
         @else
             <form method="POST" action="{{ route('panel.admin.servers.bulk') }}" id="servers-bulk"
-                  onsubmit="return event.submitter?.dataset.confirm ? confirm(event.submitter.dataset.confirm) : confirm(@js(__('Wykonać operację na zaznaczonych maszynach?')))">
+                  data-confirm="{{ __('Wykonać operację na zaznaczonych maszynach?') }}">
                 @csrf
                 <div class="bulk-bar">
                     <span>{{ __('Zaznaczone:') }}</span>
@@ -231,14 +231,14 @@
             <h3 class="card-title" style="color:var(--critical)">{{ __('Usuwanie węzła') }}</h3>
             @if ($node->servers_count === 0)
                 <form method="POST" action="{{ route('panel.admin.hypervisors.destroy', $node) }}"
-                      onsubmit="return confirm(@js(__('Usunąć węzeł :name?', ['name' => $node->name])))" class="setting-row">
+                      data-confirm="{{ __('Usunąć węzeł :name?', ['name' => $node->name]) }}" class="setting-row">
                     @csrf @method('DELETE')
                     <p class="muted setting-text">{{ __('Węzeł nie ma maszyn — można go usunąć. Agenta na serwerze wyłącz ręcznie.') }}</p>
                     <button class="btn btn-danger-solid" type="submit">{{ __('Usuń węzeł') }}</button>
                 </form>
             @elseif ($isAdmin)
                 <form method="POST" action="{{ route('panel.admin.hypervisors.destroy', $node) }}"
-                      onsubmit="return confirm(@js(__('Usunąć węzeł i WSZYSTKIE jego maszyny z panelu?')))">
+                      data-confirm="{{ __('Usunąć węzeł i WSZYSTKIE jego maszyny z panelu?') }}">
                     @csrf @method('DELETE')
                     <input type="hidden" name="purge_servers" value="1">
                     <p class="muted" style="margin-top:0">

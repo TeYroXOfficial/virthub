@@ -38,8 +38,7 @@
     </div>
 
     @php $isAdmin = auth()->user()->isAdmin(); @endphp
-    <form method="POST" action="{{ route('panel.admin.servers.bulk') }}" id="servers-bulk"
-          onsubmit="return window.vhConfirmBulk(event)">
+    <form method="POST" action="{{ route('panel.admin.servers.bulk') }}" id="servers-bulk">
         @csrf
         <div class="bulk-bar" data-bulk-bar hidden>
             <span><strong data-bulk-count>0</strong> {{ __('zaznaczonych') }}</span>
@@ -153,14 +152,14 @@
             });
             boxes.forEach((b) => b.addEventListener('change', sync));
 
-            window.vhConfirmBulk = (event) => {
-                const button = event.submitter;
-                if (button?.dataset.confirm) return confirm(button.dataset.confirm);
+            // Pytanie zależy od przycisku i liczby zaznaczonych — ustawiamy je przed
+            // wysłaniem, a modal (vh-dialog.js) pyta o nie zamiast confirm().
+            form.querySelectorAll('button[type=submit]').forEach((button) => button.addEventListener('click', () => {
                 const n = boxes.filter((b) => b.checked).length;
-                return confirm(button?.value === 'purge'
+                form.dataset.confirm = button.dataset.confirm || (button.value === 'purge'
                     ? @js(__('Usunąć :count maszyn TYLKO z panelu, bez kontaktu z węzłami?')).replace(':count', n)
                     : @js(__('Usunąć :count maszyn razem z dyskami?')).replace(':count', n));
-            };
+            }));
         })();
     </script>
 

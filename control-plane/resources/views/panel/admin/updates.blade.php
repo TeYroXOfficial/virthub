@@ -72,7 +72,7 @@
 
         @if ($panelEnabled)
             <form method="POST" action="{{ route('panel.admin.updates.panel') }}"
-                  onsubmit="return confirm(@js(__('Zaktualizować panel? Na kilka minut panel może przestać odpowiadać.')))">
+                  data-confirm="{{ __('Zaktualizować panel? Na kilka minut panel może przestać odpowiadać.') }}">
                 @csrf
                 <button class="btn btn-primary" type="submit"
                         @disabled(in_array($panelStatus['state'] ?? '', ['queued', 'running'], true))>
@@ -97,7 +97,7 @@
         <h2>{{ __('Węzły') }}</h2>
         @if ($nodes->isNotEmpty())
             <form method="POST" action="{{ route('panel.admin.updates.nodes') }}"
-                  onsubmit="return confirm(@js(__('Zaktualizować wszystkie węzły z nieaktualnym agentem? Działające maszyny nie są restartowane.')))">
+                  data-confirm="{{ __('Zaktualizować wszystkie węzły z nieaktualnym agentem? Działające maszyny nie są restartowane.') }}">
                 @csrf
                 <button class="btn btn-primary" type="submit"><x-icon name="refresh" :size="16"/> {{ __('Aktualizuj wszystkie nieaktualne') }}</button>
             </form>

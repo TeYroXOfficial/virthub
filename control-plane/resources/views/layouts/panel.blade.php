@@ -109,6 +109,7 @@
         </div>
     </main>
 @endauth
+<script src="{{ asset('js/vh-dialog.js') }}?v={{ @filemtime(public_path('js/vh-dialog.js')) }}"></script>
 @stack('scripts')
 </body>
 </html>

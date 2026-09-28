@@ -115,7 +115,7 @@
                 document.getElementById('btn-paste').addEventListener('click', async () => {
                     let text = '';
                     try { text = await navigator.clipboard.readText(); } catch (e) {}
-                    if (!text) text = prompt(@js(__('Tekst do wpisania w maszynie:'))) || '';
+                    if (!text) text = (await vhPrompt(@js(__('Tekst do wpisania w maszynie:')), '', { title: @js(__('Wklej tekst')), okLabel: @js(__('Wpisz')) })) || '';
                     for (const ch of text) {
                         const code = ch.codePointAt(0);
                         const keysym = ch === '\n' ? 0xff0d : (code < 0x100 ? code : 0x01000000 + code);

@@ -331,6 +331,58 @@ class AppContentTest extends TestCase
         $this->assertCount($count, Http::recorded());
     }
 
+    // --- postęp i potwierdzenia ------------------------------------------------------------------
+
+    public function test_postep_instalacji_modpacka_z_etapem_wezla(): void
+    {
+        $this->fakeApis([
+            'node.test:8443/jobs/agent-content-1' => Http::response(['job_id' => 'agent-content-1', 'status' => 'running',
+                'stage' => 'download', 'progress' => 42, 'detail' => '120/240 · 310 MB']),
+        ]);
+        $this->actingAs($this->customer)->post(route('panel.apps.modpacks.install', $this->paper), [
+            'source' => 'modrinth', 'project' => 'PACK', 'version' => 'pack-v1', 'eula' => '1',
+        ]);
+        $this->runQueued();
+
+        $this->actingAs($this->customer)->get(route('panel.apps.show', $this->paper))
+            ->assertOk()
+            ->assertSee('id="progress"', false)
+            ->assertSee('Pobieranie modów i konfiguracji')
+            ->assertSee('progress-panel.js', false);
+
+        $this->actingAs($this->customer)->getJson(route('panel.apps.status', $this->paper))
+            ->assertOk()
+            ->assertJsonPath('status', 'installing')
+            ->assertJsonPath('job.action', 'modpack')
+            ->assertJsonPath('job.stage', 'download')
+            ->assertJsonPath('job.stage_progress', 42)
+            ->assertJsonPath('job.stage_detail', '120/240 · 310 MB');
+    }
+
+    public function test_zakonczone_zadanie_bez_callbacku_konczy_postep(): void
+    {
+        $this->fakeApis([
+            'node.test:8443/jobs/agent-content-1' => Http::response(['job_id' => 'agent-content-1', 'status' => 'done', 'result' => []]),
+        ]);
+        $this->actingAs($this->customer)->post(route('panel.apps.loader.install', $this->paper), ['loader' => 'fabric', 'mc' => '1.20.1', 'eula' => '1']);
+        $this->runQueued();
+
+        $this->actingAs($this->customer)->getJson(route('panel.apps.status', $this->paper))
+            ->assertOk()
+            ->assertJsonPath('status', 'ready')
+            ->assertJsonPath('job.finished', true);
+        $this->assertSame('fabric', $this->paper->fresh()->minecraft['platform']);
+    }
+
+    public function test_potwierdzenia_to_modale_panelu_a_nie_confirm(): void
+    {
+        $this->fakeApis();
+        $html = $this->actingAs($this->customer)->get(route('panel.apps.settings', $this->paper))->assertOk()->getContent();
+        $this->assertStringNotContainsString('confirm(', $html);
+        $this->assertStringContainsString('data-confirm=', $html);
+        $this->assertStringContainsString('vh-dialog.js', $html);
+    }
+
     // --- modpacki i loadery ----------------------------------------------------------------------
 
     public function test_modpack_z_modrinth_przelacza_serwer_na_mody(): void

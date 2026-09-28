@@ -30,7 +30,7 @@
                 <p class="muted" style="margin-top:16px">{{ __('Brak wersji do zainstalowania.') }}</p>
             @else
                 <form class="content-form" method="POST" action="{{ route('panel.apps.modpacks.install', $app) }}"
-                      onsubmit="return confirm(@js(__('Zainstalować modpack? Mody, konfiguracja i biblioteki obecnego serwera zostaną zastąpione, aplikacja się zatrzyma.')))">
+                      data-confirm="{{ __('Zainstalować modpack? Mody, konfiguracja i biblioteki obecnego serwera zostaną zastąpione, aplikacja się zatrzyma.') }}">
                     @csrf
                     <input type="hidden" name="source" value="{{ $source }}">
                     <input type="hidden" name="project" value="{{ $project['id'] }}">
