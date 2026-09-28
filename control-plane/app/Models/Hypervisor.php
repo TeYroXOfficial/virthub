@@ -33,6 +33,9 @@ class Hypervisor extends Model
         'ram_mb_total',
         'disk_gb_total',
         'accepts_new_servers',
+        'apps_enabled',
+        'app_port_start',
+        'app_port_end',
         'bridge',
         'max_servers',
         'notes',
@@ -51,6 +54,9 @@ class Hypervisor extends Model
             'last_seen_at' => 'datetime',
             'last_health' => 'array',
             'accepts_new_servers' => 'boolean',
+            'apps_enabled' => 'boolean',
+            'app_port_start' => 'integer',
+            'app_port_end' => 'integer',
             'virtualization' => \App\Enums\Virtualization::class,
             'enrollment_expires_at' => 'datetime',
             'enrolled_at' => 'datetime',
@@ -180,6 +186,20 @@ class Hypervisor extends Model
             ?: ($agentUsable ? $agentHost : null)
             ?: $reported
             ?: $this->hostname;
+    }
+
+    /** @return HasMany<AppServer, $this> */
+    public function appServers(): HasMany
+    {
+        return $this->hasMany(AppServer::class);
+    }
+
+    /** Czy węzeł przyjmuje aplikacje: włączone przez administratora, Docker działa, jest pula portów. */
+    public function acceptsApps(): bool
+    {
+        return $this->apps_enabled
+            && $this->app_port_start && $this->app_port_end
+            && ($this->last_health['apps']['available'] ?? false);
     }
 
     /** Procesor pokazywany klientom: ustawiony przez administratora albo wykryty przez agenta. */

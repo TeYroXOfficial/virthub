@@ -550,6 +550,63 @@ tej wersji mają go od startu; w starszych trzeba go doinstalować
 
 ---
 
+### Aplikacje: serwery gier i boty (jak Pterodactyl)
+
+Oprócz VPS-ów węzeł może uruchamiać **aplikacje**: serwery gier, boty Discord
+i inne usługi w kontenerach Dockera. Agent działa wtedy jak Wings: instaluje
+aplikację skryptem z szablonu, uruchamia ją z limitami, wystawia porty,
+przekazuje konsolę (logi i polecenia) i pliki.
+
+Szablony to **eggi w formacie Pterodactyla** (PTDL_v1 i PTDL_v2), więc działają
+gotowe eggi społeczności (np. pelican-eggs, parkervcp/eggs) z tymi samymi
+obrazami `ghcr.io/pterodactyl/yolks` / `ghcr.io/parkervcp/yolks` i skryptami
+instalacyjnymi. Panel ma wbudowane: Minecraft Paper, Minecraft Vanilla,
+bot Discord Node.js i bot Discord Python.
+
+**Włączenie na węźle:**
+
+1. Zainstaluj Dockera — przy instalacji albo aktualizacji węzła dodaj `VH_APPS=1`:
+
+   ```bash
+   curl -sSL https://raw.githubusercontent.com/TeYroXOfficial/virthub/main/infra/update-node.sh | sudo VH_APPS=1 bash
+   ```
+
+   Skrypt instaluje `docker.io`, dodaje użytkownika agenta do grupy `docker`
+   i tworzy `/var/lib/virthub/apps`. Po restarcie agent zgłasza Dockera
+   w heartbeacie (widać to w Ustawieniach węzła).
+2. W panelu: Hypervisory → węzeł → Ustawienia → „Uruchamiaj aplikacje na tym
+   węźle” i zakres portów (np. 25565–25665). Porty bloków NAT maszyn są
+   pomijane automatycznie. Otwórz ten zakres (TCP i UDP) także w firewallu
+   dostawcy.
+3. Administracja → Aplikacje → Szablony: „Wgraj wbudowane szablony” albo
+   zaimportuj egg z pliku JSON. → Plany: dodaj plany (RAM, procesor w % rdzenia,
+   dysk, liczba portów).
+
+Klient zamawia aplikację w zakładce **Aplikacje** (uprawnienie „Zamawianie
+aplikacji”). Strona aplikacji ma konsolę z zasilaniem i statystykami, menedżer
+plików (edycja, wgrywanie do 50 MB, katalogi, rozpakowywanie zip/tar),
+zmienne i wersję środowiska (obraz Dockera) oraz reinstalację i usunięcie.
+Personel zmienia zasoby, zawiesza i odwiesza aplikacje.
+
+Jak to działa na węźle:
+
+- instalacja — skrypt eggu w kontenerze instalatora (jako root), katalog
+  aplikacji pod `/mnt/server`; na koniec pliki przechodzą na użytkownika agenta;
+- uruchomienie — kontener `vh-app-<uuid>` jako użytkownik agenta (jak Wings),
+  katalog pod `/home/container`, limity pamięci, procesora (`nano_cpus`)
+  i procesów, bez zbędnych uprawnień (`cap_drop`, `no-new-privileges`),
+  w sieci `virthub_apps` bez komunikacji między kontenerami;
+- porty — publikowane na wszystkich adresach węzła (TCP i UDP); pierwszy port
+  to `SERVER_PORT`, a pliki konfiguracyjne z eggu (np. `server-port`
+  w `server.properties`) agent ustawia przed każdym startem;
+- dysk — przekroczony limit blokuje start (jak w Wings);
+- pliki — agent obsługuje je przez deskryptory z `O_NOFOLLOW`, więc
+  dowiązania symboliczne i `..` nie wyprowadzą poza katalog aplikacji.
+
+Uwaga: Docker ładuje moduł `br_netfilter` i ustawia politykę `FORWARD` na
+`DROP`. Agent przy starcie (`scripts/nat-forward.sh`) przepuszcza ruch mostków
+maszyn, więc VPS-y na tym samym węźle nie tracą sieci.
+
 ## Połączenie obu części
 
 ### 1. Zarejestruj hypervisor w panelu

@@ -83,6 +83,9 @@ class Settings:
     guard_host: bool = True
     # Limit procesów w kontenerze — ochrona węzła przed fork bombą.
     ct_max_processes: int = 4096
+    # Aplikacje (serwery gier, boty) w kontenerach Dockera — jak Wings.
+    apps_dir: Path = Path("/var/lib/virthub/apps")
+    apps_network: str = "virthub_apps"
 
     @property
     def is_mock(self) -> bool:
@@ -132,6 +135,8 @@ def get_settings() -> Settings:
         nat_bridge=_env("VH_NAT_BRIDGE", "vhnat0"),
         guard_host=_env("VH_GUARD_HOST", "1") not in ("0", "false", "no"),
         ct_max_processes=int(_env("VH_CT_MAX_PROCESSES", "4096")),
+        apps_dir=_env_path("VH_APPS_DIR", "/var/lib/virthub/apps"),
+        apps_network=_env("VH_APPS_NETWORK", "virthub_apps"),
         nft_table=_env("VH_NFT_TABLE", "virthub"),
         vnc_listen=_env("VH_VNC_LISTEN", "127.0.0.1"),
         control_plane_url=_env("VH_CONTROL_PLANE_URL", "").rstrip("/"),

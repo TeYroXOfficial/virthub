@@ -563,6 +563,11 @@ fi
 echo nf_conntrack_bridge > /etc/modules-load.d/virthub.conf
 modprobe nf_conntrack_bridge 2>/dev/null || true
 
+# Aplikacje (serwery gier, boty): Docker tylko na życzenie — VH_APPS=1.
+if [ -f "$AGENT_DIR/scripts/setup-apps.sh" ]; then
+    AGENT_USER="$AGENT_USER" bash "$AGENT_DIR/scripts/setup-apps.sh" || warn "Nie udało się zainstalować Dockera dla aplikacji."
+fi
+
 # Aktualizacje zlecane z panelu (Administracja → Aktualizacje).
 if [ -f "$AGENT_DIR/scripts/install-updater.sh" ]; then
     bash "$AGENT_DIR/scripts/install-updater.sh"

@@ -16,6 +16,7 @@ final class Permissions
     /** Co użytkownik może robić ze swoimi maszynami. */
     public const SERVER = [
         'servers.order' => ['Zamawianie nowych maszyn', 'Tworzenie maszyn z dostępnych pakietów, w ramach limitu.'],
+        'apps.order' => ['Zamawianie aplikacji', 'Serwery gier, boty i inne aplikacje z dostępnych planów, w ramach limitu.'],
         'servers.power' => ['Zasilanie', 'Uruchamianie, restart, zatrzymanie i odcięcie zasilania.'],
         'servers.console' => ['Konsola', 'Ekran maszyny (noVNC) albo terminal kontenera w przeglądarce.'],
         'servers.firewall' => ['Zapora', 'Zmiana reguł i polityki zapory własnych maszyn.'],
@@ -36,6 +37,7 @@ final class Permissions
         'admin.packages' => ['Pakiety', 'Oferta zasobów.'],
         'admin.templates' => ['Szablony', 'Systemy operacyjne do instalacji.'],
         'admin.updates' => ['Aktualizacje', 'Aktualizacja panelu i agentów na węzłach.'],
+        'admin.apps' => ['Aplikacje', 'Szablony aplikacji (eggi), plany i aplikacje wszystkich klientów.'],
     ];
 
     /** @return list<string> */
@@ -56,7 +58,7 @@ final class Permissions
         return match ($role) {
             User::ROLE_ADMIN => self::all(),
             // Wsparcie obsługuje maszyny klientów, ale nie zmienia floty ani oferty.
-            User::ROLE_SUPPORT => [...array_keys(self::SERVER), 'admin.servers', 'admin.users'],
+            User::ROLE_SUPPORT => [...array_keys(self::SERVER), 'admin.servers', 'admin.users', 'admin.apps'],
             default => array_keys(self::SERVER),
         };
     }

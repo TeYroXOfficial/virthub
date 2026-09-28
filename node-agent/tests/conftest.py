@@ -27,6 +27,8 @@ os.environ.update(
     VH_SEED_DIR=str(Path(_tmp) / "seeds"),
     VH_ISO_DIR=str(Path(_tmp) / "isos"),
     VH_STATE_DB=str(Path(_tmp) / "state.sqlite3"),
+    VH_APPS_DIR=str(Path(_tmp) / "apps"),
+    VH_APPS_NETWORK="virthub_apps_test",
     VH_CONTROL_PLANE_URL="",
     VH_CALLBACK_SECRET="",
 )

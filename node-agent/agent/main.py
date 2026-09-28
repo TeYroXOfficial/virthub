@@ -16,6 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, WebSocket, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
+from .apps import AppError, AppManager, AppNotFound
 from .config import ConfigError, get_settings
 from .console import bridge as console_bridge
 from .driver import DriverError, VmNotFound, build_driver
@@ -39,6 +40,14 @@ from .schemas import (
     CpuLimitRequest,
     SnapshotRequest,
     VmStats,
+    AppCommandRequest,
+    AppDeleteRequest,
+    AppLogsRequest,
+    AppPathRequest,
+    AppPowerRequest,
+    AppRenameRequest,
+    AppSpec,
+    AppWriteRequest,
 )
 from .security import check_signature, require_control_plane
 from .updates import Updates, UpdaterMissing
@@ -107,6 +116,13 @@ def _download_iso(req: IsoDownloadRequest) -> dict[str, Any]:
 jobs = JobQueue(settings, _handlers())
 reporter = CallbackReporter(settings, jobs)
 
+# Aplikacje mają własną kolejkę: instalacja serwera gry potrafi trwać kilka
+# minut i nie może blokować operacji na maszynach.
+apps = AppManager(settings)
+app_jobs = JobQueue(settings, {
+    "app_install": lambda p: apps.install(AppSpec(**p["spec"]), reinstall=bool(p.get("reinstall"))),
+}, name="virthub-app-jobs")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -134,6 +150,7 @@ async def lifespan(app: FastAPI):
         log.exception("Nie udało się odtworzyć konfiguracji NAT")
 
     jobs.start()
+    app_jobs.start()
     reporter.start()
     log.info(
         "Agent gotowy (driver=%s, bridge=%s, obrazy=%s)",
@@ -141,6 +158,7 @@ async def lifespan(app: FastAPI):
     )
     yield
     reporter.stop()
+    app_jobs.stop()
     jobs.stop()
 
 
@@ -157,6 +175,16 @@ app = FastAPI(
 @app.exception_handler(VmNotFound)
 async def _vm_not_found(_, exc: VmNotFound):
     return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(AppNotFound)
+async def _app_not_found(_, exc: AppNotFound):
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(AppError)
+async def _app_error(_, exc: AppError):
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
 @app.exception_handler(DriverError)
@@ -185,7 +213,9 @@ async def ping() -> dict[str, str]:
     tags=["system"],
 )
 async def health() -> HostHealth:
+    apps_state = await run_in_threadpool(apps.health)
     return driver.health().model_copy(update={
+        "apps": apps_state,
         "build": updates.build(),
         "remote_update": updates.enabled(),
         "firewall_stateful": driver.network.stateful(),
@@ -479,3 +509,115 @@ async def job_state(job_id: str) -> JobState:
 )
 async def job_list(limit: int = 50) -> list[JobState]:
     return jobs.recent(min(limit, 200))
+
+
+# --- aplikacje (serwery gier, boty) ------------------------------------------------
+
+@app.get("/apps", dependencies=[Depends(require_control_plane)], tags=["apps"])
+async def apps_health() -> dict[str, Any]:
+    return await run_in_threadpool(apps.health)
+
+
+@app.post(
+    "/apps",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["apps"],
+)
+async def app_install(spec: AppSpec) -> JobAccepted:
+    """Instalacja (skrypt eggu + kontener) — przez kolejkę aplikacji."""
+    job_id = app_jobs.enqueue("app_install", {"spec": spec.model_dump()}, uuid=spec.uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.post(
+    "/apps/{uuid}/reinstall",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["apps"],
+)
+async def app_reinstall(uuid: str, spec: AppSpec) -> JobAccepted:
+    if spec.uuid != uuid:
+        raise HTTPException(status_code=422, detail="UUID w ścieżce i w specyfikacji się różnią.")
+    job_id = app_jobs.enqueue("app_install", {"spec": spec.model_dump(), "reinstall": True}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.put("/apps/{uuid}", dependencies=[Depends(require_control_plane)], tags=["apps"])
+async def app_update(uuid: str, spec: AppSpec) -> dict[str, Any]:
+    if spec.uuid != uuid:
+        raise HTTPException(status_code=422, detail="UUID w ścieżce i w specyfikacji się różnią.")
+    return await run_in_threadpool(apps.update, spec)
+
+
+@app.delete("/apps/{uuid}", dependencies=[Depends(require_control_plane)], tags=["apps"])
+async def app_delete(uuid: str) -> dict[str, Any]:
+    return await run_in_threadpool(apps.delete, uuid)
+
+
+@app.get("/apps/{uuid}/status", dependencies=[Depends(require_control_plane)], tags=["apps"])
+async def app_status(uuid: str) -> dict[str, Any]:
+    return await run_in_threadpool(apps.status, uuid)
+
+
+@app.post("/apps/{uuid}/power", dependencies=[Depends(require_control_plane)], tags=["apps"])
+async def app_power(uuid: str, req: AppPowerRequest) -> dict[str, Any]:
+    return await run_in_threadpool(apps.power, uuid, req.action)
+
+
+@app.post("/apps/{uuid}/command", dependencies=[Depends(require_control_plane)], tags=["apps"])
+async def app_command(uuid: str, req: AppCommandRequest) -> dict[str, Any]:
+    await run_in_threadpool(apps.command, uuid, req.command)
+    return {"sent": True}
+
+
+@app.post("/apps/{uuid}/logs", dependencies=[Depends(require_control_plane)], tags=["apps"])
+async def app_logs(uuid: str, req: AppLogsRequest) -> dict[str, Any]:
+    return await run_in_threadpool(apps.logs, uuid, req.since, req.tail)
+
+
+# Ścieżki plików idą w ciele żądania, a nie w zapytaniu — ciało jest objęte podpisem.
+
+@app.post("/apps/{uuid}/files/list", dependencies=[Depends(require_control_plane)], tags=["apps"])
+async def app_files_list(uuid: str, req: AppPathRequest) -> dict[str, Any]:
+    return {"path": req.path, "entries": await run_in_threadpool(apps.files(uuid).list, req.path)}
+
+
+@app.post("/apps/{uuid}/files/read", dependencies=[Depends(require_control_plane)], tags=["apps"])
+async def app_files_read(uuid: str, req: AppPathRequest) -> dict[str, Any]:
+    import base64
+
+    data = await run_in_threadpool(apps.read_file, uuid, req.path)
+    return {"path": req.path, "size": len(data), "content_base64": base64.b64encode(data).decode()}
+
+
+@app.post("/apps/{uuid}/files/write", dependencies=[Depends(require_control_plane)], tags=["apps"])
+async def app_files_write(uuid: str, req: AppWriteRequest) -> dict[str, Any]:
+    return await run_in_threadpool(apps.write_file, uuid, req.path, req.content_base64)
+
+
+@app.post("/apps/{uuid}/files/mkdir", dependencies=[Depends(require_control_plane)], tags=["apps"])
+async def app_files_mkdir(uuid: str, req: AppPathRequest) -> dict[str, Any]:
+    await run_in_threadpool(apps.files(uuid).mkdir, req.path)
+    return {"path": req.path}
+
+
+@app.post("/apps/{uuid}/files/delete", dependencies=[Depends(require_control_plane)], tags=["apps"])
+async def app_files_delete(uuid: str, req: AppDeleteRequest) -> dict[str, Any]:
+    files = apps.files(uuid)
+    for path in req.paths:
+        await run_in_threadpool(files.delete, path)
+    return {"deleted": len(req.paths)}
+
+
+@app.post("/apps/{uuid}/files/rename", dependencies=[Depends(require_control_plane)], tags=["apps"])
+async def app_files_rename(uuid: str, req: AppRenameRequest) -> dict[str, Any]:
+    await run_in_threadpool(apps.files(uuid).rename, req.source, req.target)
+    return {"source": req.source, "target": req.target}
+
+
+@app.post("/apps/{uuid}/files/decompress", dependencies=[Depends(require_control_plane)], tags=["apps"])
+async def app_files_decompress(uuid: str, req: AppPathRequest) -> dict[str, Any]:
+    return await run_in_threadpool(apps.decompress, uuid, req.path)

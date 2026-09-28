@@ -19,6 +19,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Treść pliku z edytora aplikacji zapisujemy co do znaku — bez
+        // obcinania spacji i końcowych nowych linii.
+        $middleware->trimStrings(except: ['content']);
+        $middleware->convertEmptyStringsToNull(except: [fn ($request) => $request->routeIs('panel.apps.files.save')]);
         $middleware->alias([
             'admin' => EnsureIsAdmin::class,
             'not-suspended' => \App\Http\Middleware\EnsureNotSuspended::class,

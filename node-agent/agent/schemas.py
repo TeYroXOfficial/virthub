@@ -331,6 +331,7 @@ class HostHealth(BaseModel):
     disk_gb_free: int
     running_vms: int
     cpu_model: str | None = Field(default=None, description="Model procesora hosta z /proc/cpuinfo")
+    apps: dict | None = Field(default=None, description="Docker dla aplikacji: dostępność, wersja, liczba aplikacji")
     host_networks: list[dict] | None = Field(
         default=None,
         description="Sieci węzła [{interface, network}] — panel nie pozwoli na pulę NAT nachodzącą na nie",
@@ -345,3 +346,115 @@ class HostHealth(BaseModel):
     )
     security: dict | None = Field(default=None, description="Stan izolacji kontenerów (węzły LXC)")
     remote_update: bool = Field(default=False, description="Czy węzeł przyjmuje aktualizacje zlecane z panelu")
+
+
+# --- aplikacje (serwery gier, boty) — odpowiednik Wings --------------------------
+
+APP_UUID = r"^[a-f0-9][a-f0-9-]{7,63}$"
+# Referencja obrazu Dockera: rejestr/ścieżka:tag albo @sha256:… — bez spacji i
+# znaków powłoki, bo trafia też do komunikatów.
+DOCKER_IMAGE = r"^[a-z0-9][A-Za-z0-9._/:@-]{0,254}$"
+ENV_NAME = r"^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+# Ścieżka względem katalogu aplikacji, bez bajtów sterujących. Składowe „.."
+# i dowiązania symboliczne odrzuca AppFiles przy przechodzeniu po katalogach.
+APP_PATH = r"^[^\x00-\x1f]{0,1024}$"
+
+
+class AppAllocation(BaseModel):
+    """Port węzła przydzielony aplikacji (TCP i UDP, ten sam numer w kontenerze)."""
+
+    port: int = Field(ge=1, le=65535)
+    ip: str = "0.0.0.0"
+
+    @field_validator("ip")
+    @classmethod
+    def _valid_ip(cls, value: str) -> str:
+        return str(ipaddress.ip_address(value))
+
+
+class AppConfigFile(BaseModel):
+    """Plik konfiguracyjny, w którym agent ustawia wartości przed startem
+    (np. server-port w server.properties) — jak `config.files` w eggach."""
+
+    file: str = Field(pattern=APP_PATH, min_length=1)
+    parser: Literal["properties", "file", "ini", "json", "yaml"] = "properties"
+    replace: dict[str, str] = Field(default_factory=dict)
+
+
+class AppInstall(BaseModel):
+    """Skrypt instalacyjny eggu — uruchamiany raz, w osobnym kontenerze, jako root."""
+
+    image: str = Field(pattern=DOCKER_IMAGE)
+    entrypoint: str = Field(default="bash", pattern=r"^[a-z0-9/_.-]{1,64}$")
+    script: str = Field(max_length=200_000)
+
+
+class AppSpec(BaseModel):
+    """Kompletny opis aplikacji — agent tworzy z niego kontener."""
+
+    uuid: str = Field(pattern=APP_UUID)
+    image: str = Field(pattern=DOCKER_IMAGE)
+    startup: str = Field(max_length=10_000)
+    stop: str = Field(default="^C", max_length=200)
+    environment: dict[str, str] = Field(default_factory=dict)
+    memory_mb: int = Field(ge=64, le=1_048_576)
+    swap_mb: int = Field(default=0, ge=0, le=1_048_576)
+    cpu_percent: int = Field(default=0, ge=0, le=12_800, description="0 = bez limitu")
+    disk_mb: int = Field(default=0, ge=0, description="0 = bez limitu")
+    pids_limit: int = Field(default=1024, ge=64, le=65_536)
+    allocations: list[AppAllocation] = Field(default_factory=list, max_length=100)
+    config_files: list[AppConfigFile] = Field(default_factory=list, max_length=50)
+    install: AppInstall | None = None
+
+    @field_validator("environment")
+    @classmethod
+    def _valid_env(cls, value: dict[str, str]) -> dict[str, str]:
+        import re
+
+        for key, val in value.items():
+            if not re.match(ENV_NAME, key):
+                raise ValueError(f"Nieprawidłowa nazwa zmiennej: {key}")
+            if len(val) > 10_000 or "\x00" in val:
+                raise ValueError(f"Wartość zmiennej {key} jest za długa albo zawiera bajt zerowy")
+        return value
+
+
+class AppPowerRequest(BaseModel):
+    action: Literal["start", "stop", "restart", "kill"]
+
+
+class AppCommandRequest(BaseModel):
+    command: str = Field(min_length=1, max_length=2000, pattern=r"^[^\x00\r\n]+$")
+
+
+class AppLogsRequest(BaseModel):
+    since: float | None = Field(default=None, description="Znacznik czasu ostatniej linii (unix)")
+    tail: int = Field(default=200, ge=1, le=2000)
+
+
+class AppPathRequest(BaseModel):
+    path: str = Field(default="", pattern=APP_PATH)
+
+
+class AppWriteRequest(BaseModel):
+    path: str = Field(pattern=APP_PATH, min_length=1)
+    content_base64: str = Field(max_length=70_000_000, description="Najwyżej ~50 MB po zdekodowaniu")
+
+
+class AppDeleteRequest(BaseModel):
+    paths: list[str] = Field(min_length=1, max_length=500)
+
+    @field_validator("paths")
+    @classmethod
+    def _valid_paths(cls, value: list[str]) -> list[str]:
+        import re
+
+        for path in value:
+            if not path.strip("/") or not re.match(APP_PATH, path):
+                raise ValueError(f"Nieprawidłowa ścieżka: {path!r}")
+        return value
+
+
+class AppRenameRequest(BaseModel):
+    source: str = Field(pattern=APP_PATH, min_length=1)
+    target: str = Field(pattern=APP_PATH, min_length=1)

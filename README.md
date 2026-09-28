@@ -7,6 +7,11 @@ rozliczeniowymi.
 Autorska implementacja o zakresie funkcjonalnym zbliżonym do VirtFusion. Nie
 zawiera kodu, nazwy ani identyfikacji wizualnej tamtego produktu.
 
+Oprócz VPS-ów (KVM i kontenery LXC) panel obsługuje **aplikacje** — serwery gier
+i boty Discord w kontenerach Dockera, zgodne z eggami Pterodactyla (konsola,
+pliki, zasilanie w przeglądarce). Opis w `docs/wdrozenie.md`, sekcja
+„Aplikacje: serwery gier i boty”.
+
 ---
 
 ## Architektura

@@ -181,12 +181,67 @@ class AgentClient
         return $response['job_id'];
     }
 
-    private function request(string $method, string $path, ?array $body = null): array
+    // --- aplikacje (serwery gier, boty) -----------------------------------------
+
+    public function appsHealth(): array
+    {
+        return $this->request('GET', '/apps');
+    }
+
+    /** Instalacja aplikacji — zwraca identyfikator zadania w kolejce agenta. */
+    public function appInstall(array $spec): string
+    {
+        return $this->jobId($this->request('POST', '/apps', $spec));
+    }
+
+    public function appReinstall(string $uuid, array $spec): string
+    {
+        return $this->jobId($this->request('POST', "/apps/{$uuid}/reinstall", $spec));
+    }
+
+    public function appUpdate(string $uuid, array $spec): array
+    {
+        return $this->request('PUT', "/apps/{$uuid}", $spec);
+    }
+
+    public function appDelete(string $uuid): array
+    {
+        return $this->request('DELETE', "/apps/{$uuid}", timeout: 120);
+    }
+
+    public function appStatus(string $uuid): array
+    {
+        return $this->request('GET', "/apps/{$uuid}/status");
+    }
+
+    /** Zatrzymanie czeka na aplikację do 30 s, zanim ją zabije. */
+    public function appPower(string $uuid, string $action): array
+    {
+        return $this->request('POST', "/apps/{$uuid}/power", ['action' => $action], timeout: 75);
+    }
+
+    public function appCommand(string $uuid, string $command): array
+    {
+        return $this->request('POST', "/apps/{$uuid}/command", ['command' => $command]);
+    }
+
+    public function appLogs(string $uuid, ?float $since = null, int $tail = 200): array
+    {
+        return $this->request('POST', "/apps/{$uuid}/logs", ['since' => $since, 'tail' => $tail]);
+    }
+
+    /** Operacje na plikach: list, read, write, mkdir, delete, rename, decompress. */
+    public function appFiles(string $uuid, string $operation, array $body): array
+    {
+        return $this->request('POST', "/apps/{$uuid}/files/{$operation}", $body, timeout: 120);
+    }
+
+    private function request(string $method, string $path, ?array $body = null, int $timeout = self::TIMEOUT): array
     {
         $payload = $body === null ? '' : json_encode($body, JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES);
         $timestamp = (string) time();
 
-        $request = Http::timeout(self::TIMEOUT)
+        $request = Http::timeout($timeout)
             ->connectTimeout(self::CONNECT_TIMEOUT)
             ->withOptions(['verify' => $this->tlsVerification()])
             ->withHeaders([

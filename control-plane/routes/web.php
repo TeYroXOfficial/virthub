@@ -58,6 +58,35 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/ports', [\App\Http\Controllers\Web\PortForwardController::class, 'store'])->name('servers.ports.store');
     Route::delete('/servers/{server}/ports/{forward}', [\App\Http\Controllers\Web\PortForwardController::class, 'destroy'])->name('servers.ports.destroy');
 
+    // --- aplikacje (serwery gier, boty) ---
+    Route::prefix('/apps')->name('apps.')->controller(\App\Http\Controllers\Web\AppController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/new', 'create')->name('create');
+        Route::post('/', 'store')->name('store');
+        Route::get('/{app}', 'show')->name('show');
+        Route::get('/{app}/startup', 'startup')->name('startup');
+        Route::put('/{app}/startup', 'updateStartup')->name('startup.update');
+        Route::get('/{app}/settings', 'settings')->name('settings');
+        Route::put('/{app}/name', 'rename')->name('rename');
+        Route::post('/{app}/reinstall', 'reinstall')->name('reinstall');
+        Route::delete('/{app}', 'destroy')->name('destroy');
+        Route::get('/{app}/status', 'status')->name('status');
+        Route::get('/{app}/logs', 'logs')->name('logs');
+        Route::post('/{app}/power', 'power')->name('power');
+        Route::post('/{app}/command', 'command')->name('command');
+    });
+    Route::prefix('/apps/{app}/files')->name('apps.files')->controller(\App\Http\Controllers\Web\AppFilesController::class)->group(function () {
+        Route::get('/', 'index');
+        Route::get('/edit', 'edit')->name('.edit');
+        Route::put('/edit', 'save')->name('.save');
+        Route::get('/download', 'download')->name('.download');
+        Route::post('/upload', 'upload')->name('.upload');
+        Route::post('/mkdir', 'mkdir')->name('.mkdir');
+        Route::post('/delete', 'delete')->name('.delete');
+        Route::post('/rename', 'rename')->name('.rename');
+        Route::post('/decompress', 'decompress')->name('.decompress');
+    });
+
     Route::prefix('/servers/{server}/firewall')->name('servers.firewall.')->group(function () {
         Route::post('/policy', [FirewallController::class, 'policy'])->name('policy');
         Route::post('/rules', [FirewallController::class, 'store'])->name('store');
@@ -129,6 +158,22 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/updates/panel', [UpdatesController::class, 'updatePanel'])->name('updates.panel');
         Route::post('/updates/nodes', [UpdatesController::class, 'updateAllNodes'])->name('updates.nodes');
         Route::post('/updates/nodes/{hypervisor}', [UpdatesController::class, 'updateNode'])->name('updates.node');
+    });
+
+    Route::middleware('admin:admin.apps')->prefix('/apps')->name('apps')->controller(\App\Http\Controllers\Web\AppAdminController::class)->group(function () {
+        Route::get('/', 'index');
+        Route::get('/eggs', 'eggs')->name('.eggs');
+        Route::post('/eggs', 'importEgg')->name('.eggs.import');
+        Route::post('/eggs/builtin', 'builtinEggs')->name('.eggs.builtin');
+        Route::post('/eggs/{egg}/toggle', 'toggleEgg')->name('.eggs.toggle');
+        Route::delete('/eggs/{egg}', 'deleteEgg')->name('.eggs.destroy');
+        Route::get('/plans', 'plans')->name('.plans');
+        Route::post('/plans', 'storePlan')->name('.plans.store');
+        Route::post('/plans/{plan}/toggle', 'togglePlan')->name('.plans.toggle');
+        Route::delete('/plans/{plan}', 'deletePlan')->name('.plans.destroy');
+        Route::post('/{app}/suspend', 'suspend')->name('.suspend');
+        Route::put('/{app}/resources', 'resources')->name('.resources');
+        Route::post('/{app}/purge', 'purge')->name('.purge');
     });
 
     Route::middleware('admin:admin.servers')->group(function () {

@@ -1,0 +1,67 @@
+{
+    "_comment": "Egg wbudowany w VirtHub (format Pterodactyla PTDL_v2).",
+    "meta": {
+        "version": "PTDL_v2"
+    },
+    "exported_at": "2026-09-28T00:00:00+00:00",
+    "name": "Minecraft: Vanilla",
+    "author": "virthub@local",
+    "description": "Oficjalny serwer Minecraft od Mojang, bez modyfikacji.",
+    "virthub_category": "game",
+    "features": [
+        "eula",
+        "java_version"
+    ],
+    "docker_images": {
+        "Java 25": "ghcr.io/pterodactyl/yolks:java_25",
+        "Java 21": "ghcr.io/pterodactyl/yolks:java_21",
+        "Java 17": "ghcr.io/pterodactyl/yolks:java_17"
+    },
+    "file_denylist": [],
+    "startup": "java -Xms128M -XX:MaxRAMPercentage=95.0 -Dterminal.jline=false -Dterminal.ansi=true -jar {{SERVER_JARFILE}}",
+    "config": {
+        "files": "{\"server.properties\": {\"parser\": \"properties\", \"find\": {\"server-ip\": \"0.0.0.0\", \"server-port\": \"{{server.build.default.port}}\", \"query.port\": \"{{server.build.default.port}}\"}}, \"eula.txt\": {\"parser\": \"properties\", \"find\": {\"eula\": \"{{server.build.env.EULA}}\"}}}",
+        "startup": "{\"done\": \")! For help, type \"}",
+        "logs": "{}",
+        "stop": "stop"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/ash\n# Minecraft (Mojang) — serwer z oficjalnego manifestu wersji.\nset -e\ncd /mnt/server\nMANIFEST=$(curl -fsSL https://piston-meta.mojang.com/mc/game/version_manifest_v2.json)\nif [ -z \"$MINECRAFT_VERSION\" ] || [ \"$MINECRAFT_VERSION\" = \"latest\" ]; then\n    MINECRAFT_VERSION=$(echo \"$MANIFEST\" | jq -r '.latest.release')\nelif [ \"$MINECRAFT_VERSION\" = \"snapshot\" ]; then\n    MINECRAFT_VERSION=$(echo \"$MANIFEST\" | jq -r '.latest.snapshot')\nfi\nMETA=$(echo \"$MANIFEST\" | jq -r --arg V \"$MINECRAFT_VERSION\" '.versions[] | select(.id == $V) | .url')\nif [ -z \"$META\" ]; then echo \"Nieznana wersja Minecrafta: $MINECRAFT_VERSION\"; exit 1; fi\nURL=$(curl -fsSL \"$META\" | jq -r '.downloads.server.url // empty')\nif [ -z \"$URL\" ]; then echo \"Wersja $MINECRAFT_VERSION nie ma serwera\"; exit 1; fi\necho \"Wersja $MINECRAFT_VERSION — pobieram $URL\"\ncurl -fsSL -o \"$SERVER_JARFILE\" \"$URL\"\n[ -f server.properties ] || printf 'server-port=%s\\nquery.port=%s\\n' \"$SERVER_PORT\" \"$SERVER_PORT\" > server.properties\necho \"Instalacja zakończona.\"\n",
+            "container": "ghcr.io/pterodactyl/installers:alpine",
+            "entrypoint": "ash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Wersja Minecrafta",
+            "description": "Np. 1.21.11, latest albo snapshot.",
+            "env_variable": "MINECRAFT_VERSION",
+            "default_value": "latest",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:30",
+            "field_type": "text"
+        },
+        {
+            "name": "Plik serwera",
+            "description": "Nazwa pliku .jar uruchamianego przez serwer.",
+            "env_variable": "SERVER_JARFILE",
+            "default_value": "server.jar",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|regex:/^([\\w\\d._-]+)(\\.jar)$/",
+            "field_type": "text"
+        },
+        {
+            "name": "Akceptacja EULA Minecrafta",
+            "description": "Wpisz true, jeśli akceptujesz https://aka.ms/MinecraftEULA — bez tego serwer się nie uruchomi.",
+            "env_variable": "EULA",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:true,false",
+            "field_type": "text"
+        }
+    ]
+}

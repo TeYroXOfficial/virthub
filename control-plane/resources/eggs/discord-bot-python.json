@@ -1,0 +1,94 @@
+{
+    "_comment": "Egg wbudowany w VirtHub (format Pterodactyla PTDL_v2).",
+    "meta": {
+        "version": "PTDL_v2"
+    },
+    "exported_at": "2026-09-28T00:00:00+00:00",
+    "name": "Bot Discord: Python",
+    "author": "virthub@local",
+    "description": "Bot (np. discord.py) z repozytorium Git albo wgranych plików.",
+    "virthub_category": "bot",
+    "features": [],
+    "docker_images": {
+        "Python 3.13": "ghcr.io/parkervcp/yolks:python_3.13",
+        "Python 3.12": "ghcr.io/parkervcp/yolks:python_3.12",
+        "Python 3.11": "ghcr.io/parkervcp/yolks:python_3.11"
+    },
+    "file_denylist": [],
+    "startup": "if [[ -d .git ]] && [[ \"{{AUTO_UPDATE}}\" == \"1\" ]]; then git pull; fi; if [[ -n \"{{PY_PACKAGES}}\" ]]; then pip install -U --prefix .local {{PY_PACKAGES}}; fi; if [[ -f /home/container/${REQUIREMENTS_FILE} ]]; then pip install -U --prefix .local -r ${REQUIREMENTS_FILE}; fi; python /home/container/{{PY_FILE}}",
+    "config": {
+        "files": "{}",
+        "startup": "{\"done\": \"Bot\"}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/ash\n# Bot Discord (Python) — kod z repozytorium Git albo przykładowy bot do podmiany.\ncd /mnt/server\nif [ -n \"$GIT_ADDRESS\" ]; then\n    if [ -d .git ]; then git pull; else\n        if [ -n \"$BRANCH\" ]; then git clone --single-branch --branch \"$BRANCH\" \"$GIT_ADDRESS\" . ; else git clone \"$GIT_ADDRESS\" . ; fi\n    fi || { echo \"Nie udało się pobrać repozytorium $GIT_ADDRESS\"; exit 1; }\nelif [ ! -f \"$PY_FILE\" ]; then\n    cat > \"$PY_FILE\" <<'PY'\n# Przykładowy bot — podmień ten plik na swój kod (zakładka Pliki) albo ustaw repozytorium Git.\n# Token trzymaj w pliku .env albo w zmiennej, nie w kodzie.\nimport sys\nprint(\"Bot działa. Wgraj swój kod albo ustaw repozytorium Git w zakładce Uruchamianie.\", flush=True)\nfor line in sys.stdin:\n    print(\"> \" + line.strip(), flush=True)\nPY\nfi\necho \"Instalacja zakończona.\"\n",
+            "container": "ghcr.io/pterodactyl/installers:alpine",
+            "entrypoint": "ash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Repozytorium Git",
+            "description": "Adres repozytorium z kodem (opcjonalnie). Puste = wgrywasz pliki sam.",
+            "env_variable": "GIT_ADDRESS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Gałąź",
+            "description": "Gałąź repozytorium (puste = domyślna).",
+            "env_variable": "BRANCH",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:100",
+            "field_type": "text"
+        },
+        {
+            "name": "Automatyczna aktualizacja",
+            "description": "1 = git pull przy każdym starcie.",
+            "env_variable": "AUTO_UPDATE",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Plik startowy",
+            "description": "Plik uruchamiany przy starcie.",
+            "env_variable": "PY_FILE",
+            "default_value": "bot.py",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:100",
+            "field_type": "text"
+        },
+        {
+            "name": "Plik zależności",
+            "description": "requirements.txt instalowany przy starcie.",
+            "env_variable": "REQUIREMENTS_FILE",
+            "default_value": "requirements.txt",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:100",
+            "field_type": "text"
+        },
+        {
+            "name": "Dodatkowe pakiety pip",
+            "description": "Pakiety instalowane przy starcie, np. discord.py python-dotenv.",
+            "env_variable": "PY_PACKAGES",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:500",
+            "field_type": "text"
+        }
+    ]
+}
