@@ -324,6 +324,17 @@ class AdminController extends Controller
                 ->where('virtualization', Virtualization::Lxc->value)
                 ->whereNotNull('enrolled_at')
                 ->count(),
+            'kvmCatalog' => collect(config('virthub.kvm_catalog'))
+                ->map(fn (array $entry, string $key) => [
+                    ...$entry,
+                    'key' => $key,
+                    'added' => $templates->contains(fn (OsTemplate $t) => ! $t->isContainer()
+                        && $t->image_file === $entry['file'] && $t->source_url !== null),
+                ]),
+            'kvmNodes' => Hypervisor::query()
+                ->where('virtualization', Virtualization::Kvm->value)
+                ->whereNotNull('enrolled_at')
+                ->count(),
         ]);
     }
 
@@ -415,6 +426,35 @@ class AdminController extends Controller
             .($queued > 0
                 ? trans_choice('Pobieranie zlecone na :count węźle.|Pobieranie zlecone na :count węzłach.|Pobieranie zlecone na :count węzłach.', $queued)
                 : __('Nie ma jeszcze węzła kontenerów — szablon pobierze się, gdy taki dołączy.')));
+    }
+
+    /** Szablon KVM z katalogu: węzły KVM pobierają oficjalny obraz cloud same. */
+    public function addKvmCatalogTemplate(string $key, TemplateDistributor $distributor): RedirectResponse
+    {
+        $entry = config("virthub.kvm_catalog.{$key}");
+        abort_if($entry === null, 404);
+
+        // Istniejący szablon z tym plikiem (np. z seedera) dostaje źródło —
+        // plik już wgrany na węzeł zostaje, brakujący się pobierze.
+        $template = OsTemplate::query()->firstOrNew(['image_file' => $entry['file'], 'virtualization' => Virtualization::Kvm->value]);
+        if (! $template->exists) {
+            $template->fill([
+                'name' => $entry['name'],
+                'family' => $entry['family'],
+                'version' => $entry['version'],
+                'min_disk_gb' => $entry['min_disk_gb'] ?? 10,
+                'cloud_init_support' => true,
+            ]);
+        }
+        $template->fill(['source_url' => $entry['url'], 'checksum_url' => $entry['checksum_url'], 'is_active' => true])->save();
+
+        AuditLog::record('template.created', $template, ['name' => $template->name, 'kvm_catalog' => $key]);
+        $queued = $distributor->distribute($template);
+
+        return back()->with('status', __('Dodano :name. ', ['name' => $template->name])
+            .($queued > 0
+                ? trans_choice('Pobieranie zlecone na :count węźle.|Pobieranie zlecone na :count węzłach.|Pobieranie zlecone na :count węzłach.', $queued)
+                : __('Nie ma jeszcze węzła KVM — obraz pobierze się, gdy taki dołączy.')));
     }
 
     public function retryTemplate(OsTemplate $template, TemplateDistributor $distributor): RedirectResponse

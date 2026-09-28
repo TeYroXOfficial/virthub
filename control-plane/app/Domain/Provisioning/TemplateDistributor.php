@@ -2,14 +2,13 @@
 
 namespace App\Domain\Provisioning;
 
-use App\Enums\Virtualization;
 use App\Jobs\PrefetchTemplateJob;
 use App\Models\Hypervisor;
 use App\Models\OsTemplate;
 use App\Models\TemplateDownload;
 
 /**
- * Rozsyłanie szablonów kontenerów na węzły.
+ * Rozsyłanie szablonów na węzły: kontenerów i obrazów KVM z katalogu.
  *
  * Obraz kontenera pobiera się raz na węzeł i trwa to minuty. Robimy to z
  * wyprzedzeniem — gdy administrator doda szablon albo gdy węzeł dołączy do
@@ -25,14 +24,14 @@ class TemplateDistributor
      */
     private const STALE_MINUTES = 120;
 
-    /** Rozsyła szablon na wszystkie węzły kontenerów. Zwraca liczbę zleceń. */
+    /** Rozsyła szablon na wszystkie węzły jego rodzaju. Zwraca liczbę zleceń. */
     public function distribute(OsTemplate $template): int
     {
-        if (! $template->isContainer() || ! $template->is_active) {
+        if (! $template->isDistributed() || ! $template->is_active) {
             return 0;
         }
 
-        return $this->containerNodes()
+        return $this->nodesFor($template)
             ->sum(fn (Hypervisor $node) => $this->queue($template, $node) ? 1 : 0);
     }
 
@@ -42,13 +41,14 @@ class TemplateDistributor
      */
     public function syncNode(Hypervisor $node): int
     {
-        if (! $node->runsContainers()) {
+        if ($node->enrolled_at === null) {
             return 0;
         }
 
         return OsTemplate::query()
             ->active()
-            ->where('virtualization', Virtualization::Lxc->value)
+            ->where('virtualization', $node->virtualization->value)
+            ->when(! $node->runsContainers(), fn ($q) => $q->whereNotNull('source_url'))
             ->get()
             ->sum(fn (OsTemplate $template) => $this->queue($template, $node) ? 1 : 0);
     }
@@ -56,7 +56,11 @@ class TemplateDistributor
     /** Ponawia nieudane pobrania szablonu — na żądanie administratora. */
     public function retryFailed(OsTemplate $template): int
     {
-        return $this->containerNodes()
+        if (! $template->isDistributed()) {
+            return 0;
+        }
+
+        return $this->nodesFor($template)
             ->sum(fn (Hypervisor $node) => $this->queue($template, $node, retryFailed: true) ? 1 : 0);
     }
 
@@ -101,10 +105,10 @@ class TemplateDistributor
     }
 
     /** @return \Illuminate\Support\Collection<int, Hypervisor> */
-    private function containerNodes()
+    private function nodesFor(OsTemplate $template)
     {
         return Hypervisor::query()
-            ->where('virtualization', Virtualization::Lxc->value)
+            ->where('virtualization', $template->virtualization->value)
             ->whereNotNull('enrolled_at')
             ->get();
     }

@@ -32,6 +32,7 @@ from .config import ConfigError, get_settings
 from .console import bridge as console_bridge
 from .driver import DriverError, VmNotFound, build_driver
 from .isos import IsoError
+from .templates import TemplateError, TemplateLibrary
 from .jobs import JobQueue
 from .reporter import CallbackReporter
 from .sftp import SftpService
@@ -41,6 +42,7 @@ from .schemas import (
     HostHealth,
     ImagePrefetchRequest,
     IsoDownloadRequest,
+    TemplateDownloadRequest,
     IsoMountRequest,
     PasswordResetRequest,
     JobAccepted,
@@ -100,6 +102,7 @@ def _handlers() -> dict[str, Any]:
             ImagePrefetchRequest(**p).alias
         ),
         "download_iso": lambda p: _download_iso(IsoDownloadRequest(**p)),
+        "download_template": lambda p: _download_template(TemplateDownloadRequest(**p)),
         "mount_iso": lambda p: driver.mount_iso(p["uuid"], IsoMountRequest(**p["body"])),
         "reset_password": lambda p: driver.reset_password(
             p["uuid"], PasswordResetRequest(**p["body"]).password
@@ -122,6 +125,15 @@ def _download_iso(req: IsoDownloadRequest) -> dict[str, Any]:
     try:
         return driver.isos.download(req.name, req.url, req.sha256)
     except IsoError as exc:
+        raise DriverError(str(exc)) from exc
+
+
+def _download_template(req: TemplateDownloadRequest) -> dict[str, Any]:
+    if settings.virtualization == "lxc":
+        raise DriverError("Ten węzeł uruchamia kontenery — szablony KVM go nie dotyczą.")
+    try:
+        return TemplateLibrary(settings).download(req.name, req.url, req.sha256, req.sha512)
+    except TemplateError as exc:
         raise DriverError(str(exc)) from exc
 
 
@@ -441,6 +453,19 @@ async def prefetch_image(req: ImagePrefetchRequest) -> JobAccepted:
     """Pobranie szablonu trwa minuty — idzie przez kolejkę, jak każda
     długa operacja, a panel dopytuje o wynik."""
     job_id = jobs.enqueue("prefetch_image", req.model_dump())
+    return JobAccepted(job_id=job_id)
+
+
+@app.post(
+    "/templates/download",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["images"],
+)
+async def download_template(req: TemplateDownloadRequest) -> JobAccepted:
+    """Szablon KVM z katalogu panelu — pobranie kilkuset MB idzie przez kolejkę."""
+    job_id = jobs.enqueue("download_template", req.model_dump())
     return JobAccepted(job_id=job_id)
 
 

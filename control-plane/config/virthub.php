@@ -94,6 +94,52 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Katalog szablonów maszyn wirtualnych (KVM)
+    |--------------------------------------------------------------------------
+    |
+    | Oficjalne obrazy cloud dystrybucji (qcow2 z cloud-init) — te same, na
+    | których bazują gotowe szablony innych paneli. Węzeł KVM pobiera obraz
+    | sam i sprawdza sumę z pliku sum kontrolnych dystrybucji.
+    */
+
+    'kvm_catalog' => [
+        'ubuntu-2404' => ['name' => 'Ubuntu 24.04 LTS', 'family' => 'ubuntu', 'version' => '24.04', 'file' => 'ubuntu-24.04.qcow2', 'min_disk_gb' => 10,
+            'url' => 'https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img',
+            'checksum_url' => 'https://cloud-images.ubuntu.com/noble/current/SHA256SUMS'],
+        'ubuntu-2204' => ['name' => 'Ubuntu 22.04 LTS', 'family' => 'ubuntu', 'version' => '22.04', 'file' => 'ubuntu-22.04.qcow2', 'min_disk_gb' => 10,
+            'url' => 'https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img',
+            'checksum_url' => 'https://cloud-images.ubuntu.com/jammy/current/SHA256SUMS'],
+        'debian-13' => ['name' => 'Debian 13', 'family' => 'debian', 'version' => '13', 'file' => 'debian-13.qcow2', 'min_disk_gb' => 10,
+            'url' => 'https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2',
+            'checksum_url' => 'https://cloud.debian.org/images/cloud/trixie/latest/SHA512SUMS'],
+        'debian-12' => ['name' => 'Debian 12', 'family' => 'debian', 'version' => '12', 'file' => 'debian-12.qcow2', 'min_disk_gb' => 10,
+            'url' => 'https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2',
+            'checksum_url' => 'https://cloud.debian.org/images/cloud/bookworm/latest/SHA512SUMS'],
+        'almalinux-10' => ['name' => 'AlmaLinux 10', 'family' => 'almalinux', 'version' => '10', 'file' => 'almalinux-10.qcow2', 'min_disk_gb' => 15,
+            'url' => 'https://repo.almalinux.org/almalinux/10/cloud/x86_64/images/AlmaLinux-10-GenericCloud-latest.x86_64.qcow2',
+            'checksum_url' => 'https://repo.almalinux.org/almalinux/10/cloud/x86_64/images/CHECKSUM'],
+        'almalinux-9' => ['name' => 'AlmaLinux 9', 'family' => 'almalinux', 'version' => '9', 'file' => 'almalinux-9.qcow2', 'min_disk_gb' => 15,
+            'url' => 'https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2',
+            'checksum_url' => 'https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/CHECKSUM'],
+        'rocky-10' => ['name' => 'Rocky Linux 10', 'family' => 'rocky', 'version' => '10', 'file' => 'rocky-10.qcow2', 'min_disk_gb' => 15,
+            'url' => 'https://dl.rockylinux.org/pub/rocky/10/images/x86_64/Rocky-10-GenericCloud-Base.latest.x86_64.qcow2',
+            'checksum_url' => 'https://dl.rockylinux.org/pub/rocky/10/images/x86_64/Rocky-10-GenericCloud-Base.latest.x86_64.qcow2.CHECKSUM'],
+        'rocky-9' => ['name' => 'Rocky Linux 9', 'family' => 'rocky', 'version' => '9', 'file' => 'rocky-9.qcow2', 'min_disk_gb' => 15,
+            'url' => 'https://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2',
+            'checksum_url' => 'https://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2.CHECKSUM'],
+        'centos-stream-10' => ['name' => 'CentOS Stream 10', 'family' => 'centos', 'version' => '10', 'file' => 'centos-stream-10.qcow2', 'min_disk_gb' => 15,
+            'url' => 'https://cloud.centos.org/centos/10-stream/x86_64/images/CentOS-Stream-GenericCloud-10-latest.x86_64.qcow2',
+            'checksum_url' => 'https://cloud.centos.org/centos/10-stream/x86_64/images/CentOS-Stream-GenericCloud-10-latest.x86_64.qcow2.SHA256SUM'],
+        'centos-stream-9' => ['name' => 'CentOS Stream 9', 'family' => 'centos', 'version' => '9', 'file' => 'centos-stream-9.qcow2', 'min_disk_gb' => 15,
+            'url' => 'https://cloud.centos.org/centos/9-stream/x86_64/images/CentOS-Stream-GenericCloud-9-latest.x86_64.qcow2',
+            'checksum_url' => 'https://cloud.centos.org/centos/9-stream/x86_64/images/CentOS-Stream-GenericCloud-9-latest.x86_64.qcow2.SHA256SUM'],
+        'arch' => ['name' => 'Arch Linux', 'family' => 'arch', 'version' => 'rolling', 'file' => 'arch-linux.qcow2', 'min_disk_gb' => 10,
+            'url' => 'https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2',
+            'checksum_url' => 'https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2.SHA256'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Limity
     |--------------------------------------------------------------------------
     */

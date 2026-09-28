@@ -113,10 +113,10 @@
                                 </td>
                                 <td class="mono" style="font-size:12.5px">{{ $template->image_file }}</td>
                                 <td>
-                                    @if (! $template->isContainer())
+                                    @if (! $template->isDistributed())
                                         <span class="muted">{{ __('wgrywany ręcznie') }}</span>
                                     @elseif ($template->downloads->isEmpty())
-                                        <span class="muted">{{ __('brak węzłów kontenerów') }}</span>
+                                        <span class="muted">{{ $template->isContainer() ? __('brak węzłów kontenerów') : __('brak węzłów KVM') }}</span>
                                     @else
                                         @foreach ($template->downloads as $download)
                                             @if ($download->isInProgress())
@@ -140,7 +140,7 @@
                                 </td>
                                 <td style="text-align:right">
                                     <div class="btn-row" style="justify-content:flex-end; flex-wrap:nowrap">
-                                    @if ($template->isContainer() && $template->downloads->contains('status', 'failed'))
+                                    @if ($template->isDistributed() && $template->downloads->contains('status', 'failed'))
                                         <form method="POST" action="{{ route('panel.admin.templates.retry', $template) }}" style="margin:0">
                                             @csrf <button class="btn btn-sm" type="submit">{{ __('Ponów pobieranie') }}</button>
                                         </form>
@@ -239,6 +239,41 @@
                                 <span class="pill ok">{{ __('dodany') }}</span>
                             @else
                                 <form method="POST" action="{{ route('panel.admin.templates.catalog', $entry['key']) }}">
+                                    @csrf
+                                    <button class="btn btn-primary" type="submit">{{ __('Dodaj') }}</button>
+                                </form>
+                            @endif
+                        </td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {{-- KVM: katalog oficjalnych obrazów cloud ------------------------------- --}}
+    <div class="card">
+        <h3>{{ __('Katalog maszyn wirtualnych (KVM)') }}</h3>
+        <p>
+            {{ __('Gotowe obrazy cloud od dystrybucji (qcow2 z cloud-init). Po dodaniu każdy węzeł KVM pobiera obraz sam, sprawdza sumę kontrolną z serwera dystrybucji i zapisuje go w') }}
+            <span class="mono">/var/lib/virthub/templates</span>{{ __('. Klienci widzą system, gdy obraz jest gotowy na węźle.') }}
+        </p>
+        @if ($kvmNodes === 0)
+            <p class="hint">{{ __('Nie masz jeszcze węzła KVM. Obrazy pobiorą się automatycznie, gdy pierwszy taki węzeł dołączy.') }}</p>
+        @endif
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>{{ __('System') }}</th><th>{{ __('Plik na węźle') }}</th><th></th></tr></thead>
+                <tbody>
+                @foreach ($kvmCatalog as $entry)
+                    <tr>
+                        <td>{{ $entry['name'] }}<div class="hint">{{ parse_url($entry['url'], PHP_URL_HOST) }}</div></td>
+                        <td class="mono">{{ $entry['file'] }}</td>
+                        <td style="text-align:right">
+                            @if ($entry['added'])
+                                <span class="pill ok">{{ __('dodany') }}</span>
+                            @else
+                                <form method="POST" action="{{ route('panel.admin.templates.kvm-catalog', $entry['key']) }}">
                                     @csrf
                                     <button class="btn btn-primary" type="submit">{{ __('Dodaj') }}</button>
                                 </form>
