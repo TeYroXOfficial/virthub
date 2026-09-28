@@ -7,7 +7,7 @@
             {{ __('Zaloguj się jako root na nowym serwerze i wklej to jedno polecenie. Zainstaluje KVM, agenta i wszystkie zależności, po czym węzeł sam zgłosi się do panelu.') }}
         </p>
         <p class="secret" id="enroll-cmd">{{ $enrollment['command'] }}</p>
-        <p class="hint">{{ __('Wymagany system: Debian 12/13 albo Ubuntu 22.04/24.04. Z konta innego niż root zamień końcówkę na „| sudo bash”.') }}</p>
+        <p class="hint">{{ __('Obsługiwane systemy: Debian 11–13 i Ubuntu 20.04–24.04. Z konta innego niż root zamień końcówkę na „| sudo bash”.') }}</p>
         <div class="btn-row">
             <button class="btn btn-primary" type="button" onclick="
                 navigator.clipboard.writeText(document.getElementById('enroll-cmd').textContent.trim());
