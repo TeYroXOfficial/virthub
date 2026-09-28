@@ -1380,8 +1380,6 @@
     "Autor tego modpacka nie pozwala na pobieranie przez zewnętrzne aplikacje.": "The author of this modpack does not allow downloads by third-party applications.",
     "Server pack: :name": "Server pack: :name",
     "Użyto server packa przygotowanego przez autora.": "Used the server pack prepared by the author.",
-    "Autorzy tych modów nie pozwalają na pobieranie przez zewnętrzne aplikacje: :mods. Wybierz wersję z server packiem albo wgraj je ręcznie przez SFTP.": "The authors of these mods do not allow downloads by third-party applications: :mods. Pick a version with a server pack or upload them manually via SFTP.",
-    "Paczka nie ma server packa — zainstalowano mody z listy klienta; jeśli serwer nie wstaje, usuń mody tylko dla klienta.": "The pack has no server pack — the client mod list was installed; if the server does not start, remove client-only mods.",
     "Część plików tej paczki leży na CurseForge — administrator musi ustawić VIRTHUB_CURSEFORGE_API_KEY.": "Some files of this pack are hosted on CurseForge — an administrator must set VIRTHUB_CURSEFORGE_API_KEY.",
     "Plik :file nie jest dostępny do pobrania.": "File :file is not available for download.",
     "Paczka nie podaje wersji Minecrafta.": "The pack does not specify a Minecraft version.",
@@ -1489,5 +1487,8 @@
     "Usuń pluginy i mody (plugins/, mods/)": "Delete plugins and mods (plugins/, mods/)",
     "Wyczyść wszystkie pliki (instalacja od zera)": "Wipe all files (install from scratch)",
     "Reinstalacja rozpoczęta — wybrane pliki zostaną usunięte, a skrypt eggu uruchomi się ponownie.": "Reinstall started — the selected files will be deleted and the egg script will run again.",
-    "Usuwanie plików poprzedniego serwera razem ze światem": "Deleting the previous server's files together with the world"
+    "Usuwanie plików poprzedniego serwera razem ze światem": "Deleting the previous server's files together with the world",
+    "To modpack tylko dla klienta — nie da się go uruchomić jako serwer.": "This modpack is client-only — it can't run as a server.",
+    "Ta wersja nie ma server packa — to paczka tylko dla klienta. Wybierz wersję z server packiem.": "This version has no server pack — it's a client-only pack. Choose a version with a server pack.",
+    "Autor tego modpacka nie pozwala na pobieranie server packa przez zewnętrzne aplikacje.": "The author of this modpack doesn't allow third-party apps to download the server pack."
 }

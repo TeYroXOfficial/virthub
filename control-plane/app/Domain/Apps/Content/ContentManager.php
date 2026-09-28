@@ -68,12 +68,17 @@ class ContentManager
     {
         $this->assertSource($kind, $source);
 
-        return match ($source) {
+        $project = match ($source) {
             'modrinth' => $this->modrinth->project($id),
             'hangar' => $this->hangar->projectBySlug($id),
             'curseforge' => $this->curseforge->project($id),
             'ftb' => $this->ftb->summary($this->ftb->pack((int) $id)),
         };
+        if ($kind === 'modpack' && ($project['server_side'] ?? null) === 'unsupported') {
+            throw new ContentException(__('To modpack tylko dla klienta — nie da się go uruchomić jako serwer.'));
+        }
+
+        return $project;
     }
 
     /**
@@ -89,7 +94,7 @@ class ContentManager
         if ($kind === 'modpack') {
             return match ($source) {
                 'modrinth' => $this->modrinth->versions($id),
-                'curseforge' => $this->curseforge->versions($id, null, null),
+                'curseforge' => array_values(array_filter($this->curseforge->versions($id, null, null), fn ($v) => $v['server_pack_file_id'])),
                 'ftb' => $this->ftb->versions((int) $id),
             };
         }
