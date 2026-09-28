@@ -86,6 +86,10 @@ class Settings:
     # Aplikacje (serwery gier, boty) w kontenerach Dockera — jak Wings.
     apps_dir: Path = Path("/var/lib/virthub/apps")
     apps_network: str = "virthub_apps"
+    # DNS dla kontenerów aplikacji — jak w Wings. Docker kopiuje resolvery
+    # hosta, a te bywają nieosiągalne z kontenera (stub systemd-resolved
+    # 127.0.0.53, same adresy IPv6 w sieci IPv4).
+    apps_dns: tuple[str, ...] = ("1.1.1.1", "1.0.0.1")
 
     @property
     def is_mock(self) -> bool:
@@ -137,6 +141,7 @@ def get_settings() -> Settings:
         ct_max_processes=int(_env("VH_CT_MAX_PROCESSES", "4096")),
         apps_dir=_env_path("VH_APPS_DIR", "/var/lib/virthub/apps"),
         apps_network=_env("VH_APPS_NETWORK", "virthub_apps"),
+        apps_dns=tuple(a.strip() for a in _env("VH_APPS_DNS", "1.1.1.1,1.0.0.1").split(",") if a.strip()),
         nft_table=_env("VH_NFT_TABLE", "virthub"),
         vnc_listen=_env("VH_VNC_LISTEN", "127.0.0.1"),
         control_plane_url=_env("VH_CONTROL_PLANE_URL", "").rstrip("/"),
