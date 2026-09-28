@@ -1493,5 +1493,13 @@
     "Autor tego modpacka nie pozwala na pobieranie server packa przez zewnętrzne aplikacje.": "The author of this modpack doesn't allow third-party apps to download the server pack.",
     "Paper nie wspiera Minecrafta :version.": "Paper does not support Minecraft :version.",
     "Purpur nie wspiera Minecrafta :version.": "Purpur does not support Minecraft :version.",
-    "Usuń pluginy (plugins/)": "Delete plugins (plugins/)"
+    "Usuń pluginy (plugins/)": "Delete plugins (plugins/)",
+    "aplikacje wyłączone": "apps disabled",
+    "brak zakresu portów": "no port range",
+    "za mało RAM: wolne :free MB, plan :need MB": "not enough RAM: :free MB free, plan needs :need MB",
+    "za mało dysku: wolne :free MB, plan :need MB": "not enough disk: :free MB free, plan needs :need MB",
+    "za mało portów: wolne :free, plan :need": "not enough ports: :free free, plan needs :need",
+    "Overcommit RAM (%)": "RAM overcommit (%)",
+    "Pamięć dla aplikacji: przydzielone :used z :cap MB (RAM węzła po odjęciu maszyn × overcommit). Dysk: wolne :disk MB. Wolne porty: :ports.": "App memory: :used of :cap MB allocated (node RAM minus VMs × overcommit). Disk: :disk MB free. Free ports: :ports.",
+    "Serwery gier rzadko zużywają cały limit — np. 150% pozwala przydzielić półtora raza więcej pamięci niż fizycznie jest.": "Game servers rarely use their whole limit — e.g. 150% lets you allocate one and a half times the physical memory."
 }

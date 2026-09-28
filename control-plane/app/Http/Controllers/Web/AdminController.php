@@ -156,6 +156,7 @@ class AdminController extends Controller
             'apps_enabled' => ['boolean'],
             'app_port_start' => ['nullable', 'integer', 'min:1024', 'max:65535', 'required_with:app_port_end'],
             'app_port_end' => ['nullable', 'integer', 'min:1024', 'max:65535', 'gte:app_port_start', 'required_with:app_port_start'],
+            'app_memory_overcommit' => ['sometimes', 'integer', 'min:100', 'max:400'],
             'status' => ['required', Rule::in([
                 Hypervisor::STATUS_ONLINE,
                 Hypervisor::STATUS_OFFLINE,

@@ -47,7 +47,7 @@ class AppProvisioner
                 : $this->pickNode($plan);
 
             if ($node === null || ! $this->fits($node, $plan)) {
-                throw new \DomainException(__('Żaden węzeł nie ma teraz miejsca na tę aplikację. Spróbuj później albo wybierz mniejszy plan.'));
+                throw new \DomainException($this->noRoomMessage($plan, $node, $user));
             }
 
             $app = AppServer::query()->create([
@@ -89,18 +89,53 @@ class AppProvisioner
 
     public function fits(Hypervisor $node, AppPlan $plan): bool
     {
-        return $node->acceptsApps()
-            && $this->freeMemory($node) >= $plan->memory_mb
-            && $this->freeDisk($node) >= $plan->disk_mb
-            && $this->ports->freeCount($node) >= max(1, $plan->ports);
+        return $this->shortage($node, $plan) === null;
     }
 
-    /** Pamięć węzła po odjęciu maszyn i aplikacji (MB). */
+    /** Dlaczego plan nie zmieści się na węźle — null, gdy się zmieści. */
+    public function shortage(Hypervisor $node, AppPlan $plan): ?string
+    {
+        return match (true) {
+            ! $node->apps_enabled => __('aplikacje wyłączone'),
+            ! $node->app_port_start || ! $node->app_port_end => __('brak zakresu portów'),
+            ! ($node->last_health['apps']['available'] ?? false) => __('Docker niedostępny'),
+            ($free = $this->freeMemory($node)) < $plan->memory_mb => __('za mało RAM: wolne :free MB, plan :need MB', ['free' => max(0, $free), 'need' => $plan->memory_mb]),
+            ($free = $this->freeDisk($node)) < $plan->disk_mb => __('za mało dysku: wolne :free MB, plan :need MB', ['free' => max(0, $free), 'need' => $plan->disk_mb]),
+            ($free = $this->ports->freeCount($node)) < max(1, $plan->ports) => __('za mało portów: wolne :free, plan :need', ['free' => $free, 'need' => max(1, $plan->ports)]),
+            default => null,
+        };
+    }
+
+    private function noRoomMessage(AppPlan $plan, ?Hypervisor $picked, User $user): string
+    {
+        $message = __('Żaden węzeł nie ma teraz miejsca na tę aplikację. Spróbuj później albo wybierz mniejszy plan.');
+        if (! $user->isStaff()) {
+            return $message;
+        }
+        // Obsługa widzi, czego brakuje na każdym węźle.
+        $nodes = $picked ? collect([$picked]) : Hypervisor::query()->orderBy('name')->get();
+        $reasons = $nodes->map(fn (Hypervisor $n) => $n->name.': '.($this->shortage($n, $plan) ?? '?'))->implode('; ');
+
+        return $reasons === '' ? $message : $message.' ('.$reasons.')';
+    }
+
+    /**
+     * Pamięć dla aplikacji (MB): RAM węzła po odjęciu maszyn, pomnożony przez
+     * overcommit węzła, minus limity aplikacji już na nim.
+     */
     public function freeMemory(Hypervisor $node): int
     {
-        $apps = (int) AppServer::query()->where('hypervisor_id', $node->id)->sum('memory_mb');
+        return $this->appMemoryCapacity($node) - $this->appMemoryAllocated($node);
+    }
 
-        return $node->ram_mb_total - $node->ram_mb_used - $apps;
+    public function appMemoryCapacity(Hypervisor $node): int
+    {
+        return intdiv(max(0, $node->ram_mb_total - $node->ram_mb_used) * max(100, (int) ($node->app_memory_overcommit ?: 100)), 100);
+    }
+
+    public function appMemoryAllocated(Hypervisor $node): int
+    {
+        return (int) AppServer::query()->where('hypervisor_id', $node->id)->sum('memory_mb');
     }
 
     public function freeDisk(Hypervisor $node): int

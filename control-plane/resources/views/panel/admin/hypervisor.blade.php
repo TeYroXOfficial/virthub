@@ -212,6 +212,21 @@
                         <label for="n-app-to">{{ __('Porty do') }}</label>
                         <input id="n-app-to" name="app_port_end" type="text" inputmode="numeric" value="{{ old('app_port_end', $node->app_port_end) }}" placeholder="25665">
                     </div>
+                    <div class="field">
+                        <label for="n-app-oc">{{ __('Overcommit RAM (%)') }}</label>
+                        <input id="n-app-oc" name="app_memory_overcommit" type="number" min="100" max="400" step="10" value="{{ old('app_memory_overcommit', $node->app_memory_overcommit ?? 100) }}">
+                    </div>
+                </div>
+                @php
+                    $appCap = app(\App\Domain\Apps\AppProvisioner::class);
+                    $appPorts = app(\App\Domain\Apps\AppPorts::class);
+                @endphp
+                <div class="hint">
+                    {{ __('Pamięć dla aplikacji: przydzielone :used z :cap MB (RAM węzła po odjęciu maszyn × overcommit). Dysk: wolne :disk MB. Wolne porty: :ports.', [
+                        'used' => $appCap->appMemoryAllocated($node), 'cap' => $appCap->appMemoryCapacity($node),
+                        'disk' => max(0, $appCap->freeDisk($node)), 'ports' => $appPorts->freeCount($node),
+                    ]) }}
+                    {{ __('Serwery gier rzadko zużywają cały limit — np. 150% pozwala przydzielić półtora raza więcej pamięci niż fizycznie jest.') }}
                 </div>
                 @php $appsHealth = $node->last_health['apps'] ?? null; @endphp
                 <div class="hint">
