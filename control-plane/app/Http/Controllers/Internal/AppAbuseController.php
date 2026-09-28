@@ -77,10 +77,13 @@ class AppAbuseController extends Controller
 
         if ($blocking->isNotEmpty() && config('virthub.apps_abuse_suspend') && ! $app->isSuspended()) {
             // Kontener już nie działa (zabity albo nie wystartował) — bez wołania węzła.
-            $what = $blocking->map(fn ($f) => self::label($f['category']).' ('.$f['detail'].')')->unique()->take(3)->implode('; ');
+            // Żądanie przychodzi z węzła, bez języka użytkownika — powód zapisujemy
+            // w domyślnym języku panelu, jak inne powody zawieszenia.
+            $locale = config('virthub.default_locale');
+            $what = $blocking->map(fn ($f) => self::label($f['category'], $locale).' ('.$f['detail'].')')->unique()->take(3)->implode('; ');
             $app->forceFill([
                 'suspended_at' => now(),
-                'suspension_reason' => mb_substr(__('Automatyczna blokada — wykryto: :what', ['what' => $what]), 0, 250),
+                'suspension_reason' => mb_substr(__('Automatyczna blokada — wykryto: :what', ['what' => $what], $locale), 0, 250),
             ])->save();
             AuditLog::record('app.suspend', $app, ['reason' => $app->suspension_reason, 'automatic' => true]);
             $suspended = true;
@@ -91,13 +94,13 @@ class AppAbuseController extends Controller
         return response()->json(['suspended' => $suspended]);
     }
 
-    public static function label(string $category): string
+    public static function label(string $category, ?string $locale = null): string
     {
         return match ($category) {
-            'vm' => __('system w kontenerze (PteroVM/proot/QEMU)'),
-            'miner' => __('koparka kryptowalut'),
-            'remote-shell' => __('zdalna powłoka / serwer SSH'),
-            'tunnel' => __('tunel sieciowy'),
+            'vm' => __('system w kontenerze (PteroVM/proot/QEMU)', [], $locale),
+            'miner' => __('koparka kryptowalut', [], $locale),
+            'remote-shell' => __('zdalna powłoka / serwer SSH', [], $locale),
+            'tunnel' => __('tunel sieciowy', [], $locale),
             default => $category,
         };
     }

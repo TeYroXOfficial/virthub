@@ -131,12 +131,13 @@ def test_profil_seccomp_blokuje_ptrace_i_ucieczki():
 def test_kontener_aplikacji_nie_ma_ptrace_ani_uprawnien(manager):
     from test_apps import _spec, _wait_for
 
-    spec = _spec(startup=(
-        "grep -E '^(CapEff|Seccomp|NoNewPrivs)' /proc/self/status; "
-        "node -e \"const r=require('child_process').spawnSync('sh',['-c','cat /proc/self/status >/dev/null']);console.log('dziala', r.status)\"; "
-        "sleep 60"
-    ))
+    spec = _spec(startup="sh probe.sh")
     manager.install(spec)
+    manager.files(spec.uuid).write("probe.sh", (
+        "grep -E '^(CapEff|Seccomp|NoNewPrivs)' /proc/self/status\n"
+        "echo dziala\n"
+        "exec sleep 60\n"
+    ).encode())
     manager.power(spec.uuid, "start")
     text = _wait_for(lambda: "dziala" in (t := "\n".join(manager.logs(spec.uuid)["lines"])) and t, timeout=40)
     assert "CapEff:\t0000000000000000" in text
@@ -179,9 +180,15 @@ def test_straznik_zabija_koparke_i_blokuje_ponowny_start(manager):
 
     reports = []
     manager.guard = AppGuard(manager, lambda u, f, a: reports.append((u, a, [x.category for x in f])))
-    # „Koparka”: kopia sleep pod nazwą xmrig, uruchomiona z katalogu aplikacji.
-    spec = _spec(startup="cp \"$(command -v sleep)\" /home/container/xmrig && echo start && exec /home/container/xmrig 300")
+    # „Koparka”: kopia node pod nazwą xmrig, uruchomiona z katalogu aplikacji
+    # (sleep w tym obrazie to aplet busyboxa — pod inną nazwą nie ruszy).
+    spec = _spec(startup="sh miner.sh")
     manager.install(spec)
+    manager.files(spec.uuid).write("miner.sh", (
+        'cp "$(command -v node)" /home/container/xmrig\n'
+        "echo start\n"
+        "exec /home/container/xmrig -e 'setTimeout(() => {}, 300000)'\n"
+    ).encode())
     manager.power(spec.uuid, "start")
     assert _wait_for(lambda: "start" in "\n".join(manager.logs(spec.uuid)["lines"]), timeout=40)
 
