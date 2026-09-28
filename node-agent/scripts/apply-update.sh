@@ -83,6 +83,10 @@ fi
 echo nf_conntrack_bridge > /etc/modules-load.d/virthub.conf
 modprobe nf_conntrack_bridge 2>/dev/null || true
 
+# Wolny DNS hosta (np. martwy serwer po zamianie eth0 na most) spowalnia
+# panel, pobieranie modpacków i kontenery — skrypt naprawia go tylko wtedy.
+bash "$AGENT_DIR/scripts/fix-dns.sh" || warn "DNS hosta nadal działa wolno — sprawdź /etc/resolv.conf"
+
 # Aplikacje (serwery gier, boty): Docker instalujemy tylko z VH_APPS=1, a na
 # węźle, który już go ma, pilnujemy grupy docker i katalogu aplikacji.
 bash "$AGENT_DIR/scripts/setup-apps.sh" || warn "Nie udało się przygotować Dockera dla aplikacji"

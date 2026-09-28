@@ -52,7 +52,7 @@ class Ftb
             return;
         }
         $responses = ContentHttp::client()->pool(fn (Pool $pool) => array_map(
-            fn ($id) => $pool->as((string) $id)->withHeaders(['User-Agent' => ContentHttp::USER_AGENT])->acceptJson()->timeout(15)->get(self::API.'/'.$id),
+            fn ($id) => ContentHttp::prepare($pool->as((string) $id)->withHeaders(['User-Agent' => ContentHttp::USER_AGENT])->acceptJson())->get(self::API.'/'.$id),
             $missing,
         ));
         foreach ($missing as $id) {

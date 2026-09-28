@@ -33,6 +33,10 @@ return [
     // modpacki i pluginy z CurseForge są ukryte; Modrinth, FTB i Hangar działają bez klucza.
     'curseforge_api_key' => env('VIRTHUB_CURSEFORGE_API_KEY'),
 
+    // Resolvery DNS dla zapytań do Modrinth/FTB/CurseForge/Hangar (panel pyta je
+    // wprost i pamięta adresy — omija wolny DNS systemu). Pusto = DNS systemu.
+    'content_dns' => env('VIRTHUB_CONTENT_DNS', '1.1.1.1,9.9.9.9'),
+
     'apps_abuse_suspend' => (bool) env('VIRTHUB_APPS_ABUSE_SUSPEND', true),
 
     /*
