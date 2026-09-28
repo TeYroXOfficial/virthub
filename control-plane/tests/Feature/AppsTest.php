@@ -63,6 +63,37 @@ class AppsTest extends TestCase
         return app(AppProvisioner::class)->order($this->customer, $egg ?? $this->paper(), $this->plan, 'Survival');
     }
 
+    public function test_overcommit_pamieci_i_powod_braku_miejsca(): void
+    {
+        $this->node->update(['ram_mb_total' => 4096]);
+        $this->order();
+        $this->order();
+
+        try {
+            $this->order();
+            $this->fail('Trzecia aplikacja nie powinna się zmieścić.');
+        } catch (\DomainException $e) {
+            $this->assertStringNotContainsString('RAM', $e->getMessage()); // klient nie widzi szczegółów węzłów
+        }
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        try {
+            app(AppProvisioner::class)->order($admin, $this->paper(), $this->plan, 'Admin');
+            $this->fail('Nie powinno się zmieścić.');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('za mało RAM: wolne 0 MB, plan 2048 MB', $e->getMessage());
+        }
+
+        $this->actingAs($admin)->put(route('panel.admin.hypervisors.update', $this->node), [
+            'cpu_cores_total' => $this->node->cpu_cores_total, 'ram_mb_total' => 4096, 'disk_gb_total' => 500,
+            'bridge' => $this->node->bridge, 'status' => $this->node->status, 'apps_enabled' => '1',
+            'app_port_start' => 25565, 'app_port_end' => 25574, 'app_memory_overcommit' => 150,
+        ])->assertSessionHasNoErrors();
+        $this->assertSame(150, $this->node->fresh()->app_memory_overcommit);
+        $this->order(); // 6144 MB z 4096 × 150%
+        $this->assertSame(6144, app(AppProvisioner::class)->appMemoryAllocated($this->node));
+        $this->actingAs($admin)->get(route('panel.admin.hypervisors.show', $this->node))->assertOk()->assertSee('przydzielone 6144 z 6144 MB');
+    }
+
     // --- eggi -------------------------------------------------------------------------------
 
     public function test_wbudowane_eggi_sa_zaimportowane_z_konfiguracja(): void
