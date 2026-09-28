@@ -57,7 +57,7 @@ class VariableRules
                 continue;
             }
             $rules[$env] = self::rulesFor($var);
-            $attributes[$env] = $var['name'] ?? $env;
+            $attributes[$env] = $egg->text($var['name'] ?? $env);
         }
 
         $data = array_map(fn ($v) => is_scalar($v) ? (string) $v : '', array_intersect_key($input, $rules));

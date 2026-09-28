@@ -24,8 +24,8 @@
                     @foreach ($group as $egg)
                         <label class="egg-card">
                             <input type="radio" name="egg" value="{{ $egg->id }}" required @checked((int) old('egg') === $egg->id)>
-                            <strong><x-icon :name="$egg->category === 'bot' ? 'bot' : 'gamepad'" :size="18"/> {{ $egg->name }}</strong>
-                            <p>{{ $egg->description }}</p>
+                            <strong><x-icon :name="$egg->category === 'bot' ? 'bot' : 'gamepad'" :size="18"/> {{ $egg->displayName() }}</strong>
+                            <p>{{ $egg->displayDescription() }}</p>
                             @if (count($egg->images()) > 1)
                                 <select name="image" data-egg="{{ $egg->id }}" aria-label="{{ __('Wersja środowiska') }}" disabled>
                                     @foreach ($egg->images() as $label => $image)

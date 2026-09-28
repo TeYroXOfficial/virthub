@@ -41,13 +41,13 @@
                     $editable = $staff || ($var['user_editable'] ?? true);
                 @endphp
                 <div class="card">
-                    <h3 class="card-title">{{ $var['name'] }}</h3>
+                    <h3 class="card-title">{{ $app->egg->text($var['name']) }}</h3>
                     <div class="field">
                         <input type="text" name="variables[{{ $env }}]" value="{{ old('variables.'.$env, $values[$env] ?? '') }}"
-                               aria-label="{{ $var['name'] }}" @disabled(! $editable) @readonly(! $editable)>
+                               aria-label="{{ $app->egg->text($var['name']) }}" @disabled(! $editable) @readonly(! $editable)>
                         @error('variables.'.$env) <div class="hint" style="color:var(--critical)">{{ $message }}</div> @enderror
                         @error($env) <div class="hint" style="color:var(--critical)">{{ $message }}</div> @enderror
-                        <div class="hint">{{ $var['description'] }}</div>
+                        <div class="hint">{{ $app->egg->text($var['description']) }}</div>
                         <div class="hint mono">{{ $env }}@if (! $editable) · {{ __('tylko do odczytu') }}@endif</div>
                     </div>
                 </div>
