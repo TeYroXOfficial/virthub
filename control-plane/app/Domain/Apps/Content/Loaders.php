@@ -3,12 +3,12 @@
 namespace App\Domain\Apps\Content;
 
 /**
- * Serwer Minecraft z loaderem: kroki instalacji (vanilla, Fabric, Quilt,
- * Forge, NeoForge), dobór Javy do wersji gry i uniwersalny skrypt startowy.
+ * Serwer Minecraft z loaderem: kroki instalacji (vanilla, Paper, Purpur,
+ * Fabric, Quilt, Forge, NeoForge), dobór Javy do wersji gry i uniwersalny skrypt startowy.
  */
 class Loaders
 {
-    public const TYPES = ['vanilla', 'fabric', 'quilt', 'forge', 'neoforge'];
+    public const TYPES = ['vanilla', 'paper', 'purpur', 'fabric', 'quilt', 'forge', 'neoforge'];
 
     /** Pliki i katalogi po poprzednim loaderze/paczce — usuwane przy zmianie (świat zostaje). */
     public const SERVER_FILES = [
@@ -68,6 +68,8 @@ class Loaders
     {
         return match ($loader) {
             'vanilla' => ['steps' => [$this->vanilla($mc)], 'loader_version' => null],
+            'paper' => $this->paper($mc, $version),
+            'purpur' => $this->purpur($mc, $version),
             'fabric' => $this->fabric($mc, $version),
             'quilt' => $this->quilt($mc, $version),
             'forge' => $this->forge($mc, $version),
@@ -101,6 +103,59 @@ class Loaders
 
         return ['op' => 'download', 'url' => $server['url'], 'path' => $path, 'sha1' => $server['sha1'], 'size' => (int) $server['size'],
             'label' => __('Serwer Minecraft :version', ['version' => $mc])];
+    }
+
+    /** Paper (API Fill v3) jako server.jar — wersja loadera to numer buildu. */
+    private function paper(string $mc, ?string $build): array
+    {
+        $builds = ContentHttp::cached("paper:builds:{$mc}", ContentHttp::LISTS, function () use ($mc) {
+            $response = ContentHttp::client()->get('https://fill.papermc.io/v3/projects/paper/versions/'.rawurlencode($mc).'/builds');
+            if ($response->status() === 404) {
+                return [];
+            }
+
+            return array_map(fn ($b) => [
+                'id' => (string) $b['id'], 'channel' => (string) ($b['channel'] ?? ''),
+                'download' => $b['downloads']['server:default'] ?? null,
+            ], ContentHttp::json($response, 'Paper'));
+        });
+        if ($builds === []) {
+            throw new ContentException(__('Paper nie wspiera Minecrafta :version.', ['version' => $mc]));
+        }
+        $pick = $build !== null
+            ? collect($builds)->firstWhere('id', $build)
+            : (collect($builds)->firstWhere('channel', 'STABLE') ?? $builds[0]);
+        if ($pick === null || empty($pick['download']['url'])) {
+            throw new ContentException(__('Nie ma takiej wersji loadera (:url).', ['url' => "paper-{$mc}-{$build}"]));
+        }
+        $file = $pick['download'];
+
+        return ['steps' => [
+            ['op' => 'download', 'path' => 'server.jar', 'url' => (string) $file['url'], 'sha256' => $file['checksums']['sha256'] ?? null,
+                'size' => isset($file['size']) ? (int) $file['size'] : null, 'label' => "Paper {$mc} #{$pick['id']}"],
+        ], 'loader_version' => $pick['id']];
+    }
+
+    /** Purpur (fork Papera) jako server.jar — wersja loadera to numer buildu. */
+    private function purpur(string $mc, ?string $build): array
+    {
+        $info = ContentHttp::cached("purpur:builds:{$mc}", ContentHttp::LISTS, function () use ($mc) {
+            $response = ContentHttp::client()->get('https://api.purpurmc.org/v2/purpur/'.rawurlencode($mc));
+
+            return $response->status() === 404 ? [] : (ContentHttp::json($response, 'Purpur')['builds'] ?? []);
+        });
+        if (empty($info['latest'])) {
+            throw new ContentException(__('Purpur nie wspiera Minecrafta :version.', ['version' => $mc]));
+        }
+        $build ??= (string) $info['latest'];
+        if (! in_array($build, array_map('strval', $info['all'] ?? []), true)) {
+            throw new ContentException(__('Nie ma takiej wersji loadera (:url).', ['url' => "purpur-{$mc}-{$build}"]));
+        }
+
+        return ['steps' => [
+            ['op' => 'download', 'path' => 'server.jar', 'url' => 'https://api.purpurmc.org/v2/purpur/'.rawurlencode($mc).'/'.rawurlencode($build).'/download',
+                'label' => "Purpur {$mc} #{$build}"],
+        ], 'loader_version' => $build];
     }
 
     private function fabric(string $mc, ?string $version): array
@@ -226,7 +281,7 @@ class Loaders
     {
         return <<<'SH'
 #!/bin/bash
-# VirtHub: start serwera Minecraft z loaderem (Forge, NeoForge, Fabric, Quilt, vanilla).
+# VirtHub: start serwera Minecraft z loaderem (Forge, NeoForge, Fabric, Quilt, Paper, Purpur, vanilla).
 # Plik jest nadpisywany przy instalacji modpacka albo loadera.
 JAVA_OPTS="-Xms128M -XX:MaxRAMPercentage=95.0 -Dterminal.jline=false -Dterminal.ansi=true"
 [ -f user_jvm_args.txt ] && JAVA_OPTS="$JAVA_OPTS @user_jvm_args.txt"

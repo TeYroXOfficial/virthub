@@ -1490,5 +1490,8 @@
     "Usuwanie plików poprzedniego serwera razem ze światem": "Deleting the previous server's files together with the world",
     "To modpack tylko dla klienta — nie da się go uruchomić jako serwer.": "This modpack is client-only — it can't run as a server.",
     "Ta wersja nie ma server packa — to paczka tylko dla klienta. Wybierz wersję z server packiem.": "This version has no server pack — it's a client-only pack. Choose a version with a server pack.",
-    "Autor tego modpacka nie pozwala na pobieranie server packa przez zewnętrzne aplikacje.": "The author of this modpack doesn't allow third-party apps to download the server pack."
+    "Autor tego modpacka nie pozwala na pobieranie server packa przez zewnętrzne aplikacje.": "The author of this modpack doesn't allow third-party apps to download the server pack.",
+    "Paper nie wspiera Minecrafta :version.": "Paper does not support Minecraft :version.",
+    "Purpur nie wspiera Minecrafta :version.": "Purpur does not support Minecraft :version.",
+    "Usuń pluginy (plugins/)": "Delete plugins (plugins/)"
 }
