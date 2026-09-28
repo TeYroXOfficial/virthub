@@ -18,6 +18,8 @@ class OsTemplate extends Model
         'virtualization',
         'version',
         'image_file',
+        'source_url',
+        'checksum_url',
         'min_disk_gb',
         'cloud_init_support',
         'is_active',
@@ -77,6 +79,12 @@ class OsTemplate extends Model
     public function isContainer(): bool
     {
         return $this->virtualization === \App\Enums\Virtualization::Lxc;
+    }
+
+    /** Węzły pobierają szablon same: kontenery zawsze, KVM — gdy pochodzi z katalogu. */
+    public function isDistributed(): bool
+    {
+        return $this->isContainer() || $this->source_url !== null;
     }
 
     /** @param Builder<OsTemplate> $query */

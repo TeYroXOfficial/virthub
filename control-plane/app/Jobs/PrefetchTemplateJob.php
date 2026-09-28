@@ -10,7 +10,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Throwable;
 
 /**
- * Pobranie szablonu kontenera na jeden węzeł.
+ * Pobranie szablonu (kontenera albo obrazu KVM z katalogu) na jeden węzeł.
  *
  * Zleca pobranie agentowi, a potem wraca do kolejki co kilkanaście sekund i
  * dopytuje o wynik. Nie trzyma workera przez kilka minut ściągania obrazu —
@@ -42,7 +42,12 @@ class PrefetchTemplateJob implements ShouldQueue
 
         try {
             if ($download->agent_job_id === null) {
-                $jobId = $client->prefetchImage($download->template->image_file);
+                $template = $download->template;
+                $jobId = $template->isContainer()
+                    ? $client->prefetchImage($template->image_file)
+                    : $client->downloadTemplate($template->image_file, $template->source_url, $template->checksum_url
+                        ? app(\App\Domain\Provisioning\CloudImageChecksum::class)->resolve($template->source_url, $template->checksum_url)
+                        : []);
 
                 $download->forceFill([
                     'agent_job_id' => $jobId,
@@ -64,6 +69,11 @@ class PrefetchTemplateJob implements ShouldQueue
                 return;
             }
 
+            self::finish($download, TemplateDownload::STATUS_FAILED, $e->getMessage());
+
+            return;
+        } catch (\RuntimeException $e) {
+            // Brak sum kontrolnych obrazu KVM — bez nich nie pobieramy.
             self::finish($download, TemplateDownload::STATUS_FAILED, $e->getMessage());
 
             return;

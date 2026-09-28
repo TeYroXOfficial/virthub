@@ -1534,5 +1534,14 @@
     "Nazwa pliku .jar uruchamianego przez serwer.": "Name of the .jar file the server runs.",
     "Akceptacja EULA Minecrafta": "Minecraft EULA acceptance",
     "Wpisz true, jeśli akceptujesz https://aka.ms/MinecraftEULA — bez tego serwer się nie uruchomi.": "Enter true if you accept https://aka.ms/MinecraftEULA — the server won't start without it.",
-    "Np. 1.21.11, latest albo snapshot.": "E.g. 1.21.11, latest or snapshot."
+    "Np. 1.21.11, latest albo snapshot.": "E.g. 1.21.11, latest or snapshot.",
+    "Nie udało się pobrać sum kontrolnych (:url): :error": "Could not fetch checksums (:url): :error",
+    "Nie udało się pobrać sum kontrolnych (:url): HTTP :status.": "Could not fetch checksums (:url): HTTP :status.",
+    "W pliku sum kontrolnych nie ma obrazu :file.": "The checksum file does not list the image :file.",
+    "Nie ma jeszcze węzła KVM — obraz pobierze się, gdy taki dołączy.": "There is no KVM node yet — the image will download when one joins.",
+    "Katalog maszyn wirtualnych (KVM)": "Virtual machine catalog (KVM)",
+    "Gotowe obrazy cloud od dystrybucji (qcow2 z cloud-init). Po dodaniu każdy węzeł KVM pobiera obraz sam, sprawdza sumę kontrolną z serwera dystrybucji i zapisuje go w": "Ready-made cloud images from the distributions (qcow2 with cloud-init). Once added, every KVM node downloads the image itself, verifies the checksum from the distribution's server and stores it in",
+    ". Klienci widzą system, gdy obraz jest gotowy na węźle.": ". Customers see the system once the image is ready on a node.",
+    "Nie masz jeszcze węzła KVM. Obrazy pobiorą się automatycznie, gdy pierwszy taki węzeł dołączy.": "You don't have a KVM node yet. Images will download automatically when the first one joins.",
+    "Plik na węźle": "File on node"
 }

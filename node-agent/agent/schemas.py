@@ -214,6 +214,15 @@ class IsoDownloadRequest(BaseModel):
     sha256: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{64}$")
 
 
+class TemplateDownloadRequest(BaseModel):
+    """Szablon maszyny KVM (qcow2 z cloud-init) z katalogu panelu."""
+
+    name: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,80}\.qcow2$", description="Nazwa pliku w VH_TEMPLATE_DIR")
+    url: str = Field(pattern=r"^https://[^\s]{3,2000}$")
+    sha256: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{64}$")
+    sha512: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{128}$")
+
+
 class IsoMountRequest(BaseModel):
     """Płyta w wirtualnym napędzie maszyny KVM i kolejność rozruchu."""
 

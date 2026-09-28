@@ -169,6 +169,12 @@ class AgentClient
     }
 
     /** Pobranie szablonu kontenera na węzeł z wyprzedzeniem. */
+    /** @param  array{sha256?: string, sha512?: string}  $checksum */
+    public function downloadTemplate(string $filename, string $url, array $checksum): string
+    {
+        return $this->jobId($this->request('POST', '/templates/download', ['name' => $filename, 'url' => $url] + $checksum));
+    }
+
     public function prefetchImage(string $alias): string
     {
         return $this->jobId($this->request('POST', '/images/prefetch', ['alias' => $alias]));
