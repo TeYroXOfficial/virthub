@@ -553,7 +553,6 @@
     "Polecenie zostało przekazane do hypervisora.": "The command has been sent to the hypervisor.",
     "Ponowiono pobieranie :name na :count węźle.|Ponowiono pobieranie :name na :count węzłach.|Ponowiono pobieranie :name na :count węzłach.": "Retried downloading :name on :count node.|Retried downloading :name on :count nodes.",
     "Ponowiono pobieranie na :queued węzłach.": "Download retried on :queued nodes.",
-    "Ponownie uruchamia skrypt instalacyjny szablonu (np. pobiera serwer w wersji ze zmiennych). Twoje pliki zostają, ale skrypt może nadpisać część z nich.": "Runs the template's installation script again (e.g. downloads the server in the version from the variables). Your files stay, but the script may overwrite some of them.",
     "Ponów pobieranie": "Retry download",
     "Popraw zmienne w zakładce Uruchamianie i uruchom reinstalację w Ustawieniach.": "Fix the variables on the Startup tab and run a reinstall in Settings.",
     "Popularna dystrybucja z długim wsparciem": "Popular distribution with long-term support",
@@ -1483,5 +1482,12 @@
     "Szczegóły na żywo widać w konsoli poniżej. Strona odświeży się sama po zakończeniu.": "Live details are shown in the console below. The page refreshes itself when finished.",
     "Panel przygotowuje paczkę — lista plików, loader i Java…": "The panel is preparing the pack — file list, loader and Java…",
     "Pobrano: ": "Downloaded: ",
-    "Gotowe! Instalacja zakończona.": "Done! Installation finished."
+    "Gotowe! Instalacja zakończona.": "Done! Installation finished.",
+    "Ponownie uruchamia skrypt instalacyjny szablonu (np. pobiera serwer w wersji ze zmiennych). Bez zaznaczonych opcji Twoje pliki zostają, ale skrypt może nadpisać część z nich.": "Runs the template's installation script again (e.g. downloads the server in the version from the variables). With no options ticked your files stay, but the script may overwrite some of them.",
+    "Usuń świat (świeży start)": "Delete the world (fresh start)",
+    "Usuń pluginy (plugins/) — serwer z modami ich nie wczyta": "Delete plugins (plugins/) — a modded server won't load them",
+    "Usuń pluginy i mody (plugins/, mods/)": "Delete plugins and mods (plugins/, mods/)",
+    "Wyczyść wszystkie pliki (instalacja od zera)": "Wipe all files (install from scratch)",
+    "Reinstalacja rozpoczęta — wybrane pliki zostaną usunięte, a skrypt eggu uruchomi się ponownie.": "Reinstall started — the selected files will be deleted and the egg script will run again.",
+    "Usuwanie plików poprzedniego serwera razem ze światem": "Deleting the previous server's files together with the world"
 }

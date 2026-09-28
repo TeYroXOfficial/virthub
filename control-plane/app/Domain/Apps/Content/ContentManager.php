@@ -124,23 +124,23 @@ class ContentManager
 
     // --- modpack i loader ------------------------------------------------------------------------
 
-    public function queueModpack(AppServer $app, string $source, string $projectId, string $versionId, bool $wipeWorld, User $actor): AppJob
+    public function queueModpack(AppServer $app, string $source, string $projectId, string $versionId, bool $wipeWorld, User $actor, bool $wipePlugins = false): AppJob
     {
         $this->assertSource('modpack', $source);
 
         return $this->dispatch($app, 'modpack', [
-            'source' => $source, 'project_id' => $projectId, 'version_id' => $versionId, 'wipe_world' => $wipeWorld,
+            'source' => $source, 'project_id' => $projectId, 'version_id' => $versionId, 'wipe_world' => $wipeWorld, 'wipe_plugins' => $wipePlugins,
         ], $actor);
     }
 
-    public function queueLoader(AppServer $app, string $loader, string $mc, ?string $loaderVersion, bool $wipeWorld, User $actor): AppJob
+    public function queueLoader(AppServer $app, string $loader, string $mc, ?string $loaderVersion, bool $wipeWorld, User $actor, bool $wipePlugins = false): AppJob
     {
         if (! in_array($loader, Loaders::TYPES, true)) {
             throw new ContentException(__('Nieznany loader: :loader', ['loader' => $loader]));
         }
 
         return $this->dispatch($app, 'loader', [
-            'loader' => $loader, 'mc' => $mc, 'loader_version' => $loaderVersion, 'wipe_world' => $wipeWorld,
+            'loader' => $loader, 'mc' => $mc, 'loader_version' => $loaderVersion, 'wipe_world' => $wipeWorld, 'wipe_plugins' => $wipePlugins,
         ], $actor);
     }
 
@@ -173,11 +173,17 @@ class ContentManager
         $loader = $this->loaders->steps($plan['loader'], $plan['mc'], $plan['loader_version']);
         $cleanup = Loaders::SERVER_FILES;
         if ($p['wipe_world'] ?? false) {
-            array_push($cleanup, 'world', 'world_nether', 'world_the_end');
+            // Agent czyta level-name z server.properties (świat nie musi nazywać się „world”).
+            $cleanup[] = '@world';
+        }
+        if ($p['wipe_plugins'] ?? false) {
+            $cleanup[] = 'plugins';
         }
 
         $steps = [
-            ['op' => 'delete', 'paths' => $cleanup, 'label' => __('Usuwanie plików poprzedniego serwera (świat zostaje)')],
+            ['op' => 'delete', 'paths' => $cleanup, 'label' => ($p['wipe_world'] ?? false)
+                ? __('Usuwanie plików poprzedniego serwera razem ze światem')
+                : __('Usuwanie plików poprzedniego serwera (świat zostaje)')],
             ...$loader['steps'],
             ...$plan['steps'],
             ['op' => 'write', 'path' => 'start.sh', 'content' => Loaders::startScript(), 'executable' => true],

@@ -218,6 +218,20 @@ class AppFiles:
         finally:
             os.close(dfd)
 
+    def exists(self, path: str) -> bool:
+        parents, name = self._split(path)
+        try:
+            dfd = self._open_dir(parents)
+        except AppError:
+            return False
+        try:
+            os.stat(name, dir_fd=dfd, follow_symlinks=False)
+            return True
+        except FileNotFoundError:
+            return False
+        finally:
+            os.close(dfd)
+
     def delete(self, path: str) -> None:
         parents, name = self._split(path)
         dfd = self._open_dir(parents)
@@ -352,6 +366,52 @@ class AppFiles:
         return total
 
 
+# --- czyszczenie przed instalacją ---------------------------------------------------
+
+def world_names(files: AppFiles) -> list[str]:
+    """Katalogi świata Minecrafta: level-name z server.properties (domyślnie
+    „world”) oraz jego _nether i _the_end (Bukkit/Paper trzyma je osobno)."""
+    name = "world"
+    try:
+        for line in files.read("server.properties", limit=1024 * 1024).decode("utf-8", "replace").splitlines():
+            key, sep, value = line.partition("=")
+            if sep and key.strip() == "level-name" and value.strip():
+                name = value.strip()
+                break
+    except AppError:
+        pass
+    try:
+        files.parts(name)
+    except AppError:
+        name = "world"  # level-name z „..” — nie wychodzimy poza katalog
+    return [name, f"{name}_nether", f"{name}_the_end"]
+
+
+def wipe_paths(files: AppFiles, paths: list[str]) -> list[str]:
+    """Usuwa ścieżki; „@world” — świat, „*” — całą zawartość katalogu aplikacji.
+    Zwraca faktycznie usunięte nazwy."""
+    targets: list[str] = []
+    for path in paths:
+        if path == "*":
+            try:
+                targets += [e["name"] for e in files.list("")]
+            except AppError:
+                pass
+        elif path == "@world":
+            targets += world_names(files)
+        else:
+            targets.append(path)
+    removed = []
+    for path in dict.fromkeys(targets):
+        try:
+            if files.parts(path) and files.exists(path):
+                files.delete(path)
+                removed.append(path)
+        except AppError:
+            pass
+    return removed
+
+
 # --- pliki konfiguracyjne (config.files z eggów) -------------------------------------
 
 def apply_config_file(files: AppFiles, cfg: AppConfigFile) -> None:
@@ -427,7 +487,7 @@ def _set_path(doc: dict, dotted: str, value: Any) -> None:
 def spec_hash(spec: AppSpec) -> str:
     """Skrót tego, co wymaga nowego kontenera (obraz, zmienne, zasoby, porty,
     wersja zabezpieczeń — po jej podniesieniu stare kontenery powstają od nowa)."""
-    relevant = spec.model_dump(exclude={"install", "config_files", "guard_exempt"})
+    relevant = spec.model_dump(exclude={"install", "config_files", "guard_exempt", "reinstall_wipe"})
     relevant["_security"] = SECURITY_VERSION
     return hashlib.sha256(json.dumps(relevant, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -579,6 +639,8 @@ class AppManager:
         try:
             root = self.data_dir(spec.uuid)
             root.mkdir(parents=True, exist_ok=True, mode=0o750)
+            wipe = list(spec.reinstall_wipe)
+            spec = spec.model_copy(update={"reinstall_wipe": []})
             self.save_spec(spec)
             self._network()
 
@@ -588,6 +650,11 @@ class AppManager:
                     progress("stop", 5)
                     self._stop_container(existing, spec, timeout=STOP_TIMEOUT)
                 existing.remove(force=True)
+
+            if reinstall and wipe:
+                progress("wipe", 6, "usuwanie plików")
+                removed = wipe_paths(self.files(spec.uuid), wipe)
+                log.info("Aplikacja %s: przed reinstalacją usunięto %s", spec.uuid, ", ".join(removed) or "nic")
 
             log_file = self.install_log_file(spec.uuid)
             if spec.install and spec.install.script.strip():
@@ -643,6 +710,12 @@ class AppManager:
             try:
                 line(f"[VirtHub] {request.label}")
                 result = ContentInstaller(self, uuid, request, line).run()
+                if request.exclusive:
+                    # Nowy obraz (np. Java 21 dla modpacka) pobieramy od razu —
+                    # pierwszy start nie czeka na pobieranie i nie trafia na brak obrazu.
+                    image = self.load_spec(uuid).image
+                    line(f"Obraz aplikacji: {image}")
+                    self._pull(image, "image", 90, 99)
             except Exception as exc:
                 line(f"[VirtHub] Błąd: {exc}")
                 raise
@@ -824,7 +897,21 @@ class AppManager:
         )
         if spec.cpu_percent:
             kwargs["nano_cpus"] = spec.cpu_percent * 10_000_000
-        return self.client.containers.create(spec.image, **kwargs)
+        return self._create_with_image(spec.image, kwargs)
+
+    def _create_with_image(self, image: str, kwargs: dict[str, Any]) -> Any:
+        """Kontener z obrazu; brakujący obraz (np. inna Java po instalacji
+        modpacka) pobieramy, zamiast kończyć start błędem Dockera."""
+        import docker.errors  # type: ignore[import-not-found]
+
+        try:
+            return self.client.containers.create(image, **kwargs)
+        except docker.errors.ImageNotFound:
+            log.info("Brak obrazu %s na węźle — pobieram przed startem", image)
+            self._pull(image, "image", 90, 99)
+            return self.client.containers.create(image, **kwargs)
+        except docker.errors.APIError as exc:
+            raise AppError(f"Docker odmówił utworzenia kontenera: {exc.explanation or exc}") from exc
 
     # --- zmiana ustawień ------------------------------------------------------
 

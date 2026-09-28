@@ -34,6 +34,15 @@ class AppJobApplier
     public function succeed(AppJob $job): void
     {
         $job->forceFill(['status' => AppJob::STATUS_DONE, 'finished_at' => now()])->save();
+        $wipe = $job->payload['wipe'] ?? [];
+        if ($job->action === 'reinstall' && $job->server) {
+            if (array_intersect($wipe, ['*', 'plugins', 'mods'])) {
+                $job->server->addons()->delete(); // pliki usunięte — wpisy też
+            }
+            // Skrypt mógł pobrać inną wersję gry, a czyszczenie całości usuwa loader.
+            $minecraft = in_array('*', $wipe, true) ? null : array_diff_key($job->server->minecraft ?? [], ['mc' => true]);
+            $job->server->forceFill(['minecraft' => $minecraft ?: null])->save();
+        }
         $job->server?->forceFill([
             'status' => AppServer::STATUS_READY,
             'status_message' => null,

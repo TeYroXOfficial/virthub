@@ -283,15 +283,21 @@ class AppController extends Controller
     public function reinstall(Request $request, AppServer $app): RedirectResponse
     {
         $this->authorize('operate', $app);
-        $request->validate(['confirm' => ['accepted']], ['confirm.accepted' => __('Potwierdź reinstalację.')]);
+        $data = $request->validate([
+            'confirm' => ['accepted'],
+            'wipe' => ['nullable', 'array'],
+            'wipe.*' => [Rule::in(array_keys(AppProvisioner::WIPE_OPTIONS))],
+        ], ['confirm.accepted' => __('Potwierdź reinstalację.')]);
 
         try {
-            $this->apps->reinstall($app, $request->user());
+            $this->apps->reinstall($app, $request->user(), $data['wipe'] ?? []);
         } catch (\DomainException $e) {
             return back()->withErrors(['confirm' => $e->getMessage()]);
         }
 
-        return redirect()->route('panel.apps.show', $app)->with('status', __('Reinstalacja rozpoczęta — skrypt eggu uruchomi się ponownie, pliki zostają.'));
+        return redirect()->route('panel.apps.show', $app)->with('status', ($data['wipe'] ?? []) === []
+            ? __('Reinstalacja rozpoczęta — skrypt eggu uruchomi się ponownie, pliki zostają.')
+            : __('Reinstalacja rozpoczęta — wybrane pliki zostaną usunięte, a skrypt eggu uruchomi się ponownie.'));
     }
 
     public function destroy(Request $request, AppServer $app): RedirectResponse

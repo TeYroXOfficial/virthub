@@ -77,12 +77,20 @@ def server():
 class NoContainers:
     """Docker bez kontenerów — aplikacja jeszcze nie była uruchomiona."""
 
+    pulled: list[str] = []
+
     class containers:  # noqa: N801
         @staticmethod
         def get(name):
             import docker.errors
 
             raise docker.errors.NotFound(name)
+
+    class api:  # noqa: N801
+        @staticmethod
+        def pull(repository, tag=None, stream=False, decode=False):
+            NoContainers.pulled.append(f"{repository}:{tag}")
+            return iter([{"status": "Downloaded newer image"}])
 
 
 @pytest.fixture()
@@ -193,6 +201,43 @@ def test_instalacja_blokuje_aplikacje_na_czas_trwania(manager, server):
     assert UUID not in manager._installing
 
 
+def test_modpack_od_razu_pobiera_obraz_z_nowa_java(manager):
+    NoContainers.pulled.clear()
+    spec = manager.load_spec(UUID).model_copy(update={"image": "ghcr.io/pterodactyl/yolks:java_17"})
+    manager.content(UUID, AppContentRequest(steps=[{"op": "write", "path": "a.txt", "content": "x"}], exclusive=True, spec=spec))
+    assert NoContainers.pulled == ["ghcr.io/pterodactyl/yolks:java_17"]
+    assert "Obraz aplikacji: ghcr.io/pterodactyl/yolks:java_17" in manager.install_log_file(UUID).read_text()
+
+
+def test_start_pobiera_brakujacy_obraz_a_blad_dockera_jest_czytelny(manager):
+    import docker.errors
+
+    calls = []
+
+    class Containers:
+        @staticmethod
+        def create(image, **kwargs):
+            calls.append(image)
+            if len(calls) == 1:
+                raise docker.errors.ImageNotFound("No such image")
+            return "kontener"
+
+    NoContainers.pulled.clear()
+    manager._client.containers = Containers
+    assert manager._create_with_image("ghcr.io/pterodactyl/yolks:java_21", {}) == "kontener"
+    assert NoContainers.pulled == ["ghcr.io/pterodactyl/yolks:java_21"] and len(calls) == 2
+
+    class Rejecting:
+        @staticmethod
+        def create(image, **kwargs):
+            raise docker.errors.APIError("500", explanation="seccomp: config provided but seccomp not supported")
+
+    manager._client.containers = Rejecting
+    with pytest.raises(AppError, match="seccomp not supported"):
+        manager._create_with_image("x", {})
+    manager._client.containers = NoContainers.containers
+
+
 def test_sprawdzony_host_nie_pyta_dns_przy_kazdym_pliku(monkeypatch):
     import agent.app_content as content
 
@@ -208,3 +253,50 @@ def test_sprawdzony_host_nie_pyta_dns_przy_kazdym_pliku(monkeypatch):
         check_url(f"https://cdn.modrinth.com/data/{i}.jar")
     check_url("https://edge.forgecdn.net/x.jar")
     assert calls == ["cdn.modrinth.com", "edge.forgecdn.net"]
+
+
+def test_blad_dockera_w_api_to_czytelne_409(client, monkeypatch):
+    import docker.errors
+
+    from agent import main
+
+    def boom(uuid, action):
+        raise docker.errors.APIError("500 Server Error", explanation="No such image: ghcr.io/pterodactyl/yolks:java_21")
+
+    monkeypatch.setattr(main.apps, "power", boom)
+    response = client.post(f"/apps/{UUID}/power", json={"action": "start"})
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Docker: No such image: ghcr.io/pterodactyl/yolks:java_21"
+
+
+def test_usuwanie_swiata_wg_level_name_i_calosci(manager):
+    from agent.apps import wipe_paths
+
+    root = manager.data_dir(UUID)
+    for d in ("survival", "survival_nether", "survival_the_end", "world", "plugins/LuckPerms", "mods"):
+        (root / d).mkdir(parents=True)
+    (root / "server.properties").write_text("motd=x\nlevel-name=survival\n")
+    run(manager, [{"op": "delete", "paths": ["@world", "plugins"]}])
+    left = sorted(p.name for p in root.iterdir())
+    assert left == ["mods", "server.properties", "world"]  # „world” to nie ten świat
+
+    (root / "server.properties").write_text("level-name=../../etc\n")  # nie wychodzi poza katalog
+    wipe_paths(manager.files(UUID), ["@world"])
+    assert not (root / "world").exists()
+
+    assert sorted(wipe_paths(manager.files(UUID), ["*"])) == ["mods", "server.properties"]
+    assert list(root.iterdir()) == []
+
+
+def test_reinstalacja_czysci_przed_skryptem_i_nie_zapamietuje_listy(manager, monkeypatch):
+    root = manager.data_dir(UUID)
+    (root / "world").mkdir()
+    (root / "plugins").mkdir()
+    (root / "keep.txt").write_text("x")
+    monkeypatch.setattr(manager, "_network", lambda: None)
+    monkeypatch.setattr(manager, "_pull", lambda *a, **k: None)
+    monkeypatch.setattr(manager, "_create", lambda spec: None)
+    spec = manager.load_spec(UUID).model_copy(update={"reinstall_wipe": ["@world", "plugins"]})
+    manager.install(spec, reinstall=True)
+    assert sorted(p.name for p in root.iterdir()) == ["keep.txt"]
+    assert manager.load_spec(UUID).reinstall_wipe == []

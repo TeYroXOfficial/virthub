@@ -404,6 +404,10 @@ class AppSpec(BaseModel):
     pids_limit: int = Field(default=1024, ge=64, le=65_536)
     # Personel zwolnił aplikację z ochrony przed nadużyciami (fałszywy alarm).
     guard_exempt: bool = False
+    # Reinstalacja: co usunąć przed skryptem instalacyjnym — ścieżki,
+    # „@world” (świat z level-name w server.properties) albo „*” (wszystko).
+    # Nie jest zapisywane w specyfikacji na węźle.
+    reinstall_wipe: list[str] = Field(default_factory=list, max_length=50)
     allocations: list[AppAllocation] = Field(default_factory=list, max_length=100)
     config_files: list[AppConfigFile] = Field(default_factory=list, max_length=50)
     install: AppInstall | None = None
