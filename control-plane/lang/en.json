@@ -1561,5 +1561,6 @@
     "Zbuduj na brakujących węzłach": "Build on missing nodes",
     "Zbuduj": "Build",
     "Hasło Administratora — zapisz je teraz.": "Administrator password — save it now.",
-    "użytkownik": "user"
+    "użytkownik": "user",
+    "Wymagany system: Debian 12/13 albo Ubuntu 22.04/24.04. Z konta innego niż root zamień końcówkę na „| sudo bash”.": "Required system: Debian 12/13 or Ubuntu 22.04/24.04. From an account other than root, change the ending to “| sudo bash”."
 }

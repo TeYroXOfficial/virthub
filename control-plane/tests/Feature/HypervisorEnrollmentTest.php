@@ -282,7 +282,7 @@ class HypervisorEnrollmentTest extends TestCase
 
         $command = session('enrollment')['command'];
         $this->assertStringContainsString('curl -sSL', $command);
-        $this->assertStringContainsString('| sudo bash', $command);
+        $this->assertStringEndsWith('| bash', $command);
 
         $created = Hypervisor::where('name', 'node2')->firstOrFail();
         $this->assertTrue($created->isAwaitingEnrollment());
