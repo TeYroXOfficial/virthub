@@ -52,22 +52,24 @@ fi
 command -v apt-get >/dev/null 2>&1 \
     || die "Ten instalator obsługuje Debiana i Ubuntu. Na innych dystrybucjach użyj playbooka z infra/ansible/."
 
-# Agent wymaga Pythona 3.10+, a wydania po końcu wsparcia mają martwe
-# repozytorium poprawek bezpieczeństwa (apt kończy się błędami 404).
-# Sprawdzamy to przed jakąkolwiek zmianą w systemie.
+# Najstarsze obsługiwane wydania: Debian 11 i Ubuntu 20.04. Ich systemowy
+# Python jest za stary dla agenta — instalator dokłada wtedy osobny Python
+# tylko dla agenta (scripts/ensure-python.sh), bez zmiany systemu.
+OS_ID=""
+OS_MAJOR=""
 if [ -r /etc/os-release ]; then
     # shellcheck disable=SC1091
     . /etc/os-release
+    OS_ID="${ID:-}"
     OS_MAJOR="${VERSION_ID%%.*}"
-    case "${ID:-}" in
+    case "$OS_ID" in
         debian)
-            if [ -n "$OS_MAJOR" ] && [ "$OS_MAJOR" -lt 12 ]; then
-                die "Debian ${VERSION_ID} (${VERSION_CODENAME:-}) nie jest obsługiwany: jego wsparcie się skończyło (repozytorium poprawek bezpieczeństwa już nie działa), a agent wymaga Pythona 3.10+.
-    Zainstaluj Debian 12 lub 13 albo zaktualizuj system do Debiana 12 i uruchom instalator ponownie."
+            if [ -n "$OS_MAJOR" ] && [ "$OS_MAJOR" -lt 11 ]; then
+                die "Debian ${VERSION_ID} jest za stary. Obsługiwane: Debian 11, 12, 13."
             fi ;;
         ubuntu)
-            if [ -n "$OS_MAJOR" ] && [ "$OS_MAJOR" -lt 22 ]; then
-                die "Ubuntu ${VERSION_ID} nie jest obsługiwane — agent wymaga Pythona 3.10+. Użyj Ubuntu 22.04 lub 24.04."
+            if [ -n "$OS_MAJOR" ] && [ "$OS_MAJOR" -lt 20 ]; then
+                die "Ubuntu ${VERSION_ID} jest za stare. Obsługiwane: Ubuntu 20.04, 22.04, 24.04."
             fi ;;
     esac
 fi
@@ -111,6 +113,24 @@ esac
 log "Instaluję pakiety (to potrwa 1-3 minuty)"
 export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
+
+# Debian 11 po końcu wsparcia: repozytorium poprawek bezpieczeństwa ma w
+# indeksie pakiety, których pliki już usunięto (apt kończy się błędem 404).
+# Zamiast niego — jego ostatni stan z archiwum snapshot.debian.org (te same,
+# podpisane pakiety). Samo wyłączenie nie wystarcza: system z poprawkami ma
+# biblioteki nowsze niż główne repozytorium i apt nie dobrałby pakietów -dev.
+if [ "$OS_ID" = "debian" ] && [ "$OS_MAJOR" = "11" ]; then
+    warn "Debian 11 nie dostaje już poprawek bezpieczeństwa — biorę je z archiwum snapshot.debian.org."
+    for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do
+        [ -f "$f" ] && grep -Eq '^[^#].*(security\.debian\.org|debian-security)' "$f" \
+            && sed -i.virthub-bak -E '/security\.debian\.org|debian-security/ s/^([^#])/# \1/' "$f" || true
+    done
+    for f in /etc/apt/sources.list.d/*.sources; do
+        [ -f "$f" ] && grep -q 'debian-security' "$f" && mv "$f" "$f.virthub-bak" || true
+    done
+    echo "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20260901T000000Z bullseye-security main" \
+        > /etc/apt/sources.list.d/virthub-bullseye-security.list
+fi
 apt-get update -qq
 
 apt-get install -y -qq \
@@ -118,12 +138,23 @@ apt-get install -y -qq \
     nftables nginx openssl curl ca-certificates gnupg \
     bridge-utils iproute2 >/dev/null
 
+# Agent potrzebuje Pythona 3.10+. Gdy systemowy jest starszy, dostaje osobny
+# (ensure-python.sh), a powiązania libvirt budują się z PyPI w wersji
+# systemowego libvirt — pakiet python3-libvirt pasuje tylko do Pythona systemu.
+SYSTEM_PYTHON_OK=1
+python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null || SYSTEM_PYTHON_OK=0
+
 if [ "$VIRT" = "kvm" ]; then
     # python3-libvirt z repozytorium systemu, a nie libvirt-python z PyPI:
     # wersja z PyPI kompiluje się wobec systemowego libvirt i wywala, gdy
     # ten jest nowszy od niej. Pakiet systemowy zawsze pasuje.
+    if [ "$SYSTEM_PYTHON_OK" = "1" ]; then
+        LIBVIRT_PY="python3-libvirt"
+    else
+        LIBVIRT_PY="libvirt-dev"
+    fi
     apt-get install -y -qq qemu-kvm libvirt-daemon-system qemu-utils genisoimage \
-        python3-libvirt >/dev/null
+        "$LIBVIRT_PY" >/dev/null
     systemctl enable --now libvirtd >/dev/null 2>&1 || true
     ok "KVM i libvirtd zainstalowane"
 else
@@ -454,14 +485,22 @@ log "Instaluję zależności Pythona (to potrwa 1-2 minuty)"
 # --clear: środowisko po nieudanym przebiegu mogło zostać w połowie budowy.
 # Węzeł KVM widzi pakiety systemowe, żeby agent mógł zaimportować
 # python3-libvirt; pakiety z requirements.txt i tak mają pierwszeństwo.
-if [ "$VIRT" = "kvm" ]; then
-    python3 -m venv --clear --system-site-packages "$AGENT_DIR/.venv"
+PYTHON="$(bash "$AGENT_DIR/scripts/ensure-python.sh")" \
+    || die "Nie udało się przygotować Pythona 3.10+ dla agenta (log powyżej)."
+if [ "$VIRT" = "kvm" ] && [ "$SYSTEM_PYTHON_OK" = "1" ]; then
+    "$PYTHON" -m venv --clear --system-site-packages "$AGENT_DIR/.venv"
 else
-    python3 -m venv --clear "$AGENT_DIR/.venv"
+    "$PYTHON" -m venv --clear "$AGENT_DIR/.venv"
 fi
 "$AGENT_DIR/.venv/bin/pip" install --quiet --upgrade pip
 "$AGENT_DIR/.venv/bin/pip" install --quiet -r "$AGENT_DIR/requirements.txt" \
     || die "Instalacja zależności Pythona nie powiodła się (log powyżej)."
+if [ "$VIRT" = "kvm" ] && [ "$SYSTEM_PYTHON_OK" = "0" ]; then
+    # Powiązania w wersji równej systemowemu libvirt — wtedy zawsze się kompilują.
+    LIBVIRT_VERSION="$(pkg-config --modversion libvirt)"
+    "$AGENT_DIR/.venv/bin/pip" install --quiet "libvirt-python==${LIBVIRT_VERSION}" \
+        || die "Nie udało się zbudować powiązań libvirt ${LIBVIRT_VERSION} dla agenta."
+fi
 
 if [ "$VIRT" = "kvm" ]; then
     "$AGENT_DIR/.venv/bin/python" -c "import libvirt" 2>/dev/null \
