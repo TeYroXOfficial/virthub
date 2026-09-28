@@ -11,7 +11,7 @@
         </h1>
         <div class="meta-line">
             <span class="pill {{ $tone }}" data-app-status>{{ $app->statusLabel() }}</span>
-            <span>{{ $app->egg?->name }}</span>
+            <span>{{ $app->egg?->displayName() }}</span>
             @if ($address = $app->address())
                 <span class="sep">·</span>
                 <span class="mono copyable" title="{{ __('Kliknij, żeby skopiować') }}" data-copy="{{ $address }}">{{ $address }}</span>

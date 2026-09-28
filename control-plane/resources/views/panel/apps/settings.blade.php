@@ -9,7 +9,7 @@
         <div class="card">
             <h3 class="card-title">{{ __('Informacje') }}</h3>
             <dl class="kv">
-                <dt>{{ __('Szablon') }}</dt><dd>{{ $app->egg?->name }}</dd>
+                <dt>{{ __('Szablon') }}</dt><dd>{{ $app->egg?->displayName() }}</dd>
                 <dt>{{ __('Plan') }}</dt><dd>{{ $app->plan?->name ?? '—' }}</dd>
                 <dt>{{ __('Zasoby') }}</dt>
                 <dd>{{ __(':memory MB RAM · :disk MB dysku', ['memory' => $app->memory_mb, 'disk' => $app->disk_mb]) }}

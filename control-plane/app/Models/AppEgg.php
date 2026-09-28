@@ -45,6 +45,26 @@ class AppEgg extends Model
         $query->where('is_active', true);
     }
 
+    /**
+     * Tekst z wbudowanego szablonu (nazwa, opis, zmienne) w języku panelu —
+     * wbudowane eggi są po polsku, tłumaczenia są w lang/*.json. Szablonów
+     * wgranych przez administratora nie tłumaczymy.
+     */
+    public function text(?string $text): string
+    {
+        return $this->builtin_key && $text ? __($text) : (string) $text;
+    }
+
+    public function displayName(): string
+    {
+        return $this->text($this->name);
+    }
+
+    public function displayDescription(): string
+    {
+        return $this->text($this->description);
+    }
+
     public function categoryLabel(): string
     {
         return __(self::CATEGORIES[$this->category] ?? self::CATEGORIES['other']);

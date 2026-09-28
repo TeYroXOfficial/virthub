@@ -48,9 +48,9 @@
                 @forelse ($eggs as $egg)
                     <tr>
                         <td>
-                            <strong>{{ $egg->name }}</strong>
+                            <strong>{{ $egg->displayName() }}</strong>
                             @if ($egg->source === 'builtin') <span class="pill info plain">{{ __('wbudowany') }}</span> @endif
-                            <div class="hint">{{ \Illuminate\Support\Str::limit($egg->description, 110) }}</div>
+                            <div class="hint">{{ \Illuminate\Support\Str::limit($egg->displayDescription(), 110) }}</div>
                         </td>
                         <td class="muted">{{ $egg->categoryLabel() }}</td>
                         <td class="hint mono">{{ implode(', ', array_keys($egg->images())) }}</td>
@@ -63,7 +63,7 @@
                             </form>
                             @if ($egg->servers_count === 0)
                                 <form method="POST" action="{{ route('panel.admin.apps.eggs.destroy', $egg) }}" style="display:inline"
-                                      data-confirm="{{ __('Usunąć szablon :name?', ['name' => $egg->name]) }}">
+                                      data-confirm="{{ __('Usunąć szablon :name?', ['name' => $egg->displayName()]) }}">
                                     @csrf @method('DELETE')
                                     <button class="btn btn-sm btn-danger" type="submit">{{ __('Usuń') }}</button>
                                 </form>

@@ -94,6 +94,20 @@ class AppsTest extends TestCase
         $this->actingAs($admin)->get(route('panel.admin.hypervisors.show', $this->node))->assertOk()->assertSee('przydzielone 6144 z 6144 MB');
     }
 
+    public function test_wbudowane_szablony_po_angielsku(): void
+    {
+        $this->customer->forceFill(['locale' => 'en'])->save();
+        $app = $this->order();
+        $this->actingAs($this->customer)->get(route('panel.apps.create'))->assertOk()
+            ->assertSee('Discord bot: Node.js')->assertSee('A high-performance Minecraft server')->assertDontSee('Wydajny serwer Minecraft');
+        $this->actingAs($this->customer)->get(route('panel.apps.startup', $app))->assertOk()
+            ->assertSee('Server file')->assertSee('Minecraft EULA acceptance')->assertDontSee('Nazwa pliku .jar');
+
+        // Szablon wgrany przez administratora zostaje w oryginale.
+        $custom = AppEgg::query()->create(['name' => 'Gałąź', 'description' => 'Mój opis', 'startup' => 'x', 'docker_images' => ['a' => 'ghcr.io/a:b']]);
+        $this->assertSame('Gałąź', $custom->displayName());
+    }
+
     // --- eggi -------------------------------------------------------------------------------
 
     public function test_wbudowane_eggi_sa_zaimportowane_z_konfiguracja(): void

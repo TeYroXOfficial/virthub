@@ -34,7 +34,7 @@
                     @foreach ($apps as $app)
                         <tr>
                             <td><a href="{{ route('panel.apps.show', $app) }}"><strong>{{ $app->name }}</strong></a></td>
-                            <td class="muted">{{ $app->egg?->name }}</td>
+                            <td class="muted">{{ $app->egg?->displayName() }}</td>
                             <td class="mono">{{ $app->address() ?? '—' }}</td>
                             <td class="num">{{ __(':memory MB RAM · :disk MB', ['memory' => $app->memory_mb, 'disk' => $app->disk_mb]) }}</td>
                             <td><span class="pill {{ $app->isSuspended() || $app->status === 'install_failed' ? 'critical' : ($app->isInstalling() ? 'warning' : 'neutral') }}">{{ $app->statusLabel() }}</span></td>
