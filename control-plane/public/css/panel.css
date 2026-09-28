@@ -609,6 +609,8 @@ details.form-block[open] > summary { margin-bottom: 16px; }
 .app-console-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid #1c2530; }
 .app-console { height: calc(100vh - 420px); min-height: 360px; padding: 8px 4px 8px 12px; }
 .app-console-frame:fullscreen .app-console { flex: 1; height: auto; }
+.abuse-findings { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+.abuse-findings li { margin: 4px 0; word-break: break-all; }
 .console-input { display: flex; gap: 8px; margin-top: 10px; }
 .console-input input { flex: 1; font-family: "JetBrains Mono", Consolas, monospace; }
 .app-stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 16px; }

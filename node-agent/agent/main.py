@@ -17,6 +17,8 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
 from .app_console import bridge_app
+from .app_guard import AppGuard, findings_payload
+from .panel import signed_post
 from .apps import AppError, AppManager, AppNotFound
 from .config import ConfigError, get_settings
 from .console import bridge as console_bridge
@@ -127,6 +129,19 @@ app_jobs = JobQueue(settings, {
 sftp = SftpService(settings, apps, settings.sftp_port, settings.sftp_listen)
 
 
+def _report_abuse(uuid: str, findings: list, action: str) -> None:
+    """Znaleziska ochrony aplikacji → panel (zawiesza aplikację i pokazuje powód)."""
+    response = signed_post(settings, "/api/internal/agent/app-abuse", {
+        "uuid": uuid, "action": action, "findings": findings_payload(findings),
+    })
+    if response.status_code >= 400:
+        log.warning("Panel odrzucił zgłoszenie nadużycia %s: HTTP %s", uuid, response.status_code)
+
+
+guard = AppGuard(apps, _report_abuse, mode=settings.apps_guard, interval=settings.apps_guard_interval)
+apps.guard = guard
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Mostek NAT i tabela nftables giną przy restarcie hosta — odtwarzamy je,
@@ -161,11 +176,14 @@ async def lifespan(app: FastAPI):
             await sftp.start()
         except Exception:
             log.exception("Nie udało się uruchomić SFTP aplikacji")
+    if settings.apps_dir.is_dir():
+        guard.start()
     log.info(
         "Agent gotowy (driver=%s, bridge=%s, obrazy=%s)",
         settings.driver, settings.bridge, settings.image_dir,
     )
     yield
+    guard.stop()
     sftp.stop()
     reporter.stop()
     app_jobs.stop()

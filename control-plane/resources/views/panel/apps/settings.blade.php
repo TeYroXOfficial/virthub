@@ -78,6 +78,34 @@
                     <button class="btn btn-danger" type="submit">{{ __('Zawieś i zatrzymaj') }}</button>
                 @endif
             </form>
+
+            <div class="setting-row" style="margin-top:16px">
+                <div class="setting-text">
+                    <h3>{{ __('Ochrona przed nadużyciami') }}
+                        @if ($app->abuse_exempt) <span class="pill warning">{{ __('wyłączona') }}</span> @endif
+                    </h3>
+                    <p class="muted">{{ __('Węzeł co minutę sprawdza procesy i pliki aplikacji: PteroVM i inne systemy w kontenerze (proot, QEMU), koparki kryptowalut i zdalne powłoki są zabijane, a aplikacja zawieszana.') }}</p>
+                    @if ($app->abuse_detected_at)
+                        <p><strong>{{ __('Ostatnie wykrycie: :date', ['date' => $app->abuse_detected_at->format('d.m.Y H:i')]) }}</strong></p>
+                        <ul class="abuse-findings">
+                            @foreach ($app->abuse_findings['findings'] ?? [] as $finding)
+                                <li><span class="pill {{ $finding['level'] === 'block' ? 'critical' : 'warning' }} plain">{{ \App\Http\Controllers\Internal\AppAbuseController::label($finding['category']) }}</span>
+                                    <span class="muted">{{ $finding['source'] === 'process' ? __('proces') : __('plik') }}:</span> <code>{{ $finding['detail'] }}</code></li>
+                            @endforeach
+                        </ul>
+                    @endif
+                    @error('abuse') <div class="hint" style="color:var(--critical)">{{ $message }}</div> @enderror
+                </div>
+                @if (auth()->user()->isAdmin())
+                    <form method="POST" action="{{ route('panel.admin.apps.abuse-exempt', $app) }}"
+                          @unless ($app->abuse_exempt) onsubmit="return confirm(@js(__('Wyłączyć ochronę dla tej aplikacji? Rób to tylko przy fałszywym alarmie.')))" @endunless>
+                        @csrf
+                        <button class="btn {{ $app->abuse_exempt ? '' : 'btn-danger' }}" type="submit">
+                            {{ $app->abuse_exempt ? __('Włącz ochronę') : __('Fałszywy alarm — wyłącz ochronę') }}
+                        </button>
+                    </form>
+                @endif
+            </div>
         </div>
     @endcan
 

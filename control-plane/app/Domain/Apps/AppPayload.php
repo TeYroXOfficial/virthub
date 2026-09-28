@@ -54,6 +54,7 @@ class AppPayload
             'memory_mb' => $app->memory_mb,
             'cpu_percent' => $app->cpu_percent,
             'disk_mb' => $app->disk_mb,
+            'guard_exempt' => (bool) $app->abuse_exempt,
             'allocations' => $app->allocations->map(fn ($a) => ['port' => $a->port])->values()->all(),
             'config_files' => $configFiles,
             'install' => $egg->install_script ? [

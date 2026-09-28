@@ -121,6 +121,11 @@ Route::post('/internal/agent/sftp-auth', \App\Http\Controllers\Internal\SftpAuth
     ->middleware('throttle:120,1')
     ->name('internal.agent.sftp-auth');
 
+// Ochrona aplikacji: węzeł zgłasza PteroVM, koparki, zdalne powłoki (podpis sekretem węzła).
+Route::post('/internal/agent/app-abuse', \App\Http\Controllers\Internal\AppAbuseController::class)
+    ->middleware('throttle:120,1')
+    ->name('internal.agent.app-abuse');
+
 // Przekaźnik konsoli (console-proxy/) wymienia jednorazową sesję na parametry
 // połączenia z agentem. Uwierzytelnienie wspólnym sekretem w kontrolerze.
 Route::post('/internal/console/{session}', ConsoleRedeemController::class)

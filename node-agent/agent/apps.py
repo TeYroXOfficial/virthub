@@ -57,12 +57,30 @@ MAX_WRITE = 50 * 1024 * 1024
 MAX_LIST = 5000
 MAX_EXTRACT_ENTRIES = 50_000
 
-# Jak Wings: bez uprawnień, których serwer gry nie potrzebuje, a które
-# ułatwiają ucieczkę z kontenera albo podsłuch sieci.
-CAP_DROP = [
-    "setpcap", "mknod", "audit_write", "net_raw", "dac_override", "fowner",
-    "fsetid", "net_bind_service", "sys_chroot", "setfcap",
-]
+# Aplikacja działa jako zwykły użytkownik, więc żadne uprawnienie jądra nie
+# jest jej potrzebne — odbieramy wszystkie (Wings odbiera tylko część).
+CAP_DROP = ["ALL"]
+# Instalator działa jako root (pakiety, chown) — zostawiamy mu tylko to, czego
+# używają skrypty eggów, bez podsłuchu sieci, urządzeń i zmian uprawnień plików.
+INSTALLER_CAP_DROP = ["NET_RAW", "MKNOD", "SYS_CHROOT", "SETFCAP", "SETPCAP", "AUDIT_WRITE", "NET_BIND_SERVICE"]
+
+# Podnieś przy każdej zmianie zabezpieczeń kontenera — działające aplikacje
+# dostaną nowy kontener przy najbliższym starcie.
+SECURITY_VERSION = 2
+# Profil seccomp: lista zakazanych wywołań (ptrace, przestrzenie nazw,
+# montowanie, moduły, BPF, io_uring…) z mapą architektur, żeby 32-bitowe
+# programy (SteamCMD) działały. ptrace to fundament proot, którym „eggi VPS”
+# (PteroVM) uruchamiają cały system w kontenerze; serwerom gier i botom nie
+# jest potrzebny. Reszta zakazów zamyka drogi ucieczki z kontenera, gdyby
+# jądro miało błąd — aplikacja i tak nie ma żadnych uprawnień.
+SECCOMP_PROFILE = Path(__file__).with_name("seccomp_apps.json")
+
+
+def security_options(settings: Settings) -> list[str]:
+    options = ["no-new-privileges"]
+    if settings.apps_seccomp and SECCOMP_PROFILE.exists():
+        options.append("seccomp=" + SECCOMP_PROFILE.read_text(encoding="utf-8"))
+    return options
 
 
 class AppError(RuntimeError):
@@ -407,8 +425,10 @@ def _set_path(doc: dict, dotted: str, value: Any) -> None:
 # --- menedżer ---------------------------------------------------------------------
 
 def spec_hash(spec: AppSpec) -> str:
-    """Skrót tego, co wymaga nowego kontenera (obraz, zmienne, zasoby, porty)."""
-    relevant = spec.model_dump(exclude={"install", "config_files"})
+    """Skrót tego, co wymaga nowego kontenera (obraz, zmienne, zasoby, porty,
+    wersja zabezpieczeń — po jej podniesieniu stare kontenery powstają od nowa)."""
+    relevant = spec.model_dump(exclude={"install", "config_files", "guard_exempt"})
+    relevant["_security"] = SECURITY_VERSION
     return hashlib.sha256(json.dumps(relevant, sort_keys=True).encode()).hexdigest()[:16]
 
 
@@ -421,6 +441,7 @@ class AppManager:
         self._usage_cache: dict[str, tuple[float, int]] = {}
         self.uid = os.getuid()
         self.gid = os.getgid()
+        self.guard: Any = None  # AppGuard — ustawia go main.py
 
     # --- dostęp do Dockera --------------------------------------------------
 
@@ -614,6 +635,8 @@ class AppManager:
             network=self.settings.apps_network,
             mem_limit=f"{max(spec.memory_mb, 1024)}m",
             pids_limit=4096,
+            cap_drop=INSTALLER_CAP_DROP,
+            security_opt=security_options(self.settings),
             labels={LABEL: spec.uuid, "virthub.role": "installer"},
             dns=self._dns(),
             detach=True,
@@ -693,7 +716,7 @@ class AppManager:
             memswap_limit=f"{spec.memory_mb + spec.swap_mb}m",
             pids_limit=spec.pids_limit,
             cap_drop=CAP_DROP,
-            security_opt=["no-new-privileges"],
+            security_opt=security_options(self.settings),
             stdin_open=True,
             tty=True,
             labels={LABEL: spec.uuid, SPEC_LABEL: spec_hash(spec), DNS_LABEL: ",".join(self.settings.apps_dns)},
@@ -754,6 +777,15 @@ class AppManager:
                 raise AppError(
                     f"Aplikacja zajmuje {used // (1024 * 1024)} MB z limitu {spec.disk_mb} MB — "
                     "usuń zbędne pliki, żeby ją uruchomić."
+                )
+        if self.guard is not None:
+            found = self.guard.check_before_start(spec.uuid)
+            if found:
+                raise AppError(
+                    "Start zablokowany: w plikach aplikacji wykryto narzędzia niedozwolone na tym hostingu "
+                    f"({'; '.join(f.label() for f in found[:3])}). Aplikacje służą do serwerów gier i botów — "
+                    "uruchamianie systemów (PteroVM, proot, QEMU), koparek i zdalnych powłok jest zabronione. "
+                    "Usuń te pliki albo skontaktuj się z obsługą."
                 )
         for cfg in spec.config_files:
             try:

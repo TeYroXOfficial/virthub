@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\RateLimiter;
  */
 class SftpAuthController extends Controller
 {
-    private const MAX_CLOCK_SKEW = 300;
+    use VerifiesNodeSignature;
 
     private const MAX_FAILURES = 10;
 
@@ -44,7 +44,7 @@ class SftpAuthController extends Controller
             return $this->deny(404);
         }
 
-        if (! $this->hasValidSignature($request, (string) $app->hypervisor->callback_secret)) {
+        if (! $this->hasValidNodeSignature($request,(string) $app->hypervisor->callback_secret)) {
             Log::warning(__('Odrzucono logowanie SFTP z nieprawidłowym podpisem węzła'), ['app' => $app->uuid, 'ip' => $request->ip()]);
 
             return $this->deny(401);
@@ -76,19 +76,5 @@ class SftpAuthController extends Controller
     private function deny(int $status): JsonResponse
     {
         return response()->json(['allowed' => false], $status);
-    }
-
-    private function hasValidSignature(Request $request, string $secret): bool
-    {
-        $signature = (string) $request->header('X-VH-Signature', '');
-        $timestamp = (string) $request->header('X-VH-Timestamp', '');
-
-        if ($secret === '' || $signature === '' || ! ctype_digit($timestamp) || abs(time() - (int) $timestamp) > self::MAX_CLOCK_SKEW) {
-            return false;
-        }
-
-        $canonical = implode("\n", [$timestamp, 'POST', $request->getPathInfo(), hash('sha256', $request->getContent())]);
-
-        return hash_equals(hash_hmac('sha256', $canonical, $secret), $signature);
     }
 }

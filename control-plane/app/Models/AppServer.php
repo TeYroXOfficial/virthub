@@ -35,6 +35,9 @@ class AppServer extends Model
             'disk_mb' => 'integer',
             'installed_at' => 'datetime',
             'suspended_at' => 'datetime',
+            'abuse_detected_at' => 'datetime',
+            'abuse_findings' => 'array',
+            'abuse_exempt' => 'boolean',
         ];
     }
 

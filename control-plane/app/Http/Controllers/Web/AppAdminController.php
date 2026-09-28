@@ -155,6 +155,23 @@ class AppAdminController extends Controller
         return back()->with('status', __('Aplikacja :name została zawieszona i zatrzymana.', ['name' => $app->name]));
     }
 
+    /** Zwolnienie z ochrony przed nadużyciami — tylko administrator (fałszywy alarm). */
+    public function abuseExempt(Request $request, AppServer $app): RedirectResponse
+    {
+        $this->authorize('manage', $app);
+        abort_unless($request->user()->isAdmin(), 403);
+
+        try {
+            $this->apps->setAbuseExempt($app, ! $app->abuse_exempt, $request->user());
+        } catch (\DomainException|AgentException $e) {
+            return back()->withErrors(['abuse' => $e->getMessage()]);
+        }
+
+        return back()->with('status', $app->abuse_exempt
+            ? __('Aplikacja :name jest zwolniona z ochrony przed nadużyciami.', ['name' => $app->name])
+            : __('Ochrona przed nadużyciami znów obejmuje aplikację :name.', ['name' => $app->name]));
+    }
+
     public function resources(Request $request, AppServer $app): RedirectResponse
     {
         $this->authorize('manage', $app);
