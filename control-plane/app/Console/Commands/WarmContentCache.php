@@ -25,14 +25,15 @@ class WarmContentCache extends Command
     {
         $top = max(0, (int) $this->option('top'));
         $warmed = 0;
-        $try = function (callable $fn) use (&$warmed): mixed {
+        $errors = [];
+        $try = function (callable $fn) use (&$warmed, &$errors): mixed {
             try {
                 $result = $fn();
                 $warmed++;
 
                 return $result;
             } catch (ContentException|\Illuminate\Http\Client\ConnectionException $e) {
-                $this->warn($e->getMessage());
+                $errors[] = $e->getMessage();
 
                 return null;
             }
@@ -67,6 +68,15 @@ class WarmContentCache extends Command
         });
 
         $this->info("Rozgrzano {$warmed} pozycji cache.");
+        if ($errors !== []) {
+            $this->warn(count($errors).' zapytań się nie udało, np.: '.mb_substr($errors[0], 0, 200));
+            if (collect($errors)->contains(fn ($e) => str_contains($e, 'Resolving timed out') || str_contains($e, 'Could not resolve'))) {
+                $this->warn('DNS serwera nie odpowiada. Napraw go: sudo bash /opt/virthub-agent/scripts/fix-dns.sh (na węźle) '
+                    .'albo curl -sSL https://raw.githubusercontent.com/TeYroXOfficial/virthub/main/node-agent/scripts/fix-dns.sh | sudo bash');
+            }
+
+            return $warmed > 0 ? self::SUCCESS : self::FAILURE;
+        }
 
         return self::SUCCESS;
     }

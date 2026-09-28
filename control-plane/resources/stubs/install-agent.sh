@@ -345,6 +345,7 @@ iface $BRIDGE inet static
     bridge_hw $mac
     bridge_stp off
     bridge_fd 0
+    dns-nameservers 1.1.1.1 9.9.9.9
 IFUPEOF
         systemctl restart networking >/dev/null 2>&1 || true
     fi
@@ -562,6 +563,12 @@ fi
 # Bez niego agent przechodzi w tryb bezstanowy, więc brak modułu nie jest błędem.
 echo nf_conntrack_bridge > /etc/modules-load.d/virthub.conf
 modprobe nf_conntrack_bridge 2>/dev/null || true
+
+# DNS hosta po zmianie sieci — serwery DNS ze strofy starego interfejsu
+# mogły zniknąć; skrypt naprawia tylko wolny/niedziałający DNS.
+if [ -f "$AGENT_DIR/scripts/fix-dns.sh" ]; then
+    bash "$AGENT_DIR/scripts/fix-dns.sh" || warn "DNS hosta działa wolno — sprawdź /etc/resolv.conf."
+fi
 
 # Aplikacje (serwery gier, boty): Docker tylko na życzenie — VH_APPS=1.
 if [ -f "$AGENT_DIR/scripts/setup-apps.sh" ]; then

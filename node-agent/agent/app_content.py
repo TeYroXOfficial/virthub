@@ -83,6 +83,10 @@ class ContentError(AppError):
     pass
 
 
+CHECKED_HOST_TTL = 300
+_checked_hosts: dict[str, float] = {}
+
+
 def check_url(url: str, allow_private: bool = False) -> None:
     parts = urlsplit(url)
     if parts.scheme != "https" and not (allow_private and parts.scheme == "http"):
@@ -92,6 +96,11 @@ def check_url(url: str, allow_private: bool = False) -> None:
         raise ContentError("Adres bez hosta.")
     if allow_private:
         return
+    # Modpack to setki plików z kilku hostów — sprawdzony host pamiętamy chwilę,
+    # zamiast pytać DNS przy każdym pliku (wolny DNS hosta mnożyłby czas).
+    now = time.monotonic()
+    if _checked_hosts.get(host, 0) > now:
+        return
     try:
         infos = socket.getaddrinfo(host, parts.port or 443, proto=socket.IPPROTO_TCP)
     except socket.gaierror as exc:
@@ -100,6 +109,7 @@ def check_url(url: str, allow_private: bool = False) -> None:
         ip = ipaddress.ip_address(info[4][0])
         if not ip.is_global:
             raise ContentError(f"Adres {host} wskazuje na sieć prywatną ({ip}) — odrzucono.")
+    _checked_hosts[host] = now + CHECKED_HOST_TTL
 
 
 class _HashingReader:

@@ -24,10 +24,28 @@ class ContentHttp
 
     public static function client(array $headers = [], int $timeout = 15): PendingRequest
     {
-        return Http::withHeaders(['User-Agent' => self::USER_AGENT, ...$headers])
-            ->acceptJson()
+        return self::prepare(Http::withHeaders(['User-Agent' => self::USER_AGENT, ...$headers])->acceptJson(), $timeout);
+    }
+
+    /**
+     * Wspólne ustawienia żądania: limity czasu i adres z własnego resolvera
+     * (HostResolver) — curl nie czeka wtedy na wolny DNS systemu.
+     */
+    public static function prepare(PendingRequest $request, int $timeout = 15): PendingRequest
+    {
+        return $request
             ->timeout($timeout)
-            ->connectTimeout(5);
+            ->connectTimeout(8)
+            ->withMiddleware(fn (callable $handler) => function ($request, array $options) use ($handler) {
+                $uri = $request->getUri();
+                $ips = HostResolver::resolve($uri->getHost());
+                if ($ips !== []) {
+                    $port = $uri->getPort() ?? ($uri->getScheme() === 'http' ? 80 : 443);
+                    $options['curl'][CURLOPT_RESOLVE] = [$uri->getHost().':'.$port.':'.implode(',', $ips)];
+                }
+
+                return $handler($request, $options);
+            });
     }
 
     /**

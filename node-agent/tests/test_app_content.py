@@ -191,3 +191,20 @@ def test_instalacja_blokuje_aplikacje_na_czas_trwania(manager, server):
     run(manager, [{"op": "write", "path": "a.txt", "content": "x"}], exclusive=True)
     assert UUID in seen["installing"]
     assert UUID not in manager._installing
+
+
+def test_sprawdzony_host_nie_pyta_dns_przy_kazdym_pliku(monkeypatch):
+    import agent.app_content as content
+
+    calls = []
+
+    def fake_getaddrinfo(host, *args, **kwargs):
+        calls.append(host)
+        return [(0, 0, 0, "", ("104.18.22.35", 443))]
+
+    monkeypatch.setattr(content.socket, "getaddrinfo", fake_getaddrinfo)
+    monkeypatch.setattr(content, "_checked_hosts", {})
+    for i in range(50):
+        check_url(f"https://cdn.modrinth.com/data/{i}.jar")
+    check_url("https://edge.forgecdn.net/x.jar")
+    assert calls == ["cdn.modrinth.com", "edge.forgecdn.net"]

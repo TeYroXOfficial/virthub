@@ -665,6 +665,19 @@ strony modpacków ze szczegółami najpopularniejszych paczek oraz katalogi
 pluginów/modów dla wersji gry, na których działają serwery klientów — ręcznie:
 `php artisan virthub:warm-content`.
 
+Panel rozwiązuje nazwy serwisów sam (zapytanie DNS wprost do 1.1.1.1 i
+9.9.9.9, wynik w cache), więc wolny DNS systemu nie spowalnia katalogów.
+Resolvery zmienisz w `.env` panelu: `VIRTHUB_CONTENT_DNS=1.1.1.1,9.9.9.9`
+(puste = DNS systemu). Jeśli `virthub:warm-content` pokazuje
+„Resolving timed out”, DNS samego serwera nie działa — typowo na Debianie
+z ifupdown po zamianie eth0 na most (serwery DNS były w strofie eth0).
+Naprawa (zostawia działające serwery, dopisuje 1.1.1.1 i 9.9.9.9; aktualizacja
+węzła robi to sama):
+
+```bash
+curl -sSL https://raw.githubusercontent.com/TeYroXOfficial/virthub/main/node-agent/scripts/fix-dns.sh | sudo bash
+```
+
 CurseForge wymaga darmowego klucza API: załóż go w
 [console.curseforge.com](https://console.curseforge.com) i wpisz w `.env`
 panelu jako `VIRTHUB_CURSEFORGE_API_KEY=` — bez klucza to źródło jest ukryte,
