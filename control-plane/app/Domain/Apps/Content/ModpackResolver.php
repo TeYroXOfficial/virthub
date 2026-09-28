@@ -13,7 +13,8 @@ use Illuminate\Support\Str;
  */
 class ModpackResolver
 {
-    private const MAX_PACK_BYTES = 300 * 1024 * 1024;
+    /** Tylko gdy serwis nie obsługuje Range i trzeba pobrać całe archiwum. */
+    private const MAX_PACK_BYTES = 4 * 1024 * 1024 * 1024;
 
     public function __construct(
         private readonly Modrinth $modrinth,
@@ -247,20 +248,35 @@ class ModpackResolver
         return $name;
     }
 
-    /** Pobiera archiwum paczki (do pliku tymczasowego) i czyta z niego jeden plik JSON. */
+    /**
+     * Jeden plik JSON z archiwum paczki. Najpierw sam wpis przez HTTP Range
+     * (kilka małych zapytań, niezależnie od rozmiaru paczki); całe archiwum
+     * pobieramy tylko, gdy serwer Range nie obsługuje. Sumę całego archiwum
+     * i tak sprawdza agent przy rozpakowaniu.
+     */
     private function readZipJson(string $url, string $entry, ?string $sha512 = null, ?string $sha1 = null): array
     {
         if (! str_starts_with($url, 'https://')) {
             throw new ContentException(__('Adres paczki musi być https.'));
         }
+        $json = RemoteZip::read($url, $entry);
+        if ($json !== null) {
+            $data = json_decode($json, true);
+            if (! is_array($data)) {
+                throw new ContentException(__('W paczce brakuje :file.', ['file' => $entry]));
+            }
+
+            return $data;
+        }
+
         $tmp = tempnam(sys_get_temp_dir(), 'vhpack');
         try {
-            $response = ContentHttp::client(timeout: 180)->withOptions(['sink' => $tmp])->get($url);
+            $response = ContentHttp::client(timeout: 1800)->withOptions(['sink' => $tmp])->get($url);
             if (! $response->successful()) {
                 throw new ContentException(__('Nie udało się pobrać paczki (HTTP :code).', ['code' => $response->status()]));
             }
             if (filesize($tmp) > self::MAX_PACK_BYTES) {
-                throw new ContentException(__('Archiwum paczki jest za duże.'));
+                throw new ContentException(__('Archiwum paczki ma ponad 4 GB — panel go nie przetworzy.'));
             }
             if (($sha512 && hash_file('sha512', $tmp) !== $sha512) || ($sha1 && hash_file('sha1', $tmp) !== $sha1)) {
                 throw new ContentException(__('Archiwum paczki ma złą sumę kontrolną.'));
