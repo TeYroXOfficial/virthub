@@ -5,6 +5,7 @@
 @section('content')
     @include('panel.apps._header')
 
+    @include('panel.apps._content_ui')
     <p><a href="{{ route('panel.apps.modpacks', [$app, 'source' => $source]) }}"><x-icon name="arrow-left" :size="14"/> {{ __('Wróć do listy') }}</a></p>
 
     @if ($error)
@@ -28,7 +29,7 @@
             @if ($versions === [])
                 <p class="muted" style="margin-top:16px">{{ __('Brak wersji do zainstalowania.') }}</p>
             @else
-                <form method="POST" action="{{ route('panel.apps.modpacks.install', $app) }}"
+                <form class="content-form" method="POST" action="{{ route('panel.apps.modpacks.install', $app) }}"
                       onsubmit="return confirm(@js(__('Zainstalować modpack? Mody, konfiguracja i biblioteki obecnego serwera zostaną zastąpione, aplikacja się zatrzyma.')))">
                     @csrf
                     <input type="hidden" name="source" value="{{ $source }}">

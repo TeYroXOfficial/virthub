@@ -657,6 +657,14 @@ limicie dysku aplikacji. Postęp instalacji modpacka i loadera widać na żywo w
 konsoli. Panel nie pozwala zejść na starszą wersję gry bez usunięcia świata
 (Minecraft nie wczyta nowszego świata).
 
+Katalogi idą z cache panelu (Redis): wyszukiwanie i listy wersji są świeże
+15 minut, opisy 6 godzin, konkretne wersje i pliki — miesiąc. Po czasie
+świeżości strona dalej dostaje dane od razu, a odświeżenie dzieje się w tle.
+Co 10 minut `virthub:warm-content` (harmonogram panelu) rozgrzewa pierwsze
+strony modpacków ze szczegółami najpopularniejszych paczek oraz katalogi
+pluginów/modów dla wersji gry, na których działają serwery klientów — ręcznie:
+`php artisan virthub:warm-content`.
+
 CurseForge wymaga darmowego klucza API: załóż go w
 [console.curseforge.com](https://console.curseforge.com) i wpisz w `.env`
 panelu jako `VIRTHUB_CURSEFORGE_API_KEY=` — bez klucza to źródło jest ukryte,

@@ -2,8 +2,6 @@
 
 namespace App\Domain\Apps\Content;
 
-use Illuminate\Support\Facades\Cache;
-
 /**
  * Serwer Minecraft z loaderem: kroki instalacji (vanilla, Fabric, Quilt,
  * Forge, NeoForge), dobór Javy do wersji gry i uniwersalny skrypt startowy.
@@ -78,18 +76,25 @@ class Loaders
         };
     }
 
+    /** @return list<array{id: string, type: string, url: string}> wersje gry od Mojang, najnowsze pierwsze */
+    public static function mojangVersions(): array
+    {
+        return ContentHttp::cached('mojang:versions', ContentHttp::DETAILS, fn () => array_values(array_map(
+            fn ($v) => ['id' => (string) $v['id'], 'type' => (string) ($v['type'] ?? ''), 'url' => (string) $v['url']],
+            ContentHttp::json(ContentHttp::client()->get('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'), 'Mojang')['versions'] ?? [],
+        )));
+    }
+
     /** @return array<string, mixed> */
     public function vanilla(string $mc, string $path = 'server.jar'): array
     {
-        $manifest = Cache::remember('mojang:manifest', 3600, fn () => ContentHttp::json(
-            ContentHttp::client()->get('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'), 'Mojang',
-        ));
-        $entry = collect($manifest['versions'] ?? [])->firstWhere('id', $mc);
+        $entry = collect(self::mojangVersions())->firstWhere('id', $mc);
         if ($entry === null) {
             throw new ContentException(__('Mojang nie zna wersji Minecrafta :version.', ['version' => $mc]));
         }
-        $meta = Cache::remember("mojang:version:{$mc}", 86400, fn () => ContentHttp::json(ContentHttp::client()->get($entry['url']), 'Mojang'));
-        $server = $meta['downloads']['server'] ?? null;
+        $server = ContentHttp::cached("mojang:server:{$mc}", ContentHttp::IMMUTABLE, fn () => ContentHttp::json(
+            ContentHttp::client()->get($entry['url']), 'Mojang',
+        )['downloads']['server'] ?? null);
         if (! $server) {
             throw new ContentException(__('Wersja :version nie ma serwera od Mojang.', ['version' => $mc]));
         }
@@ -100,14 +105,14 @@ class Loaders
 
     private function fabric(string $mc, ?string $version): array
     {
-        $loaders = Cache::remember("fabric:loaders:{$mc}", 3600, fn () => ContentHttp::json(
+        $loaders = ContentHttp::cached("fabric:loaders:{$mc}", ContentHttp::LISTS, fn () => ContentHttp::json(
             ContentHttp::client()->get('https://meta.fabricmc.net/v2/versions/loader/'.rawurlencode($mc)), 'Fabric',
         ));
         if ($loaders === []) {
             throw new ContentException(__('Fabric nie wspiera Minecrafta :version.', ['version' => $mc]));
         }
         $version ??= collect($loaders)->first(fn ($l) => $l['loader']['stable'] ?? false)['loader']['version'] ?? $loaders[0]['loader']['version'];
-        $installers = Cache::remember('fabric:installers', 3600, fn () => ContentHttp::json(
+        $installers = ContentHttp::cached('fabric:installers', ContentHttp::LISTS, fn () => ContentHttp::json(
             ContentHttp::client()->get('https://meta.fabricmc.net/v2/versions/installer'), 'Fabric',
         ));
         $installer = collect($installers)->firstWhere('stable', true)['version'] ?? $installers[0]['version'];
@@ -122,14 +127,14 @@ class Loaders
 
     private function quilt(string $mc, ?string $version): array
     {
-        $loaders = Cache::remember("quilt:loaders:{$mc}", 3600, fn () => ContentHttp::json(
+        $loaders = ContentHttp::cached("quilt:loaders:{$mc}", ContentHttp::LISTS, fn () => ContentHttp::json(
             ContentHttp::client()->get('https://meta.quiltmc.org/v3/versions/loader/'.rawurlencode($mc)), 'Quilt',
         ));
         if ($loaders === []) {
             throw new ContentException(__('Quilt nie wspiera Minecrafta :version.', ['version' => $mc]));
         }
         $version ??= collect($loaders)->first(fn ($l) => ! str_contains($l['loader']['version'], 'beta'))['loader']['version'] ?? $loaders[0]['loader']['version'];
-        $xml = Cache::remember('quilt:installer', 3600, fn () => ContentHttp::client()
+        $xml = ContentHttp::cached('quilt:installer', ContentHttp::LISTS, fn () => ContentHttp::client()
             ->get('https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/maven-metadata.xml')->body());
         if (! preg_match('#<release>([^<]+)</release>#', $xml, $m)) {
             throw new ContentException(__('Nie udało się ustalić wersji instalatora Quilt.'));
@@ -149,7 +154,7 @@ class Loaders
     private function forge(string $mc, ?string $version): array
     {
         if ($version === null) {
-            $promos = Cache::remember('forge:promotions', 3600, fn () => ContentHttp::json(
+            $promos = ContentHttp::cached('forge:promotions', ContentHttp::LISTS, fn () => ContentHttp::json(
                 ContentHttp::client()->get('https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json'), 'Forge',
             ))['promos'] ?? [];
             $version = $promos["{$mc}-recommended"] ?? $promos["{$mc}-latest"] ?? null;
@@ -175,9 +180,10 @@ class Loaders
         if ($version === null) {
             // Metadane repozytorium NeoForge obejmują tylko najnowszą serię — pełną
             // listę z przypisaniem do wersji gry daje meta Prism Launchera.
-            $index = Cache::remember('neoforge:index', 3600, fn () => ContentHttp::json(
-                ContentHttp::client()->get('https://meta.prismlauncher.org/v1/net.neoforged/index.json'), 'NeoForge',
-            ));
+            $index = ContentHttp::cached('neoforge:index', ContentHttp::LISTS, fn () => ['versions' => array_map(
+                fn ($v) => ['version' => $v['version'], 'type' => $v['type'] ?? 'release', 'requires' => $v['requires'] ?? []],
+                ContentHttp::json(ContentHttp::client()->get('https://meta.prismlauncher.org/v1/net.neoforged/index.json'), 'NeoForge')['versions'] ?? [],
+            )]);
             $matching = array_values(array_filter($index['versions'] ?? [], fn ($v) => collect($v['requires'] ?? [])
                 ->contains(fn ($r) => ($r['uid'] ?? '') === 'net.minecraft' && ($r['equals'] ?? '') === $mc)));
             $pick = collect($matching)->first(fn ($v) => ($v['type'] ?? 'release') === 'release' && ! str_contains($v['version'], 'beta'))
@@ -203,7 +209,7 @@ class Loaders
 
     private function mavenSha1(string $url): ?string
     {
-        $sha1 = Cache::remember('maven:sha1:'.md5($url), 86400, function () use ($url) {
+        $sha1 = ContentHttp::cached('maven:sha1:'.md5($url), ContentHttp::IMMUTABLE, function () use ($url) {
             $response = ContentHttp::client()->get($url.'.sha1');
             if ($response->status() === 404) {
                 throw new ContentException(__('Nie ma takiej wersji loadera (:url).', ['url' => basename($url)]));

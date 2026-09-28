@@ -2,14 +2,15 @@
 
 namespace App\Domain\Apps\Content;
 
-use Illuminate\Support\Facades\Cache;
-
 /** Modrinth (api.modrinth.com/v2) — modpacki (.mrpack), mody i pluginy. Bez klucza API. */
 class Modrinth
 {
     public const NAME = 'Modrinth';
 
     private const API = 'https://api.modrinth.com/v2';
+
+    /** Listy wersji modpacków bywają ogromne (setki wydań) — trzymamy najnowsze. */
+    private const MAX_VERSIONS = 80;
 
     /**
      * @param  'modpack'|'plugin'|'mod'  $kind
@@ -33,45 +34,45 @@ class Modrinth
             'limit' => $perPage,
         ];
 
-        $data = Cache::remember('modrinth:search:'.md5(json_encode($params)), 600, fn () => ContentHttp::json(
-            ContentHttp::client()->get(self::API.'/search', $params), self::NAME,
-        ));
+        return ContentHttp::cached('modrinth:search:'.md5(json_encode($params)), ContentHttp::LISTS, function () use ($params, $kind) {
+            $data = ContentHttp::json(ContentHttp::client()->get(self::API.'/search', $params), self::NAME);
 
-        return [
-            'items' => array_map(fn ($h) => [
-                'source' => 'modrinth',
-                'id' => (string) $h['project_id'],
-                'slug' => (string) ($h['slug'] ?? $h['project_id']),
-                'name' => (string) ($h['title'] ?? ''),
-                'summary' => (string) ($h['description'] ?? ''),
-                'icon' => $h['icon_url'] ?? null,
-                'downloads' => (int) ($h['downloads'] ?? 0),
-                'author' => $h['author'] ?? null,
-                'url' => 'https://modrinth.com/'.($kind === 'modpack' ? 'modpack' : ($kind === 'plugin' ? 'plugin' : 'mod')).'/'.($h['slug'] ?? $h['project_id']),
-            ], $data['hits'] ?? []),
-            'total' => (int) ($data['total_hits'] ?? 0),
-        ];
+            return [
+                'items' => array_map(fn ($h) => [
+                    'source' => 'modrinth',
+                    'id' => (string) $h['project_id'],
+                    'slug' => (string) ($h['slug'] ?? $h['project_id']),
+                    'name' => (string) ($h['title'] ?? ''),
+                    'summary' => mb_substr((string) ($h['description'] ?? ''), 0, 300),
+                    'icon' => $h['icon_url'] ?? null,
+                    'downloads' => (int) ($h['downloads'] ?? 0),
+                    'author' => $h['author'] ?? null,
+                    'url' => 'https://modrinth.com/'.$kind.'/'.($h['slug'] ?? $h['project_id']),
+                ], $data['hits'] ?? []),
+                'total' => (int) ($data['total_hits'] ?? 0),
+            ];
+        });
     }
 
     /** @return array<string, mixed> */
     public function project(string $id): array
     {
-        $p = Cache::remember("modrinth:project:{$id}", 600, fn () => ContentHttp::json(
-            ContentHttp::client()->get(self::API.'/project/'.rawurlencode($id)), self::NAME,
-        ));
+        return ContentHttp::cached("modrinth:project:{$id}", ContentHttp::DETAILS, function () use ($id) {
+            $p = ContentHttp::json(ContentHttp::client()->get(self::API.'/project/'.rawurlencode($id)), self::NAME);
 
-        return [
-            'source' => 'modrinth',
-            'id' => (string) $p['id'],
-            'slug' => (string) ($p['slug'] ?? $p['id']),
-            'name' => (string) ($p['title'] ?? ''),
-            'summary' => (string) ($p['description'] ?? ''),
-            'icon' => $p['icon_url'] ?? null,
-            'downloads' => (int) ($p['downloads'] ?? 0),
-            'author' => null,
-            'url' => 'https://modrinth.com/project/'.($p['slug'] ?? $p['id']),
-            'type' => $p['project_type'] ?? null,
-        ];
+            return [
+                'source' => 'modrinth',
+                'id' => (string) $p['id'],
+                'slug' => (string) ($p['slug'] ?? $p['id']),
+                'name' => (string) ($p['title'] ?? ''),
+                'summary' => mb_substr((string) ($p['description'] ?? ''), 0, 500),
+                'icon' => $p['icon_url'] ?? null,
+                'downloads' => (int) ($p['downloads'] ?? 0),
+                'author' => null,
+                'url' => 'https://modrinth.com/project/'.($p['slug'] ?? $p['id']),
+                'type' => $p['project_type'] ?? null,
+            ];
+        });
     }
 
     /**
@@ -86,20 +87,22 @@ class Modrinth
         $params = array_filter([
             'loaders' => $loaders ? json_encode(array_values($loaders)) : null,
             'game_versions' => $gameVersions ? json_encode(array_values($gameVersions)) : null,
+            'include_changelog' => 'false',
         ]);
-        $data = Cache::remember('modrinth:versions:'.$projectId.':'.md5(json_encode($params)), 300, fn () => ContentHttp::json(
-            ContentHttp::client()->get(self::API.'/project/'.rawurlencode($projectId).'/version', $params), self::NAME,
-        ));
 
-        return array_map(fn ($v) => $this->version($v), $data);
+        return ContentHttp::cached('modrinth:versions:'.$projectId.':'.md5(json_encode($params)), ContentHttp::LISTS, function () use ($projectId, $params) {
+            $data = ContentHttp::json(ContentHttp::client()->get(self::API.'/project/'.rawurlencode($projectId).'/version', $params), self::NAME);
+
+            return array_map(fn ($v) => $this->version($v), array_slice($data, 0, self::MAX_VERSIONS));
+        });
     }
 
     /** @return array<string, mixed> */
     public function versionById(string $versionId): array
     {
-        return $this->version(Cache::remember("modrinth:version:{$versionId}", 600, fn () => ContentHttp::json(
-            ContentHttp::client()->get(self::API.'/version/'.rawurlencode($versionId)), self::NAME,
-        )));
+        return ContentHttp::cached("modrinth:version:{$versionId}", ContentHttp::IMMUTABLE, fn () => $this->version(
+            ContentHttp::json(ContentHttp::client()->get(self::API.'/version/'.rawurlencode($versionId)), self::NAME),
+        ));
     }
 
     /** @return array<string, mixed> */
@@ -117,17 +120,18 @@ class Modrinth
             'loaders' => array_values($v['loaders'] ?? []),
             'type' => (string) ($v['version_type'] ?? 'release'),
             'date' => $v['date_published'] ?? null,
+            // Tylko plik główny (i .mrpack) — dodatkowe pliki (źródła, javadoc) są zbędne.
             'files' => array_map(fn ($f) => [
                 'url' => (string) $f['url'],
                 'filename' => (string) $f['filename'],
                 'size' => (int) ($f['size'] ?? 0),
                 'sha1' => $f['hashes']['sha1'] ?? null,
                 'sha512' => $f['hashes']['sha512'] ?? null,
-            ], $files),
+            ], array_slice($files, 0, 2)),
             'dependencies' => array_values(array_map(fn ($d) => [
                 'project_id' => $d['project_id'] ?? null,
                 'version_id' => $d['version_id'] ?? null,
-                'required' => ($d['dependency_type'] ?? '') === 'required',
+                'required' => true,
             ], array_filter($v['dependencies'] ?? [], fn ($d) => ($d['dependency_type'] ?? '') === 'required'))),
         ];
     }

@@ -33,3 +33,10 @@ Schedule::command('virthub:collect-metrics')
 Schedule::call(function () {
     App\Models\ServerMetric::where('sampled_at', '<', now()->subDays(8))->delete();
 })->daily()->name('prune-metrics');
+
+// Katalogi modpacków, pluginów i modów — klient dostaje listy z cache od
+// razu, zamiast czekać na Modrinth/FTB/CurseForge/Hangar.
+Schedule::command('virthub:warm-content')
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();

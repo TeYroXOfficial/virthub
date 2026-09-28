@@ -6,6 +6,8 @@
     $pages = $results ? (int) min(50, ceil(($results['total'] ?? 0) / $perPage)) : 0;
 @endphp
 
+@include('panel.apps._content_ui')
+
 <form method="GET" action="{{ route($route, $app) }}" class="catalog-search">
     <div class="segmented" role="tablist" aria-label="{{ __('Źródło') }}">
         @foreach ($sources as $key => $name)
