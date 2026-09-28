@@ -14,16 +14,28 @@ APPS_DIR="${VH_APPS_DIR:-/var/lib/virthub/apps}"
 ok()   { printf '  ✓ %s\n' "$*"; }
 warn() { printf '  ! %s\n' "$*"; }
 
-if ! command -v docker >/dev/null 2>&1; then
+export DEBIAN_FRONTEND=noninteractive
+
+# Demon (dockerd) decyduje, czy węzeł ma aplikacje — samo polecenie docker
+# bywa w osobnym pakiecie.
+if ! command -v dockerd >/dev/null 2>&1; then
     [ "${VH_APPS:-0}" = "1" ] || exit 0
 
-    export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
     if ! apt-get install -y -qq docker.io >/dev/null; then
         warn "Nie udało się zainstalować Dockera (pakiet docker.io)."
         exit 1
     fi
     ok "Docker zainstalowany"
+fi
+
+# Debian 13 trzyma klienta `docker` w osobnym pakiecie docker-cli, którego
+# docker.io nie wciąga — bez niego nie da się diagnozować kontenerów na węźle.
+if ! command -v docker >/dev/null 2>&1; then
+    if apt-cache show docker-cli >/dev/null 2>&1; then
+        apt-get install -y -qq docker-cli >/dev/null && ok "Zainstalowano polecenie docker (docker-cli)" \
+            || warn "Nie udało się zainstalować docker-cli."
+    fi
 fi
 
 # Rotacja logów kontenerów (konsola aplikacji to ich logi) i live-restore —
@@ -49,4 +61,4 @@ if id "$AGENT_USER" >/dev/null 2>&1; then
     install -d -o "$AGENT_USER" -g "$(id -gn "$AGENT_USER")" -m 0750 "$APPS_DIR"
 fi
 
-ok "Aplikacje: Docker $(docker version --format '{{.Server.Version}}' 2>/dev/null || echo '?') gotowy"
+ok "Aplikacje: Docker $(dockerd --version 2>/dev/null | awk '{print $3}' | tr -d , || echo '?') gotowy"
