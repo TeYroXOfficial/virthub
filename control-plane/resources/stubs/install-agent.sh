@@ -52,6 +52,26 @@ fi
 command -v apt-get >/dev/null 2>&1 \
     || die "Ten instalator obsługuje Debiana i Ubuntu. Na innych dystrybucjach użyj playbooka z infra/ansible/."
 
+# Agent wymaga Pythona 3.10+, a wydania po końcu wsparcia mają martwe
+# repozytorium poprawek bezpieczeństwa (apt kończy się błędami 404).
+# Sprawdzamy to przed jakąkolwiek zmianą w systemie.
+if [ -r /etc/os-release ]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    OS_MAJOR="${VERSION_ID%%.*}"
+    case "${ID:-}" in
+        debian)
+            if [ -n "$OS_MAJOR" ] && [ "$OS_MAJOR" -lt 12 ]; then
+                die "Debian ${VERSION_ID} (${VERSION_CODENAME:-}) nie jest obsługiwany: jego wsparcie się skończyło (repozytorium poprawek bezpieczeństwa już nie działa), a agent wymaga Pythona 3.10+.
+    Zainstaluj Debian 12 lub 13 albo zaktualizuj system do Debiana 12 i uruchom instalator ponownie."
+            fi ;;
+        ubuntu)
+            if [ -n "$OS_MAJOR" ] && [ "$OS_MAJOR" -lt 22 ]; then
+                die "Ubuntu ${VERSION_ID} nie jest obsługiwane — agent wymaga Pythona 3.10+. Użyj Ubuntu 22.04 lub 24.04."
+            fi ;;
+    esac
+fi
+
 # --- rodzaj węzła -----------------------------------------------------------
 
 # Maszyny KVM wymagają sprzętowego wsparcia wirtualizacji. Bez niego (typowo

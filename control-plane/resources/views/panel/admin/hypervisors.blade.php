@@ -23,9 +23,9 @@
         </p>
         <p class="hint">
             {{ __('Rodzaj węzła instalator wykrywa sam: serwer z VT-x/AMD-V dostaje KVM, a serwer bez niego (np. VPS) — kontenery LXC. Żeby wymusić kontenery na serwerze z KVM, uruchom polecenie z') }}
-            <span class="mono">{{ __('sudo VH_VIRT=lxc bash') }}</span> {{ __('zamiast') }} <span class="mono">{{ __('sudo bash') }}</span>.
+            <span class="mono">VH_VIRT=lxc bash</span> {{ __('zamiast') }} <span class="mono">bash</span>.
             {{ __('Węzeł na aplikacje (serwery gier, boty) potrzebuje Dockera — dodaj') }} <span class="mono">VH_APPS=1</span>,
-            {{ __('np.') }} <span class="mono">sudo VH_APPS=1 bash</span>.
+            {{ __('np.') }} <span class="mono">VH_APPS=1 bash</span>.
         </p>
         <form method="POST" action="{{ route('panel.admin.hypervisors.store') }}">
             @csrf

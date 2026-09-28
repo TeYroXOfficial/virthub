@@ -850,7 +850,8 @@ class AdminController extends Controller
     private function enrollmentCommand(string $token): string
     {
         return sprintf(
-            'curl -sSL %s/enroll/%s | sudo bash',
+            // Jako root — na świeżym serwerze często nie ma sudo. Z innego konta: … | sudo bash.
+            'curl -sSL %s/enroll/%s | bash',
             rtrim(config('app.url'), '/'),
             $token,
         );

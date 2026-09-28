@@ -100,7 +100,7 @@ class AdminPanelTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('panel.admin.hypervisors'))
             ->assertOk()
-            ->assertSee('| sudo bash', escape: false)
+            ->assertSee('| bash', escape: false)
             ->assertSee('node-z-poleceniem');
     }
 
