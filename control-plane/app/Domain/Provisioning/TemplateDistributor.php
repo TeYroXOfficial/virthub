@@ -48,7 +48,7 @@ class TemplateDistributor
         return OsTemplate::query()
             ->active()
             ->where('virtualization', $node->virtualization->value)
-            ->when(! $node->runsContainers(), fn ($q) => $q->whereNotNull('source_url'))
+            ->when(! $node->runsContainers(), fn ($q) => $q->where(fn ($q) => $q->whereNotNull('source_url')->orWhereNotNull('build_recipe')))
             ->get()
             ->sum(fn (OsTemplate $template) => $this->queue($template, $node) ? 1 : 0);
     }

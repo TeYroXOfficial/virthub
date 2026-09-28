@@ -137,6 +137,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/templates/{template}/retry', [AdminController::class, 'retryTemplate'])->name('templates.retry');
         Route::post('/templates/catalog/{key}', [AdminController::class, 'addCatalogTemplate'])->name('templates.catalog');
         Route::post('/templates/kvm-catalog/{key}', [AdminController::class, 'addKvmCatalogTemplate'])->name('templates.kvm-catalog');
+        Route::post('/templates/build/{key}', [AdminController::class, 'buildTemplate'])->name('templates.build');
         Route::put('/templates/{template}', [AdminController::class, 'updateTemplate'])->name('templates.update');
         Route::delete('/templates/{template}', [AdminController::class, 'destroyTemplate'])->name('templates.destroy');
         Route::post('/template-groups', [AdminController::class, 'storeTemplateGroup'])->name('template-groups.store');

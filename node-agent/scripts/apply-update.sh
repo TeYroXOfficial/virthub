@@ -91,6 +91,9 @@ bash "$AGENT_DIR/scripts/fix-dns.sh" || warn "DNS hosta nadal działa wolno — 
 # węźle, który już go ma, pilnujemy grupy docker i katalogu aplikacji.
 bash "$AGENT_DIR/scripts/setup-apps.sh" || warn "Nie udało się przygotować Dockera dla aplikacji"
 
+# Węzły KVM: budowa szablonów Windows (grupa kvm dla konta agenta, QEMU).
+bash "$AGENT_DIR/scripts/setup-builder.sh" || warn "Nie udało się przygotować budowy szablonów"
+
 # Węzły kontenerów: osobny zakres UID/GID dla każdego kontenera.
 bash "$AGENT_DIR/scripts/harden-incus.sh" || warn "Nie udało się ustawić przydziału UID/GID dla Incusa"
 

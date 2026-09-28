@@ -24,7 +24,7 @@ class TemplateCatalog
             ->where('cloud_init_support', true)
             ->whereIn('virtualization', $virtualizations)
             // Obraz KVM z katalogu jest do wyboru, gdy choć jeden węzeł go już pobrał.
-            ->where(fn ($q) => $q->whereNull('source_url')->orWhere('virtualization', 'lxc')
+            ->where(fn ($q) => $q->where(fn ($q) => $q->whereNull('source_url')->whereNull('build_recipe'))->orWhere('virtualization', 'lxc')
                 ->orWhereHas('downloads', fn ($d) => $d->where('status', \App\Models\TemplateDownload::STATUS_READY)))
             ->get()
             ->filter(fn (OsTemplate $t) => $t->group === null || $t->group->is_active);

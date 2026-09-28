@@ -20,6 +20,8 @@ class OsTemplate extends Model
         'image_file',
         'source_url',
         'checksum_url',
+        'build_recipe',
+        'build_options',
         'min_disk_gb',
         'cloud_init_support',
         'is_active',
@@ -41,6 +43,7 @@ class OsTemplate extends Model
             'cloud_init_support' => 'boolean',
             'is_active' => 'boolean',
             'virtualization' => \App\Enums\Virtualization::class,
+            'build_options' => 'array',
         ];
     }
 
@@ -84,7 +87,39 @@ class OsTemplate extends Model
     /** Węzły pobierają szablon same: kontenery zawsze, KVM — gdy pochodzi z katalogu. */
     public function isDistributed(): bool
     {
-        return $this->isContainer() || $this->source_url !== null;
+        return $this->isContainer() || $this->source_url !== null || $this->build_recipe !== null;
+    }
+
+    public function isBuilt(): bool
+    {
+        return $this->build_recipe !== null;
+    }
+
+    /**
+     * Zlecenie budowy dla agenta: przepis z config/virthub.php + ustawienia
+     * administratora (ISO retail/SPLA albo wersja ewaluacyjna).
+     *
+     * @return array<string, mixed>
+     */
+    public function buildRequest(): array
+    {
+        $recipe = config("virthub.template_builds.{$this->build_recipe}");
+        if ($recipe === null) {
+            throw new \RuntimeException(__('Nieznany przepis budowy: :recipe.', ['recipe' => (string) $this->build_recipe]));
+        }
+        $options = $this->build_options ?? [];
+        $evaluation = (bool) ($options['evaluation'] ?? false);
+
+        return array_filter([
+            'name' => $this->image_file,
+            'edition' => $recipe['edition'],
+            'evaluation' => $evaluation,
+            'iso_url' => $evaluation ? $recipe['eval_iso'] : ($options['iso_url'] ?? null),
+            'iso_sha256' => $evaluation ? ($recipe['eval_sha256'] ?? null) : ($options['iso_sha256'] ?? null),
+            'kms_key' => $recipe['kms_key'] ?? null,
+            'disk_gb' => $recipe['disk_gb'] ?? 20,
+            'files_url' => config('virthub.template_build_files'),
+        ], fn ($v) => $v !== null);
     }
 
     /** @param Builder<OsTemplate> $query */

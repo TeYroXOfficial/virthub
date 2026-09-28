@@ -80,7 +80,14 @@ class ServerPayload
             'ssh_keys' => array_values($sshKeys),
             'root_password' => $server->root_password,
             'nameservers' => self::nameservers($server),
+            'os_type' => self::osType($server->template),
         ];
+    }
+
+    /** Windows dostaje nośnik config-2 (cloudbase-init) i ustawienia maszyny pod Windows. */
+    public static function osType(?\App\Models\OsTemplate $template): string
+    {
+        return $template?->family === 'windows' ? 'windows' : 'linux';
     }
 
     public static function forNetwork(Server $server): array

@@ -33,6 +33,7 @@ from .console import bridge as console_bridge
 from .driver import DriverError, VmNotFound, build_driver
 from .isos import IsoError
 from .templates import TemplateError, TemplateLibrary
+from .builder import TemplateBuilder
 from .jobs import JobQueue
 from .reporter import CallbackReporter
 from .sftp import SftpService
@@ -43,6 +44,7 @@ from .schemas import (
     ImagePrefetchRequest,
     IsoDownloadRequest,
     TemplateDownloadRequest,
+    TemplateBuildRequest,
     IsoMountRequest,
     PasswordResetRequest,
     JobAccepted,
@@ -102,11 +104,8 @@ def _handlers() -> dict[str, Any]:
             ImagePrefetchRequest(**p).alias
         ),
         "download_iso": lambda p: _download_iso(IsoDownloadRequest(**p)),
-        "download_template": lambda p: _download_template(TemplateDownloadRequest(**p)),
         "mount_iso": lambda p: driver.mount_iso(p["uuid"], IsoMountRequest(**p["body"])),
-        "reset_password": lambda p: driver.reset_password(
-            p["uuid"], PasswordResetRequest(**p["body"]).password
-        ),
+        "reset_password": lambda p: _reset_password(p["uuid"], PasswordResetRequest(**p["body"])),
     }
 
 
@@ -119,6 +118,13 @@ def _delete_vm(uuid: str) -> dict[str, Any]:
     except VmNotFound:
         log.warning("Usuwana maszyna %s nie istnieje na węźle — uznaję za usuniętą", uuid)
         return {"uuid": uuid, "deleted": True, "already_absent": True}
+
+
+def _reset_password(uuid: str, req: PasswordResetRequest) -> dict[str, Any]:
+    # Konto inne niż root tylko w maszynach Windows (KVM) — kontenery zostają przy roocie.
+    if req.username == "root":
+        return driver.reset_password(uuid, req.password)
+    return driver.reset_password(uuid, req.password, req.username)
 
 
 def _download_iso(req: IsoDownloadRequest) -> dict[str, Any]:
@@ -147,6 +153,21 @@ app_jobs = JobQueue(settings, {
     "app_install": lambda p: apps.install(AppSpec(**p["spec"]), reinstall=bool(p.get("reinstall"))),
     "app_content": lambda p: apps.content(p["uuid"], AppContentRequest(**p["request"])),
 }, name="virthub-app-jobs")
+# Pobieranie (minuty) i budowa (godziny) szablonów KVM — osobna kolejka, żeby
+# nie blokowały tworzenia i zasilania maszyn.
+def _build_template(req: TemplateBuildRequest) -> dict[str, Any]:
+    if settings.virtualization == "lxc":
+        raise DriverError("Ten węzeł uruchamia kontenery — szablony KVM go nie dotyczą.")
+    try:
+        return TemplateBuilder(settings).build(req)
+    except TemplateError as exc:
+        raise DriverError(str(exc)) from exc
+
+
+build_jobs = JobQueue(settings, {
+    "build_template": lambda p: _build_template(TemplateBuildRequest(**p)),
+    "download_template": lambda p: _download_template(TemplateDownloadRequest(**p)),
+}, name="virthub-template-jobs")
 sftp = SftpService(settings, apps, settings.sftp_port, settings.sftp_listen)
 
 
@@ -190,6 +211,7 @@ async def lifespan(app: FastAPI):
 
     jobs.start()
     app_jobs.start()
+    build_jobs.start()
     reporter.start()
     # SFTP tylko tam, gdzie są aplikacje — węzeł bez Dockera nie otwiera portu.
     if settings.sftp_port and settings.apps_dir.is_dir():
@@ -207,6 +229,7 @@ async def lifespan(app: FastAPI):
     guard.stop()
     sftp.stop()
     reporter.stop()
+    build_jobs.stop()
     app_jobs.stop()
     jobs.stop()
 
@@ -465,7 +488,20 @@ async def prefetch_image(req: ImagePrefetchRequest) -> JobAccepted:
 )
 async def download_template(req: TemplateDownloadRequest) -> JobAccepted:
     """Szablon KVM z katalogu panelu — pobranie kilkuset MB idzie przez kolejkę."""
-    job_id = jobs.enqueue("download_template", req.model_dump())
+    job_id = build_jobs.enqueue("download_template", req.model_dump())
+    return JobAccepted(job_id=job_id)
+
+
+@app.post(
+    "/templates/build",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["images"],
+)
+async def build_template(req: TemplateBuildRequest) -> JobAccepted:
+    """Szablon Windows budowany Packerem na tym węźle — kolejka budowy."""
+    job_id = build_jobs.enqueue("build_template", req.model_dump())
     return JobAccepted(job_id=job_id)
 
 

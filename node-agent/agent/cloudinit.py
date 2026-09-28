@@ -12,6 +12,8 @@ większa powierzchnia ataku za tę samą funkcjonalność.
 
 from __future__ import annotations
 
+import ipaddress
+import json
 import logging
 import tempfile
 from pathlib import Path
@@ -150,6 +152,50 @@ def render_network_config(
     return "\n".join(lines) + "\n"
 
 
+def render_windows_meta_data(server_id: int, hostname: str, password: str | None) -> str:
+    """meta_data.json nośnika config-2 (OpenStack) dla cloudbase-init w Windows.
+
+    cloudbase-init ustawia z niego hasło Administratora (admin_pass) i nazwę
+    komputera (skróconą do 15 znaków NetBIOS)."""
+    data: dict = {
+        "uuid": f"virthub-{server_id}",
+        "hostname": hostname,
+        "name": hostname.split(".")[0],
+        "launch_index": 0,
+        "availability_zone": "virthub",
+    }
+    if password:
+        data["admin_pass"] = password
+    return json.dumps(data, indent=2)
+
+
+def render_network_data(interfaces: list[NetworkInterfaceSpec], nameservers: list[str], mac: str) -> str:
+    """network_data.json (format OpenStack) — statyczna adresacja dla cloudbase-init."""
+    networks = []
+    for index, iface in enumerate(interfaces):
+        net = ipaddress.ip_interface(f"{iface.address}/{iface.prefix}").network
+        entry: dict = {
+            "id": f"network{index}",
+            "link": "interface0",
+            "type": "ipv4" if iface.version == 4 else "ipv6",
+            "ip_address": iface.address,
+            "netmask": str(net.netmask),
+            "routes": [],
+        }
+        if iface.gateway:
+            entry["routes"].append({
+                "network": "0.0.0.0" if iface.version == 4 else "::",
+                "netmask": "0.0.0.0" if iface.version == 4 else "::",
+                "gateway": iface.gateway,
+            })
+        networks.append(entry)
+    return json.dumps({
+        "links": [{"id": "interface0", "type": "phy", "ethernet_mac_address": mac, "mtu": 1500}],
+        "networks": networks,
+        "services": [{"type": "dns", "address": ns} for ns in nameservers],
+    }, indent=2)
+
+
 class CloudInitBuilder:
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -168,9 +214,18 @@ class CloudInitBuilder:
         ssh_keys: list[str],
         root_password: str | None,
         mac: str,
+        os_type: str = "linux",
     ) -> Path:
         target = self.seed_path(name)
         target.parent.mkdir(parents=True, exist_ok=True)
+
+        if os_type == "windows":
+            # cloudbase-init (obrazy Windows) czyta nośnik config-2 w formacie OpenStack.
+            payload = {
+                "openstack/latest/meta_data.json": render_windows_meta_data(server_id, hostname, root_password),
+                "openstack/latest/network_data.json": render_network_data(interfaces, nameservers, mac),
+            }
+            return self._write(target, payload, label="config-2")
 
         payload = {
             "meta-data": render_meta_data(server_id, hostname),
@@ -178,6 +233,9 @@ class CloudInitBuilder:
             "network-config": render_network_config(interfaces, nameservers, mac),
         }
 
+        return self._write(target, payload, label="cidata")
+
+    def _write(self, target: Path, payload: dict[str, str], *, label: str) -> Path:
         if self.settings.is_mock:
             target.write_text(
                 "\n---\n".join(f"# {k}\n{v}" for k, v in payload.items()),
@@ -189,9 +247,10 @@ class CloudInitBuilder:
         with tempfile.TemporaryDirectory(prefix="virthub-seed-") as tmp:
             tmp_dir = Path(tmp)
             for filename, content in payload.items():
+                (tmp_dir / filename).parent.mkdir(parents=True, exist_ok=True)
                 (tmp_dir / filename).write_text(content, encoding="utf-8")
 
-            argv = self._iso_command(target, tmp_dir, list(payload))
+            argv = self._iso_command(target, tmp_dir, label)
             try:
                 run(argv, timeout=120)
             except CommandError as exc:
@@ -203,15 +262,14 @@ class CloudInitBuilder:
         log.info("Zbudowano nośnik cloud-init %s", target)
         return target
 
-    def _iso_command(self, target: Path, source_dir: Path, files: list[str]) -> list[str]:
-        sources = [str(source_dir / f) for f in files]
-
+    def _iso_command(self, target: Path, source_dir: Path, label: str = "cidata") -> list[str]:
+        # Cały katalog jako korzeń nośnika — config-2 ma podkatalogi openstack/latest.
         if which("genisoimage"):
-            return ["genisoimage", "-output", str(target), "-volid", "cidata",
-                    "-joliet", "-rock", *sources]
+            return ["genisoimage", "-output", str(target), "-volid", label,
+                    "-joliet", "-rock", str(source_dir)]
         if which("xorriso"):
             return ["xorriso", "-as", "mkisofs", "-output", str(target),
-                    "-volid", "cidata", "-joliet", "-rock", *sources]
+                    "-volid", label, "-joliet", "-rock", str(source_dir)]
 
         raise CloudInitError(
             "Na hypervisorze brakuje genisoimage lub xorriso — bez nich nie da się "

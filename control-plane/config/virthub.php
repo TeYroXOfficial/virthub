@@ -140,6 +140,34 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Szablony budowane na węzłach KVM (Packer)
+    |--------------------------------------------------------------------------
+    |
+    | Windows Server budowany z ISO na każdym węźle KVM: pliki instalacji
+    | (Autounattend, sysprep, cloudbase-init) z publicznego repozytorium
+    | VirtFusion, przepis Packera z agenta. ISO retail/SPLA podaje
+    | administrator; wersje ewaluacyjne pobierają się od Microsoftu. Klucz
+    | licencji klient podaje sam po instalacji — obraz ma tylko publiczny klucz
+    | KMS klienta (GVLK), potrzebny przy konwersji wersji ewaluacyjnej 2025.
+    */
+
+    'template_build_files' => env('VIRTHUB_TEMPLATE_BUILD_FILES', 'https://bitbucket.org/virtfusion-public/packer/get/master.zip'),
+
+    'template_builds' => [
+        'windows-2025' => ['name' => 'Windows Server 2025 Standard', 'edition' => '2025', 'file' => 'windows-server-2025.qcow2', 'min_disk_gb' => 30, 'disk_gb' => 20,
+            'kms_key' => 'TVRH6-WHNXV-R9WG3-9XRFY-MY832',
+            'eval_iso' => 'https://software-static.download.prss.microsoft.com/dbazure/888969d5-f34g-4e03-ac9d-1f9786c66749/26100.1742.240906-0331.ge_release_svc_refresh_SERVER_EVAL_x64FRE_en-us.iso',
+            'eval_sha256' => '16442d1c0509bcbb25b715b1b322a15fb3ab724a42da0f384b9406ca1c124ed4'],
+        'windows-2022' => ['name' => 'Windows Server 2022 Standard', 'edition' => '2022', 'file' => 'windows-server-2022.qcow2', 'min_disk_gb' => 30, 'disk_gb' => 20,
+            'eval_iso' => 'https://software-download.microsoft.com/download/sg/20348.169.210806-2348.fe_release_svc_refresh_SERVER_EVAL_x64FRE_en-us.iso',
+            'eval_sha256' => '4f1457c4fe14ce48c9b2324924f33ca4f0470475e6da851b39ccbf98f44e7852'],
+        'windows-2019' => ['name' => 'Windows Server 2019 Standard', 'edition' => '2019', 'file' => 'windows-server-2019.qcow2', 'min_disk_gb' => 30, 'disk_gb' => 20,
+            'eval_iso' => 'https://software-static.download.prss.microsoft.com/pr/download/17763.737.190906-2324.rs5_release_svc_refresh_SERVER_EVAL_x64FRE_en-us_1.iso',
+            'eval_sha256' => '549bca46c055157291be6c22a3aaaed8330e78ef4382c99ee82c896426a1cee1'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Limity
     |--------------------------------------------------------------------------
     */

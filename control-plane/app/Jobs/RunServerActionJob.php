@@ -71,10 +71,12 @@ class RunServerActionJob implements ShouldQueue
                     // KVM po reinstalacji wstawała bez sieci.
                     'interfaces' => ServerPayload::interfaces($server),
                     'nameservers' => ServerPayload::nameservers($server),
+                    'os_type' => ServerPayload::osType($server->template),
                 ]),
                 'password' => $client->resetPassword(
                     $server->agent_uuid,
                     Crypt::decryptString($payload['password']),
+                    $server->osFamily() === 'windows' ? 'Administrator' : 'root',
                 ),
                 'iso' => $client->mountIso(
                     $server->agent_uuid,

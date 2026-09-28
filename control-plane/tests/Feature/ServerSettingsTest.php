@@ -48,6 +48,17 @@ class ServerSettingsTest extends TestCase
             ->assertSee('Resetuj hasło');
     }
 
+    public function test_reset_hasla_w_windows_zmienia_konto_administratora(): void
+    {
+        $this->server->template()->associate(OsTemplate::factory()->create(['family' => 'windows', 'image_file' => 'windows-server-2022.qcow2']))->save();
+        $this->actingAs($this->owner)->post(route('panel.servers.password', $this->server))->assertSessionHasNoErrors();
+        Http::fake(['*' => Http::response(['job_id' => 'agent-1', 'status' => 'queued'], 202)]);
+        (new RunServerActionJob(ServerJob::where('action', 'password')->sole()->id))->handle();
+
+        Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/password') && $r['username'] === 'Administrator');
+        $this->actingAs($this->owner)->get(route('panel.servers.show', $this->server))->assertOk();
+    }
+
     public function test_reset_hasla_pokazuje_nowe_haslo_raz(): void
     {
         $this->actingAs($this->owner)->post(route('panel.servers.password', $this->server))

@@ -570,6 +570,11 @@ if [ -f "$AGENT_DIR/scripts/fix-dns.sh" ]; then
     bash "$AGENT_DIR/scripts/fix-dns.sh" || warn "DNS hosta działa wolno — sprawdź /etc/resolv.conf."
 fi
 
+# Węzły KVM: budowa szablonów Windows (grupa kvm dla konta agenta).
+if [ -f "$AGENT_DIR/scripts/setup-builder.sh" ]; then
+    bash "$AGENT_DIR/scripts/setup-builder.sh" || warn "Nie udało się przygotować budowy szablonów."
+fi
+
 # Aplikacje (serwery gier, boty): Docker tylko na życzenie — VH_APPS=1.
 if [ -f "$AGENT_DIR/scripts/setup-apps.sh" ]; then
     AGENT_USER="$AGENT_USER" bash "$AGENT_DIR/scripts/setup-apps.sh" || warn "Nie udało się zainstalować Dockera dla aplikacji."
