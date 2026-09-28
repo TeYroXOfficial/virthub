@@ -40,7 +40,7 @@
             <div class="card">
                 <h3 class="card-title">{{ __('Czysty serwer z loaderem') }}</h3>
                 <form class="content-form" method="POST" action="{{ route('panel.apps.loader.install', $app) }}"
-                      onsubmit="return confirm(@js(__('Zainstalować nowy serwer? Mody, konfiguracja i biblioteki poprzedniego serwera zostaną usunięte.')))">
+                      data-confirm="{{ __('Zainstalować nowy serwer? Mody, konfiguracja i biblioteki poprzedniego serwera zostaną usunięte.') }}">
                     @csrf
                     <div class="grid-compact">
                         <div class="field">

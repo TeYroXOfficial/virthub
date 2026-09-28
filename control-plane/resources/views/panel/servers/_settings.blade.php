@@ -21,7 +21,7 @@
                 @endif
             </div>
             <form method="POST" action="{{ route('panel.servers.password', $server) }}"
-                  onsubmit="return confirm(@js(__('Ustawić nowe hasło roota? Stare przestanie działać.')))">
+                  data-confirm="{{ __('Ustawić nowe hasło roota? Stare przestanie działać.') }}">
                 @csrf
                 <button class="btn" type="submit" @disabled(! $server->acceptsCommands() || ! $server->isRunning())
                         title="{{ $server->isRunning() ? '' : __('Uruchom maszynę, żeby zmienić hasło') }}">
@@ -143,7 +143,7 @@
                     <button class="btn" type="submit">{{ __('Zapisz limit') }}</button>
                 </form>
                 <form method="POST" action="{{ route('panel.servers.traffic', $server) }}"
-                      onsubmit="return confirm(@js(__('Wyzerować licznik transferu w tym miesiącu?')))">
+                      data-confirm="{{ __('Wyzerować licznik transferu w tym miesiącu?') }}">
                     @csrf
                     <input type="hidden" name="action" value="reset">
                     <div class="field">
@@ -180,7 +180,7 @@
             <h3 class="card-title" style="color:var(--critical)">{{ __('Usuwanie maszyny') }}</h3>
             @can('destroy', $server)
                 <form method="POST" action="{{ route('panel.servers.destroy', $server) }}" class="setting-row"
-                      onsubmit="return confirm(@js(__('Usunąć :hostname razem z dyskiem? Tej operacji nie da się cofnąć.', ['hostname' => $server->hostname])))">
+                      data-confirm="{{ __('Usunąć :hostname razem z dyskiem? Tej operacji nie da się cofnąć.', ['hostname' => $server->hostname]) }}">
                     @csrf @method('DELETE')
                     <div class="setting-text">
                         <strong>{{ __('Usuń maszynę') }}</strong>
@@ -195,7 +195,7 @@
             @endcan
             @can('purge', $server)
                 <form method="POST" action="{{ route('panel.servers.purge', $server) }}" class="setting-row" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border)"
-                      onsubmit="return confirm(@js(__('Usunąć wpis TYLKO z panelu? Panel nie skontaktuje się z węzłem.')))">
+                      data-confirm="{{ __('Usunąć wpis TYLKO z panelu? Panel nie skontaktuje się z węzłem.') }}">
                     @csrf
                     <div class="setting-text">
                         <strong>{{ __('Usuń tylko z panelu') }}</strong> <span class="pill neutral">{{ __('administrator') }}</span>

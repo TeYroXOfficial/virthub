@@ -185,7 +185,7 @@
                         <td>
                             @if ($pool->assigned_count === 0)
                                 <form method="POST" action="{{ route('panel.admin.ip-pools.destroy', $pool) }}"
-                                      onsubmit="return confirm(@js(__('Usunąć pulę :name?', ['name' => $pool->name])))">
+                                      data-confirm="{{ __('Usunąć pulę :name?', ['name' => $pool->name]) }}">
                                     @csrf @method('DELETE')
                                     <button class="btn btn-danger" type="submit">{{ __('Usuń') }}</button>
                                 </form>

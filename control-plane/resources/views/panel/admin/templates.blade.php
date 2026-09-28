@@ -151,7 +151,7 @@
                                     <button class="btn btn-sm" type="button" onclick="document.getElementById('edit-t{{ $template->id }}').hidden ^= true">{{ __('Edytuj') }}</button>
                                     @if ($template->servers_count === 0)
                                         <form method="POST" action="{{ route('panel.admin.templates.destroy', $template) }}" style="margin:0"
-                                              onsubmit="return confirm(@js(__('Usunąć :name?', ['name' => $template->name])))">
+                                              data-confirm="{{ __('Usunąć :name?', ['name' => $template->name]) }}">
                                             @csrf @method('DELETE') <button class="btn btn-sm btn-danger" type="submit">{{ __('Usuń') }}</button>
                                         </form>
                                     @endif
@@ -195,7 +195,7 @@
                     </form>
                     @if ($versions->isEmpty())
                         <form method="POST" action="{{ route('panel.admin.template-groups.destroy', $group) }}" style="margin:0"
-                              onsubmit="return confirm(@js(__('Usunąć system :name?', ['name' => $group->name])))">
+                              data-confirm="{{ __('Usunąć system :name?', ['name' => $group->name]) }}">
                             @csrf @method('DELETE') <button class="btn btn-sm btn-danger" type="submit">{{ __('Usuń system') }}</button>
                         </form>
                     @endif

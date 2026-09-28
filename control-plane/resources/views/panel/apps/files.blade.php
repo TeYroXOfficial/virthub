@@ -55,7 +55,7 @@
     @endif
 
     <form method="POST" action="{{ route('panel.apps.files.delete', $app) }}" id="files-form"
-          onsubmit="return confirm(@js(__('Usunąć zaznaczone pliki i katalogi?')))">
+          data-confirm="{{ __('Usunąć zaznaczone pliki i katalogi?') }}">
         @csrf
         <input type="hidden" name="path" value="{{ $path }}">
         <div class="card" style="padding:0">
@@ -128,8 +128,8 @@
 
 @push('scripts')
     <script>
-        document.querySelectorAll('[data-rename]').forEach((btn) => btn.addEventListener('click', () => {
-            const to = prompt(@js(__('Nowa nazwa (albo ścieżka od /home/container, zaczynająca się od /):')), btn.dataset.rename);
+        document.querySelectorAll('[data-rename]').forEach((btn) => btn.addEventListener('click', async () => {
+            const to = await vhPrompt(@js(__('Nowa nazwa (albo ścieżka od /home/container, zaczynająca się od /):')), btn.dataset.rename, { title: @js(__('Zmień nazwę')), okLabel: @js(__('Zmień nazwę')) });
             if (!to || to === btn.dataset.rename) return;
             const form = document.getElementById('rename-form');
             form.elements.from.value = btn.dataset.rename;

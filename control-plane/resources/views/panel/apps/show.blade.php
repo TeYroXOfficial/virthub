@@ -9,6 +9,10 @@
 @section('content')
     @include('panel.apps._header')
 
+    @if ($app->isInstalling())
+        @include('panel.apps._progress')
+    @endif
+
     <div class="app-stats">
         <div class="card stat"><div class="stat-label">{{ __('Stan') }}</div><div class="stat-value" data-stat="state">—</div></div>
         <div class="card stat"><div class="stat-label">{{ __('Procesor') }}</div><div class="stat-value" data-stat="cpu">—</div>

@@ -85,7 +85,7 @@
                     @csrf <button class="btn btn-sm" type="submit">{{ $iso->is_public ? __('Ukryj przed klientami') : __('Pokaż klientom') }}</button>
                 </form>
                 <form method="POST" action="{{ route('panel.admin.isos.destroy', $iso) }}" style="margin:0"
-                      onsubmit="return confirm(@js(__('Usunąć :name z biblioteki i z węzłów?', ['name' => $iso->name])))">
+                      data-confirm="{{ __('Usunąć :name z biblioteki i z węzłów?', ['name' => $iso->name]) }}">
                     @csrf @method('DELETE')
                     <button class="btn btn-sm btn-danger" type="submit" @disabled($iso->servers_count > 0)>{{ __('Usuń') }}</button>
                 </form>

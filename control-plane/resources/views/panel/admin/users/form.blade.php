@@ -156,7 +156,7 @@
         <div class="card">
             <div class="btn-row">
                 <form method="POST" action="{{ route('panel.admin.users.password', $user) }}" style="margin:0"
-                      onsubmit="return confirm(@js(__('Wygenerować nowe hasło? Stare przestanie działać, a tokeny API zostaną unieważnione.')))">
+                      data-confirm="{{ __('Wygenerować nowe hasło? Stare przestanie działać, a tokeny API zostaną unieważnione.') }}">
                     @csrf
                     <button class="btn" type="submit"><x-icon name="key" :size="16"/> {{ __('Nowe hasło') }}</button>
                 </form>
@@ -167,13 +167,13 @@
                     </form>
                 @else
                     <form method="POST" action="{{ route('panel.admin.users.suspend', $user) }}" style="margin:0"
-                          onsubmit="return confirm(@js(__('Zablokować konto? Użytkownik zostanie wylogowany, a jego tokeny API unieważnione. Maszyny działają dalej.')))">
+                          data-confirm="{{ __('Zablokować konto? Użytkownik zostanie wylogowany, a jego tokeny API unieważnione. Maszyny działają dalej.') }}">
                         @csrf
                         <button class="btn btn-danger" type="submit">{{ __('Zablokuj konto') }}</button>
                     </form>
                 @endif
                 <form method="POST" action="{{ route('panel.admin.users.destroy', $user) }}" style="margin:0"
-                      onsubmit="return confirm(@js(__('Usunąć konto :email? Tej operacji nie da się cofnąć.', ['email' => $user->email])))">
+                      data-confirm="{{ __('Usunąć konto :email? Tej operacji nie da się cofnąć.', ['email' => $user->email]) }}">
                     @csrf @method('DELETE')
                     <button class="btn btn-danger" type="submit" @disabled($user->servers()->exists())
                             title="{{ $user->servers()->exists() ? __('Konto ma maszyny — usuń je najpierw') : '' }}">{{ __('Usuń konto') }}</button>

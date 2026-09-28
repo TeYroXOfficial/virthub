@@ -98,7 +98,7 @@
                 </div>
                 @if (auth()->user()->isAdmin())
                     <form method="POST" action="{{ route('panel.admin.apps.abuse-exempt', $app) }}"
-                          @unless ($app->abuse_exempt) onsubmit="return confirm(@js(__('Wyłączyć ochronę dla tej aplikacji? Rób to tylko przy fałszywym alarmie.')))" @endunless>
+                          @unless ($app->abuse_exempt) data-confirm="{{ __('Wyłączyć ochronę dla tej aplikacji? Rób to tylko przy fałszywym alarmie.') }}" @endunless>
                         @csrf
                         <button class="btn {{ $app->abuse_exempt ? '' : 'btn-danger' }}" type="submit">
                             {{ $app->abuse_exempt ? __('Włącz ochronę') : __('Fałszywy alarm — wyłącz ochronę') }}
@@ -114,7 +114,7 @@
         @error('confirm') <div class="alert alert-error">{{ $message }}</div> @enderror
 
         <form method="POST" action="{{ route('panel.apps.reinstall', $app) }}" class="setting-row"
-              onsubmit="return confirm(@js(__('Uruchomić instalację ponownie? Skrypt eggu może nadpisać pliki.')))">
+              data-confirm="{{ __('Uruchomić instalację ponownie? Skrypt eggu może nadpisać pliki.') }}">
             @csrf
             <div class="setting-text">
                 <h3>{{ __('Reinstalacja') }}</h3>
@@ -126,7 +126,7 @@
 
         @can('destroy', $app)
             <form method="POST" action="{{ route('panel.apps.destroy', $app) }}" class="setting-row" style="margin-top:16px"
-                  onsubmit="return confirm(@js(__('Usunąć :name razem ze wszystkimi plikami? Tej operacji nie da się cofnąć.', ['name' => $app->name])))">
+                  data-confirm="{{ __('Usunąć :name razem ze wszystkimi plikami? Tej operacji nie da się cofnąć.', ['name' => $app->name]) }}">
                 @csrf @method('DELETE')
                 <div class="setting-text">
                     <h3>{{ __('Usunięcie aplikacji') }}</h3>
@@ -139,7 +139,7 @@
 
         @if (auth()->user()->isAdmin() && auth()->user()->can('manage', $app))
             <form method="POST" action="{{ route('panel.admin.apps.purge', $app) }}" class="setting-row" style="margin-top:16px"
-                  onsubmit="return confirm(@js(__('Usunąć wpis TYLKO z panelu? Panel nie skontaktuje się z węzłem.')))">
+                  data-confirm="{{ __('Usunąć wpis TYLKO z panelu? Panel nie skontaktuje się z węzłem.') }}">
                 @csrf
                 <div class="setting-text">
                     <h3>{{ __('Usuń tylko z panelu') }}</h3>

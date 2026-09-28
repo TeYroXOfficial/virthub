@@ -16,6 +16,7 @@ final class JsTranslations
         'Węzeł pobiera obraz systemu. Przy pierwszym użyciu tego systemu może to potrwać kilka minut.',
         'Węzeł pobiera obraz systemu: ', 'Gotowe! Serwer działa.', 'Operacja nie powiodła się',
         'Szczegóły pojawią się na stronie.', 'Odświeżam panel…', 'Wybierz system operacyjny.',
+        'OK', 'Anuluj', 'Potwierdź', 'Podaj wartość', 'Uwaga',
     ];
 
     /** @return array<string, string> */

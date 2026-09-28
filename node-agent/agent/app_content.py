@@ -248,6 +248,7 @@ class ContentInstaller:
 
     def extract(self, step: ContentStep) -> None:
         assert step.url
+        progress("extract", 86, step.label or "rozpakowywanie")
         meta = self.apps._meta_dir() / f"{self.uuid}.content.zip"
         response = self._open(step.url)
         try:
@@ -328,6 +329,7 @@ class ContentInstaller:
             os.close(dfd)
 
     def java(self, step: ContentStep) -> None:
+        progress("loader", 88, "instalator loadera")
         self.log(f"$ java {' '.join(step.args)}")
         self.apps.run_java(self.spec, step.args, self.log, timeout=JAVA_TIMEOUT)
 

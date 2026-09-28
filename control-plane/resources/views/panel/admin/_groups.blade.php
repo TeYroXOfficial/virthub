@@ -63,7 +63,7 @@
 
         @if ($group->ip_pools_count === 0)
             <form method="POST" action="{{ route('panel.admin.hypervisor-groups.destroy', $group) }}"
-                  onsubmit="return confirm(@js(__('Usunąć grupę :name? Węzły zostaną bez grupy.', ['name' => $group->name])))">
+                  data-confirm="{{ __('Usunąć grupę :name? Węzły zostaną bez grupy.', ['name' => $group->name]) }}">
                 @csrf @method('DELETE')
                 <button class="btn btn-sm btn-danger" type="submit">{{ __('Usuń grupę') }}</button>
             </form>
