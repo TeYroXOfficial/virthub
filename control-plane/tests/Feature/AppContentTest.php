@@ -550,6 +550,40 @@ class AppContentTest extends TestCase
         $this->assertSame(1, AppJob::query()->whereIn('action', ContentManager::ACTIONS)->count());
     }
 
+    public function test_modpacki_tylko_z_wersja_serwerowa(): void
+    {
+        config(['virthub.curseforge_api_key' => 'klucz']);
+        $queries = [];
+        Http::fake([
+            'api.modrinth.com/v2/search*' => function (Request $r) use (&$queries) {
+                $queries[] = $r->data();
+
+                return Http::response(['total_hits' => 0, 'hits' => []]);
+            },
+            'api.modrinth.com/v2/project/CLIENT' => Http::response(['id' => 'CLIENT', 'title' => 'Shadery', 'project_type' => 'modpack', 'server_side' => 'unsupported']),
+            'api.curseforge.com/v1/mods/search*' => Http::response(['data' => [
+                ['id' => 1, 'name' => 'Z serwerem', 'latestFiles' => [['id' => 10, 'serverPackFileId' => 11]]],
+                ['id' => 2, 'name' => 'Kliencki', 'latestFiles' => [['id' => 20, 'serverPackFileId' => null]]],
+            ], 'pagination' => ['totalCount' => 2]]),
+            'api.curseforge.com/v1/mods/1/files*' => Http::response(['data' => [
+                ['id' => 10, 'modId' => 1, 'displayName' => 'v2', 'serverPackFileId' => 11],
+                ['id' => 9, 'modId' => 1, 'displayName' => 'v1 (bez serwera)'],
+            ]]),
+        ]);
+        $content = app(ContentManager::class);
+        $profile = new \App\Domain\Apps\Content\ServerProfile($this->paper);
+
+        $content->search('modpack', 'modrinth', '', 1, $profile);
+        $this->assertContains(['server_side:required', 'server_side:optional'], json_decode($queries[0]['facets'], true));
+
+        $cf = $content->search('modpack', 'curseforge', '', 1, $profile);
+        $this->assertSame(['Z serwerem'], array_column($cf['items'], 'name'));
+        $this->assertSame(['10'], array_column($content->versions('modpack', 'curseforge', '1', $profile), 'id'));
+
+        $this->expectException(\App\Domain\Apps\Content\ContentException::class);
+        $content->project('modpack', 'modrinth', 'CLIENT');
+    }
+
     public function test_curseforge_bez_klucza_jest_ukryty(): void
     {
         config(['virthub.curseforge_api_key' => null]);

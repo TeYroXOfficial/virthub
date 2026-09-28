@@ -43,11 +43,16 @@ class CurseForge
             'pageSize' => $perPage,
         ], fn ($v) => $v !== null);
 
-        return ContentHttp::cached('curseforge:search:'.md5(json_encode($params)), ContentHttp::LISTS, function () use ($params) {
+        return ContentHttp::cached('curseforge:search:v2:'.md5(json_encode($params)), ContentHttp::LISTS, function () use ($params) {
             $data = ContentHttp::json($this->client()->get(self::API.'/mods/search', $params), self::NAME);
+            $mods = $data['data'] ?? [];
+            if ($params['classId'] === self::CLASS_IDS['modpack']) {
+                // Modpack bez server packa to paczka tylko dla klienta.
+                $mods = array_filter($mods, fn ($m) => collect($m['latestFiles'] ?? [])->contains(fn ($f) => ! empty($f['serverPackFileId'])));
+            }
 
             return [
-                'items' => array_map(fn ($m) => $this->project($m), $data['data'] ?? []),
+                'items' => array_values(array_map(fn ($m) => $this->project($m), $mods)),
                 'total' => min(10000, (int) ($data['pagination']['totalCount'] ?? 0)),
             ];
         });

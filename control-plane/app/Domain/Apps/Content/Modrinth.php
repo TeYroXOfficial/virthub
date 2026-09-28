@@ -19,7 +19,12 @@ class Modrinth
      */
     public function search(string $kind, string $query, ?string $gameVersion, array $loaders, int $page, int $perPage = 20): array
     {
-        $facets = [["project_type:{$kind}"]];
+        // Tylko to, co działa na serwerze — bez paczek i modów wyłącznie klienckich.
+        $serverSide = ['server_side:required', 'server_side:optional'];
+        if ($kind !== 'modpack') {
+            $serverSide[] = 'server_side:unknown'; // starsze pluginy nie mają tego pola
+        }
+        $facets = [["project_type:{$kind}"], $serverSide];
         if ($gameVersion) {
             $facets[] = ["versions:{$gameVersion}"];
         }
@@ -57,7 +62,7 @@ class Modrinth
     /** @return array<string, mixed> */
     public function project(string $id): array
     {
-        return ContentHttp::cached("modrinth:project:{$id}", ContentHttp::DETAILS, function () use ($id) {
+        return ContentHttp::cached("modrinth:project:v2:{$id}", ContentHttp::DETAILS, function () use ($id) {
             $p = ContentHttp::json(ContentHttp::client()->get(self::API.'/project/'.rawurlencode($id)), self::NAME);
 
             return [
@@ -71,6 +76,7 @@ class Modrinth
                 'author' => null,
                 'url' => 'https://modrinth.com/project/'.($p['slug'] ?? $p['id']),
                 'type' => $p['project_type'] ?? null,
+                'server_side' => $p['server_side'] ?? null,
             ];
         });
     }

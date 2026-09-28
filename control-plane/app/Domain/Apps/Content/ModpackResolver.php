@@ -41,6 +41,9 @@ class ModpackResolver
     private function modrinth(string $projectId, string $versionId): array
     {
         $project = $this->modrinth->project($projectId);
+        if (($project['server_side'] ?? null) === 'unsupported') {
+            throw new ContentException(__('To modpack tylko dla klienta — nie da się go uruchomić jako serwer.'));
+        }
         $version = $this->modrinth->versionById($versionId);
         if ($version['project_id'] !== $project['id']) {
             throw new ContentException(__('Ta wersja nie należy do wybranego modpacka.'));
@@ -107,42 +110,20 @@ class ModpackResolver
         [$loader, $loaderVersion] = $this->splitLoaderId((string) ($primary['id'] ?? ''));
         $overrides = trim((string) ($manifest['overrides'] ?? 'overrides'), '/').'/';
 
-        $steps = [];
-        $notes = [];
-        if ($file['server_pack_file_id']) {
-            // Server pack od autora — gotowy zestaw modów bez klienckich.
-            $server = $this->curseforge->fileById($projectId, (string) $file['server_pack_file_id']);
-            $url = $server['files'][0]['url'] ?? null;
-            if ($url) {
-                $steps[] = ['op' => 'extract', 'url' => $url, 'sha1' => $server['files'][0]['sha1'] ?? null, 'strip_root' => true,
-                    'skip' => ['start.bat', 'startserver.bat', 'run.bat', 'start.sh', 'startserver.sh', 'run.sh'],
-                    'label' => __('Server pack: :name', ['name' => $server['files'][0]['filename']])];
-                $notes[] = __('Użyto server packa przygotowanego przez autora.');
-            }
+        // Bez server packa autor nie przygotował paczki pod serwer: lista modów
+        // z manifestu to wersja kliencka (CurseForge nie oznacza modów klienckich).
+        if (! $file['server_pack_file_id']) {
+            throw new ContentException(__('Ta wersja nie ma server packa — to paczka tylko dla klienta. Wybierz wersję z server packiem.'));
         }
-
-        if ($steps === []) {
-            $ids = array_map(fn ($f) => (int) $f['fileID'], array_filter($manifest['files'] ?? [], fn ($f) => $f['required'] ?? true));
-            $blocked = [];
-            foreach ($this->curseforge->filesByIds($ids) as $mod) {
-                $f = $mod['files'][0];
-                if (! $f['url']) {
-                    $blocked[] = $f['filename'];
-
-                    continue;
-                }
-                $steps[] = ['op' => 'download', 'url' => $f['url'], 'path' => 'mods/'.$this->safeName($f['filename']),
-                    'sha1' => $f['sha1'], 'size' => $f['size'] ?: null, 'label' => $f['filename']];
-            }
-            if ($blocked !== []) {
-                throw new ContentException(__('Autorzy tych modów nie pozwalają na pobieranie przez zewnętrzne aplikacje: :mods. Wybierz wersję z server packiem albo wgraj je ręcznie przez SFTP.', [
-                    'mods' => implode(', ', array_slice($blocked, 0, 8)).(count($blocked) > 8 ? '…' : ''),
-                ]));
-            }
-            $steps[] = ['op' => 'extract', 'url' => $packUrl, 'sha1' => $file['files'][0]['sha1'] ?? null,
-                'prefixes' => [$overrides => ''], 'label' => __('Konfiguracja paczki (overrides)')];
-            $notes[] = __('Paczka nie ma server packa — zainstalowano mody z listy klienta; jeśli serwer nie wstaje, usuń mody tylko dla klienta.');
+        $server = $this->curseforge->fileById($projectId, (string) $file['server_pack_file_id']);
+        $url = $server['files'][0]['url'] ?? null;
+        if (! $url) {
+            throw new ContentException(__('Autor tego modpacka nie pozwala na pobieranie server packa przez zewnętrzne aplikacje.'));
         }
+        $steps = [['op' => 'extract', 'url' => $url, 'sha1' => $server['files'][0]['sha1'] ?? null, 'strip_root' => true,
+            'skip' => ['start.bat', 'startserver.bat', 'run.bat', 'start.sh', 'startserver.sh', 'run.sh'],
+            'label' => __('Server pack: :name', ['name' => $server['files'][0]['filename']])]];
+        $notes = [__('Użyto server packa przygotowanego przez autora.')];
 
         return $this->plan($project['name'], $file['name'], $mc, $loader, $loaderVersion, $steps, $notes, $project['icon']);
     }
