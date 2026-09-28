@@ -174,6 +174,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::delete('/plans/{plan}', 'deletePlan')->name('.plans.destroy');
         Route::post('/{app}/suspend', 'suspend')->name('.suspend');
         Route::put('/{app}/resources', 'resources')->name('.resources');
+        Route::post('/{app}/abuse-exempt', 'abuseExempt')->name('.abuse-exempt');
         Route::post('/{app}/purge', 'purge')->name('.purge');
     });
 

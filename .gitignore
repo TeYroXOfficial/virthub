@@ -1,7 +1,7 @@
 # Zależności
 /control-plane/vendor
 /node-agent/.venv
-/node-agent/**/__pycache__
+__pycache__/
 /node-agent/.pytest_cache
 node_modules
 

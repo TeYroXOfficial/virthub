@@ -633,6 +633,36 @@ Port zmienisz w `VH_SFTP_PORT` w `/etc/virthub-agent/agent.env` (`0` wyłącza
 SFTP, `VH_SFTP_LISTEN` to adres nasłuchu) — wtedy ustaw ten sam port w `.env`
 panelu: `VIRTHUB_APPS_SFTP_PORT`.
 
+**Ochrona przed nadużyciami (PteroVM i podobne).** Aplikacje to serwery gier
+i boty, nie VPS-y. „Eggi VPS” (PteroVM, Pterodactyl-VPS-Egg itp.) uruchamiają
+w kontenerze cały system przez proot albo QEMU, żeby dać klientowi roota,
+kopać kryptowaluty albo wystawić SSH. Obrona ma trzy warstwy:
+
+1. *Zapobieganie* — kontener aplikacji działa jako zwykły użytkownik, bez
+   żadnych uprawnień jądra (`cap_drop: ALL`), z `no-new-privileges` i własnym
+   profilem seccomp: domyślny profil Dockera bez `ptrace`,
+   `process_vm_readv/writev`. Na `ptrace` stoi proot — bez niego PteroVM nie
+   wystartuje. Instalator eggu dostaje ten sam profil. Po aktualizacji
+   węzła każda aplikacja przy najbliższym starcie dostaje nowy kontener.
+2. *Wykrywanie* — agent co minutę sprawdza procesy każdej działającej
+   aplikacji (`docker top`, z hosta, więc nie da się ich ukryć), a co 10 minut
+   i przed każdym startem jej pliki. Szuka proot/udocker/QEMU, rozpakowanego
+   systemu Linux (`etc/os-release` + `bin` + `usr`), koparek (xmrig i inne,
+   `stratum+tcp://` w poleceniu), serwerów SSH i zdalnych powłok (sshd,
+   tmate, ttyd…). Takie znalezisko zabija kontener albo blokuje start;
+   aplikacja jest zawieszana w panelu z powodem widocznym dla klienta i
+   personelu (Administracja → Aplikacje, znacznik „nadużycie”). Tunele
+   (ngrok, cloudflared, frpc…) są tylko zgłaszane.
+3. *Import eggów* — panel odrzuca eggi, które instalują proot, QEMU, koparki
+   albo serwer SSH.
+
+Przy fałszywym alarmie administrator w Ustawieniach aplikacji wybiera
+„Fałszywy alarm — wyłącz ochronę” i odwiesza aplikację. Ustawienia węzła
+(`/etc/virthub-agent/agent.env`): `VH_APPS_GUARD=kill` (domyślnie; `report` —
+tylko zgłasza, `off` — wyłącza), `VH_APPS_GUARD_INTERVAL=60`,
+`VH_APPS_SECCOMP=1`. Panel: `VIRTHUB_APPS_ABUSE_SUSPEND=true` (`false` —
+zgłoszenie bez zawieszania).
+
 Uwaga: Docker ładuje moduł `br_netfilter` i ustawia politykę `FORWARD` na
 `DROP`. Agent przy starcie (`scripts/nat-forward.sh`) przepuszcza ruch mostków
 maszyn, więc VPS-y na tym samym węźle nie tracą sieci.

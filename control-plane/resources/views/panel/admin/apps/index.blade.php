@@ -24,7 +24,8 @@
                         <td class="muted">{{ $app->egg?->name }}</td>
                         <td><span class="muted">{{ $app->hypervisor?->name ?? '—' }}</span><div class="hint mono">{{ $app->address() }}</div></td>
                         <td class="num">{{ __(':memory MB · :disk MB', ['memory' => $app->memory_mb, 'disk' => $app->disk_mb]) }}</td>
-                        <td><span class="pill {{ $app->isSuspended() || $app->status === 'install_failed' ? 'critical' : ($app->isInstalling() ? 'warning' : 'neutral') }}">{{ $app->statusLabel() }}</span></td>
+                        <td><span class="pill {{ $app->isSuspended() || $app->status === 'install_failed' ? 'critical' : ($app->isInstalling() ? 'warning' : 'neutral') }}">{{ $app->statusLabel() }}</span>
+                            @if ($app->abuse_detected_at) <span class="pill critical plain" title="{{ $app->suspension_reason }}">{{ __('nadużycie') }}</span> @endif</td>
                         <td style="text-align:right">
                             <form method="POST" action="{{ route('panel.admin.apps.suspend', $app) }}" style="margin:0">
                                 @csrf

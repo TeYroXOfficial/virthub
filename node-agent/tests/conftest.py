@@ -30,6 +30,7 @@ os.environ.update(
     VH_APPS_DIR=str(Path(_tmp) / "apps"),
     VH_APPS_NETWORK="virthub_apps_test",
     VH_SFTP_PORT="0",
+    VH_APPS_GUARD="off",
     VH_CONTROL_PLANE_URL="",
     VH_CALLBACK_SECRET="",
 )

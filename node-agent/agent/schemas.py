@@ -402,6 +402,8 @@ class AppSpec(BaseModel):
     cpu_percent: int = Field(default=0, ge=0, le=12_800, description="0 = bez limitu")
     disk_mb: int = Field(default=0, ge=0, description="0 = bez limitu")
     pids_limit: int = Field(default=1024, ge=64, le=65_536)
+    # Personel zwolnił aplikację z ochrony przed nadużyciami (fałszywy alarm).
+    guard_exempt: bool = False
     allocations: list[AppAllocation] = Field(default_factory=list, max_length=100)
     config_files: list[AppConfigFile] = Field(default_factory=list, max_length=50)
     install: AppInstall | None = None

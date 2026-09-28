@@ -1,0 +1,60 @@
+{
+    "defaultAction": "SCMP_ACT_ALLOW",
+    "archMap": [
+        {"architecture": "SCMP_ARCH_X86_64", "subArchitectures": ["SCMP_ARCH_X86", "SCMP_ARCH_X32"]},
+        {"architecture": "SCMP_ARCH_AARCH64", "subArchitectures": ["SCMP_ARCH_ARM"]}
+    ],
+    "syscalls": [
+        {
+            "comment": "proot (PteroVM) i debugowanie innych procesów",
+            "names": ["ptrace", "process_vm_readv", "process_vm_writev", "kcmp"],
+            "action": "SCMP_ACT_ERRNO",
+            "errnoRet": 1
+        },
+        {
+            "comment": "przestrzenie nazw, montowanie, zmiana korzenia",
+            "names": [
+                "unshare", "setns", "mount", "umount", "umount2", "pivot_root", "chroot",
+                "fsopen", "fsconfig", "fsmount", "fspick", "move_mount", "open_tree", "mount_setattr",
+                "open_by_handle_at", "name_to_handle_at"
+            ],
+            "action": "SCMP_ACT_ERRNO",
+            "errnoRet": 1
+        },
+        {
+            "comment": "jądro, moduły, BPF, klucze, czas systemowy i sprzęt",
+            "names": [
+                "init_module", "finit_module", "delete_module", "create_module", "kexec_load", "kexec_file_load",
+                "reboot", "swapon", "swapoff", "syslog", "acct", "bpf", "perf_event_open", "userfaultfd",
+                "keyctl", "add_key", "request_key", "lookup_dcookie", "quotactl", "quotactl_fd",
+                "iopl", "ioperm", "uselib", "vm86", "vm86old", "settimeofday", "clock_settime", "clock_settime64",
+                "stime", "clock_adjtime", "clock_adjtime64", "nfsservctl", "get_kernel_syms", "query_module",
+                "_sysctl", "sysfs", "ustat", "afs_syscall", "fanotify_init",
+                "io_uring_setup", "io_uring_enter", "io_uring_register",
+                "mbind", "set_mempolicy", "get_mempolicy", "move_pages", "migrate_pages"
+            ],
+            "action": "SCMP_ACT_ERRNO",
+            "errnoRet": 1
+        },
+        {
+            "comment": "clone3 nie da się filtrować po flagach — ENOSYS, glibc wraca do clone",
+            "names": ["clone3"],
+            "action": "SCMP_ACT_ERRNO",
+            "errnoRet": 38
+        },
+        {"comment": "clone z CLONE_NEWNS", "names": ["clone"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1,
+         "args": [{"index": 0, "value": 131072, "valueTwo": 131072, "op": "SCMP_CMP_MASKED_EQ"}]},
+        {"comment": "clone z CLONE_NEWCGROUP", "names": ["clone"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1,
+         "args": [{"index": 0, "value": 33554432, "valueTwo": 33554432, "op": "SCMP_CMP_MASKED_EQ"}]},
+        {"comment": "clone z CLONE_NEWUTS", "names": ["clone"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1,
+         "args": [{"index": 0, "value": 67108864, "valueTwo": 67108864, "op": "SCMP_CMP_MASKED_EQ"}]},
+        {"comment": "clone z CLONE_NEWIPC", "names": ["clone"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1,
+         "args": [{"index": 0, "value": 134217728, "valueTwo": 134217728, "op": "SCMP_CMP_MASKED_EQ"}]},
+        {"comment": "clone z CLONE_NEWUSER", "names": ["clone"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1,
+         "args": [{"index": 0, "value": 268435456, "valueTwo": 268435456, "op": "SCMP_CMP_MASKED_EQ"}]},
+        {"comment": "clone z CLONE_NEWPID", "names": ["clone"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1,
+         "args": [{"index": 0, "value": 536870912, "valueTwo": 536870912, "op": "SCMP_CMP_MASKED_EQ"}]},
+        {"comment": "clone z CLONE_NEWNET", "names": ["clone"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1,
+         "args": [{"index": 0, "value": 1073741824, "valueTwo": 1073741824, "op": "SCMP_CMP_MASKED_EQ"}]}
+    ]
+}

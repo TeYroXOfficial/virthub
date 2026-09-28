@@ -18,8 +18,6 @@ from __future__ import annotations
 import asyncio
 import errno
 import hashlib
-import hmac
-import json
 import logging
 import os
 import posixpath
@@ -29,10 +27,9 @@ import time
 from pathlib import Path
 from typing import Any, AsyncIterator
 
-import httpx
-
 from .apps import AppError, AppFiles, AppManager
 from .config import Settings
+from .panel import PanelUnavailable, signed_post
 
 log = logging.getLogger("virthub.sftp")
 
@@ -90,22 +87,9 @@ class SftpAuth:
         return None
 
     def _ask_panel(self, uuid: str, user_id: int, password: str) -> bool:
-        if not self.settings.control_plane_url or not self.settings.callback_secret:
-            log.warning("SFTP: brak adresu panelu albo sekretu — logowanie niemożliwe")
-            return False
-        body = json.dumps({"uuid": uuid, "user_id": user_id, "password": password}).encode()
-        timestamp = str(int(time.time()))
-        canonical = f"{timestamp}\nPOST\n{AUTH_PATH}\n{hashlib.sha256(body).hexdigest()}"
-        signature = hmac.new(self.settings.callback_secret.encode(), canonical.encode(), hashlib.sha256).hexdigest()
         try:
-            response = httpx.post(
-                f"{self.settings.control_plane_url}{AUTH_PATH}",
-                content=body,
-                headers={"Content-Type": "application/json", "Accept": "application/json",
-                         "X-VH-Timestamp": timestamp, "X-VH-Signature": signature},
-                timeout=10,
-            )
-        except httpx.HTTPError as exc:
+            response = signed_post(self.settings, AUTH_PATH, {"uuid": uuid, "user_id": user_id, "password": password})
+        except PanelUnavailable as exc:
             log.warning("SFTP: panel nieosiągalny (%s)", exc)
             return False
         return response.status_code == 200 and bool(response.json().get("allowed"))

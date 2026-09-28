@@ -45,6 +45,10 @@ class EggImporter
         $install = $egg['scripts']['installation'] ?? [];
         $script = is_string($install['script'] ?? null) ? str_replace("\r\n", "\n", $install['script']) : null;
 
+        if ($reason = self::forbiddenReason($name, $startup, $script, $images, $egg['description'] ?? null)) {
+            $this->fail(__('Tego eggu nie można zaimportować: :reason. Aplikacje służą do serwerów gier i botów, a nie do uruchamiania systemów (PteroVM i podobne), koparek czy zdalnych powłok.', ['reason' => $reason]));
+        }
+
         return [
             'name' => mb_substr($name, 0, 120),
             'category' => $category ?: ($egg['virthub_category'] ?? $this->guessCategory($egg)),
@@ -210,5 +214,32 @@ class EggImporter
     private function fail(string $message): never
     {
         throw ValidationException::withMessages(['egg' => $message]);
+    }
+
+    /**
+     * Eggi „VPS” (PteroVM, Pterodactyl-VPS-Egg itp.) uruchamiają w kontenerze
+     * cały system przez proot albo QEMU — to nadużycie hostingu aplikacji.
+     * Ten sam katalog nazw co ochrona w agencie (agent/app_guard.py).
+     *
+     * @param  list<string>|array<string, string>  $images
+     */
+    public static function forbiddenReason(string $name, string $startup, ?string $script, array $images, mixed $description = null): ?string
+    {
+        $haystack = mb_strtolower(implode("\n", [$name, $startup, (string) $script, implode(' ', $images), is_string($description) ? $description : '']));
+        $rules = [
+            'PteroVM / VPS w kontenerze' => '/pterovm|pterodactyl-vps|vps[-_ ]?egg|\bfree\s*vps\b/',
+            'proot / udocker' => '/\b(proot|udocker|fakechroot)\b/',
+            'QEMU' => '/\bqemu-(system|img|x86_64|aarch64)/',
+            'koparka kryptowalut' => '/\b(xmrig|xmr-stak|cpuminer|minerd|nbminer|lolminer|t-rex|srbminer|phoenixminer)\b|stratum\+(tcp|ssl|tls):\/\//',
+            'zdalna powłoka' => '/\b(tmate|ttyd|gotty|shellinabox|sshx|upterm)\b|openssh-server|\bsshd\b/',
+        ];
+
+        foreach ($rules as $label => $pattern) {
+            if (preg_match($pattern, $haystack)) {
+                return $label;
+            }
+        }
+
+        return null;
     }
 }

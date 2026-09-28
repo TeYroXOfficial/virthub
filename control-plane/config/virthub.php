@@ -27,6 +27,10 @@ return [
     // Port SFTP aplikacji na węzłach (VH_SFTP_PORT agenta) — pokazywany klientom.
     'apps_sftp_port' => (int) env('VIRTHUB_APPS_SFTP_PORT', 2022),
 
+    // Aplikacja, w której węzeł wykrył PteroVM/proot/QEMU, koparkę albo
+    // zdalną powłokę, jest automatycznie zawieszana (false = tylko zgłoszenie).
+    'apps_abuse_suspend' => (bool) env('VIRTHUB_APPS_ABUSE_SUSPEND', true),
+
     /*
     |--------------------------------------------------------------------------
     | Aktualizacje

@@ -182,6 +182,15 @@ class AppProvisioner
         return $this->pushSpec($app);
     }
 
+    /** Zwolnienie z ochrony przed nadużyciami (fałszywy alarm) — węzeł dostaje je w specyfikacji. */
+    public function setAbuseExempt(AppServer $app, bool $exempt, ?User $actor = null): void
+    {
+        $app->forceFill(['abuse_exempt' => $exempt])->save();
+        AuditLog::record('app.abuse_exempt', $app, ['exempt' => $exempt], $actor);
+
+        $this->pushSpec($app);
+    }
+
     /** Wysyła nową specyfikację na węzeł. Zwraca true, gdy zmiana wymaga restartu. */
     private function pushSpec(AppServer $app): bool
     {
