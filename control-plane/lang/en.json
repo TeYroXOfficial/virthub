@@ -1459,5 +1459,8 @@
     "postęp w konsoli": "progress in the console",
     "Instalacja nie powiodła się": "Installation failed",
     "Przygotowuję instalację…": "Preparing the installation…",
-    "Świat jest z Minecrafta :current, a :target to starsza wersja — nie wczyta go. Zaznacz „Usuń też świat” albo wybierz wersję :current lub nowszą.": "The world is from Minecraft :current and :target is an older version — it cannot load it. Tick “Also delete the world” or pick version :current or newer."
+    "Świat jest z Minecrafta :current, a :target to starsza wersja — nie wczyta go. Zaznacz „Usuń też świat” albo wybierz wersję :current lub nowszą.": "The world is from Minecraft :current and :target is an older version — it cannot load it. Tick “Also delete the world” or pick version :current or newer.",
+    "Lista plików paczki jest za duża.": "The pack's file list is too large.",
+    "Archiwum paczki używa nieobsługiwanej kompresji.": "The pack archive uses an unsupported compression method.",
+    "Archiwum paczki ma ponad 4 GB — panel go nie przetworzy.": "The pack archive is over 4 GB — the panel cannot process it."
 }
