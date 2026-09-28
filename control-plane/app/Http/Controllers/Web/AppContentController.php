@@ -208,13 +208,9 @@ class AppContentController extends Controller
     private function mcVersions(): array
     {
         try {
-            $manifest = Cache::remember('mojang:manifest', 3600, fn () => \App\Domain\Apps\Content\ContentHttp::json(
-                \App\Domain\Apps\Content\ContentHttp::client()->get('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'), 'Mojang',
-            ));
+            return array_values(array_map(fn ($v) => $v['id'], array_filter(Loaders::mojangVersions(), fn ($v) => $v['type'] === 'release')));
         } catch (\Throwable) {
             return ['1.21.1', '1.20.1', '1.19.2', '1.18.2', '1.16.5', '1.12.2'];
         }
-
-        return array_values(array_map(fn ($v) => $v['id'], array_filter($manifest['versions'] ?? [], fn ($v) => ($v['type'] ?? '') === 'release')));
     }
 }

@@ -250,6 +250,87 @@ class AppContentTest extends TestCase
         $this->actingAs($stranger)->get(route('panel.apps.modpacks', $this->paper))->assertForbidden();
     }
 
+    // --- cache ------------------------------------------------------------------------------
+
+    public function test_katalog_idzie_z_cache_bez_ponownego_pytania_serwisu(): void
+    {
+        $this->fakeApis();
+        $this->paper->forceFill(['minecraft' => ['platform' => 'paper', 'mc' => '1.20.1']])->save();
+
+        $this->actingAs($this->customer)->get(route('panel.apps.addons', $this->paper))->assertOk()->assertSee('LuckPerms');
+        $this->actingAs($this->customer)->get(route('panel.apps.addons.show', [$this->paper, 'modrinth', 'LUCK']))->assertOk();
+        $count = count(Http::recorded());
+
+        $this->actingAs($this->customer)->get(route('panel.apps.addons', $this->paper))->assertOk()->assertSee('LuckPerms');
+        $this->actingAs($this->customer)->get(route('panel.apps.addons.show', [$this->paper, 'modrinth', 'LUCK']))->assertOk()->assertSee('5.4.1');
+        $this->assertCount($count, Http::recorded());
+
+        // Lista wersji bez changelogów — odpowiedź Modrinth jest wtedy wielokrotnie mniejsza.
+        Http::assertSent(fn (Request $r) => str_contains($r->url(), '/project/LUCK/version') && str_contains($r->url(), 'include_changelog=false'));
+    }
+
+    public function test_nieswieze_dane_sa_podawane_od_razu(): void
+    {
+        $this->fakeApis();
+        $this->paper->forceFill(['minecraft' => ['platform' => 'paper', 'mc' => '1.20.1']])->save();
+        $this->actingAs($this->customer)->get(route('panel.apps.addons', $this->paper))->assertOk();
+
+        // Po czasie świeżości, ale w oknie nieświeżości: strona nie czeka na serwis
+        // (który teraz by padł) — odświeżenie idzie w tle po odpowiedzi.
+        $this->travel(2)->hours();
+        Http::fake(['api.modrinth.com/*' => Http::response('awaria', 500), '*' => Http::response([])]);
+        $this->actingAs($this->customer)->get(route('panel.apps.addons', $this->paper))->assertOk()->assertSee('LuckPerms');
+    }
+
+    public function test_ftb_pobiera_paczki_rownolegle_i_trzyma_je_w_cache(): void
+    {
+        $pack = fn (int $id) => ['id' => $id, 'name' => "Paczka {$id}", 'slug' => "p{$id}", 'synopsis' => 'x', 'installs' => $id,
+            'description' => str_repeat('długi opis ', 500), 'art' => [['type' => 'square', 'url' => "https://cdn.test/{$id}.png"]], 'versions' => []];
+        Http::fake([
+            'api.feed-the-beast.com/v1/modpacks/public/modpack/popular/installs/100' => Http::response(['packs' => [1, 2, 3]]),
+            'api.feed-the-beast.com/v1/modpacks/public/modpack/1' => Http::response($pack(1)),
+            'api.feed-the-beast.com/v1/modpacks/public/modpack/2' => Http::response($pack(2)),
+            'api.feed-the-beast.com/v1/modpacks/public/modpack/3' => Http::response($pack(3)),
+        ]);
+        $ftb = app(\App\Domain\Apps\Content\Ftb::class);
+
+        $first = $ftb->search('', 1);
+        $this->assertSame(['Paczka 1', 'Paczka 2', 'Paczka 3'], array_column($first['items'], 'name'));
+        $this->assertCount(4, Http::recorded());
+        $this->assertSame($first, $ftb->search('', 1));
+        $this->assertCount(4, Http::recorded());
+        $this->assertArrayNotHasKey('description', $ftb->pack(2)); // w cache tylko potrzebne pola
+    }
+
+    public function test_rozgrzewanie_cache_katalogow(): void
+    {
+        $this->fakeApis([
+            'api.feed-the-beast.com/*' => Http::response(['packs' => []]),
+        ]);
+        $this->paper->forceFill(['minecraft' => ['platform' => 'paper', 'mc' => '1.20.1']])->save();
+
+        $this->artisan('virthub:warm-content', ['--top' => 1])->assertSuccessful();
+
+        Http::assertSent(fn (Request $r) => str_contains(urldecode($r->url()), 'project_type:modpack'));
+        Http::assertSent(fn (Request $r) => str_contains(urldecode($r->url()), 'project_type:plugin') && str_contains(urldecode($r->url()), 'versions:1.20.1'));
+        Http::assertSent(fn (Request $r) => str_contains($r->url(), 'hangar.papermc.io'));
+
+        // Klient trafia już w gotowy cache.
+        $count = count(Http::recorded());
+        $this->actingAs($this->customer)->get(route('panel.apps.addons', $this->paper))->assertOk()->assertSee('LuckPerms');
+        $this->assertCount($count, Http::recorded());
+    }
+
+    public function test_nieznana_wersja_gry_nie_pyta_agenta_przy_kazdym_wejsciu(): void
+    {
+        $this->fakeApis(['node.test:8443/apps/*/files/*' => Http::response(['detail' => 'brak'], 404)]);
+
+        $this->actingAs($this->customer)->get(route('panel.apps.addons', $this->paper))->assertOk()->assertSee('Nie znam wersji');
+        $count = count(Http::recorded());
+        $this->actingAs($this->customer)->get(route('panel.apps.addons', $this->paper))->assertOk();
+        $this->assertCount($count, Http::recorded());
+    }
+
     // --- modpacki i loadery ----------------------------------------------------------------------
 
     public function test_modpack_z_modrinth_przelacza_serwer_na_mody(): void

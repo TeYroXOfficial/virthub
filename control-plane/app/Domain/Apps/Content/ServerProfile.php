@@ -5,6 +5,7 @@ namespace App\Domain\Apps\Content;
 use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
 use App\Models\AppServer;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Co działa na serwerze Minecraft: platforma (paper, vanilla, fabric, forge,
@@ -72,9 +73,17 @@ class ServerProfile
             return $stored;
         }
 
+        // Nieudane wykrycie (serwer jeszcze nie startował) pamiętamy chwilę —
+        // inaczej każde wejście na stronę pytałoby agenta o pliki.
+        $miss = "app:{$this->app->id}:mc-miss";
+        if (Cache::has($miss)) {
+            return null;
+        }
         $version = $this->detect();
         if ($version) {
             $this->remember(['mc' => $version]);
+        } else {
+            Cache::put($miss, true, 120);
         }
 
         return $version;

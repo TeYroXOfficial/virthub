@@ -2,8 +2,6 @@
 
 namespace App\Domain\Apps\Content;
 
-use Illuminate\Support\Facades\Cache;
-
 /**
  * CurseForge (api.curseforge.com) — wymaga klucza API (VIRTHUB_CURSEFORGE_API_KEY,
  * darmowy z console.curseforge.com). Bez klucza źródło jest ukryte.
@@ -45,23 +43,25 @@ class CurseForge
             'pageSize' => $perPage,
         ], fn ($v) => $v !== null);
 
-        $data = Cache::remember('curseforge:search:'.md5(json_encode($params)), 600, fn () => ContentHttp::json(
-            $this->client()->get(self::API.'/mods/search', $params), self::NAME,
-        ));
+        return ContentHttp::cached('curseforge:search:'.md5(json_encode($params)), ContentHttp::LISTS, function () use ($params) {
+            $data = ContentHttp::json($this->client()->get(self::API.'/mods/search', $params), self::NAME);
 
-        return [
-            'items' => array_map(fn ($m) => $this->project($m), $data['data'] ?? []),
-            'total' => min(10000, (int) ($data['pagination']['totalCount'] ?? 0)),
-        ];
+            return [
+                'items' => array_map(fn ($m) => $this->project($m), $data['data'] ?? []),
+                'total' => min(10000, (int) ($data['pagination']['totalCount'] ?? 0)),
+            ];
+        });
     }
 
     /** @return array<string, mixed> */
     public function project(array|int|string $mod): array
     {
         if (! is_array($mod)) {
-            $mod = Cache::remember("curseforge:mod:{$mod}", 600, fn () => ContentHttp::json(
-                $this->client()->get(self::API.'/mods/'.(int) $mod), self::NAME,
-            )['data']);
+            $id = (int) $mod;
+
+            return ContentHttp::cached("curseforge:mod:{$id}", ContentHttp::DETAILS, fn () => $this->project(ContentHttp::json(
+                $this->client()->get(self::API.'/mods/'.$id), self::NAME,
+            )['data']));
         }
 
         return [
@@ -69,7 +69,7 @@ class CurseForge
             'id' => (string) $mod['id'],
             'slug' => (string) ($mod['slug'] ?? $mod['id']),
             'name' => (string) ($mod['name'] ?? ''),
-            'summary' => (string) ($mod['summary'] ?? ''),
+            'summary' => mb_substr((string) ($mod['summary'] ?? ''), 0, 300),
             'icon' => $mod['logo']['thumbnailUrl'] ?? null,
             'downloads' => (int) ($mod['downloadCount'] ?? 0),
             'author' => $mod['authors'][0]['name'] ?? null,
@@ -85,19 +85,18 @@ class CurseForge
             'modLoaderType' => $loader ? (self::LOADER_TYPES[$loader] ?? null) : null,
             'pageSize' => 30,
         ], fn ($v) => $v !== null);
-        $data = Cache::remember("curseforge:files:{$modId}:".md5(json_encode($params)), 300, fn () => ContentHttp::json(
-            $this->client()->get(self::API.'/mods/'.(int) $modId.'/files', $params), self::NAME,
+        return ContentHttp::cached("curseforge:files:{$modId}:".md5(json_encode($params)), ContentHttp::LISTS, fn () => array_map(
+            fn ($f) => $this->file($f),
+            ContentHttp::json($this->client()->get(self::API.'/mods/'.(int) $modId.'/files', $params), self::NAME)['data'] ?? [],
         ));
-
-        return array_map(fn ($f) => $this->file($f), $data['data'] ?? []);
     }
 
     /** @return array<string, mixed> */
     public function fileById(string $modId, string $fileId): array
     {
-        return $this->file(ContentHttp::json(
+        return ContentHttp::cached('curseforge:file:'.(int) $fileId, ContentHttp::IMMUTABLE, fn () => $this->file(ContentHttp::json(
             $this->client()->get(self::API.'/mods/'.(int) $modId.'/files/'.(int) $fileId), self::NAME,
-        )['data']);
+        )['data']));
     }
 
     /**

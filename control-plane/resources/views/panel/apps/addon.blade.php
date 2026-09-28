@@ -5,6 +5,7 @@
 @section('content')
     @include('panel.apps._header')
 
+    @include('panel.apps._content_ui')
     <p><a href="{{ route('panel.apps.addons', [$app, 'source' => $source]) }}"><x-icon name="arrow-left" :size="14"/> {{ __('Wróć do listy') }}</a></p>
 
     @if ($error)
