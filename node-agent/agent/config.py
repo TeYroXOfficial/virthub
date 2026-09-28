@@ -99,6 +99,8 @@ class Settings:
     apps_guard_interval: int = 60
     # Profil seccomp aplikacji bez ptrace (blokuje proot). 0 = domyślny Dockera.
     apps_seccomp: bool = True
+    # Tylko testy: pobieranie treści z adresów prywatnych (lokalny serwer HTTP).
+    apps_content_allow_private: bool = False
 
     @property
     def is_mock(self) -> bool:
@@ -156,6 +158,7 @@ def get_settings() -> Settings:
         apps_guard=_env("VH_APPS_GUARD", "kill").lower() if _env("VH_APPS_GUARD", "kill").lower() in ("kill", "report", "off") else "kill",
         apps_guard_interval=max(10, _env_int("VH_APPS_GUARD_INTERVAL", 60)),
         apps_seccomp=_env("VH_APPS_SECCOMP", "1") not in ("0", "false", "no"),
+        apps_content_allow_private=_env("VH_APPS_CONTENT_ALLOW_PRIVATE", "0") in ("1", "true", "yes"),
         nft_table=_env("VH_NFT_TABLE", "virthub"),
         vnc_listen=_env("VH_VNC_LISTEN", "127.0.0.1"),
         control_plane_url=_env("VH_CONTROL_PLANE_URL", "").rstrip("/"),

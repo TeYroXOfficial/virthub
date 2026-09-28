@@ -629,3 +629,24 @@ details.form-block[open] > summary { margin-bottom: 16px; }
 .egg-card strong { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .egg-card p { margin: 0; font-size: 13px; color: var(--muted); }
 .egg-card select { margin-top: 10px; }
+
+/* --- instalator modpacków i pluginów --- */
+.segmented a { color: var(--muted); font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 6px; text-decoration: none; }
+.segmented a[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.catalog-search { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+.catalog-search input[type=search] { flex: 1; min-width: 180px; }
+.catalog-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.catalog-card { display: flex; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); text-decoration: none; min-width: 0; }
+.catalog-card:hover { border-color: var(--accent); }
+.catalog-card img, .catalog-icon { width: 48px; height: 48px; border-radius: 10px; flex: none; object-fit: cover; background: var(--surface-3); display: grid; place-items: center; color: var(--muted); }
+.catalog-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.catalog-body strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catalog-meta { font-size: 12px; display: inline-flex; gap: 4px; align-items: center; }
+.catalog-summary { font-size: 13px; color: var(--muted); line-height: 1.4; }
+.pager { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 16px; }
+.content-hero { display: flex; gap: 16px; align-items: center; }
+.content-hero img { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; }
+.version-list { display: grid; gap: 6px; max-height: 420px; overflow: auto; margin: 12px 0; }
+.version-list label { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.version-list label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.version-list .tags { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }

@@ -30,6 +30,7 @@ class AppServer extends Model
     {
         return [
             'environment' => 'array',
+            'minecraft' => 'array',
             'memory_mb' => 'integer',
             'cpu_percent' => 'integer',
             'disk_mb' => 'integer',
@@ -81,6 +82,19 @@ class AppServer extends Model
     public function allocations(): HasMany
     {
         return $this->hasMany(AppAllocation::class)->orderByDesc('is_primary')->orderBy('port');
+    }
+
+    /** @return HasMany<AppAddon, $this> */
+    public function addons(): HasMany
+    {
+        return $this->hasMany(AppAddon::class)->orderBy('name');
+    }
+
+    /** Serwer Minecraft (Paper, Vanilla albo z modami) — ma zakładki Modpacki i Pluginy/Mody. */
+    public function isMinecraft(): bool
+    {
+        return str_starts_with((string) $this->egg?->builtin_key, 'minecraft-')
+            || in_array('modpacks', $this->egg?->features ?? [], true);
     }
 
     /** @return HasMany<AppJob, $this> */
