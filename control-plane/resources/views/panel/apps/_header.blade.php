@@ -1,7 +1,7 @@
 {{-- Nagłówek i zakładki strony aplikacji. --}}
 @php
-    $icon = $app->egg?->category === 'bot' ? 'bot' : 'gamepad';
-    $tone = $app->isSuspended() || $app->status === \App\Models\AppServer::STATUS_INSTALL_FAILED ? 'critical' : ($app->isInstalling() ? 'warning' : 'neutral');
+    $icon = $app->icon();
+    $tone = $app->statusTone();
 @endphp
 <div class="page-header">
     <div>

@@ -28,12 +28,16 @@ class AppController extends Controller
 
     public function index(Request $request): View
     {
+        $apps = AppServer::query()
+            ->where('user_id', $request->user()->id)
+            ->with(['egg', 'plan', 'allocations', 'hypervisor'])
+            ->latest()
+            ->get();
+
         return view('panel.apps.index', [
-            'apps' => AppServer::query()
-                ->where('user_id', $request->user()->id)
-                ->with(['egg', 'plan', 'allocations', 'hypervisor'])
-                ->latest()
-                ->get(),
+            'apps' => $apps,
+            'ready' => $apps->filter(fn (AppServer $a) => $a->statusTone() === 'ok')->count(),
+            'busy' => $apps->filter(fn (AppServer $a) => $a->statusTone() === 'warning')->count(),
         ]);
     }
 

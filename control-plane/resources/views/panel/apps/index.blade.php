@@ -15,6 +15,28 @@
         @endcan
     </div>
 
+    @if ($apps->isNotEmpty())
+        <div class="grid grid-4" style="margin-bottom:20px">
+            <div class="stat">
+                <div class="stat-label">{{ __('Wszystkie') }}</div>
+                <div class="stat-value">{{ $apps->count() }}</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">{{ __('Gotowe') }}</div>
+                <div class="stat-value" style="color:var(--ok)">{{ $ready }}</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">{{ __('W trakcie operacji') }}</div>
+                <div class="stat-value" style="color:var(--warn)">{{ $busy }}</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">{{ __('Łącznie RAM / dysk') }}</div>
+                <div class="stat-value">{{ round($apps->sum('memory_mb') / 1024, 1) }} <span class="stat-sub">{{ __('GB') }}</span>
+                    · {{ round($apps->sum('disk_mb') / 1024, 1) }} <span class="stat-sub">{{ __('GB') }}</span></div>
+            </div>
+        </div>
+    @endif
+
     @if ($apps->isEmpty())
         <div class="card empty">
             <x-icon name="gamepad" :size="40"/>
@@ -28,16 +50,34 @@
             <div class="table-wrap">
                 <table>
                     <thead>
-                    <tr><th>{{ __('Nazwa') }}</th><th>{{ __('Szablon') }}</th><th>{{ __('Adres') }}</th><th>{{ __('Zasoby') }}</th><th>{{ __('Stan') }}</th></tr>
+                    <tr>
+                        <th>{{ __('Nazwa') }}</th>
+                        <th>{{ __('Stan') }}</th>
+                        <th>{{ __('Adres') }}</th>
+                        <th>{{ __('Szablon') }}</th>
+                        <th>{{ __('Zasoby') }}</th>
+                        <th></th>
+                    </tr>
                     </thead>
                     <tbody>
                     @foreach ($apps as $app)
                         <tr>
-                            <td><a href="{{ route('panel.apps.show', $app) }}"><strong>{{ $app->name }}</strong></a></td>
-                            <td class="muted">{{ $app->egg?->displayName() }}</td>
+                            <td>
+                                <a href="{{ route('panel.apps.show', $app) }}" style="font-weight:600">{{ $app->name }}</a>
+                                @if (! empty($app->minecraft['mc']))
+                                    <div class="hint">{{ trim(ucfirst($app->minecraft['platform'] ?? '').' '.$app->minecraft['mc']) }}@if (! empty($app->minecraft['modpack']['name'])) · {{ $app->minecraft['modpack']['name'] }}@endif</div>
+                                @endif
+                            </td>
+                            <td><span class="pill {{ $app->statusTone() }}">{{ $app->statusLabel() }}</span></td>
                             <td class="mono">{{ $app->address() ?? '—' }}</td>
-                            <td class="num">{{ __(':memory MB RAM · :disk MB', ['memory' => $app->memory_mb, 'disk' => $app->disk_mb]) }}</td>
-                            <td><span class="pill {{ $app->isSuspended() || $app->status === 'install_failed' ? 'critical' : ($app->isInstalling() ? 'warning' : 'neutral') }}">{{ $app->statusLabel() }}</span></td>
+                            <td>
+                                <span class="os-inline">
+                                    <span class="os-badge app-badge"><x-icon :name="$app->icon()" :size="14"/></span>
+                                    {{ $app->egg?->displayName() ?? '—' }}
+                                </span>
+                            </td>
+                            <td class="num" style="white-space:nowrap">{{ __(':ram GB RAM · :disk GB', ['ram' => round($app->memory_mb / 1024, 1), 'disk' => round($app->disk_mb / 1024, 1)]) }}</td>
+                            <td style="text-align:right"><a class="btn btn-sm" href="{{ route('panel.apps.show', $app) }}">{{ __('Zarządzaj') }}</a></td>
                         </tr>
                     @endforeach
                     </tbody>

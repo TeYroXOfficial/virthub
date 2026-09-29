@@ -108,7 +108,7 @@
                             <td><span class="pill info">{{ __('Aplikacja') }}</span></td>
                             <td class="muted">{{ $item->user?->email ?? '—' }}</td>
                             <td>
-                                <span class="pill {{ $item->isSuspended() || $item->status === 'install_failed' ? 'critical' : ($item->isInstalling() ? 'warning' : 'ok') }}">{{ $item->statusLabel() }}</span>
+                                <span class="pill {{ $item->statusTone() }}">{{ $item->statusLabel() }}</span>
                                 @if ($item->abuse_detected_at) <span class="pill critical plain" title="{{ $item->suspension_reason }}">{{ __('nadużycie') }}</span> @endif
                             </td>
                             <td class="mono">{{ $item->address() ?? '—' }}</td>
