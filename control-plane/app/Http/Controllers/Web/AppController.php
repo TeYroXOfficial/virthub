@@ -90,6 +90,38 @@ class AppController extends Controller
         return view('panel.apps.show', $this->page($app) + ['tab' => 'overview']);
     }
 
+    /**
+     * Hasło SFTP aplikacji: wygeneruj nowe (pokazane raz), ustaw własne albo
+     * wróć do logowania hasłem panelu. Osobne hasło można dać np. współpracownikowi.
+     */
+    public function sftpPassword(Request $request, AppServer $app): RedirectResponse
+    {
+        $this->authorize('operate', $app);
+        $data = $request->validate([
+            'mode' => ['required', Rule::in(['generate', 'set', 'panel'])],
+            'password' => ['nullable', 'required_if:mode,set', 'confirmed', \Illuminate\Validation\Rules\Password::min(10)],
+        ]);
+
+        $redirect = redirect()->route('panel.apps.show', $app);
+        switch ($data['mode']) {
+            case 'generate':
+                $password = \Illuminate\Support\Str::password(20, symbols: false);
+                $app->forceFill(['sftp_password' => $password])->save();
+                $redirect->with('sftp_password', $password)->with('status', __('Nowe hasło SFTP ustawione — zapisz je, zobaczysz je tylko teraz.'));
+                break;
+            case 'set':
+                $app->forceFill(['sftp_password' => $data['password']])->save();
+                $redirect->with('status', __('Hasło SFTP zmienione.'));
+                break;
+            default:
+                $app->forceFill(['sftp_password' => null])->save();
+                $redirect->with('status', __('SFTP używa teraz hasła do panelu.'));
+        }
+        \App\Models\AuditLog::record('app.sftp_password', $app, ['mode' => $data['mode']], $request->user());
+
+        return $redirect;
+    }
+
     /** Konsola na żywo — osobna zakładka, jak konsola maszyny. */
     public function terminal(AppServer $app): View
     {

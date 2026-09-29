@@ -20,5 +20,18 @@ class AppServiceProvider extends ServiceProvider
         // stylujemy razem z resztą interfejsu.
         Paginator::defaultView('pagination::simple-default');
         Paginator::defaultSimpleView('pagination::simple-default');
+
+        // E-mail z linkiem do nowego hasła w języku panelu (domyślny jest po angielsku).
+        \Illuminate\Auth\Notifications\ResetPassword::toMailUsing(function ($user, string $token) {
+            $url = route('password.reset', ['token' => $token, 'email' => $user->getEmailForPasswordReset()]);
+
+            return (new \Illuminate\Notifications\Messages\MailMessage)
+                ->subject(__('Ustawienie nowego hasła — :brand', ['brand' => config('virthub.brand')]))
+                ->greeting(__('Cześć!'))
+                ->line(__('Ktoś (miejmy nadzieję, że Ty) poprosił o ustawienie nowego hasła do panelu :brand.', ['brand' => config('virthub.brand')]))
+                ->action(__('Ustaw nowe hasło'), $url)
+                ->line(__('Link jest ważny :minutes minut. Jeśli to nie Ty, zignoruj tę wiadomość — hasło się nie zmieni.', ['minutes' => config('auth.passwords.users.expire', 60)]))
+                ->salutation(config('virthub.brand'));
+        });
     }
 }

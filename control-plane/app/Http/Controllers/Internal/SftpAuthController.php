@@ -56,8 +56,10 @@ class SftpAuthController extends Controller
         }
 
         $user = User::find($userId);
+        // Aplikacja z osobnym hasłem SFTP przyjmuje tylko je; bez niego — hasło do panelu.
+        $secret = $app->sftp_password ?: $user?->password;
         $allowed = $user !== null
-            && Hash::check($password, $user->password)
+            && is_string($secret) && Hash::check($password, $secret)
             && $user->can('operate', $app)
             && ! $app->isSuspended()
             && $app->status !== AppServer::STATUS_DELETING;

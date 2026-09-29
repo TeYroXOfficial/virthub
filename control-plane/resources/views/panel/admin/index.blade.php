@@ -8,6 +8,13 @@
 
     @include('panel.admin._nav')
 
+    @if (in_array(config('mail.default'), ['log', 'array'], true) && auth()->user()->isAdmin())
+        <div class="alert alert-warning">
+            <strong>{{ __('Poczta nie jest skonfigurowana.') }}</strong>
+            {{ __('Link „Nie pamiętasz hasła?” nie dotrze do klientów — wiadomości trafiają tylko do logu panelu. Ustaw serwer SMTP w pliku .env panelu (MAIL_MAILER=smtp, MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD, MAIL_FROM_ADDRESS) i uruchom php artisan config:cache.') }}
+        </div>
+    @endif
+
     <div class="grid grid-3">
         <div class="card">
             <h3>{{ __('Maszyny') }}</h3>

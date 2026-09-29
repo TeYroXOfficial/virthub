@@ -36,5 +36,6 @@
                 <button class="btn btn-primary" type="submit" style="width:100%">{{ __('Zaloguj się') }}</button>
             </form>
         </div>
+        <p style="text-align:center; margin-top:16px"><a href="{{ route('password.request') }}">{{ __('Nie pamiętasz hasła?') }}</a></p>
     </div>
 @endsection

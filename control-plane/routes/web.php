@@ -19,6 +19,10 @@ Route::get('/', fn () => redirect()->route('panel.dashboard'));
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login']);
+    Route::get('/forgot-password', [\App\Http\Controllers\Web\PasswordResetController::class, 'request'])->name('password.request');
+    Route::post('/forgot-password', [\App\Http\Controllers\Web\PasswordResetController::class, 'send'])->middleware('throttle:5,1')->name('password.email');
+    Route::get('/reset-password/{token}', [\App\Http\Controllers\Web\PasswordResetController::class, 'edit'])->name('password.reset');
+    Route::post('/reset-password', [\App\Http\Controllers\Web\PasswordResetController::class, 'update'])->middleware('throttle:10,1')->name('password.update');
 });
 
 // Zmiana języka — także przed zalogowaniem (strona logowania).
@@ -38,9 +42,21 @@ Route::post('/logout', [AuthController::class, 'logout'])
 // mieć już aktywną sesję na inne konto (np. wsparcie testujące zgłoszenie).
 Route::get('/sso/{token}', SsoController::class)->name('sso.consume');
 
+Route::get('/avatars/{user}', [\App\Http\Controllers\Web\AccountController::class, 'avatar'])
+    ->middleware('auth')->whereNumber('user')->name('avatar');
+
 // --- panel ------------------------------------------------------------------
 Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->group(function () {
     Route::get('/', [PanelController::class, 'dashboard'])->name('dashboard');
+
+    Route::prefix('/account')->name('account')->controller(\App\Http\Controllers\Web\AccountController::class)->group(function () {
+        Route::get('/', 'show');
+        Route::put('/profile', 'updateProfile')->name('.profile');
+        Route::put('/password', 'updatePassword')->middleware('throttle:10,1')->name('.password');
+        Route::post('/logout-others', 'logoutOthers')->middleware('throttle:10,1')->name('.logout-others');
+        Route::post('/avatar', 'uploadAvatar')->name('.avatar');
+        Route::delete('/avatar', 'deleteAvatar')->name('.avatar.delete');
+    });
 
     Route::get('/servers/new', [PanelController::class, 'createServer'])->name('servers.create');
     Route::post('/servers', [PanelController::class, 'storeServer'])->name('servers.store');
@@ -69,6 +85,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
         Route::put('/{app}/startup', 'updateStartup')->name('startup.update');
         Route::get('/{app}/settings', 'settings')->name('settings');
         Route::put('/{app}/name', 'rename')->name('rename');
+        Route::put('/{app}/sftp-password', 'sftpPassword')->middleware('throttle:10,1')->name('sftp-password');
         Route::post('/{app}/reinstall', 'reinstall')->name('reinstall');
         Route::delete('/{app}', 'destroy')->name('destroy');
         Route::get('/{app}/status', 'status')->name('status');

@@ -80,11 +80,17 @@
 
             @include('layouts._locale')
             <div class="sidebar-footer">
-                <span class="avatar">{{ mb_substr($user->name ?: $user->email, 0, 1) }}</span>
-                <div class="user-meta">
-                    <strong title="{{ $user->email }}">{{ $user->name ?: $user->email }}</strong>
-                    <span>{{ $user->isAdmin() ? __('administrator') : ($user->isStaff() ? __('wsparcie') : __('klient')) }}</span>
-                </div>
+                <a href="{{ route('panel.account') }}" class="account-link" title="{{ __('Moje konto') }}">
+                    @if ($avatar = $user->avatarUrl())
+                        <img class="avatar" src="{{ $avatar }}" alt="">
+                    @else
+                        <span class="avatar">{{ mb_substr($user->name ?: $user->email, 0, 1) }}</span>
+                    @endif
+                    <div class="user-meta">
+                        <strong title="{{ $user->email }}">{{ $user->name ?: $user->email }}</strong>
+                        <span>{{ $user->isAdmin() ? __('administrator') : ($user->isStaff() ? __('wsparcie') : __('klient')) }} · {{ __('Moje konto') }}</span>
+                    </div>
+                </a>
                 <form method="POST" action="{{ route('logout') }}" style="margin:0">
                     @csrf
                     <button class="icon-btn" type="submit" title="{{ __('Wyloguj') }}" aria-label="{{ __('Wyloguj') }}">

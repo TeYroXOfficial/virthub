@@ -26,10 +26,13 @@ class AppServer extends Model
 
     protected $attributes = ['status' => self::STATUS_INSTALLING, 'cpu_percent' => 0];
 
+    protected $hidden = ['sftp_password'];
+
     protected function casts(): array
     {
         return [
             'environment' => 'array',
+            'sftp_password' => 'hashed',
             'minecraft' => 'array',
             'memory_mb' => 'integer',
             'cpu_percent' => 'integer',
