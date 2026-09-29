@@ -108,6 +108,34 @@ class AppsTest extends TestCase
         $this->assertSame('Gałąź', $custom->displayName());
     }
 
+    public function test_admin_widzi_maszyny_i_aplikacje_w_jednym_spisie(): void
+    {
+        $app = $this->order();
+        $other = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'email' => 'inny@example.com']);
+        \App\Models\Server::factory()->create(['user_id' => $other->id, 'hostname' => 'vps-klienta.example.com', 'hypervisor_id' => $this->node->id]);
+        \App\Models\Server::factory()->create(['user_id' => $other->id, 'hostname' => 'kontener.example.com', 'virtualization' => 'lxc']);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->get(route('panel.admin.services'))->assertOk()
+            ->assertSee('Survival')->assertSee('vps-klienta.example.com')->assertSee('kontener.example.com')
+            ->assertSee(route('panel.admin.services'), false);
+
+        $this->actingAs($admin)->get(route('panel.admin.services', ['kind' => 'app']))->assertOk()
+            ->assertSee('Survival')->assertDontSee('vps-klienta.example.com');
+        $this->actingAs($admin)->get(route('panel.admin.services', ['kind' => 'lxc']))->assertOk()
+            ->assertSee('kontener.example.com')->assertDontSee('vps-klienta.example.com')->assertDontSee('Survival');
+        $this->actingAs($admin)->get(route('panel.admin.services', ['q' => 'inny@']))->assertOk()
+            ->assertSee('vps-klienta.example.com')->assertDontSee('Survival');
+        $this->actingAs($admin)->get(route('panel.admin.services', ['node' => $this->node->id]))->assertOk()
+            ->assertSee('Survival')->assertSee('vps-klienta.example.com')->assertDontSee('kontener.example.com');
+
+        // Support tylko z działem maszyn nie widzi aplikacji; bez obu działów — brak dostępu.
+        $support = User::factory()->create(['role' => User::ROLE_SUPPORT, 'permissions' => ['admin.servers']]);
+        $this->actingAs($support)->get(route('panel.admin.services'))->assertOk()
+            ->assertSee('vps-klienta.example.com')->assertDontSee($app->name);
+        $this->actingAs($this->customer)->get(route('panel.admin.services'))->assertForbidden();
+    }
+
     // --- eggi -------------------------------------------------------------------------------
 
     public function test_wbudowane_eggi_sa_zaimportowane_z_konfiguracja(): void

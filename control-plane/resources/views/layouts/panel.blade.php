@@ -26,7 +26,8 @@
         // Działy administracji widoczne tylko z odpowiednim uprawnieniem.
         $adminNav = [
             ['panel.admin.index', __('Przegląd'), 'dashboard', 'panel.admin.index', null],
-            ['panel.admin.servers', __('Maszyny'), 'list', 'panel.admin.servers', 'admin.servers'],
+            ['panel.admin.services', __('Wszystkie usługi'), 'list', 'panel.admin.services', 'admin.servers|admin.apps'],
+            ['panel.admin.servers', __('Maszyny'), 'servers', 'panel.admin.servers', 'admin.servers'],
             ['panel.admin.users', __('Użytkownicy'), 'users', 'panel.admin.users*', 'admin.users'],
             ['panel.admin.hypervisors', __('Hypervisory'), 'node', 'panel.admin.hypervisors', 'admin.hypervisors'],
             ['panel.admin.ip-pools', __('Adresy IP'), 'network', 'panel.admin.ip-pools', 'admin.ip_pools'],
@@ -68,7 +69,7 @@
                 @if ($user->hasAnyAdminPermission())
                     <div class="nav-section">{{ __('Administracja') }}</div>
                     @foreach ($adminNav as [$route, $label, $icon, $pattern, $permission])
-                        @continue($permission && ! $user->hasPermission($permission))
+                        @continue($permission && ! collect(explode('|', $permission))->contains(fn ($p) => $user->hasPermission($p)))
                         <a class="nav-link" href="{{ route($route) }}"
                            @if(request()->routeIs($pattern)) aria-current="page" @endif>
                             <x-icon :name="$icon"/> {{ $label }}

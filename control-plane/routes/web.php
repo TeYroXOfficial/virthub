@@ -190,6 +190,8 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/{app}/purge', 'purge')->name('.purge');
     });
 
+    Route::get('/services', [AdminController::class, 'services'])->middleware('admin:admin.servers|admin.apps')->name('services');
+
     Route::middleware('admin:admin.servers')->group(function () {
         Route::get('/servers', [AdminController::class, 'servers'])->name('servers');
         Route::post('/servers/bulk', [AdminController::class, 'bulkServers'])->name('servers.bulk');
