@@ -83,7 +83,15 @@ class AppController extends Controller
     {
         $this->authorize('view', $app);
 
-        return view('panel.apps.show', $this->page($app) + ['tab' => 'console']);
+        return view('panel.apps.show', $this->page($app) + ['tab' => 'overview']);
+    }
+
+    /** Konsola na żywo — osobna zakładka, jak konsola maszyny. */
+    public function terminal(AppServer $app): View
+    {
+        $this->authorize('view', $app);
+
+        return view('panel.apps.console', $this->page($app) + ['tab' => 'console']);
     }
 
     public function startup(AppServer $app): View

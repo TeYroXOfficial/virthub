@@ -16,8 +16,11 @@
         body: JSON.stringify(body || {}),
     });
 
+    // Przegląd aplikacji: bez terminala — tylko stan, statystyki i zasilanie.
+    const withConsole = cfg.console !== false && box && typeof Terminal !== 'undefined';
+
     // --- terminal (tylko wyjście — polecenia idą polem pod konsolą) ---------------
-    const term = new Terminal({
+    const term = withConsole ? new Terminal({
         disableStdin: true,
         convertEol: true,
         cursorStyle: 'underline',
@@ -26,14 +29,16 @@
         fontSize: 13,
         scrollback: 5000,
         theme: { background: '#0b0f14', foreground: '#d5dde6' },
-    });
-    const fit = new FitAddon.FitAddon();
-    term.loadAddon(fit);
-    term.open(box);
-    const refit = () => { try { fit.fit(); } catch (e) { /* ukryty element */ } };
-    refit();
-    window.addEventListener('resize', refit);
-    document.addEventListener('fullscreenchange', () => setTimeout(refit, 50));
+    }) : { write() {}, writeln() {}, reset() {} };
+    if (withConsole) {
+        const fit = new FitAddon.FitAddon();
+        term.loadAddon(fit);
+        term.open(box);
+        const refit = () => { try { fit.fit(); } catch (e) { /* ukryty element */ } };
+        refit();
+        window.addEventListener('resize', refit);
+        document.addEventListener('fullscreenchange', () => setTimeout(refit, 50));
+    }
 
     const sys = (text) => term.writeln('\x1b[38;5;111m' + text + '\x1b[0m');
     const err = (text) => term.writeln('\x1b[38;5;210m' + text + '\x1b[0m');
@@ -83,7 +88,7 @@
             if (cfg.installing && data.status !== 'installing') { location.reload(); return; }
             if (!ws || ws.readyState !== WebSocket.OPEN) renderStatus(data);
         } catch (e) { /* następna próba za chwilę */ }
-        if (repeat) setTimeout(() => pollStatus(true), ws ? 8000 : 4000);
+        if (repeat) setTimeout(() => pollStatus(true), (ws || !withConsole) ? 8000 : 4000);
     }
 
     // --- na żywo: WebSocket --------------------------------------------------------
@@ -210,6 +215,8 @@
         });
     }
 
-    if (cfg.session) connect(); else startPolling();
+    if (withConsole) {
+        if (cfg.session) connect(); else startPolling();
+    }
     pollStatus(true);
 })();

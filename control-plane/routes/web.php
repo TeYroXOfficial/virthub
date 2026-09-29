@@ -64,6 +64,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
         Route::get('/new', 'create')->name('create');
         Route::post('/', 'store')->name('store');
         Route::get('/{app}', 'show')->name('show');
+        Route::get('/{app}/console', 'terminal')->name('terminal');
         Route::get('/{app}/startup', 'startup')->name('startup');
         Route::put('/{app}/startup', 'updateStartup')->name('startup.update');
         Route::get('/{app}/settings', 'settings')->name('settings');
