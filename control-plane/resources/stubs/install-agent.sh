@@ -675,6 +675,9 @@ server {
     ssl_certificate_key $CONFIG_DIR/tls/agent.key;
     ssl_protocols TLSv1.2 TLSv1.3;
 
+    # Pliki aplikacji z panelu (kawałki po kilka MB), paczki treści.
+    client_max_body_size 100m;
+
     location / {
         proxy_pass http://127.0.0.1:8899;
         proxy_set_header Host \$host;

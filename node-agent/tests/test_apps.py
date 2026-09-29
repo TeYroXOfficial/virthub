@@ -44,6 +44,15 @@ def test_zapis_odczyt_lista_i_katalogi(files):
     assert [e["name"] for e in files.list("")] == ["plugins", "server.properties"]
 
 
+def test_zapis_kawalkami_dopisuje_a_zwykly_nadpisuje(files):
+    files.write("world.zip", b"AAA")
+    files.write("world.zip", b"BBB", append=True)
+    files.write("world.zip", b"C", append=True)
+    assert files.read("world.zip") == b"AAABBBC"
+    files.write("world.zip", b"nowy")
+    assert files.read("world.zip") == b"nowy"
+
+
 @pytest.mark.parametrize("path", ["../etc/passwd", "a/../../x", "..", "plugins/../../x"])
 def test_sciezka_nie_wychodzi_poza_katalog(files, path):
     with pytest.raises(AppError):
@@ -308,6 +317,16 @@ def test_api_aplikacji(client, manager, monkeypatch):
     read = client.post(f"/apps/{spec.uuid}/files/read", json={"path": "extra/a.js"}).json()
     assert base64.b64decode(read["content_base64"]) == b"console.log('nowy')"
     assert client.post(f"/apps/{spec.uuid}/files/read", json={"path": "../../etc/passwd"}).status_code == 409
+
+    # Duży plik z panelu przychodzi kawałkami: pierwszy tworzy, kolejne dopisują.
+    for i, part in enumerate([b"AAA", b"BBB", b"CC"]):
+        body = {"path": "extra/big.bin", "content_base64": base64.b64encode(part).decode(), "append": i > 0}
+        assert client.post(f"/apps/{spec.uuid}/files/write", json=body).status_code == 200
+    read = client.post(f"/apps/{spec.uuid}/files/read", json={"path": "extra/big.bin"}).json()
+    assert base64.b64decode(read["content_base64"]) == b"AAABBBCC"
+    client.post(f"/apps/{spec.uuid}/files/write", json={"path": "extra/big.bin", "content_base64": base64.b64encode(b"new").decode()})
+    read = client.post(f"/apps/{spec.uuid}/files/read", json={"path": "extra/big.bin"}).json()
+    assert base64.b64decode(read["content_base64"]) == b"new", "bez append plik jest nadpisywany"
 
     assert client.post(f"/apps/{spec.uuid}/power", json={"action": "start"}).json()["state"] == "running"
     assert client.post(f"/apps/{spec.uuid}/command", json={"command": "ping"}).json() == {"sent": True}

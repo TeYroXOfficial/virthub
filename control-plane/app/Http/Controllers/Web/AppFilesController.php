@@ -17,6 +17,9 @@ use Illuminate\View\View;
  */
 class AppFilesController extends Controller
 {
+    /** Kawałek pliku w jednym żądaniu do węzła (~5,3 MB po base64). */
+    private const UPLOAD_CHUNK = 4 * 1024 * 1024;
+
     private const EDITABLE_LIMIT = 2 * 1024 * 1024;
 
     public function __construct(private readonly AppProvisioner $apps) {}
@@ -123,16 +126,42 @@ class AppFilesController extends Controller
             $client = $this->apps->client($app);
             foreach ($request->file('files') as $file) {
                 $name = basename(str_replace('\\', '/', $file->getClientOriginalName()));
-                $client->appFiles($app->uuid, 'write', [
-                    'path' => ltrim($dir.'/'.$name, '/'),
-                    'content_base64' => base64_encode((string) file_get_contents($file->getRealPath())),
-                ]);
+                $this->sendInChunks($client, $app, ltrim($dir.'/'.$name, '/'), $file->getRealPath());
             }
         } catch (\DomainException|AgentException $e) {
             return $this->back($app, $dir)->withErrors(['files' => $e->getMessage()]);
         }
 
         return $this->back($app, $dir)->with('status', __('Wgrano pliki: :count.', ['count' => count($request->file('files'))]));
+    }
+
+    /**
+     * Plik na węzeł kawałkami po 4 MB: każde żądanie mieści się w limicie
+     * nginx węzła, a panel nie trzyma w pamięci całego pliku w base64.
+     */
+    private function sendInChunks(\App\Domain\Agent\AgentClient $client, AppServer $app, string $path, string $source): void
+    {
+        $handle = fopen($source, 'rb');
+        if ($handle === false) {
+            throw new \DomainException(__('Nie udało się odczytać wgranego pliku.'));
+        }
+        try {
+            $first = true;
+            do {
+                $chunk = (string) fread($handle, self::UPLOAD_CHUNK);
+                if ($chunk === '' && ! $first) {
+                    break;
+                }
+                $client->appFiles($app->uuid, 'write', array_filter([
+                    'path' => $path,
+                    'content_base64' => base64_encode($chunk),
+                    'append' => $first ? null : true,
+                ], fn ($v) => $v !== null));
+                $first = false;
+            } while (! feof($handle));
+        } finally {
+            fclose($handle);
+        }
     }
 
     public function mkdir(Request $request, AppServer $app): RedirectResponse

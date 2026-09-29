@@ -65,6 +65,12 @@ if [ -f "$NGINX_SITE" ]; then
         sed -i 's|^\(\s*\)proxy_read_timeout .*;|\1proxy_http_version 1.1;\n\1proxy_set_header Upgrade $http_upgrade;\n\1proxy_set_header Connection $connection_upgrade;\n\1proxy_read_timeout 3600s;|' "$NGINX_SITE"
         ok "nginx: dodano obsługę WebSocketów (kopia: $NGINX_SITE.bak)"
     fi
+    # Domyślny limit nginx (1 MB) odrzucał wgrywanie plików aplikacji (413).
+    if ! grep -q 'client_max_body_size' "$NGINX_SITE"; then
+        [ -f "$NGINX_SITE.bak" ] || cp "$NGINX_SITE" "$NGINX_SITE.bak"
+        sed -i '0,/^\(\s*\)location \/ {/s//\1client_max_body_size 100m;\n\n&/' "$NGINX_SITE"
+        ok "nginx: limit rozmiaru żądania 100 MB (wgrywanie plików)"
+    fi
     if nginx -t >/dev/null 2>&1; then
         systemctl reload nginx
     else

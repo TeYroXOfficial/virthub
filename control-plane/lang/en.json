@@ -1576,5 +1576,6 @@
     "modpack :name :version": "modpack :name :version",
     ":percent% rdzenia": ":percent% of a core",
     ":mb MB": ":mb MB",
-    "Uruchom instalację od nowa": "Run the installation again"
+    "Uruchom instalację od nowa": "Run the installation again",
+    "Nie udało się odczytać wgranego pliku.": "Could not read the uploaded file."
 }

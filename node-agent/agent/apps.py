@@ -182,20 +182,22 @@ class AppFiles:
             raise AppError(f"Plik jest większy niż {limit // (1024 * 1024)} MB — pobierz go przez SFTP albo spakuj.")
         return data
 
-    def write(self, path: str, data: bytes) -> None:
+    def write(self, path: str, data: bytes, append: bool = False) -> None:
         if len(data) > MAX_WRITE:
             raise AppError(f"Plik może mieć najwyżej {MAX_WRITE // (1024 * 1024)} MB.")
         parents, name = self._split(path)
         dfd = self._open_dir(parents, create=True)
         try:
-            self._write_at(dfd, name, data)
+            self._write_at(dfd, name, data, append=append)
         finally:
             os.close(dfd)
 
     @staticmethod
-    def _write_at(dfd: int, name: str, data: bytes | io.BufferedReader, mode: int = 0o644) -> None:
+    def _write_at(dfd: int, name: str, data: bytes | io.BufferedReader, mode: int = 0o644, append: bool = False) -> None:
+        # Dopisywanie: kolejne kawałki pliku wysyłanego z panelu partiami.
+        flags = os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC | (os.O_APPEND if append else os.O_TRUNC)
         try:
-            fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW | os.O_CLOEXEC, mode, dir_fd=dfd)
+            fd = os.open(name, flags, mode, dir_fd=dfd)
         except OSError as exc:
             if exc.errno == errno.ELOOP:
                 raise AppError("Nie można nadpisać dowiązania symbolicznego.") from None
@@ -1134,14 +1136,15 @@ class AppManager:
     def read_file(self, uuid: str, path: str) -> bytes:
         return self.files(uuid).read(path)
 
-    def write_file(self, uuid: str, path: str, content_base64: str) -> dict[str, Any]:
+    def write_file(self, uuid: str, path: str, content_base64: str, append: bool = False) -> dict[str, Any]:
         try:
             data = base64.b64decode(content_base64, validate=True)
         except ValueError:
             raise AppError("Treść pliku nie jest poprawnym base64.") from None
         self._check_quota(uuid, len(data))
-        self.files(uuid).write(path, data)
-        return {"path": path, "size": len(data)}
+        self.files(uuid).write(path, data, append=append)
+        self._usage_cache.pop(uuid, None)
+        return {"path": path, "size": len(data), "append": append}
 
     def decompress(self, uuid: str, path: str) -> dict[str, Any]:
         spec = self.load_spec(uuid)
