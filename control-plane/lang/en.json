@@ -1572,5 +1572,9 @@
     "zawieszone": "suspended",
     ":vcpu vCPU · :ram GB · :disk GB": ":vcpu vCPU · :ram GB · :disk GB",
     "Aplikacja": "Application",
-    "Brak usług spełniających kryteria.": "No services match the criteria."
+    "Brak usług spełniających kryteria.": "No services match the criteria.",
+    "modpack :name :version": "modpack :name :version",
+    ":percent% rdzenia": ":percent% of a core",
+    ":mb MB": ":mb MB",
+    "Uruchom instalację od nowa": "Run the installation again"
 }

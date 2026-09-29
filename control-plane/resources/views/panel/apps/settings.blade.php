@@ -7,45 +7,6 @@
 
     <div class="grid grid-2">
         <div class="card">
-            <h3 class="card-title">{{ __('Informacje') }}</h3>
-            <dl class="kv">
-                <dt>{{ __('Szablon') }}</dt><dd>{{ $app->egg?->displayName() }}</dd>
-                <dt>{{ __('Plan') }}</dt><dd>{{ $app->plan?->name ?? '—' }}</dd>
-                <dt>{{ __('Zasoby') }}</dt>
-                <dd>{{ __(':memory MB RAM · :disk MB dysku', ['memory' => $app->memory_mb, 'disk' => $app->disk_mb]) }}
-                    · {{ $app->cpu_percent ? __('procesor: :percent% rdzenia', ['percent' => $app->cpu_percent]) : __('procesor bez limitu') }}</dd>
-                <dt>{{ __('Porty') }}</dt>
-                <dd class="mono">
-                    @foreach ($app->allocations as $allocation)
-                        {{ $app->hypervisor?->publicAddress() }}:{{ $allocation->port }}@if ($allocation->is_primary) <span class="pill neutral plain">{{ __('główny') }}</span>@endif<br>
-                    @endforeach
-                </dd>
-                <dt>{{ __('Identyfikator') }}</dt><dd class="mono">{{ $app->uuid }}</dd>
-                <dt>{{ __('Utworzona') }}</dt><dd>{{ $app->created_at->format('d.m.Y H:i') }}</dd>
-            </dl>
-        </div>
-
-        <div class="card">
-            <h3 class="card-title">{{ __('SFTP') }}</h3>
-            @php($sftpHost = $app->hypervisor?->publicAddress())
-            @php($sftpUser = $app->sftpUsername(auth()->user()))
-            @php($sftpPort = config('virthub.apps_sftp_port'))
-            @php($sftpUrl = 'sftp://'.$sftpUser.'@'.$sftpHost.':'.$sftpPort)
-            <dl class="kv">
-                <dt>{{ __('Host') }}</dt>
-                <dd class="mono copyable" title="{{ __('Kliknij, żeby skopiować') }}" data-copy="{{ $sftpHost }}">{{ $sftpHost ?? '?' }}</dd>
-                <dt>{{ __('Port') }}</dt><dd class="mono">{{ $sftpPort }}</dd>
-                <dt>{{ __('Użytkownik') }}</dt>
-                <dd class="mono copyable" title="{{ __('Kliknij, żeby skopiować') }}" data-copy="{{ $sftpUser }}">{{ $sftpUser }}</dd>
-                <dt>{{ __('Hasło') }}</dt><dd>{{ __('twoje hasło do panelu') }}</dd>
-            </dl>
-            <p class="hint">{{ __('Połącz się dowolnym klientem SFTP (FileZilla, WinSCP) — zobaczysz pliki aplikacji jak w zakładce Pliki. Większe paczki wgrywaj tą drogą.') }}</p>
-            @if ($sftpHost)
-                <a class="btn btn-sm" href="{{ $sftpUrl }}">{{ __('Otwórz w kliencie SFTP') }}</a>
-            @endif
-        </div>
-
-        <div class="card">
             <h3 class="card-title">{{ __('Nazwa') }}</h3>
             <form method="POST" action="{{ route('panel.apps.rename', $app) }}">
                 @csrf @method('PUT')
@@ -113,7 +74,7 @@
         <h3 class="card-title" style="color:var(--critical)">{{ __('Strefa niebezpieczna') }}</h3>
         @error('confirm') <div class="alert alert-error">{{ $message }}</div> @enderror
 
-        <form method="POST" action="{{ route('panel.apps.reinstall', $app) }}" class="setting-row"
+        <form method="POST" action="{{ route('panel.apps.reinstall', $app) }}" id="reinstall" class="setting-row"
               data-confirm="{{ __('Uruchomić instalację ponownie? Skrypt eggu może nadpisać pliki.') }}">
             @csrf
             <div class="setting-text">

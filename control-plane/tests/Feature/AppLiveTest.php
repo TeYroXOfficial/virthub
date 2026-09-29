@@ -98,14 +98,14 @@ class AppLiveTest extends TestCase
             ->assertStatus(409)
             ->assertJson(['enabled' => false]);
 
-        $this->actingAs($this->customer)->get(route('panel.apps.show', $this->appServer))
+        $this->actingAs($this->customer)->get(route('panel.apps.terminal', $this->appServer))
             ->assertOk()
             ->assertSee('session: null', false);
     }
 
     public function test_strona_konsoli_laduje_xterm_i_adres_sesji(): void
     {
-        $this->actingAs($this->customer)->get(route('panel.apps.show', $this->appServer))
+        $this->actingAs($this->customer)->get(route('panel.apps.terminal', $this->appServer))
             ->assertOk()
             ->assertSee('vendor/xterm/xterm.js', false)
             ->assertSee(str_replace('/', '\\/', route('panel.apps.console', $this->appServer)), false);
@@ -167,11 +167,17 @@ class AppLiveTest extends TestCase
         $this->sftpAuth(['uuid' => $this->appServer->uuid, 'user_id' => $this->customer->id, 'password' => 'password'])->assertStatus(429);
     }
 
-    public function test_ustawienia_pokazuja_dane_sftp(): void
+    public function test_przeglad_pokazuje_dane_sftp_jak_strona_maszyny(): void
     {
         $user = 'u'.$this->customer->id.'.'.substr($this->appServer->uuid, 0, 8);
 
-        $this->actingAs($this->customer)->get(route('panel.apps.settings', $this->appServer))
+        $this->actingAs($this->customer)->get(route('panel.apps.show', $this->appServer))
+            ->assertOk()
+            ->assertSee('Parametry')->assertSee('Połączenie')
+            ->assertSee(route('panel.apps.terminal', $this->appServer), false)
+            ->assertDontSee('vendor/xterm/xterm.js', false);
+
+        $this->actingAs($this->customer)->get(route('panel.apps.show', $this->appServer))
             ->assertOk()
             ->assertSee($user)
             ->assertSee('203.0.113.10')

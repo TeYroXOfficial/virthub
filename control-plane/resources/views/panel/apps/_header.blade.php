@@ -24,12 +24,22 @@
     </div>
     @if ($app->acceptsCommands())
         <div class="actions">
+            @if ($tab !== 'console')
+                <a class="btn btn-primary" href="{{ route('panel.apps.terminal', $app) }}">
+                    <x-icon name="terminal" :size="16"/> {{ __('Konsola') }}
+                </a>
+            @endif
             <div class="btn-group" id="app-power">
                 <button class="btn" data-power="start"><x-icon name="play" :size="15"/> {{ __('Start') }}</button>
                 <button class="btn" data-power="restart"><x-icon name="refresh" :size="15"/> {{ __('Restart') }}</button>
                 <button class="btn" data-power="stop"><x-icon name="stop" :size="15"/> {{ __('Stop') }}</button>
                 <button class="btn btn-danger" data-power="kill" title="{{ __('Zabij proces — niezapisane dane przepadną') }}"><x-icon name="power" :size="15"/></button>
             </div>
+            @can('operate', $app)
+                <a class="btn" href="{{ route('panel.apps.settings', $app) }}#reinstall" title="{{ __('Uruchom instalację od nowa') }}">
+                    <x-icon name="refresh" :size="15"/> {{ __('Reinstaluj') }}
+                </a>
+            @endcan
         </div>
     @endif
 </div>
@@ -47,7 +57,8 @@
 <nav class="tabs" aria-label="{{ __('Sekcje aplikacji') }}">
     @php
         $tabs = [
-            'console' => [__('Konsola'), route('panel.apps.show', $app)],
+            'overview' => [__('Przegląd'), route('panel.apps.show', $app)],
+            'console' => [__('Konsola'), route('panel.apps.terminal', $app)],
             'files' => [__('Pliki'), route('panel.apps.files', $app)],
         ];
         if ($app->isMinecraft()) {
@@ -69,4 +80,9 @@
             if (navigator.clipboard) navigator.clipboard.writeText(el.dataset.copy);
         }));
     </script>
+    @if (($tab ?? null) !== 'console')
+        {{-- Zasilanie i stan w nagłówku na każdej zakładce; konsola ładuje skrypt sama (po xterm). --}}
+        @include('panel.apps._live-config', ['withConsole' => false])
+        <script src="{{ asset('js/app-console.js') }}?v={{ @filemtime(public_path('js/app-console.js')) }}"></script>
+    @endif
 @endpush
