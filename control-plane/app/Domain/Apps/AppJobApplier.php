@@ -34,6 +34,7 @@ class AppJobApplier
     public function succeed(AppJob $job): void
     {
         $job->forceFill(['status' => AppJob::STATUS_DONE, 'finished_at' => now()])->save();
+        app(PterodactylMigrator::class)->cleanup($job);
         $wipe = $job->payload['wipe'] ?? [];
         if ($job->action === 'reinstall' && $job->server) {
             if (array_intersect($wipe, ['*', 'plugins', 'mods'])) {
@@ -53,6 +54,7 @@ class AppJobApplier
     public function fail(AppJob $job, string $error): void
     {
         $job->forceFill(['status' => AppJob::STATUS_FAILED, 'error' => $error, 'finished_at' => now()])->save();
+        app(PterodactylMigrator::class)->cleanup($job);
         $job->server?->forceFill([
             'status' => AppServer::STATUS_INSTALL_FAILED,
             'status_message' => mb_substr($error, 0, 2000),
