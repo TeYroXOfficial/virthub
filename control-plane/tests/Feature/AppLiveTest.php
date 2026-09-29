@@ -134,6 +134,34 @@ class AppLiveTest extends TestCase
             ->assertJson(['allowed' => true]);
     }
 
+    public function test_osobne_haslo_sftp_zastepuje_haslo_panelu(): void
+    {
+        $body = fn (string $password) => ['uuid' => $this->appServer->uuid, 'user_id' => $this->customer->id, 'password' => $password];
+
+        $this->actingAs($this->customer)->put(route('panel.apps.sftp-password', $this->appServer), ['mode' => 'generate'])
+            ->assertRedirect()->assertSessionHas('sftp_password');
+        $generated = session('sftp_password');
+        $this->sftpAuth($body($generated))->assertOk();
+        $this->sftpAuth($body('password'))->assertForbidden();
+
+        $this->actingAs($this->customer)->put(route('panel.apps.sftp-password', $this->appServer), [
+            'mode' => 'set', 'password' => 'krotkie', 'password_confirmation' => 'krotkie',
+        ])->assertSessionHasErrors('password');
+        $this->actingAs($this->customer)->put(route('panel.apps.sftp-password', $this->appServer), [
+            'mode' => 'set', 'password' => 'Wlasne-haslo-123', 'password_confirmation' => 'Wlasne-haslo-123',
+        ])->assertSessionHasNoErrors();
+        $this->sftpAuth($body('Wlasne-haslo-123'))->assertOk();
+        $this->sftpAuth($body($generated))->assertForbidden();
+        $this->assertStringNotContainsString('Wlasne', json_encode($this->appServer->fresh()->toArray()), 'hash ukryty w JSON');
+
+        $this->actingAs($this->customer)->put(route('panel.apps.sftp-password', $this->appServer), ['mode' => 'panel']);
+        $this->assertNull($this->appServer->fresh()->sftp_password);
+        $this->sftpAuth($body('password'))->assertOk();
+
+        $stranger = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $this->actingAs($stranger)->put(route('panel.apps.sftp-password', $this->appServer), ['mode' => 'generate'])->assertForbidden();
+    }
+
     public function test_sftp_odrzuca_zle_haslo_obcego_i_cudzy_podpis(): void
     {
         $this->sftpAuth(['uuid' => $this->appServer->uuid, 'user_id' => $this->customer->id, 'password' => 'zle'])

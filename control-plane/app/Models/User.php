@@ -37,6 +37,12 @@ class User extends Authenticatable
     ];
 
     /** @var list<string> */
+    /** Adres avatara (serwowany przez panel) albo null — wtedy inicjał. */
+    public function avatarUrl(): ?string
+    {
+        return $this->avatar_path ? route('avatar', ['user' => $this->id, 'v' => substr(md5($this->avatar_path), 0, 8)]) : null;
+    }
+
     protected $hidden = [
         'password',
         'remember_token',
