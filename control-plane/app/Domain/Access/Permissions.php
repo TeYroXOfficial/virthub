@@ -38,6 +38,7 @@ final class Permissions
         'admin.templates' => ['Szablony', 'Systemy operacyjne do instalacji.'],
         'admin.updates' => ['Aktualizacje', 'Aktualizacja panelu i agentów na węzłach.'],
         'admin.apps' => ['Aplikacje', 'Szablony aplikacji (eggi), plany i aplikacje wszystkich klientów.'],
+        'admin.settings' => ['Ustawienia panelu', 'Poczta wychodząca (SMTP) i inne ustawienia całego panelu.'],
     ];
 
     /** @return list<string> */
