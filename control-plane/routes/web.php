@@ -212,6 +212,12 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/{app}/purge', 'purge')->name('.purge');
     });
 
+    Route::middleware('admin:admin.settings')->prefix('/mail')->name('mail')->controller(\App\Http\Controllers\Web\MailSettingsController::class)->group(function () {
+        Route::get('/', 'show');
+        Route::put('/', 'update')->name('.update');
+        Route::post('/test', 'test')->middleware('throttle:5,1')->name('.test');
+    });
+
     Route::get('/services', [AdminController::class, 'services'])->middleware('admin:admin.servers|admin.apps')->name('services');
 
     Route::middleware('admin:admin.servers')->group(function () {

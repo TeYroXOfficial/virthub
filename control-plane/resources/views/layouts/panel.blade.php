@@ -36,6 +36,7 @@
             ['panel.admin.isos', __('Obrazy ISO'), 'disc', 'panel.admin.isos', 'admin.templates'],
             ['panel.admin.apps', __('Aplikacje'), 'gamepad', 'panel.admin.apps*', 'admin.apps'],
             ['panel.admin.updates', __('Aktualizacje'), 'refresh', 'panel.admin.updates*', 'admin.updates'],
+            ['panel.admin.mail', __('Poczta (SMTP)'), 'mail', 'panel.admin.mail*', 'admin.settings'],
         ];
     @endphp
 

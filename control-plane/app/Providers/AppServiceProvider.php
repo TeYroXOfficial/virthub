@@ -21,6 +21,9 @@ class AppServiceProvider extends ServiceProvider
         Paginator::defaultView('pagination::simple-default');
         Paginator::defaultSimpleView('pagination::simple-default');
 
+        // Poczta ustawiona w Administracji nadpisuje MAIL_* z .env.
+        \App\Domain\Settings\MailSettings::apply();
+
         // E-mail z linkiem do nowego hasła w języku panelu (domyślny jest po angielsku).
         \Illuminate\Auth\Notifications\ResetPassword::toMailUsing(function ($user, string $token) {
             $url = route('password.reset', ['token' => $token, 'email' => $user->getEmailForPasswordReset()]);
