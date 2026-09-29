@@ -745,7 +745,7 @@ async def app_files_read(uuid: str, req: AppPathRequest) -> dict[str, Any]:
 
 @app.post("/apps/{uuid}/files/write", dependencies=[Depends(require_control_plane)], tags=["apps"])
 async def app_files_write(uuid: str, req: AppWriteRequest) -> dict[str, Any]:
-    return await run_in_threadpool(apps.write_file, uuid, req.path, req.content_base64)
+    return await run_in_threadpool(apps.write_file, uuid, req.path, req.content_base64, req.append)
 
 
 @app.post("/apps/{uuid}/files/mkdir", dependencies=[Depends(require_control_plane)], tags=["apps"])

@@ -480,6 +480,8 @@ class AppPathRequest(BaseModel):
 class AppWriteRequest(BaseModel):
     path: str = Field(pattern=APP_PATH, min_length=1)
     content_base64: str = Field(max_length=70_000_000, description="Najwyżej ~50 MB po zdekodowaniu")
+    # Duże pliki z panelu idą kawałkami: pierwszy tworzy plik, kolejne dopisują.
+    append: bool = False
 
 
 class AppDeleteRequest(BaseModel):

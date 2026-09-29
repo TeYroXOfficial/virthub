@@ -392,6 +392,28 @@ class AppsTest extends TestCase
             'nazwa pliku sprowadzona do basename — bez wyjścia z katalogu');
     }
 
+    public function test_duzy_plik_idzie_na_wezel_kawalkami(): void
+    {
+        $app = $this->readyApp();
+        $parts = [];
+        Http::fake(['*/files/write' => function (Request $r) use (&$parts) {
+            $parts[] = [$r['path'], strlen(base64_decode($r['content_base64'])), $r['append'] ?? false];
+
+            return Http::response(['size' => 1]);
+        }]);
+        $file = \Illuminate\Http\UploadedFile::fake()->createWithContent('world.zip', str_repeat('x', 9 * 1024 * 1024));
+
+        $this->actingAs($this->customer)->post(route('panel.apps.files.upload', $app), ['path' => 'saves', 'files' => [$file]])
+            ->assertSessionHasNoErrors();
+
+        // 9 MB → 4 + 4 + 1 MB; każde żądanie mieści się w limicie nginx węzła.
+        $this->assertSame([
+            ['saves/world.zip', 4194304, false],
+            ['saves/world.zip', 4194304, true],
+            ['saves/world.zip', 1048576, true],
+        ], $parts);
+    }
+
     public function test_zmienne_walidowane_regulami_eggu(): void
     {
         $app = $this->readyApp();
