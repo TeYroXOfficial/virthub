@@ -22,6 +22,7 @@ use App\Models\User;
 use App\Models\VpsPackage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -800,6 +801,76 @@ class AdminController extends Controller
         return view('panel.admin.servers', [
             'servers' => $servers,
             'states' => ServerState::cases(),
+        ]);
+    }
+
+    /**
+     * Wszystkie usługi w jednym spisie: maszyny (KVM i kontenery) oraz
+     * aplikacje — każdy rodzaj tylko z uprawnieniem do jego działu.
+     */
+    public function services(Request $request): View
+    {
+        $user = $request->user();
+        $canServers = $user->hasPermission('admin.servers');
+        $canApps = $user->hasPermission('admin.apps');
+        $kind = in_array($request->query('kind'), ['kvm', 'lxc', 'app'], true) ? $request->query('kind') : null;
+        $status = in_array($request->query('status'), ['problem', 'suspended'], true) ? $request->query('status') : null;
+        $node = $request->integer('node') ?: null;
+        $term = trim((string) $request->query('q'));
+        $users = fn ($q) => $q->where('email', 'like', "%{$term}%")->orWhere('name', 'like', "%{$term}%");
+
+        $servers = Server::query()
+            ->selectRaw("'server' as kind, id, created_at")
+            ->when($kind === 'kvm' || $kind === 'lxc', fn ($q) => $q->where('virtualization', $kind))
+            ->when($node, fn ($q) => $q->where('hypervisor_id', $node))
+            ->when($status === 'problem', fn ($q) => $q->whereIn('state', [ServerState::Error->value, ServerState::Suspended->value]))
+            ->when($status === 'suspended', fn ($q) => $q->where('state', ServerState::Suspended->value))
+            ->when($term !== '', fn ($q) => $q->where(fn ($s) => $s->where('hostname', 'like', "%{$term}%")
+                ->orWhere('label', 'like', "%{$term}%")
+                ->orWhereHas('user', $users)
+                ->orWhereHas('ipAddresses', fn ($ip) => $ip->where('address', 'like', "{$term}%"))));
+        $apps = \App\Models\AppServer::query()
+            ->selectRaw("'app' as kind, id, created_at")
+            ->when($node, fn ($q) => $q->where('hypervisor_id', $node))
+            ->when($status === 'problem', fn ($q) => $q->where(fn ($s) => $s->where('status', \App\Models\AppServer::STATUS_INSTALL_FAILED)
+                ->orWhereNotNull('suspended_at')->orWhereNotNull('abuse_detected_at')))
+            ->when($status === 'suspended', fn ($q) => $q->whereNotNull('suspended_at'))
+            ->when($term !== '', fn ($q) => $q->where(fn ($s) => $s->where('name', 'like', "%{$term}%")
+                ->orWhere('uuid', 'like', "{$term}%")
+                ->orWhereHas('user', $users)));
+
+        $parts = array_values(array_filter([
+            $canServers && $kind !== 'app' ? $servers : null,
+            $canApps && ($kind === null || $kind === 'app') ? $apps : null,
+        ]));
+        $union = array_shift($parts);
+        foreach ($parts as $part) {
+            $union->unionAll($part);
+        }
+
+        $page = $union
+            ? DB::query()->fromSub($union, 'services')->orderByDesc('created_at')->orderByDesc('id')->paginate(50)->withQueryString()
+            : new \Illuminate\Pagination\LengthAwarePaginator([], 0, 50);
+
+        // Jeden odczyt na rodzaj — z relacjami potrzebnymi w tabeli.
+        $rows = collect($page->items());
+        $serverModels = Server::query()->with(['user:id,name,email', 'hypervisor', 'ipAddresses', 'template'])
+            ->whereIn('id', $rows->where('kind', 'server')->pluck('id'))->get()->keyBy('id');
+        $appModels = \App\Models\AppServer::query()->with(['user:id,name,email', 'hypervisor', 'egg', 'allocations'])
+            ->whereIn('id', $rows->where('kind', 'app')->pluck('id'))->get()->keyBy('id');
+        $items = $rows->map(fn ($row) => $row->kind === 'server' ? $serverModels->get($row->id) : $appModels->get($row->id))->filter();
+
+        return view('panel.admin.services', [
+            'items' => $items,
+            'page' => $page,
+            'nodes' => Hypervisor::query()->orderBy('name')->get(['id', 'name']),
+            'canServers' => $canServers,
+            'canApps' => $canApps,
+            'totals' => [
+                'kvm' => $canServers ? Server::query()->where('virtualization', 'kvm')->count() : null,
+                'lxc' => $canServers ? Server::query()->where('virtualization', 'lxc')->count() : null,
+                'app' => $canApps ? \App\Models\AppServer::query()->count() : null,
+            ],
         ]);
     }
 

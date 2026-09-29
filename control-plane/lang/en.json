@@ -1562,5 +1562,15 @@
     "Zbuduj": "Build",
     "Hasło Administratora — zapisz je teraz.": "Administrator password — save it now.",
     "użytkownik": "user",
-    "Obsługiwane systemy: Debian 11–13 i Ubuntu 20.04–24.04. Z konta innego niż root zamień końcówkę na „| sudo bash”.": "Supported systems: Debian 11–13 and Ubuntu 20.04–24.04. From an account other than root, change the ending to “| sudo bash”."
+    "Obsługiwane systemy: Debian 11–13 i Ubuntu 20.04–24.04. Z konta innego niż root zamień końcówkę na „| sudo bash”.": "Supported systems: Debian 11–13 and Ubuntu 20.04–24.04. From an account other than root, change the ending to “| sudo bash”.",
+    "Wszystkie usługi": "All services",
+    "Maszyny wirtualne, kontenery i aplikacje wszystkich klientów w jednym spisie.": "Virtual machines, containers and applications of all customers in one list.",
+    "Maszyny KVM": "KVM machines",
+    "Kontenery": "Containers",
+    "nazwa, adres IP, UUID albo klient": "name, IP address, UUID or customer",
+    "z problemem (błąd, zawieszone)": "with a problem (error, suspended)",
+    "zawieszone": "suspended",
+    ":vcpu vCPU · :ram GB · :disk GB": ":vcpu vCPU · :ram GB · :disk GB",
+    "Aplikacja": "Application",
+    "Brak usług spełniających kryteria.": "No services match the criteria."
 }
