@@ -143,6 +143,22 @@ class AppServer extends Model
         return $port ? ($this->hypervisor?->publicAddress() ?? '?').':'.$port : null;
     }
 
+    /** Kolor stanu jak przy maszynach: gotowa zielona, w toku żółta, problem czerwony. */
+    public function statusTone(): string
+    {
+        return match (true) {
+            $this->isSuspended(), $this->status === self::STATUS_INSTALL_FAILED => 'critical',
+            $this->isInstalling(), $this->status === self::STATUS_DELETING => 'warning',
+            default => 'ok',
+        };
+    }
+
+    /** Ikona rodzaju aplikacji (w miejscu logo systemu przy maszynach). */
+    public function icon(): string
+    {
+        return $this->egg?->category === 'bot' ? 'bot' : 'gamepad';
+    }
+
     public function statusLabel(): string
     {
         if ($this->isSuspended()) {

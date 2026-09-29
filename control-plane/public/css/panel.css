@@ -606,6 +606,8 @@ details.form-block[open] > summary { margin-bottom: 16px; }
 .tabs a[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 650; }
 .app-badge { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 9px;
     background: var(--accent-soft); color: var(--accent); }
+.os-inline .app-badge { width: 24px; height: 24px; border-radius: 7px; }
+.os-inline .app-badge svg { width: 14px; height: 14px; }
 .copyable { cursor: copy; }
 .install-error { white-space: pre-wrap; font-size: 12.5px; max-height: 220px; overflow: auto; margin: 8px 0; }
 .app-console-frame { background: #0b0f14; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }

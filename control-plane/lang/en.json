@@ -1577,5 +1577,8 @@
     ":percent% rdzenia": ":percent% of a core",
     ":mb MB": ":mb MB",
     "Uruchom instalację od nowa": "Run the installation again",
-    "Nie udało się odczytać wgranego pliku.": "Could not read the uploaded file."
+    "Nie udało się odczytać wgranego pliku.": "Could not read the uploaded file.",
+    "Gotowe": "Ready",
+    "Łącznie RAM / dysk": "Total RAM / disk",
+    ":ram GB RAM · :disk GB": ":ram GB RAM · :disk GB"
 }
