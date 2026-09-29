@@ -17,6 +17,9 @@ class InstallAppJob implements ShouldQueue
 
     public int $tries = 3;
 
+    /** Migracja z Pterodactyla czeka, aż Wings spakuje pliki serwera. */
+    public int $timeout = 1800;
+
     /** @var list<int> */
     public array $backoff = [10, 30];
 
@@ -41,6 +44,16 @@ class InstallAppJob implements ShouldQueue
         $spec = AppPayload::spec($app);
         if ($job->action === 'reinstall' && ! empty($job->payload['wipe'])) {
             $spec['reinstall_wipe'] = $job->payload['wipe'];
+        }
+        if (! empty($job->payload['pterodactyl'])) {
+            // Migracja: pliki serwera z Pterodactyla zamiast skryptu instalacji eggu.
+            try {
+                $spec['install'] = app(\App\Domain\Apps\PterodactylMigrator::class)->installFor($job);
+            } catch (\RuntimeException $e) {
+                $applier->fail($job, __('Migracja z Pterodactyla: :error', ['error' => $e->getMessage()]));
+
+                return;
+            }
         }
 
         try {

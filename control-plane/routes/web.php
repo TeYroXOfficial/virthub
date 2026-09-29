@@ -185,6 +185,10 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/plans', 'storePlan')->name('.plans.store');
         Route::post('/plans/{plan}/toggle', 'togglePlan')->name('.plans.toggle');
         Route::delete('/plans/{plan}', 'deletePlan')->name('.plans.destroy');
+        Route::get('/pterodactyl', [\App\Http\Controllers\Web\PterodactylMigrationController::class, 'index'])->name('.pterodactyl');
+        Route::post('/pterodactyl/connect', [\App\Http\Controllers\Web\PterodactylMigrationController::class, 'connect'])->name('.pterodactyl.connect');
+        Route::post('/pterodactyl/disconnect', [\App\Http\Controllers\Web\PterodactylMigrationController::class, 'disconnect'])->name('.pterodactyl.disconnect');
+        Route::post('/pterodactyl/migrate', [\App\Http\Controllers\Web\PterodactylMigrationController::class, 'migrate'])->name('.pterodactyl.migrate');
         Route::post('/{app}/suspend', 'suspend')->name('.suspend');
         Route::put('/{app}/resources', 'resources')->name('.resources');
         Route::post('/{app}/abuse-exempt', 'abuseExempt')->name('.abuse-exempt');
