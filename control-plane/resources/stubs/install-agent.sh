@@ -133,6 +133,34 @@ if [ "$OS_ID" = "debian" ] && [ "$OS_MAJOR" = "11" ]; then
 fi
 apt-get update -qq
 
+# Pozostałość po innym nginx (skompilowanym ręcznie albo z innego repozytorium
+# i już usuniętym): /etc/nginx z dyrektywami, których nginx z repozytorium
+# systemu nie zna (np. „http2 on;” z nginx 1.25+). Pakiet przy instalacji
+# uruchamia usługę, ta nie przechodzi „nginx -t” i dpkg zostawia nginx w połowie
+# zainstalowany. Taką konfigurację odkładamy na bok (nic nie kasujemy)
+# i stawiamy domyślną z pakietu. Działający nginx zostaje nietknięty.
+nginx_installed() {
+    local p
+    for p in nginx nginx-core nginx-light nginx-full nginx-extras; do
+        dpkg-query -W -f='${db:Status-Abbrev}' "$p" 2>/dev/null | grep -q '^ii' && return 0
+    done
+    return 1
+}
+if [ -f /etc/nginx/nginx.conf ] && ! nginx_installed \
+    && ! { command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; }; then
+    NGINX_BAK="/etc/nginx.virthub-bak-$(date +%Y%m%d%H%M%S)"
+    mv /etc/nginx "$NGINX_BAK"
+    warn "Stara konfiguracja nginx nie działa z nginx z repozytorium systemu — przeniesiona do $NGINX_BAK."
+    # Pakiety nginx zostawione w połowie instalacji usuwamy do czysta, żeby
+    # instalacja niżej postawiła je od nowa razem z domyślną konfiguracją.
+    NGINX_PKGS=$(dpkg-query -W -f='${Package} ${db:Status-Abbrev}\n' 'nginx*' 'libnginx-mod*' 2>/dev/null \
+        | awk '$2 !~ /^[up]n/ {print $1}')
+    if [ -n "$NGINX_PKGS" ]; then
+        # shellcheck disable=SC2086
+        dpkg --purge --force-depends $NGINX_PKGS >/dev/null 2>&1 || true
+    fi
+fi
+
 apt-get install -y -qq \
     python3 python3-venv python3-dev build-essential pkg-config \
     nftables nginx openssl curl ca-certificates gnupg \
@@ -691,7 +719,10 @@ server {
 EOF
 
 ln -sf /etc/nginx/sites-available/virthub-agent /etc/nginx/sites-enabled/virthub-agent
-nginx -t >/dev/null 2>&1 || die "Konfiguracja nginx jest niepoprawna."
+if ! NGINX_TEST=$(nginx -t 2>&1); then
+    echo "$NGINX_TEST" >&2
+    die "Konfiguracja nginx jest niepoprawna (szczegóły powyżej)."
+fi
 systemctl enable --now nginx >/dev/null 2>&1
 systemctl reload nginx
 ok "TLS nasłuchuje na porcie $TLS_PORT"
