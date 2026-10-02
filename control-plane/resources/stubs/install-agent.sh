@@ -763,9 +763,24 @@ fi
 if timedatectl show -p NTPSynchronized --value 2>/dev/null | grep -q yes; then
     ok "Zegar zsynchronizowany"
 else
-    warn "Zegar nie jest zsynchronizowany. Rozjechane zegary blokują komunikację"
-    warn "z panelem. Naprawa: timedatectl set-ntp true"
-    timedatectl set-ntp true >/dev/null 2>&1 || true
+    # „NTP not supported” = brak usługi synchronizacji (minimalny Debian 11+ nie
+    # ma systemd-timesyncd). Dokładamy ją, chyba że jest już chrony albo ntpd —
+    # z nimi pakiet się wyklucza, a one same pilnują zegara.
+    if ! timedatectl set-ntp true >/dev/null 2>&1; then
+        if ! dpkg-query -W -f='${db:Status-Abbrev}\n' chrony ntp ntpsec 2>/dev/null | grep -q '^ii'; then
+            apt-get install -y -qq systemd-timesyncd >/dev/null 2>&1 || true
+            systemctl enable --now systemd-timesyncd >/dev/null 2>&1 || true
+            timedatectl set-ntp true >/dev/null 2>&1 || true
+        fi
+    fi
+    if timedatectl show -p NTP --value 2>/dev/null | grep -q yes \
+        || systemctl is-active --quiet chrony chronyd ntp ntpsec 2>/dev/null; then
+        ok "Synchronizacja zegara włączona (zegar dogoni czas w ciągu kilku minut)"
+    else
+        warn "Zegar nie jest zsynchronizowany i nie udało się włączyć NTP. Rozjechane"
+        warn "zegary blokują komunikację z panelem. Naprawa:"
+        warn "  apt-get install -y systemd-timesyncd && timedatectl set-ntp true"
+    fi
 fi
 
 echo
