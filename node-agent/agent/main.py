@@ -36,6 +36,7 @@ from .templates import TemplateError, TemplateLibrary
 from .builder import TemplateBuilder
 from .jobs import JobQueue
 from .reporter import CallbackReporter
+from .host_security import HostSecurity
 from .monitor import HostMonitor
 from .sftp import SftpService
 from .schemas import (
@@ -172,6 +173,7 @@ build_jobs = JobQueue(settings, {
     "download_template": lambda p: _download_template(TemplateDownloadRequest(**p)),
 }, name="virthub-template-jobs")
 sftp = SftpService(settings, apps, settings.sftp_port, settings.sftp_listen)
+host_security = HostSecurity(kvm_host=settings.driver == "libvirt", allow_nested=settings.allow_nested)
 monitor = HostMonitor(app_resolver=apps.container_map if settings.apps_dir.is_dir() else None)
 
 
@@ -299,12 +301,20 @@ async def ping() -> dict[str, str]:
 )
 async def health() -> HostHealth:
     apps_state = await run_in_threadpool(apps.health)
+    security_state = await run_in_threadpool(host_security.report)
     return driver.health().model_copy(update={
+        "host_security": security_state,
         "apps": apps_state,
         "build": updates.build(),
         "remote_update": updates.enabled(),
         "firewall_stateful": driver.network.stateful(),
     })
+
+
+@app.get("/system/security", dependencies=[Depends(require_control_plane)], tags=["system"])
+async def host_security_report() -> dict[str, Any]:
+    """Świeży audyt ochrony hosta (panel: Infrastruktura → Bezpieczeństwo → „Sprawdź teraz”)."""
+    return await run_in_threadpool(host_security.report, True)
 
 
 @app.get("/system/monitor", dependencies=[Depends(require_control_plane)], tags=["system"])

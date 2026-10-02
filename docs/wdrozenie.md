@@ -904,3 +904,30 @@ i można zamówić pierwszą testową maszynę.
 - [ ] Zegary zsynchronizowane przez NTP na obu maszynach
 - [ ] Backup bazy panelu (utrata = utrata przypisań maszyn do klientów)
 - [ ] Pierwsza testowa maszyna zamówiona, uruchomiona i usunięta bez błędów
+
+## Ochrona hosta przed ucieczkami z maszyn
+
+Instalator i każda aktualizacja węzła uruchamiają `scripts/harden-host.sh`:
+
+- **zagnieżdżona wirtualizacja wyłączona** (`/etc/modprobe.d/virthub-kvm.conf`:
+  `kvm_intel nested=0`, `kvm_amd nested=0`) — główna droga ataku ucieczek przez
+  shadow MMU KVM (Januscape CVE-2026-53359, Zapscape CVE-2026-64561). Przy
+  działających maszynach modułu nie da się przeładować — zmiana zadziała po
+  restarcie węzła;
+- **EPT/NPT pilnowane** — linie `ept=0`/`npt=0` z innych plików są wyłączane
+  (bez nich KVM używa shadow MMU dla każdej maszyny);
+- **maszyny KVM bez `vmx`/`svm`** w procesorze gościa (nowe maszyny i każda
+  reinstalacja) — niezależnie od ustawienia hosta;
+- **jądro z najnowszymi poprawkami** z repozytorium i **unattended-upgrades**
+  bez automatycznego restartu.
+
+Poprawka w jądrze działa dopiero po restarcie węzła — panel pokazuje to w
+Infrastruktura → Bezpieczeństwo razem ze stanem znanych luk (poprawka w
+changelogu działającego jądra, obejście konfiguracją albo podatność),
+podatnościami procesora i wymaganym restartem. Zapscape na AMD i ITScape
+(CVE-2026-46316, tylko arm64) nie mają pełnego obejścia — potrzebne jest jądro
+z poprawką. Debian 11 nie dostaje już poprawek jądra.
+
+Zagnieżdżanie można świadomie włączyć: `VH_ALLOW_NESTED=1` w
+`/etc/virthub-agent/agent.env`, potem aktualizacja węzła. `VH_KERNEL_UPDATES=0`
+pomija aktualizację jądra przy aktualizacji węzła.

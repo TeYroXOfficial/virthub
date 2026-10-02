@@ -42,6 +42,7 @@ class AdminController extends Controller
             'canServers' => $canServers,
             'canApps' => $canApps,
             'canNodes' => $user->hasPermission('admin.hypervisors'),
+            'securityCritical' => $nodes->filter(fn ($n) => ($n->securityReport()['overall'] ?? null) === 'critical')->count(),
             'servers' => $dashboard->servers(),
             'apps' => $dashboard->apps(),
             'ipv4' => $dashboard->ipv4(),

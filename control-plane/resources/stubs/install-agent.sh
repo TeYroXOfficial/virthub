@@ -669,6 +669,12 @@ if [ -f "$AGENT_DIR/scripts/setup-apps.sh" ]; then
     AGENT_USER="$AGENT_USER" bash "$AGENT_DIR/scripts/setup-apps.sh" || warn "Nie udało się zainstalować Dockera dla aplikacji."
 fi
 
+# Ochrona hosta przed ucieczkami z maszyn (Januscape, Zapscape i podobne):
+# bez zagnieżdżonej wirtualizacji, aktualne jądro, automatyczne poprawki.
+if [ -f "$AGENT_DIR/scripts/harden-host.sh" ]; then
+    bash "$AGENT_DIR/scripts/harden-host.sh" || warn "Nie udało się utwardzić hosta."
+fi
+
 # Aktualizacje zlecane z panelu (Administracja → Aktualizacje).
 if [ -f "$AGENT_DIR/scripts/install-updater.sh" ]; then
     bash "$AGENT_DIR/scripts/install-updater.sh"

@@ -205,6 +205,14 @@ class Hypervisor extends Model
     }
 
     /** Procesor pokazywany klientom: ustawiony przez administratora albo wykryty przez agenta. */
+    /** Audyt ochrony hosta z ostatniego raportu agenta (null — agent bez tej funkcji). */
+    public function securityReport(): ?array
+    {
+        $report = $this->last_health['host_security'] ?? null;
+
+        return is_array($report) ? $report : null;
+    }
+
     public function cpuModel(): ?string
     {
         return $this->cpu_model ?: ($this->last_health['cpu_model'] ?? null);
