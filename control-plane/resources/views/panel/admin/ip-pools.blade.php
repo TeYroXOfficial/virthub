@@ -200,7 +200,8 @@
         </div>
     </div>
 
-    @include('panel.admin._groups')
+    <p class="hint" style="margin-top:16px">{{ __('Grupy węzłów (wspólne pule adresów, lokalizacje) ustawisz w:') }}
+        <a href="{{ route('panel.admin.hypervisor-groups') }}">{{ __('Infrastruktura → Grupy hypervisorów') }}</a></p>
 
     <script>
         // Pokazuje tylko pola pasujące do wybranego zasięgu i rodzaju puli.

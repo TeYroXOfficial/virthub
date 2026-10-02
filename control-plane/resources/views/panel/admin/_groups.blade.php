@@ -1,8 +1,4 @@
 {{-- Grupy węzłów: wspólne pule adresów, lokalizacja do wyboru przy zamówieniu, wstrzymanie sprzedaży. --}}
-<h2 id="groups" class="section-head">{{ __('Grupy węzłów') }}</h2>
-<p class="lede">
-    {{ __('Grupa to zwykle jedna lokalizacja: węzły korzystają z jej pul adresów, a klient może ją wybrać przy zamówieniu, jeśli jest widoczna. Wyłączenie przyjmowania maszyn wstrzymuje sprzedaż na wszystkich węzłach grupy naraz.') }}
-</p>
 
 @php
     $groupFields = function ($group) {

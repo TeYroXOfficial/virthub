@@ -81,7 +81,15 @@ class AdminController extends Controller
     public function hypervisors(): View
     {
         return view('panel.admin.hypervisors', [
-            'hypervisors' => Hypervisor::query()->with('group')->withCount('servers')->orderBy('name')->get(),
+            'hypervisors' => Hypervisor::query()->with('group')->withCount(['servers', 'appServers'])->orderBy('name')->get(),
+        ]);
+    }
+
+    /** Infrastruktura → Grupy hypervisorów: tworzenie grup i przypisywanie do nich węzłów. */
+    public function hypervisorGroups(): View
+    {
+        return view('panel.admin.hypervisor-groups', [
+            'hypervisors' => Hypervisor::query()->with('group')->orderBy('name')->get(),
             'groups' => $this->groupsForView(),
         ]);
     }
@@ -93,6 +101,7 @@ class AdminController extends Controller
         return view('panel.admin.hypervisor', [
             'node' => $hypervisor,
             'servers' => $hypervisor->servers()->with(['user:id,email', 'ipAddresses', 'template'])->latest()->get(),
+            'apps' => $hypervisor->appServers()->with(['user:id,email', 'egg', 'allocations'])->latest()->get(),
             'groups' => HypervisorGroup::query()->ordered()->get(),
             'pools' => IpPool::query()->where('hypervisor_id', $hypervisor->id)
                 ->orWhere(fn ($q) => $q->whereNotNull('hypervisor_group_id')->where('hypervisor_group_id', $hypervisor->hypervisor_group_id))

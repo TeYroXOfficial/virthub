@@ -539,6 +539,15 @@ class AppManager:
         except Exception as exc:
             return {"available": False, "error": str(exc)[:300]}
 
+    def container_map(self) -> dict[str, str]:
+        """Pełne id działających kontenerów aplikacji → uuid aplikacji (dla monitoringu)."""
+        containers = self.client.containers.list(filters={"label": LABEL})
+        return {
+            c.id: c.labels[LABEL]
+            for c in containers
+            if c.labels.get("virthub.role") is None and c.labels.get(LABEL) not in (None, "network")
+        }
+
     # --- ścieżki i stan ------------------------------------------------------
 
     def data_dir(self, uuid: str) -> Path:

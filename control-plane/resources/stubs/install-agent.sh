@@ -648,8 +648,10 @@ fi
 # Zapora maszyn śledzi połączenia w rodzinie bridge (odpowiedzi na ruch
 # wychodzący przy domyślnej blokadzie) — wymaga modułu nf_conntrack_bridge.
 # Bez niego agent przechodzi w tryb bezstanowy, więc brak modułu nie jest błędem.
-echo nf_conntrack_bridge > /etc/modules-load.d/virthub.conf
+printf 'nf_conntrack_bridge\ndrivetemp\n' > /etc/modules-load.d/virthub.conf
 modprobe nf_conntrack_bridge 2>/dev/null || true
+# Temperatury dysków SATA w /sys/class/hwmon (monitoring w panelu, bez roota).
+modprobe drivetemp 2>/dev/null || true
 
 # DNS hosta po zmianie sieci — serwery DNS ze strofy starego interfejsu
 # mogły zniknąć; skrypt naprawia tylko wolny/niedziałający DNS.

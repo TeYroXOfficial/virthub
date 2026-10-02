@@ -42,7 +42,7 @@
         <div class="table-wrap">
             <table>
                 <thead>
-                <tr><th>{{ __('Węzeł') }}</th><th>{{ __('Stan') }}</th><th>{{ __('Grupa') }}</th><th>{{ __('CPU') }}</th><th>{{ __('RAM') }}</th><th>{{ __('Dysk') }}</th><th>{{ __('Maszyny') }}</th><th></th></tr>
+                <tr><th>{{ __('Węzeł') }}</th><th>{{ __('Stan') }}</th><th>{{ __('Grupa') }}</th><th>{{ __('CPU') }}</th><th>{{ __('RAM') }}</th><th>{{ __('Dysk') }}</th><th>{{ __('Maszyny') }}</th><th>{{ __('Aplikacje') }}</th><th></th></tr>
                 </thead>
                 <tbody>
                 @forelse ($hypervisors as $node)
@@ -79,6 +79,7 @@
                         <td class="num">
                             {{ $node->servers_count }}@if ($node->max_servers !== null)<span class="muted"> / {{ $node->max_servers }}</span>@endif
                         </td>
+                        <td class="num">{{ $node->app_servers_count }}</td>
                         <td style="text-align:right">
                             @if ($node->enrolled_at === null)
                                 <form method="POST" action="{{ route('panel.admin.hypervisors.enrollment', $node) }}" style="display:inline">
@@ -90,12 +91,11 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="muted">{{ __('Brak węzłów. Dodaj pierwszy — dostaniesz jedno polecenie do wklejenia na serwerze.') }}</td></tr>
+                    <tr><td colspan="9" class="muted">{{ __('Brak węzłów. Dodaj pierwszy — dostaniesz jedno polecenie do wklejenia na serwerze.') }}</td></tr>
                 @endforelse
                 </tbody>
             </table>
         </div>
     </div>
 
-    @include('panel.admin._groups')
 @endsection
