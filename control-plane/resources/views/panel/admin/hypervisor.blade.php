@@ -381,7 +381,7 @@
                 <h3 class="card-title">{{ __('Pule adresów węzła') }}</h3>
                 @forelse ($pools as $pool)
                     <p style="margin:0 0 8px">
-                        <span class="mono">{{ $pool->name }}</span>
+                        <a class="mono" href="{{ route('panel.admin.ip-pools.show', $pool) }}">{{ $pool->name }}</a>
                         <span class="pill neutral">{{ __('IPv:version:nat', ['version' => $pool->version, 'nat' => $pool->isNat() ? __(' · NAT') : '']) }}</span>
                         <span class="muted">{{ $pool->hypervisor_id ? __('węzła') : __('grupy') }}
                             @if ($pool->version === 4) {{ __('· :assigned_count / :addresses_count zajętych', ['assigned_count' => $pool->assigned_count, 'addresses_count' => $pool->addresses_count]) }} @endif</span>
@@ -392,7 +392,7 @@
                 @empty
                     <p class="muted">{{ __('Brak pul — węzeł nie dostanie maszyn, dopóki nie przypiszesz mu adresów.') }}</p>
                 @endforelse
-                <a class="btn btn-sm" href="{{ route('panel.admin.ip-pools') }}" style="margin-top:8px">{{ __('Adresy IP') }}</a>
+                <a class="btn btn-sm" href="{{ route('panel.admin.ip-pools') }}" style="margin-top:8px">{{ __('Bloki IP') }}</a>
             </div>
         </div>
         @if ($node->last_health)

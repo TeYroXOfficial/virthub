@@ -176,9 +176,19 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
     });
 
     Route::middleware('admin:admin.ip_pools')->group(function () {
-        Route::get('/ip-pools', [AdminController::class, 'ipPools'])->name('ip-pools');
-        Route::post('/ip-pools', [AdminController::class, 'storeIpPool'])->name('ip-pools.store');
-        Route::delete('/ip-pools/{pool}', [AdminController::class, 'destroyIpPool'])->name('ip-pools.destroy');
+        // Sieć: bloki IP i przegląd adresów.
+        Route::controller(\App\Http\Controllers\Web\NetworkController::class)->group(function () {
+            Route::get('/ip-pools', 'blocks')->name('ip-pools');
+            Route::post('/ip-pools', 'store')->name('ip-pools.store');
+            Route::get('/ip-pools/{pool}', 'show')->name('ip-pools.show');
+            Route::put('/ip-pools/{pool}', 'update')->name('ip-pools.update');
+            Route::delete('/ip-pools/{pool}', 'destroy')->name('ip-pools.destroy');
+            Route::post('/ip-pools/{pool}/addresses', 'addAddresses')->middleware('throttle:30,1')->name('ip-pools.addresses');
+            Route::post('/ip-addresses/{address}', 'address')->name('ip-addresses.update');
+            Route::get('/network/ipv4', 'ipv4')->name('network.ipv4');
+            Route::get('/network/nat', 'nat')->name('network.nat');
+            Route::get('/network/ipv6', 'ipv6')->name('network.ipv6');
+        });
     });
 
     Route::middleware('admin:admin.hypervisors|admin.ip_pools')->group(function () {

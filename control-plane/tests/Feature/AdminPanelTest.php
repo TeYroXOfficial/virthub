@@ -315,7 +315,7 @@ class AdminPanelTest extends TestCase
             ->assertOk()
             ->assertSee('NAT v6')
             ->assertSee('grupa Warszawa DC1')
-            ->assertSee('przydział na żądanie');
+            ->assertSee('na żądanie');
     }
 
     public function test_pula_z_przydzielonymi_adresami_nie_da_sie_usunac(): void

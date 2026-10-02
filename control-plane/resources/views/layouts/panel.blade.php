@@ -42,7 +42,12 @@
                 ['panel.admin.hypervisors', __('Hypervisory'), 'node', 'panel.admin.hypervisors*', 'admin.hypervisors'],
                 ['panel.admin.hypervisor-groups', __('Grupy hypervisorów'), 'network', 'panel.admin.hypervisor-groups', 'admin.hypervisors|admin.ip_pools'],
                 ['panel.admin.monitoring', __('Monitorowanie'), 'monitor', 'panel.admin.monitoring*', 'admin.hypervisors'],
-                ['panel.admin.ip-pools', __('Adresy IP'), 'network', 'panel.admin.ip-pools*', 'admin.ip_pools'],
+            ]],
+            [__('Sieć'), 'network', [
+                ['panel.admin.ip-pools', __('Bloki IP'), 'network', 'panel.admin.ip-pools*', 'admin.ip_pools'],
+                ['panel.admin.network.ipv4', __('Adresy IPv4'), 'network', 'panel.admin.network.ipv4', 'admin.ip_pools'],
+                ['panel.admin.network.nat', __('Adresy IPv4 NAT'), 'network', 'panel.admin.network.nat', 'admin.ip_pools'],
+                ['panel.admin.network.ipv6', __('Adresy IPv6'), 'network', 'panel.admin.network.ipv6', 'admin.ip_pools'],
             ]],
             [__('Oferta'), 'package', [
                 ['panel.admin.packages', __('Pakiety VPS'), 'package', 'panel.admin.packages*', 'admin.packages'],

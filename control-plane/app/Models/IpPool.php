@@ -119,7 +119,7 @@ class IpPool extends Model
 
     public function typeLabel(): string
     {
-        return $this->isNat() ? 'NAT' : 'publiczna';
+        return $this->isNat() ? 'NAT' : __('publiczna');
     }
 
     /** Pierwszy adres, który wolno przydzielić. */
