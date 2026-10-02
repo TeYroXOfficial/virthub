@@ -131,6 +131,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
 // administrator ma wszystkie, support te, które mu nadano.
 Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel.admin.')->group(function () {
     Route::get('/', [AdminController::class, 'index'])->middleware('admin:panel')->name('index');
+    Route::get('/logs', [AdminController::class, 'logs'])->middleware('admin')->name('logs');
 
     Route::middleware('admin:admin.hypervisors')->group(function () {
         Route::get('/hypervisors', [AdminController::class, 'hypervisors'])->name('hypervisors');
