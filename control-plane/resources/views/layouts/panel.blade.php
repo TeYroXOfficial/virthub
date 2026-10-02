@@ -40,6 +40,8 @@
             ]],
             [__('Infrastruktura'), 'node', [
                 ['panel.admin.hypervisors', __('Hypervisory'), 'node', 'panel.admin.hypervisors*', 'admin.hypervisors'],
+                ['panel.admin.hypervisor-groups', __('Grupy hypervisorów'), 'network', 'panel.admin.hypervisor-groups', 'admin.hypervisors|admin.ip_pools'],
+                ['panel.admin.monitoring', __('Monitorowanie'), 'monitor', 'panel.admin.monitoring*', 'admin.hypervisors'],
                 ['panel.admin.ip-pools', __('Adresy IP'), 'network', 'panel.admin.ip-pools*', 'admin.ip_pools'],
             ]],
             [__('Oferta'), 'package', [

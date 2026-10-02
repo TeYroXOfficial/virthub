@@ -59,6 +59,12 @@ map $http_upgrade $connection_upgrade {
 }
 MAPEOF
 
+# Temperatury dysków SATA dla monitoringu w panelu (moduł jądra drivetemp).
+if [ -f /etc/modules-load.d/virthub.conf ] && ! grep -q drivetemp /etc/modules-load.d/virthub.conf; then
+    echo drivetemp >> /etc/modules-load.d/virthub.conf
+fi
+modprobe drivetemp 2>/dev/null || true
+
 if [ -f "$NGINX_SITE" ]; then
     if ! grep -q 'connection_upgrade' "$NGINX_SITE"; then
         cp "$NGINX_SITE" "$NGINX_SITE.bak"

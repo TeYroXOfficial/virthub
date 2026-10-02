@@ -33,6 +33,12 @@ class AgentClient
         return $this->request('GET', '/health');
     }
 
+    /** Szczegółowe statystyki hosta i usług (strona Monitorowanie). */
+    public function monitor(): array
+    {
+        return $this->request('GET', '/system/monitor');
+    }
+
     public function stats(string $uuid): array
     {
         return $this->request('GET', "/vm/{$uuid}/stats");

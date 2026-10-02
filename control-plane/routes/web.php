@@ -136,6 +136,9 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
     Route::middleware('admin:admin.hypervisors')->group(function () {
         Route::get('/hypervisors', [AdminController::class, 'hypervisors'])->name('hypervisors');
         Route::get('/hypervisors/{hypervisor}', [AdminController::class, 'showHypervisor'])->name('hypervisors.show');
+        Route::get('/monitoring', [\App\Http\Controllers\Web\MonitoringController::class, 'index'])->name('monitoring');
+        Route::get('/monitoring/{hypervisor}/data', [\App\Http\Controllers\Web\MonitoringController::class, 'data'])
+            ->middleware('throttle:60,1')->name('monitoring.data');
         Route::post('/hypervisors', [AdminController::class, 'storeHypervisor'])->name('hypervisors.store');
         Route::post('/hypervisors/{hypervisor}/enrollment', [AdminController::class, 'regenerateEnrollment'])->name('hypervisors.enrollment');
         Route::put('/hypervisors/{hypervisor}', [AdminController::class, 'updateHypervisor'])->name('hypervisors.update');
@@ -179,6 +182,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
     });
 
     Route::middleware('admin:admin.hypervisors|admin.ip_pools')->group(function () {
+        Route::get('/hypervisor-groups', [AdminController::class, 'hypervisorGroups'])->name('hypervisor-groups');
         Route::post('/hypervisor-groups', [AdminController::class, 'storeHypervisorGroup'])->name('hypervisor-groups.store');
         Route::put('/hypervisor-groups/{group}', [AdminController::class, 'updateHypervisorGroup'])->name('hypervisor-groups.update');
         Route::delete('/hypervisor-groups/{group}', [AdminController::class, 'destroyHypervisorGroup'])->name('hypervisor-groups.destroy');

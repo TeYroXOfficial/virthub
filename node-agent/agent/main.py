@@ -36,6 +36,7 @@ from .templates import TemplateError, TemplateLibrary
 from .builder import TemplateBuilder
 from .jobs import JobQueue
 from .reporter import CallbackReporter
+from .monitor import HostMonitor
 from .sftp import SftpService
 from .schemas import (
     GuestOs,
@@ -169,6 +170,7 @@ build_jobs = JobQueue(settings, {
     "download_template": lambda p: _download_template(TemplateDownloadRequest(**p)),
 }, name="virthub-template-jobs")
 sftp = SftpService(settings, apps, settings.sftp_port, settings.sftp_listen)
+monitor = HostMonitor(app_resolver=apps.container_map if settings.apps_dir.is_dir() else None)
 
 
 def _report_abuse(uuid: str, findings: list, action: str) -> None:
@@ -301,6 +303,12 @@ async def health() -> HostHealth:
         "remote_update": updates.enabled(),
         "firewall_stateful": driver.network.stateful(),
     })
+
+
+@app.get("/system/monitor", dependencies=[Depends(require_control_plane)], tags=["system"])
+async def host_monitor() -> dict[str, Any]:
+    """Szczegółowe statystyki hosta i usług dla strony Monitorowanie w panelu."""
+    return await run_in_threadpool(monitor.report)
 
 
 # --- aktualizacja węzła -----------------------------------------------------

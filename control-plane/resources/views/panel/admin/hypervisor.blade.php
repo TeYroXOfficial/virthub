@@ -31,6 +31,7 @@
         </div>
         <div class="actions">
             @if ($node->enrolled_at)
+                <a class="btn" href="{{ route('panel.admin.monitoring', ['node' => $node->id]) }}"><x-icon name="monitor" :size="15"/> {{ __('Monitorowanie') }}</a>
                 <form method="POST" action="{{ route('panel.admin.hypervisors.check', $node) }}" style="margin:0">
                     @csrf
                     <button class="btn" type="submit"><x-icon name="refresh" :size="15"/> {{ __('Sprawdź łączność') }}</button>
@@ -46,24 +47,36 @@
 
     @include('panel.admin._nav')
 
+    {{-- Przydział liczony razem dla maszyn i aplikacji — obie zajmują ten sam host. --}}
+    @php
+        $appRam = (int) $apps->sum('memory_mb');
+        $appDisk = (int) round($apps->sum('disk_mb') / 1024);
+        $tiles = [
+            [__('Procesor'), $node->cpu_cores_used, $node->cpu_cores_total, 'vCPU', null],
+            [__('Pamięć'), $node->ram_mb_used + $appRam, $node->ram_mb_total, 'MB', $appRam ? __('w tym aplikacje: :mb MB', ['mb' => $appRam]) : null],
+            [__('Dysk'), $node->disk_gb_used + $appDisk, $node->disk_gb_total, 'GB', $appDisk ? __('w tym aplikacje: :gb GB', ['gb' => $appDisk]) : null],
+        ];
+    @endphp
     <div class="grid grid-4" style="margin-bottom:16px">
-        @foreach ([[__('Procesor'), $node->cpu_cores_used, $node->cpu_cores_total, 'vCPU'], [__('Pamięć'), $node->ram_mb_used, $node->ram_mb_total, 'MB'], [__('Dysk'), $node->disk_gb_used, $node->disk_gb_total, 'GB']] as [$label, $u, $t, $unit])
+        @foreach ($tiles as [$label, $u, $t, $unit, $extra])
             <div class="stat">
                 <div class="stat-label">{{ $label }}</div>
                 <div class="stat-value">{{ $pct($u, $t) }}%</div>
-                <div class="stat-sub">{{ $u }} / {{ $t }} {{ $unit }}</div>
+                <div class="stat-sub">{{ $u }} / {{ $t }} {{ $unit }}@if ($extra) · {{ $extra }}@endif</div>
                 <div class="meter {{ $pct($u, $t) > 85 ? 'hot' : '' }}"><i style="width: {{ $pct($u, $t) }}%"></i></div>
             </div>
         @endforeach
         <div class="stat">
-            <div class="stat-label">{{ __('Maszyny') }}</div>
-            <div class="stat-value">{{ $node->servers_count }}@if ($node->max_servers !== null)<span class="muted" style="font-size:15px"> / {{ $node->max_servers }}</span>@endif</div>
+            <div class="stat-label">{{ __('Usługi') }}</div>
+            <div class="stat-value">{{ $node->servers_count + $apps->count() }}</div>
+            <div class="stat-sub">{{ __(':servers maszyn · :apps apl.', ['servers' => $node->servers_count, 'apps' => $apps->count()]) }}@if ($node->max_servers !== null) · {{ __('limit maszyn: :max', ['max' => $node->max_servers]) }}@endif</div>
             <div class="stat-sub">{{ __('ostatni kontakt: :nigdy', ['nigdy' => $node->last_seen_at?->diffForHumans() ?? __('nigdy')]) }}</div>
         </div>
     </div>
 
     <nav class="tabs" role="tablist">
         <button type="button" role="tab" data-tab="servers">{{ __('Maszyny (:count)', ['count' => $servers->count()]) }}</button>
+        <button type="button" role="tab" data-tab="apps">{{ __('Aplikacje (:count)', ['count' => $apps->count()]) }}</button>
         <button type="button" role="tab" data-tab="settings">{{ __('Ustawienia') }}</button>
         <button type="button" role="tab" data-tab="info">{{ __('Informacje') }}</button>
     </nav>
@@ -113,6 +126,36 @@
                     </div>
                 </div>
             </form>
+        @endif
+    </div>
+
+    <div data-tab-panel="apps" role="tabpanel" hidden>
+        @if ($apps->isEmpty())
+            <div class="card empty">{{ __('Na tym węźle nie ma aplikacji.') }}</div>
+        @else
+            <div class="card" style="padding:0">
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>{{ __('Aplikacja') }}</th><th>{{ __('Klient') }}</th><th>{{ __('Stan') }}</th><th>{{ __('Szablon') }}</th><th>{{ __('Adres') }}</th><th>{{ __('Zasoby') }}</th><th></th></tr></thead>
+                        <tbody>
+                        @foreach ($apps as $app)
+                            <tr>
+                                <td><a href="{{ route('panel.apps.show', $app) }}">{{ $app->name }}</a></td>
+                                <td class="muted">{{ $app->user?->email ?? '—' }}</td>
+                                <td>
+                                    <span class="pill {{ $app->statusTone() }}">{{ $app->statusLabel() }}</span>
+                                    @if ($app->abuse_detected_at) <span class="pill critical plain">{{ __('nadużycie') }}</span> @endif
+                                </td>
+                                <td class="muted">{{ $app->egg?->displayName() ?? '—' }}</td>
+                                <td class="mono">{{ $app->address() ?? '—' }}</td>
+                                <td class="num">{{ __(':memory MB · :disk MB', ['memory' => $app->memory_mb, 'disk' => $app->disk_mb]) }}</td>
+                                <td style="text-align:right"><a class="btn btn-sm" href="{{ route('panel.apps.settings', $app) }}">{{ __('Zarządzaj') }}</a></td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         @endif
     </div>
 
