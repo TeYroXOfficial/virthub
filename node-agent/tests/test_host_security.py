@@ -112,3 +112,101 @@ def test_raport_w_health(client):
     body = client.get("/health").json()
     assert "issues" in body["host_security"]
     assert client.get("/system/security").status_code == 200
+
+
+# --- polityka zagnieżdżania ---------------------------------------------------------
+
+def _security(tmp_path, changelog=None, arch="x86_64", unit=True):
+    host(tmp_path, changelog=changelog, arch=arch)
+    if unit:
+        _w(tmp_path / "unit.path", "")
+    return HostSecurity(kvm_host=True, root=tmp_path,
+                        uname=types.SimpleNamespace(release="6.1.0-30-amd64", machine=arch),
+                        policy_file=tmp_path / "state/nested-policy", request_file=tmp_path / "state/request",
+                        unit=tmp_path / "unit.path")
+
+
+def test_jadro_z_poprawkami_pozwala_na_zagniezdzanie(tmp_path):
+    assert _security(tmp_path / "a").kernel_patched() is False
+    assert _security(tmp_path / "b", changelog="* KVM (CVE-2026-53359)").kernel_patched() is False, "potrzebne obie poprawki"
+    assert _security(tmp_path / "c", changelog="CVE-2026-53359 CVE-2026-64561").kernel_patched() is True
+    assert _security(tmp_path / "d", arch="aarch64").kernel_patched() is None
+
+
+def test_polityka_z_panelu_trafia_do_pliku_i_zlecenia(tmp_path):
+    sec = _security(tmp_path)
+    assert sec.nested_policy() == "auto"
+    assert sec.set_nested_policy("allow") == {"policy": "allow", "requested": True}
+    assert (tmp_path / "state/nested-policy").read_text().strip() == "allow"
+    assert (tmp_path / "state/request").exists()
+    assert sec.nested_policy() == "allow"
+    assert sec.report(fresh=True)["nested_policy"] == "allow"
+
+    import pytest
+    with pytest.raises(ValueError):
+        sec.set_nested_policy("rm -rf /")
+
+
+def test_brak_uslugi_roota(tmp_path):
+    import pytest
+
+    from agent.host_security import HardenerMissing
+
+    with pytest.raises(HardenerMissing):
+        _security(tmp_path, unit=False).set_nested_policy("allow")
+
+
+def test_zagniezdzanie_na_zalatanym_jadrze_nie_jest_alarmem(tmp_path):
+    r = host(tmp_path, nested="Y", changelog="CVE-2026-53359 CVE-2026-64561")
+    assert not any(f["title"].startswith("Zagnieżdżona") for f in r["findings"])
+    assert r["overall"] == "ok"
+
+
+def test_endpoint_polityki_bez_uslugi_roota(client):
+    assert client.put("/system/nested", json={"policy": "allow"}).status_code == 409
+    assert client.put("/system/nested", json={"policy": "zle"}).status_code == 422
+
+
+def test_cpu_maszyn_podaza_za_hostem(settings, monkeypatch):
+    import sys
+    import xml.etree.ElementTree as ET
+
+    monkeypatch.setitem(sys.modules, "libvirt", types.SimpleNamespace(VIR_DOMAIN_XML_INACTIVE=2, libvirtError=Exception))
+    from agent.driver import LibvirtDriver
+
+    class Dom:
+        xml = "<domain><name>virthub-1</name><cpu mode='host-passthrough' check='none'/></domain>"
+
+        def XMLDesc(self, flags=0):
+            return self.xml
+
+        def name(self):
+            return "virthub-1"
+
+    dom = Dom()
+
+    class Conn:
+        def isAlive(self):
+            return True
+
+        def listAllDomains(self):
+            return [dom]
+
+        def defineXML(self, xml):
+            dom.xml = xml
+
+    drv = LibvirtDriver.__new__(LibvirtDriver)
+    drv.settings = settings
+    drv._conn = Conn()
+
+    state = {"nested": False}
+    monkeypatch.setattr(drv, "nested_enabled", lambda: state["nested"])
+
+    assert drv.sync_guest_cpu() == 1
+    disabled = {f.get("name") for f in ET.fromstring(dom.xml).find("cpu").findall("feature")}
+    assert disabled == {"vmx", "svm"}
+    assert drv.sync_guest_cpu() == 0, "bez zmiany stanu hosta nic nie robimy"
+
+    state["nested"] = True
+    assert drv.sync_guest_cpu() == 1
+    assert ET.fromstring(dom.xml).find("cpu").findall("feature") == []

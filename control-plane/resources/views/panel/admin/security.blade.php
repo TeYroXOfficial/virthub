@@ -30,8 +30,8 @@
     <div class="card">
         <h3 class="card-title"><x-icon name="shield" :size="16"/> {{ __('Co robi panel') }}</h3>
         <ul class="plain-list">
-            <li>{{ __('Wyłącza zagnieżdżoną wirtualizację na hoście (kvm_intel / kvm_amd nested=0) — to główna droga ataku Januscape i Zapscape.') }}</li>
-            <li>{{ __('Maszyny KVM nie widzą wirtualizacji sprzętowej (vmx/svm wyłączone w procesorze gościa), nawet gdyby ktoś włączył ją na hoście.') }}</li>
+            <li>{{ __('Sprawdza, czy działające jądro ma poprawki znanych ucieczek z maszyn. Jeśli tak — zagnieżdżona wirtualizacja jest dozwolona automatycznie; jeśli nie — wyłączona (kvm_intel / kvm_amd nested=0), chyba że włączysz ją przełącznikiem przy węźle.') }}</li>
+            <li>{{ __('Maszyny KVM widzą wirtualizację sprzętową (vmx/svm) tylko wtedy, gdy zagnieżdżanie jest na węźle włączone.') }}</li>
             <li>{{ __('Pilnuje EPT/NPT — bez nich KVM używa podatnego shadow MMU dla każdej maszyny.') }}</li>
             <li>{{ __('Instaluje najnowsze jądro z repozytorium i włącza automatyczne poprawki bezpieczeństwa (bez automatycznego restartu).') }}</li>
             <li>{{ __('Kontenery LXC i aplikacje nie mają dostępu do /dev/kvm, więc same nie są drogą do tych ataków.') }}</li>
@@ -79,8 +79,27 @@
                         @endif
                     </dd>
                     @if ($r['kvm_host'])
+                        @php
+                            $patched = $r['kernel_patched'] ?? null;
+                            $nestedOn = $r['kvm']['nested'] ?? null;
+                            $policy = $r['nested_policy'] ?? 'auto';
+                        @endphp
                         <dt>{{ __('Zagnieżdżona wirtualizacja') }}</dt>
-                        <dd>@if ($r['kvm']['nested'] === null) — @else <span class="pill {{ $r['kvm']['nested'] ? 'critical' : 'ok' }}">{{ $r['kvm']['nested'] ? __('włączona') : __('wyłączona') }}</span> @endif</dd>
+                        <dd>
+                            @if ($nestedOn === null) —
+                            @else
+                                <span class="pill {{ $nestedOn ? ($patched ? 'ok' : 'critical') : 'ok' }}">{{ $nestedOn ? __('włączona') : __('wyłączona') }}</span>
+                            @endif
+                            <span class="muted">
+                                @if ($policy === 'allow')
+                                    {{ __('— włączona decyzją administratora') }}
+                                @elseif ($patched)
+                                    {{ __('— automatycznie: jądro ma poprawki') }}
+                                @else
+                                    {{ __('— automatycznie: jądro bez poprawek, więc wyłączona') }}
+                                @endif
+                            </span>
+                        </dd>
                         <dt>{{ __('EPT / NPT') }}</dt>
                         <dd>@if ($r['kvm']['tdp'] === null) — @else <span class="pill {{ $r['kvm']['tdp'] ? 'ok' : 'critical' }}">{{ $r['kvm']['tdp'] ? __('włączone') : __('wyłączone') }}</span> @endif</dd>
                     @endif
@@ -88,6 +107,41 @@
                     <dd>@if ($r['auto_updates'] === null) — @else <span class="pill {{ $r['auto_updates'] ? 'ok' : 'warning' }}">{{ $r['auto_updates'] ? __('włączone') : __('wyłączone') }}</span> @endif</dd>
                     <dt>{{ __('Sprawdzono') }}</dt><dd class="muted">{{ \Illuminate\Support\Carbon::createFromTimestamp($r['checked_at'])->diffForHumans() }}</dd>
                 </dl>
+
+                @if ($r['kvm_host'] && auth()->user()->isAdmin())
+                    <div class="setting-row nested-box">
+                        <div class="setting-text">
+                            <h3>{{ __('Zagnieżdżona wirtualizacja dla klientów') }}</h3>
+                            @if (($r['kernel_patched'] ?? null) === true)
+                                <p class="muted">{{ __('Jądro węzła ma poprawki znanych ucieczek z maszyn — zagnieżdżanie jest włączone automatycznie. Maszyny dostają je po wyłączeniu i włączeniu.') }}</p>
+                            @elseif (($r['nested_policy'] ?? 'auto') === 'allow')
+                                <p class="muted">{{ __('Włączona mimo braku poprawek w jądrze. Klient z maszyną KVM może próbować uciec do hosta (Januscape, Zapscape).') }}</p>
+                            @else
+                                <p class="muted">{{ __('Jądro nie ma poprawek, więc zagnieżdżanie jest wyłączone. Włączy się samo po aktualizacji jądra i restarcie węzła. Możesz je włączyć wcześniej na własne ryzyko.') }}</p>
+                            @endif
+                            @unless ($r['hardener'] ?? false)
+                                <p class="hint" style="color:var(--warn)">{{ __('Węzeł nie ma jeszcze usługi zabezpieczeń — zaktualizuj go, żeby przełącznik działał.') }}</p>
+                            @endunless
+                        </div>
+                        @if (($r['kernel_patched'] ?? null) !== true)
+                            @if (($r['nested_policy'] ?? 'auto') === 'allow')
+                                <form method="POST" action="{{ route('panel.admin.security.nested', $node) }}" style="margin:0">
+                                    @csrf @method('PUT')
+                                    <input type="hidden" name="policy" value="auto">
+                                    <button class="btn" type="submit">{{ __('Wyłącz (tylko na jądrze z poprawkami)') }}</button>
+                                </form>
+                            @else
+                                <form method="POST" action="{{ route('panel.admin.security.nested', $node) }}" style="margin:0"
+                                      data-confirm="{{ __('Włączyć zagnieżdżoną wirtualizację na :name mimo braku poprawek w jądrze? Klient z maszyną KVM może wtedy przejąć host.', ['name' => $node->name]) }}">
+                                    @csrf @method('PUT')
+                                    <input type="hidden" name="policy" value="allow">
+                                    <input type="hidden" name="confirm" value="1">
+                                    <button class="btn btn-danger" type="submit">{{ __('Włącz mimo braku poprawek') }}</button>
+                                </form>
+                            @endif
+                        @endif
+                    </div>
+                @endif
 
                 <div class="table-wrap">
                     <table>

@@ -268,7 +268,7 @@ class LibvirtDriver(HypervisorDriver):
                 vnc_listen=self.settings.vnc_listen,
                 vnc_password=vnc_password,
                 windows=req.os_type == "windows",
-                allow_nested=self.settings.allow_nested,
+                allow_nested=self.nested_enabled(),
             )
 
             domain = self.conn.defineXML(xml)
@@ -362,8 +362,8 @@ class LibvirtDriver(HypervisorDriver):
         mac = req.mac or current_mac or mac_address(server_id)
         if mac != current_mac:
             self._define_mac(domain, mac)
-        # Starsze maszyny (sprzed wyłączenia vmx/svm) dostają tę samą ochronę przy reinstalacji.
-        self._harden_cpu(domain)
+        # vmx/svm zgodnie z hostem (starsze maszyny dostają przy reinstalacji tę samą ochronę).
+        self._apply_cpu_policy(domain, self.nested_enabled())
 
         progress("image", 20)
         self.storage.delete_volume(name)
@@ -437,32 +437,66 @@ class LibvirtDriver(HypervisorDriver):
         node = root.find("./devices/interface/mac")
         return node.get("address").lower() if node is not None and node.get("address") else None
 
-    def _harden_cpu(self, domain: Any) -> bool:
-        """Wyłącza vmx/svm w definicji maszyny (gość bez zagnieżdżonej wirtualizacji)."""
+    def nested_enabled(self) -> bool:
+        """Czy host ma włączoną zagnieżdżoną wirtualizację (ustawia ją harden-host.sh
+        wg polityki: automatycznie na jądrze z poprawkami albo decyzją administratora)."""
+        if self.settings.allow_nested:
+            return True
+        for module in ("kvm_intel", "kvm_amd"):
+            try:
+                value = Path(f"/sys/module/{module}/parameters/nested").read_text().strip()
+            except OSError:
+                continue
+            return value in ("1", "Y", "y")
+        return False
+
+    def _apply_cpu_policy(self, domain: Any, nested: bool) -> bool:
+        """vmx/svm w procesorze gościa tylko wtedy, gdy host pozwala na zagnieżdżanie.
+        Zmienia trwałą definicję — działająca maszyna dostanie ją po wyłączeniu i włączeniu."""
         import xml.etree.ElementTree as ET
 
         import libvirt
 
-        if self.settings.allow_nested:
-            return False
         root = ET.fromstring(domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE))
         cpu = root.find("./cpu")
         if cpu is None:
             cpu = ET.SubElement(root, "cpu", {"mode": "host-passthrough", "check": "none"})
-        present = {f.get("name"): f.get("policy") for f in cpu.findall("feature")}
-        if present.get("vmx") == "disable" and present.get("svm") == "disable":
+        disabled = {f.get("name") for f in cpu.findall("feature") if f.get("policy") == "disable"}
+        if nested and not disabled & {"vmx", "svm"}:
             return False
-        for name in ("vmx", "svm"):
-            for f in cpu.findall("feature"):
-                if f.get("name") == name:
-                    cpu.remove(f)
-            ET.SubElement(cpu, "feature", {"policy": "disable", "name": name})
+        if not nested and {"vmx", "svm"} <= disabled:
+            return False
+        for f in list(cpu.findall("feature")):
+            if f.get("name") in ("vmx", "svm"):
+                cpu.remove(f)
+        if not nested:
+            for name in ("vmx", "svm"):
+                ET.SubElement(cpu, "feature", {"policy": "disable", "name": name})
         try:
             self.conn.defineXML(ET.tostring(root, encoding="unicode"))
         except libvirt.libvirtError as exc:
-            log.warning("Nie udało się wyłączyć vmx/svm w %s: %s", domain.name(), exc)
+            log.warning("Nie udało się zmienić vmx/svm w %s: %s", domain.name(), exc)
             return False
         return True
+
+    def sync_guest_cpu(self) -> int:
+        """Dopasowuje vmx/svm wszystkich maszyn do stanu hosta — wołane przy raporcie
+        zdrowia, ale tylko gdy stan zagnieżdżania się zmienił."""
+        nested = self.nested_enabled()
+        if getattr(self, "_cpu_policy_applied", None) == nested:
+            return 0
+        changed = 0
+        try:
+            for domain in self.conn.listAllDomains() or []:
+                changed += int(self._apply_cpu_policy(domain, nested))
+        except Exception as exc:  # libvirt chwilowo niedostępny — spróbujemy przy następnym raporcie
+            log.warning("Nie udało się dopasować vmx/svm maszyn: %s", exc)
+            return 0
+        self._cpu_policy_applied = nested
+        if changed:
+            log.info("Zagnieżdżanie %s: zmieniono definicję %d maszyn (zadziała po wyłączeniu i włączeniu)",
+                     "włączone" if nested else "wyłączone", changed)
+        return changed
 
     def _define_mac(self, domain: Any, mac: str) -> None:
         import xml.etree.ElementTree as ET
@@ -648,6 +682,7 @@ class LibvirtDriver(HypervisorDriver):
         return VncTarget(host=self.settings.vnc_listen, port=port)
 
     def health(self) -> HostHealth:
+        self.sync_guest_cpu()
         metrics = self._host_metrics()
         connected = True
         running = 0

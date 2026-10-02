@@ -141,6 +141,8 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::get('/security', [\App\Http\Controllers\Web\NodeSecurityController::class, 'index'])->name('security');
         Route::post('/security/{hypervisor}/check', [\App\Http\Controllers\Web\NodeSecurityController::class, 'check'])
             ->middleware('throttle:20,1')->name('security.check');
+        Route::put('/security/{hypervisor}/nested', [\App\Http\Controllers\Web\NodeSecurityController::class, 'nested'])
+            ->middleware('throttle:10,1')->name('security.nested');
         Route::get('/monitoring/{hypervisor}/data', [\App\Http\Controllers\Web\MonitoringController::class, 'data'])
             ->middleware('throttle:60,1')->name('monitoring.data');
         Route::post('/hypervisors', [AdminController::class, 'storeHypervisor'])->name('hypervisors.store');

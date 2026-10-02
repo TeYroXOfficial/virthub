@@ -762,3 +762,4 @@ table.sortable th[aria-sort="descending"]::after { content: " ▼"; font-size: 9
 .plain-list li { margin: 4px 0; }
 .finding-list { list-style: none; margin: 12px 0 0; padding: 0; font-size: 13.5px; }
 .finding-list li { padding: 6px 0; border-top: 1px solid var(--grid); }
+.nested-box { margin: 4px 0 16px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }

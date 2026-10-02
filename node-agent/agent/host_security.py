@@ -26,6 +26,15 @@ from typing import Any
 
 CACHE_SECONDS = 600
 
+# Polityka zagnieżdżonej wirtualizacji ustawiana z panelu (plik zapisuje agent,
+# czyta go harden-host.sh uruchamiany jako root):
+#   auto  — włączona tylko na jądrze z poprawkami znanych ucieczek z maszyn,
+#   allow — włączona mimo braku poprawek (świadoma decyzja administratora).
+NESTED_POLICIES = ("auto", "allow")
+POLICY_FILE = Path("/var/lib/virthub/security/nested-policy")
+REQUEST_FILE = Path("/var/lib/virthub/security/request")
+HARDEN_UNIT = Path("/etc/systemd/system/virthub-harden.path")
+
 
 # Znane ucieczki z maszyn wirtualnych do hosta. `rule` wybiera sposób oceny.
 KNOWN_ISSUES: list[dict[str, Any]] = [
@@ -62,9 +71,14 @@ def _read(path: Path) -> str | None:
 
 class HostSecurity:
     def __init__(self, kvm_host: bool, allow_nested: bool = False,
-                 root: Path = Path("/"), uname: Any = None, clock=time.monotonic) -> None:
+                 root: Path = Path("/"), uname: Any = None, clock=time.monotonic,
+                 policy_file: Path = POLICY_FILE, request_file: Path = REQUEST_FILE,
+                 unit: Path = HARDEN_UNIT) -> None:
         self.kvm_host = kvm_host
         self.allow_nested = allow_nested
+        self.policy_file = policy_file
+        self.request_file = request_file
+        self.unit = unit
         self.root = root
         self.uname = uname or os.uname()
         self.clock = clock
@@ -78,6 +92,38 @@ class HostSecurity:
             result = self._build()
             self._cache = (self.clock(), result)
             return result
+
+    # --- polityka zagnieżdżania -------------------------------------------------
+
+    def nested_policy(self) -> str:
+        if self.allow_nested:
+            return "allow"
+        value = _read(self.policy_file) or "auto"
+        return value if value in NESTED_POLICIES else "auto"
+
+    def set_nested_policy(self, policy: str) -> dict[str, Any]:
+        """Zapisuje politykę i zleca jej zastosowanie usłudze roota (virthub-harden)."""
+        if policy not in NESTED_POLICIES:
+            raise ValueError(f"Nieznana polityka: {policy}")
+        if not self.unit.exists():
+            raise HardenerMissing(
+                "Ten węzeł nie ma jeszcze usługi zabezpieczeń — zaktualizuj go raz z panelu albo ręcznie."
+            )
+        self.policy_file.parent.mkdir(parents=True, exist_ok=True)
+        self.policy_file.write_text(policy + "\n", encoding="utf-8")
+        self.request_file.write_text(str(int(time.time())), encoding="utf-8")
+        with self._lock:
+            self._cache = None
+        return {"policy": policy, "requested": True}
+
+    def kernel_patched(self) -> bool | None:
+        """Czy działające jądro ma poprawki wszystkich znanych ucieczek związanych
+        z zagnieżdżaniem na tej architekturze. None — nie dotyczy (inna architektura)."""
+        relevant = [i for i in KNOWN_ISSUES if self.uname.machine in i["arch"] and i["rule"] in ("nested", "zapscape")]
+        if not relevant:
+            return None
+        changelog = self._kernel_changelog()
+        return all(i["id"] in changelog for i in relevant)
 
     # --- składniki ------------------------------------------------------------
 
@@ -173,11 +219,12 @@ class HostSecurity:
             issues.append({k: issue[k] for k in ("id", "name", "summary")} | {"status": status, "detail": detail})
 
         findings: list[dict[str, str]] = []
-        if self.kvm_host and nested_on:
-            findings.append({"severity": "critical" if not self.allow_nested else "warning",
-                             "title": "Zagnieżdżona wirtualizacja włączona",
+        if self.kvm_host and nested_on and not self.kernel_patched():
+            allowed = self.nested_policy() == "allow"
+            findings.append({"severity": "critical",
+                             "title": "Zagnieżdżona wirtualizacja włączona na jądrze bez poprawek",
                              "detail": "Maszyny mogą uruchamiać własne KVM — to główna droga ucieczek do hosta. "
-                                       + ("Włączona świadomie (VH_ALLOW_NESTED=1)." if self.allow_nested
+                                       + ("Włączona świadomie przez administratora." if allowed
                                           else "Zaktualizuj węzeł — wyłączy ją; przy działających maszynach zadziała po restarcie.")})
         if self.kvm_host and kvm["tdp"] is False:
             findings.append({"severity": "critical", "title": "EPT/NPT wyłączone",
@@ -208,6 +255,9 @@ class HostSecurity:
             "cpu_vendor": vendor,
             "kvm_host": self.kvm_host,
             "kvm": kvm,
+            "nested_policy": self.nested_policy(),
+            "kernel_patched": self.kernel_patched(),
+            "hardener": self.unit.exists(),
             "os": f"{os_info.get('PRETTY_NAME', '?')}",
             "kernel": reboot,
             "auto_updates": auto,
@@ -245,3 +295,22 @@ class HostSecurity:
                 return "partial", "AMD: wyłączone zagnieżdżanie utrudnia atak, ale go nie zamyka — potrzebne jądro z poprawką i restart węzła."
             return "vulnerable", "Zagnieżdżona wirtualizacja włączona, jądro bez poprawki."
         return "vulnerable", "Brak obejścia konfiguracją — potrzebne jądro z poprawką i restart węzła."
+
+
+class HardenerMissing(RuntimeError):
+    """Węzeł bez jednostki virthub-harden (stary instalator)."""
+
+
+def main() -> int:
+    """`python -m agent.host_security --kernel-patched` dla harden-host.sh:
+    kod 0 — jądro ma poprawki, 1 — nie ma, 2 — nie dotyczy tej architektury."""
+    import sys
+
+    if "--kernel-patched" in sys.argv:
+        patched = HostSecurity(kvm_host=True).kernel_patched()
+        return 2 if patched is None else (0 if patched else 1)
+    return 64
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
