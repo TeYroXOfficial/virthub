@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Web;
 
 use App\Domain\Agent\AgentException;
 use App\Domain\Network\HypervisorGroupManager;
-use App\Domain\Network\IpPoolManager;
 use App\Domain\Provisioning\HypervisorEnrollment;
 use App\Domain\Provisioning\TemplateDistributor;
 use App\Enums\ServerState;
@@ -705,36 +704,8 @@ class AdminController extends Controller
 
     // --- pule adresów -------------------------------------------------------
 
-    public function ipPools(): View
-    {
-        return view('panel.admin.ip-pools', [
-            'pools' => IpPool::query()->with(['hypervisor', 'group'])->withCount([
-                'addresses',
-                'addresses as assigned_count' => fn ($q) => $q->whereNotNull('server_id'),
-                'addresses as reserved_count' => fn ($q) => $q->where('is_reserved', true),
-            ])->orderBy('version')->orderBy('type')->orderBy('name')->get(),
-            'hypervisors' => Hypervisor::query()->with('group')->orderBy('name')->get(),
-            'groups' => $this->groupsForView(),
-        ]);
-    }
 
-    public function storeIpPool(Request $request, IpPoolManager $pools): RedirectResponse
-    {
-        $validated = $request->validate(IpPoolManager::rules());
 
-        ['pool' => $pool, 'imported' => $imported] = $pools->create($validated);
-
-        return back()->with('status', $pool->version === 4
-            ? __('Zaimportowano :imported adresów do puli :name.', ['imported' => $imported, 'name' => $pool->name])
-            : __('Dodano pulę IPv6 :name. Adresy będą przydzielane kolejno przy zamówieniach.', ['name' => $pool->name]));
-    }
-
-    public function destroyIpPool(IpPool $pool, IpPoolManager $pools): RedirectResponse
-    {
-        $pools->delete($pool);
-
-        return back()->with('status', __('Pula :name została usunięta.', ['name' => $pool->name]));
-    }
 
     // --- grupy węzłów -------------------------------------------------------
 

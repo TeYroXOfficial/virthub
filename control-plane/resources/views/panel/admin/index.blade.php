@@ -88,11 +88,11 @@
 
         <div class="card dash-card">
             <h3 class="card-title"><x-icon name="network" :size="16"/> {{ __('Adresy IPv4') }}
-                <a class="card-more" href="{{ route('panel.admin.ip-pools') }}">{{ $ipv4['total'] }}</a></h3>
+                <a class="card-more" href="{{ route('panel.admin.network.ipv4') }}">{{ $ipv4['total'] }}</a></h3>
             <ul class="status-list">
-                <li><span><i class="dot ok"></i>{{ __('Wolne') }}</span><b>{{ $ipv4['free'] }}</b></li>
-                <li><span><i class="dot info"></i>{{ __('Przydzielone') }}</span><b>{{ $ipv4['used'] }}</b></li>
-                <li><span><i class="dot neutral"></i>{{ __('Zarezerwowane') }}</span><b>{{ $ipv4['reserved'] }}</b></li>
+                <li><a href="{{ route('panel.admin.network.ipv4', ['status' => 'free']) }}"><i class="dot ok"></i>{{ __('Wolne') }}</a><b>{{ $ipv4['free'] }}</b></li>
+                <li><a href="{{ route('panel.admin.network.ipv4', ['status' => 'assigned']) }}"><i class="dot info"></i>{{ __('Przydzielone') }}</a><b>{{ $ipv4['used'] }}</b></li>
+                <li><a href="{{ route('panel.admin.network.ipv4', ['status' => 'reserved']) }}"><i class="dot neutral"></i>{{ __('Zarezerwowane') }}</a><b>{{ $ipv4['reserved'] }}</b></li>
             </ul>
             @if ($ipv4['total'] > 0 && $ipv4['free'] < 5)
                 <p class="hint" style="color: var(--warn); margin:8px 0 0">{{ __('Pula na wyczerpaniu — zaimportuj kolejną.') }}</p>
