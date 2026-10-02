@@ -23,21 +23,45 @@
             ['panel.servers.create', __('Zamów serwer'), 'plus', 'panel.servers.create', 'servers.order'],
             ['panel.apps.index', __('Aplikacje'), 'gamepad', 'panel.apps.*', 'apps.order'],
         ];
-        // Działy administracji widoczne tylko z odpowiednim uprawnieniem.
-        $adminNav = [
-            ['panel.admin.index', __('Przegląd'), 'dashboard', 'panel.admin.index', null],
-            ['panel.admin.services', __('Wszystkie usługi'), 'list', 'panel.admin.services', 'admin.servers|admin.apps'],
-            ['panel.admin.servers', __('Maszyny'), 'servers', 'panel.admin.servers', 'admin.servers'],
-            ['panel.admin.users', __('Użytkownicy'), 'users', 'panel.admin.users*', 'admin.users'],
-            ['panel.admin.hypervisors', __('Hypervisory'), 'node', 'panel.admin.hypervisors', 'admin.hypervisors'],
-            ['panel.admin.ip-pools', __('Adresy IP'), 'network', 'panel.admin.ip-pools', 'admin.ip_pools'],
-            ['panel.admin.packages', __('Pakiety'), 'package', 'panel.admin.packages', 'admin.packages'],
-            ['panel.admin.templates', __('Szablony'), 'disc', 'panel.admin.templates', 'admin.templates'],
-            ['panel.admin.isos', __('Obrazy ISO'), 'disc', 'panel.admin.isos', 'admin.templates'],
-            ['panel.admin.apps', __('Aplikacje'), 'gamepad', 'panel.admin.apps*', 'admin.apps'],
-            ['panel.admin.updates', __('Aktualizacje'), 'refresh', 'panel.admin.updates*', 'admin.updates'],
-            ['panel.admin.mail', __('Poczta (SMTP)'), 'mail', 'panel.admin.mail*', 'admin.settings'],
+        // Administracja w grupach jak w panelach hostingowych: grupa jest
+        // zwijana i otwiera się sama, gdy zawiera bieżącą stronę. Pozycje
+        // widoczne tylko z odpowiednim uprawnieniem ('admin' = administrator).
+        $adminGroups = [
+            [null, null, [
+                ['panel.admin.index', __('Pulpit'), 'dashboard', 'panel.admin.index', null],
+            ]],
+            [__('Usługi'), 'servers', [
+                ['panel.admin.services', __('Wszystkie usługi'), 'list', 'panel.admin.services', 'admin.servers|admin.apps'],
+                ['panel.admin.servers', __('Maszyny'), 'servers', 'panel.admin.servers', 'admin.servers'],
+                ['panel.admin.apps', __('Aplikacje'), 'gamepad', 'panel.admin.apps', 'admin.apps'],
+            ]],
+            [null, null, [
+                ['panel.admin.users', __('Użytkownicy'), 'users', 'panel.admin.users*', 'admin.users'],
+            ]],
+            [__('Infrastruktura'), 'node', [
+                ['panel.admin.hypervisors', __('Hypervisory'), 'node', 'panel.admin.hypervisors*', 'admin.hypervisors'],
+                ['panel.admin.ip-pools', __('Adresy IP'), 'network', 'panel.admin.ip-pools*', 'admin.ip_pools'],
+            ]],
+            [__('Oferta'), 'package', [
+                ['panel.admin.packages', __('Pakiety VPS'), 'package', 'panel.admin.packages*', 'admin.packages'],
+                ['panel.admin.apps.plans', __('Plany aplikacji'), 'sliders', 'panel.admin.apps.plans*', 'admin.apps'],
+            ]],
+            [__('Media'), 'disc', [
+                ['panel.admin.templates', __('Szablony systemów'), 'disc', 'panel.admin.templates*', 'admin.templates'],
+                ['panel.admin.isos', __('Obrazy ISO'), 'disc', 'panel.admin.isos*', 'admin.templates'],
+                ['panel.admin.apps.eggs', __('Szablony aplikacji'), 'puzzle', 'panel.admin.apps.eggs*', 'admin.apps'],
+            ]],
+            [__('Migracje'), 'upload', [
+                ['panel.admin.apps.pterodactyl', __('Z Pterodactyla'), 'upload', 'panel.admin.apps.pterodactyl*', 'admin.apps'],
+            ]],
+            [__('System'), 'sliders', [
+                ['panel.admin.updates', __('Aktualizacje'), 'refresh', 'panel.admin.updates*', 'admin.updates'],
+                ['panel.admin.mail', __('Poczta (SMTP)'), 'mail', 'panel.admin.mail*', 'admin.settings'],
+                ['panel.admin.logs', __('Dziennik zdarzeń'), 'archive', 'panel.admin.logs', 'admin'],
+            ]],
         ];
+        $allowed = fn (?string $permission) => $permission === null
+            || ($permission === 'admin' ? $user->isAdmin() : collect(explode('|', $permission))->contains(fn ($p) => $user->hasPermission($p)));
     @endphp
 
     <div class="mobile-bar">
@@ -69,12 +93,26 @@
 
                 @if ($user->hasAnyAdminPermission())
                     <div class="nav-section">{{ __('Administracja') }}</div>
-                    @foreach ($adminNav as [$route, $label, $icon, $pattern, $permission])
-                        @continue($permission && ! collect(explode('|', $permission))->contains(fn ($p) => $user->hasPermission($p)))
-                        <a class="nav-link" href="{{ route($route) }}"
-                           @if(request()->routeIs($pattern)) aria-current="page" @endif>
-                            <x-icon :name="$icon"/> {{ $label }}
-                        </a>
+                    @foreach ($adminGroups as [$groupLabel, $groupIcon, $items])
+                        @php $items = array_values(array_filter($items, fn ($i) => $allowed($i[4]))); @endphp
+                        @continue($items === [])
+                        @if ($groupLabel === null)
+                            @foreach ($items as [$route, $label, $icon, $pattern])
+                                <a class="nav-link" href="{{ route($route) }}" @if(request()->routeIs($pattern)) aria-current="page" @endif>
+                                    <x-icon :name="$icon"/> {{ $label }}
+                                </a>
+                            @endforeach
+                        @else
+                            @php $groupActive = collect($items)->contains(fn ($i) => request()->routeIs($i[3])); @endphp
+                            <details class="nav-group" @if ($groupActive) open @endif>
+                                <summary class="nav-link"><x-icon :name="$groupIcon"/> {{ $groupLabel }}</summary>
+                                @foreach ($items as [$route, $label, $icon, $pattern])
+                                    <a class="nav-link nav-sub" href="{{ route($route) }}" @if(request()->routeIs($pattern)) aria-current="page" @endif>
+                                        {{ $label }}
+                                    </a>
+                                @endforeach
+                            </details>
+                        @endif
                     @endforeach
                 @endif
             </nav>

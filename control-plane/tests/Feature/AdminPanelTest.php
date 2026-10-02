@@ -64,7 +64,8 @@ class AdminPanelTest extends TestCase
             ->get(route('panel.admin.index'))
             ->assertOk()
             ->assertSee('Administracja')
-            ->assertSee('Flota');
+            ->assertSee('Zasoby węzłów')
+            ->assertSee('Ostatnie usługi');
     }
 
     public function test_wszystkie_strony_administracji_sie_renderuja(): void

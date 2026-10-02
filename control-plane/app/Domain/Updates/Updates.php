@@ -72,6 +72,17 @@ class Updates
         });
     }
 
+    /**
+     * Najnowszy commit tylko z cache — bez zapytania do GitHuba (pulpit nie
+     * może czekać na sieć). Null, gdy nikt jeszcze nie sprawdzał.
+     *
+     * @return array{sha: string, message: string, date: ?string, url: string}|null
+     */
+    public function cachedLatest(): ?array
+    {
+        return Cache::get('updates:latest:'.config('virthub.update_repo').':'.config('virthub.update_branch'));
+    }
+
     public function panelUpdatesEnabled(): bool
     {
         return is_file((string) config('virthub.update_unit'))

@@ -13,12 +13,10 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Hypervisor;
 use App\Models\HypervisorGroup;
-use App\Models\IpAddress;
 use App\Models\IpPool;
 use App\Models\OsTemplate;
 use App\Models\OsTemplateGroup;
 use App\Models\Server;
-use App\Models\User;
 use App\Models\VpsPackage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,23 +31,49 @@ class AdminController extends Controller
 
     // --- przegląd -----------------------------------------------------------
 
-    public function index(): View
+    public function index(Request $request, \App\Domain\Admin\Dashboard $dashboard): View
     {
-        $hypervisors = Hypervisor::query()->withCount('servers')->orderBy('name')->get();
+        $user = $request->user();
+        $canServers = $user->hasPermission('admin.servers');
+        $canApps = $user->hasPermission('admin.apps');
+        $nodes = Hypervisor::query()->withCount('servers')->orderBy('name')->get();
+        $recent = in_array($request->integer('recent'), \App\Domain\Admin\Dashboard::RECENT_SIZES, true) ? $request->integer('recent') : 5;
 
         return view('panel.admin.index', [
-            'hypervisors' => $hypervisors,
-            'serversTotal' => Server::count(),
-            'serversRunning' => Server::where('state', ServerState::Running->value)->count(),
-            'serversBroken' => Server::whereIn('state', [
-                ServerState::Error->value,
-                ServerState::Suspended->value,
-            ])->count(),
-            'customers' => User::where('role', User::ROLE_CUSTOMER)->count(),
-            'addressesFree' => IpAddress::assignable()->count(),
-            'addressesTotal' => IpAddress::count(),
-            'recentLogs' => AuditLog::with('actor:id,email')->latest()->limit(12)->get(),
+            'canServers' => $canServers,
+            'canApps' => $canApps,
+            'canNodes' => $user->hasPermission('admin.hypervisors'),
+            'servers' => $dashboard->servers(),
+            'apps' => $dashboard->apps(),
+            'ipv4' => $dashboard->ipv4(),
+            'system' => $dashboard->system($nodes),
+            'nodes' => $dashboard->nodes($nodes),
+            'tasks' => $dashboard->tasks($canServers, $canApps, $user->hasPermission('admin.templates')),
+            'activeUsers' => $user->hasPermission('admin.users') ? $dashboard->activeUsers() : null,
+            'recent' => $recent,
+            'recentServices' => $dashboard->recentServices($recent, $canServers, $canApps),
+            'recentLogs' => $user->isAdmin() ? $dashboard->recentLogs() : collect(),
         ]);
+    }
+
+    /** Dziennik zdarzeń: kto, co i kiedy zmienił — z filtrem po rodzaju i wyszukiwaniem. */
+    public function logs(Request $request): View
+    {
+        $category = (string) $request->query('category', '');
+        $term = trim((string) $request->query('q', ''));
+
+        $logs = AuditLog::query()->with('actor:id,email,name')
+            ->when($category !== '', fn ($q) => $q->where('action', 'like', $category.'.%'))
+            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('action', 'like', "%{$term}%")
+                ->orWhere('ip_address', 'like', "{$term}%")
+                ->orWhere('actor_label', 'like', "%{$term}%")
+                ->orWhereHas('actor', fn ($a) => $a->where('email', 'like', "%{$term}%"))))
+            ->latest()->paginate(50)->withQueryString();
+
+        $categories = AuditLog::query()->selectRaw('action')->distinct()->pluck('action')
+            ->map(fn ($a) => Str::before($a, '.'))->unique()->sort()->values();
+
+        return view('panel.admin.logs', compact('logs', 'categories', 'category', 'term'));
     }
 
     // --- hypervisory --------------------------------------------------------
