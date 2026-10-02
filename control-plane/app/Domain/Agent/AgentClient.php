@@ -33,6 +33,12 @@ class AgentClient
         return $this->request('GET', '/health');
     }
 
+    /** Świeży audyt ochrony hosta (znane ucieczki z maszyn, jądro, podatności CPU). */
+    public function securityAudit(): array
+    {
+        return $this->request('GET', '/system/security');
+    }
+
     /** Szczegółowe statystyki hosta i usług (strona Monitorowanie). */
     public function monitor(): array
     {

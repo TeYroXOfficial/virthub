@@ -28,6 +28,14 @@
         </div>
     @endif
 
+    @if ($securityCritical > 0 && $canNodes)
+        <div class="alert alert-error">
+            <strong>{{ __('Węzły podatne na ucieczki z maszyn: :count.', ['count' => $securityCritical]) }}</strong>
+            {{ __('Klient z maszyną KVM może przejąć host (np. Januscape, Zapscape).') }}
+            <a href="{{ route('panel.admin.security') }}">{{ __('Zobacz i zabezpiecz') }}</a>
+        </div>
+    @endif
+
     {{-- Kafelki stanu: każda pozycja prowadzi do przefiltrowanej listy. --}}
     <div class="grid dash-tiles">
         @if ($canServers)

@@ -268,6 +268,7 @@ class LibvirtDriver(HypervisorDriver):
                 vnc_listen=self.settings.vnc_listen,
                 vnc_password=vnc_password,
                 windows=req.os_type == "windows",
+                allow_nested=self.settings.allow_nested,
             )
 
             domain = self.conn.defineXML(xml)
@@ -361,6 +362,8 @@ class LibvirtDriver(HypervisorDriver):
         mac = req.mac or current_mac or mac_address(server_id)
         if mac != current_mac:
             self._define_mac(domain, mac)
+        # Starsze maszyny (sprzed wyłączenia vmx/svm) dostają tę samą ochronę przy reinstalacji.
+        self._harden_cpu(domain)
 
         progress("image", 20)
         self.storage.delete_volume(name)
@@ -433,6 +436,33 @@ class LibvirtDriver(HypervisorDriver):
         root = ET.fromstring(domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE))
         node = root.find("./devices/interface/mac")
         return node.get("address").lower() if node is not None and node.get("address") else None
+
+    def _harden_cpu(self, domain: Any) -> bool:
+        """Wyłącza vmx/svm w definicji maszyny (gość bez zagnieżdżonej wirtualizacji)."""
+        import xml.etree.ElementTree as ET
+
+        import libvirt
+
+        if self.settings.allow_nested:
+            return False
+        root = ET.fromstring(domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE))
+        cpu = root.find("./cpu")
+        if cpu is None:
+            cpu = ET.SubElement(root, "cpu", {"mode": "host-passthrough", "check": "none"})
+        present = {f.get("name"): f.get("policy") for f in cpu.findall("feature")}
+        if present.get("vmx") == "disable" and present.get("svm") == "disable":
+            return False
+        for name in ("vmx", "svm"):
+            for f in cpu.findall("feature"):
+                if f.get("name") == name:
+                    cpu.remove(f)
+            ET.SubElement(cpu, "feature", {"policy": "disable", "name": name})
+        try:
+            self.conn.defineXML(ET.tostring(root, encoding="unicode"))
+        except libvirt.libvirtError as exc:
+            log.warning("Nie udało się wyłączyć vmx/svm w %s: %s", domain.name(), exc)
+            return False
+        return True
 
     def _define_mac(self, domain: Any, mac: str) -> None:
         import xml.etree.ElementTree as ET

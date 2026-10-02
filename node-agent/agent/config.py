@@ -93,6 +93,9 @@ class Settings:
     # SFTP do plików aplikacji (logowanie hasłem z panelu). 0 wyłącza.
     sftp_port: int = 2022
     sftp_listen: str = "0.0.0.0"
+    # Zagnieżdżona wirtualizacja w maszynach klientów — domyślnie wyłączona
+    # (ucieczki z maszyn przez shadow MMU KVM: Januscape, Zapscape).
+    allow_nested: bool = False
     # Ochrona przed nadużyciami (PteroVM, koparki, zdalne powłoki):
     # kill — zabija i blokuje start, report — tylko zgłasza, off — wyłączona.
     apps_guard: str = "kill"
@@ -155,6 +158,7 @@ def get_settings() -> Settings:
         apps_dns=tuple(a.strip() for a in _env("VH_APPS_DNS", "1.1.1.1,1.0.0.1").split(",") if a.strip()),
         sftp_port=_env_int("VH_SFTP_PORT", 2022),
         sftp_listen=_env("VH_SFTP_LISTEN", "0.0.0.0"),
+        allow_nested=_env("VH_ALLOW_NESTED", "0") == "1",
         apps_guard=_env("VH_APPS_GUARD", "kill").lower() if _env("VH_APPS_GUARD", "kill").lower() in ("kill", "report", "off") else "kill",
         apps_guard_interval=max(10, _env_int("VH_APPS_GUARD_INTERVAL", 60)),
         apps_seccomp=_env("VH_APPS_SECCOMP", "1") not in ("0", "false", "no"),

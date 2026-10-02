@@ -109,6 +109,10 @@ bash "$AGENT_DIR/scripts/setup-builder.sh" || warn "Nie udało się przygotować
 # Węzły kontenerów: osobny zakres UID/GID dla każdego kontenera.
 bash "$AGENT_DIR/scripts/harden-incus.sh" || warn "Nie udało się ustawić przydziału UID/GID dla Incusa"
 
+# Ochrona hosta przed ucieczkami z maszyn: bez zagnieżdżonej wirtualizacji,
+# aktualne jądro i automatyczne poprawki bezpieczeństwa.
+bash "$AGENT_DIR/scripts/harden-host.sh" || warn "Nie udało się utwardzić hosta"
+
 # --- restart --------------------------------------------------------------------
 
 systemctl restart virthub-agent

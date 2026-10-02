@@ -23,6 +23,17 @@ HYPERV = """    <hyperv mode='custom'>
 """
 
 
+def cpu_xml(allow_nested: bool = False) -> str:
+    if allow_nested:
+        return "  <cpu mode='host-passthrough' check='none'/>"
+    return (
+        "  <cpu mode='host-passthrough' check='none'>\n"
+        "    <feature policy='disable' name='vmx'/>\n"
+        "    <feature policy='disable' name='svm'/>\n"
+        "  </cpu>"
+    )
+
+
 def build_domain_xml(
     *,
     name: str,
@@ -38,6 +49,7 @@ def build_domain_xml(
     vnc_listen: str,
     vnc_password: str,
     windows: bool = False,
+    allow_nested: bool = False,
 ) -> str:
     """Zwraca XML domeny gotowy do `virsh define`.
 
@@ -51,6 +63,9 @@ def build_domain_xml(
       jak wejść na maszynę, a logi cloud-init z pierwszego bootu przepadają.
     * `discard='unmap'` — TRIM z gościa zwalnia miejsce w pliku qcow2, inaczej
       thin-provisioning przestaje działać po pierwszym zapełnieniu dysku.
+    * bez `vmx`/`svm` — gość nie widzi wirtualizacji sprzętowej, więc nie uruchomi
+      własnego KVM (zagnieżdżanie to główna droga ucieczek do hosta, np. Januscape
+      i Zapscape). Działa niezależnie od ustawienia `nested` modułu na hoście.
     """
     devices = [
         f"""    <disk type='file' device='disk'>
@@ -121,7 +136,7 @@ def build_domain_xml(
     <acpi/>
     <apic/>
 {HYPERV if windows else ""}  </features>
-  <cpu mode='host-passthrough' check='none'/>
+{cpu_xml(allow_nested)}
   <clock offset='{"localtime" if windows else "utc"}'>
     <timer name='rtc' tickpolicy='catchup'/>
     <timer name='pit' tickpolicy='delay'/>

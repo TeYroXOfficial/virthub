@@ -138,6 +138,9 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::get('/hypervisors', [AdminController::class, 'hypervisors'])->name('hypervisors');
         Route::get('/hypervisors/{hypervisor}', [AdminController::class, 'showHypervisor'])->name('hypervisors.show');
         Route::get('/monitoring', [\App\Http\Controllers\Web\MonitoringController::class, 'index'])->name('monitoring');
+        Route::get('/security', [\App\Http\Controllers\Web\NodeSecurityController::class, 'index'])->name('security');
+        Route::post('/security/{hypervisor}/check', [\App\Http\Controllers\Web\NodeSecurityController::class, 'check'])
+            ->middleware('throttle:20,1')->name('security.check');
         Route::get('/monitoring/{hypervisor}/data', [\App\Http\Controllers\Web\MonitoringController::class, 'data'])
             ->middleware('throttle:60,1')->name('monitoring.data');
         Route::post('/hypervisors', [AdminController::class, 'storeHypervisor'])->name('hypervisors.store');

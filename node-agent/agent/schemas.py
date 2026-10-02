@@ -409,6 +409,7 @@ class HostHealth(BaseModel):
         default=None, description="Czy zapora śledzi połączenia (moduł nf_conntrack_bridge)",
     )
     security: dict | None = Field(default=None, description="Stan izolacji kontenerów (węzły LXC)")
+    host_security: dict | None = Field(default=None, description="Audyt ochrony hosta: znane ucieczki z maszyn, jądro, podatności CPU")
     remote_update: bool = Field(default=False, description="Czy węzeł przyjmuje aktualizacje zlecane z panelu")
 
 
