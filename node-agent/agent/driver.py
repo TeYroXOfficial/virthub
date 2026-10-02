@@ -125,6 +125,10 @@ class HypervisorDriver(ABC):
         """Twardy limit procesora (procent jednego rdzenia), od razu i na stałe."""
         raise DriverError("Ten węzeł nie obsługuje limitu procesora.")
 
+    def set_mac(self, uuid: str, mac: str | None) -> dict[str, Any]:
+        """MAC karty sieciowej (None = domyślny z puli 52:54:00). Działa od następnego uruchomienia."""
+        raise DriverError("Ten węzeł nie obsługuje zmiany MAC.")
+
     def guest_os(self, uuid: str) -> GuestOs:
         """System zainstalowany w maszynie (może różnić się od szablonu — np. po instalacji z ISO)."""
         raise DriverError("Ten węzeł nie odczytuje systemu gościa.")
@@ -223,7 +227,7 @@ class LibvirtDriver(HypervisorDriver):
     def create_vm(self, req: CreateVmRequest) -> dict[str, Any]:
         name = domain_name(req.server_id)
         vm_uuid = str(uuidlib.uuid4())
-        mac = mac_address(req.server_id)
+        mac = req.mac or mac_address(req.server_id)
         target = interface_name(req.server_id)
         vnc_password = secrets.token_urlsafe(12)
 
@@ -352,6 +356,12 @@ class LibvirtDriver(HypervisorDriver):
         interfaces = req.interfaces if req.interfaces is not None else self._interfaces_from_domain(domain)
         disk_gb = self._disk_size_gb(name)
 
+        # MAC z panelu (adres IP dostawcy z wirtualnym MAC) albo ten, który karta ma teraz.
+        current_mac = self._domain_mac(domain)
+        mac = req.mac or current_mac or mac_address(server_id)
+        if mac != current_mac:
+            self._define_mac(domain, mac)
+
         progress("image", 20)
         self.storage.delete_volume(name)
         self.storage.create_volume(name, req.template, disk_gb)
@@ -364,7 +374,7 @@ class LibvirtDriver(HypervisorDriver):
             nameservers=req.nameservers or ["1.1.1.1", "9.9.9.9"],
             ssh_keys=req.ssh_keys,
             root_password=req.root_password,
-            mac=mac_address(server_id),
+            mac=mac,
             os_type=req.os_type,
         )
 
@@ -403,6 +413,41 @@ class LibvirtDriver(HypervisorDriver):
     def set_cpu_limit(self, uuid: str, cpu_limit_percent: int | None) -> dict[str, Any]:
         self._apply_cpu_limit(self._domain(uuid), cpu_limit_percent)
         return {"uuid": uuid, "cpu_limit_percent": cpu_limit_percent}
+
+    def set_mac(self, uuid: str, mac: str | None) -> dict[str, Any]:
+        """Nowy MAC w trwałej definicji domeny. QEMU działającej maszyny trzyma
+        stary — zmiana działa po wyłączeniu i włączeniu (nie po restarcie z systemu)."""
+        domain = self._domain(uuid)
+        target = mac or mac_address(server_id_from_name(domain.name()))
+        changed = target != self._domain_mac(domain)
+        if changed:
+            self._define_mac(domain, target)
+        return {"uuid": uuid, "mac": target, "changed": changed,
+                "restart_required": changed and bool(domain.isActive())}
+
+    def _domain_mac(self, domain: Any) -> str | None:
+        import xml.etree.ElementTree as ET
+
+        import libvirt
+
+        root = ET.fromstring(domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE))
+        node = root.find("./devices/interface/mac")
+        return node.get("address").lower() if node is not None and node.get("address") else None
+
+    def _define_mac(self, domain: Any, mac: str) -> None:
+        import xml.etree.ElementTree as ET
+
+        import libvirt
+
+        root = ET.fromstring(domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE))
+        node = root.find("./devices/interface/mac")
+        if node is None:
+            raise DriverError("Maszyna nie ma karty sieciowej — nie ma czemu zmienić MAC.")
+        node.set("address", mac)
+        try:
+            self.conn.defineXML(ET.tostring(root, encoding="unicode"))
+        except libvirt.libvirtError as exc:
+            raise DriverError(f"Nie udało się zapisać nowego MAC: {exc}") from exc
 
     @staticmethod
     def _apply_cpu_limit(domain: Any, cpu_limit_percent: int | None) -> None:
@@ -669,7 +714,7 @@ class MockDriver(HypervisorDriver):
             nameservers=req.nameservers,
             ssh_keys=req.ssh_keys,
             root_password=req.root_password,
-            mac=mac_address(req.server_id),
+            mac=req.mac or mac_address(req.server_id),
             os_type=req.os_type,
         )
 
@@ -683,7 +728,7 @@ class MockDriver(HypervisorDriver):
             "ram_mb": req.ram_mb,
             "disk_gb": req.disk_gb,
             "template": req.template,
-            "mac": mac_address(req.server_id),
+            "mac": req.mac or mac_address(req.server_id),
             "interface": interface_name(req.server_id),
             "vnc_port": 5900 + (req.server_id % 100),
             "vnc_password": secrets.token_urlsafe(12),
@@ -720,6 +765,8 @@ class MockDriver(HypervisorDriver):
         self._stage("boot", 85)
         record["template"] = req.template
         record["state"] = "running"
+        if req.mac:
+            record["mac"] = req.mac
         self._save(data)
         return {"uuid": uuid, "state": "running", "template": req.template}
 
@@ -746,6 +793,18 @@ class MockDriver(HypervisorDriver):
         record["cpu_limit_percent"] = cpu_limit_percent
         self._save(data)
         return {"uuid": uuid, "cpu_limit_percent": cpu_limit_percent}
+
+    def set_mac(self, uuid: str, mac: str | None) -> dict[str, Any]:
+        data = self._load()
+        record = data.get(uuid)
+        if record is None:
+            raise VmNotFound(uuid)
+        target = mac or mac_address(record["server_id"])
+        changed = record.get("mac") != target
+        record["mac"] = target
+        self._save(data)
+        return {"uuid": uuid, "mac": target, "changed": changed,
+                "restart_required": changed and record.get("state") == "running"}
 
     def delete(self, uuid: str) -> dict[str, Any]:
         data = self._load()

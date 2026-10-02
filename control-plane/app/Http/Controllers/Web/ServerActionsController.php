@@ -135,6 +135,25 @@ class ServerActionsController extends Controller
             ->with('status', __('Limit procesora trafi na węzeł w ciągu kilku sekund — bez restartu maszyny.'));
     }
 
+    /** rDNS adresu maszyny — klient ustawia nazwę, która wskazuje na ten adres. */
+    public function rdns(Request $request, Server $server, \App\Models\IpAddress $address, \App\Domain\Network\ReverseDns $reverseDns): RedirectResponse
+    {
+        $this->authorize('operate', $server);
+        abort_unless($address->server_id === $server->id, 404);
+
+        $back = redirect()->to(route('panel.servers.show', $server).'#network');
+        if ($address->isNat()) {
+            return $back->withErrors(['rdns' => __('Adres za NAT-em jest prywatny — rDNS ustawia się dla publicznego adresu węzła.')]);
+        }
+
+        $data = $request->validate(['rdns' => ['nullable', 'string', 'max:253']]);
+        $reverseDns->set($address, $data['rdns'] ?? null, $request->user(), asStaff: $request->user()->isStaff());
+
+        return $back->with('status', ($data['rdns'] ?? null)
+            ? __('rDNS :address → :host zapisany.', ['address' => $address->address, 'host' => $address->fresh()->rdns])
+            : __('rDNS adresu :address usunięty.', ['address' => $address->address]));
+    }
+
     /** Odczyt systemu z wnętrza maszyny na żądanie (normalnie co kilka godzin). */
     public function detectOs(Server $server, \App\Domain\Provisioning\GuestOs $guestOs): RedirectResponse
     {

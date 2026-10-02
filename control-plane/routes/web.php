@@ -71,6 +71,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/detect-os', [ServerActionsController::class, 'detectOs'])->name('servers.detect-os');
     Route::post('/servers/{server}/traffic', [ServerActionsController::class, 'traffic'])->name('servers.traffic');
     Route::post('/servers/{server}/cpu-limit', [ServerActionsController::class, 'cpuLimit'])->name('servers.cpu-limit');
+    Route::put('/servers/{server}/ips/{address}/rdns', [ServerActionsController::class, 'rdns'])->middleware('throttle:10,1')->name('servers.rdns');
     Route::post('/servers/{server}/ports', [\App\Http\Controllers\Web\PortForwardController::class, 'store'])->name('servers.ports.store');
     Route::delete('/servers/{server}/ports/{forward}', [\App\Http\Controllers\Web\PortForwardController::class, 'destroy'])->name('servers.ports.destroy');
 
@@ -225,6 +226,12 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::put('/{app}/resources', 'resources')->name('.resources');
         Route::post('/{app}/abuse-exempt', 'abuseExempt')->name('.abuse-exempt');
         Route::post('/{app}/purge', 'purge')->name('.purge');
+    });
+
+    Route::middleware('admin:admin.settings')->prefix('/network/dns')->name('network.dns')->controller(\App\Http\Controllers\Web\ReverseDnsSettingsController::class)->group(function () {
+        Route::get('/', 'show');
+        Route::put('/', 'update')->name('.update');
+        Route::post('/test', 'test')->middleware('throttle:10,1')->name('.test');
     });
 
     Route::middleware('admin:admin.settings')->prefix('/mail')->name('mail')->controller(\App\Http\Controllers\Web\MailSettingsController::class)->group(function () {

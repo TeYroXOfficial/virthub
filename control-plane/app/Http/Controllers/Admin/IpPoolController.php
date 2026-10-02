@@ -95,6 +95,7 @@ class IpPoolController extends Controller
             'address' => $ip->address,
             'reserved' => $ip->is_reserved,
             'rdns' => $ip->rdns,
+            'mac_address' => $ip->mac_address,
             'server' => $ip->server?->only(['id', 'hostname']),
         ]));
     }
@@ -128,7 +129,7 @@ class IpPoolController extends Controller
             'rdns' => ['nullable', 'string', 'max:253'],
         ]);
 
-        $address->forceFill(['rdns' => $validated['rdns'] ?? null])->save();
+        app(\App\Domain\Network\ReverseDns::class)->set($address, $validated['rdns'] ?? null, $request->user(), asStaff: true);
 
         return response()->json([
             'message' => __('Zapisano rekord PTR. Propagacja u dostawcy może potrwać do kilku godzin.'),

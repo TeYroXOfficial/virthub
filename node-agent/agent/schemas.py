@@ -7,10 +7,11 @@ Zmiana pola tutaj = zmiana kontraktu z control plane.
 from __future__ import annotations
 
 import ipaddress
+import re
 from enum import Enum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 
 
 class PowerAction(str, Enum):
@@ -178,6 +179,24 @@ Password = Annotated[str, Field(pattern=r"^[\x21-\x7e]{8,128}$")]
 CpuLimit = Annotated[int, Field(ge=1, le=12800)]
 
 
+def _unicast_mac(value: str) -> str:
+    """MAC karty maszyny: sześć bajtów szesnastkowo, adres unicast (nie grupowy).
+
+    Część dostawców (np. adresy failover) przyjmuje ruch adresu IP tylko z
+    przypisanego do niego wirtualnego MAC — admin wpisuje go w panelu."""
+    mac = value.strip().lower().replace("-", ":")
+    if not re.fullmatch(r"[0-9a-f]{2}(:[0-9a-f]{2}){5}", mac):
+        raise ValueError("MAC musi mieć postać aa:bb:cc:dd:ee:ff")
+    if int(mac[:2], 16) & 1:
+        raise ValueError("MAC grupowy (multicast) nie może być adresem karty")
+    if mac == "00:00:00:00:00:00":
+        raise ValueError("Zerowy MAC nie może być adresem karty")
+    return mac
+
+
+MacAddress = Annotated[str, AfterValidator(_unicast_mac)]
+
+
 class CreateVmRequest(BaseModel):
     server_id: int = Field(description="Identyfikator VPS-a w control plane")
     hostname: str = Field(pattern=HOSTNAME, max_length=253)
@@ -192,6 +211,8 @@ class CreateVmRequest(BaseModel):
     nameservers: list[str] = Field(default_factory=lambda: ["1.1.1.1", "9.9.9.9"])
     # Windows: nośnik config-2 dla cloudbase-init zamiast NoCloud i ustawienia domeny pod Windows.
     os_type: Literal["linux", "windows"] = "linux"
+    # MAC karty wymagany przez dostawcę dla adresu IP; brak = stały MAC z puli 52:54:00.
+    mac: MacAddress | None = None
 
 
 class RebuildVmRequest(BaseModel):
@@ -204,6 +225,8 @@ class RebuildVmRequest(BaseModel):
     interfaces: list[NetworkInterfaceSpec] | None = None
     nameservers: list[str] | None = None
     os_type: Literal["linux", "windows"] = "linux"
+    # Brak = MAC zostaje taki, jaki karta ma teraz.
+    mac: MacAddress | None = None
 
 
 ISO_NAME = r"^[a-z0-9][a-z0-9._-]{0,80}\.iso$"
@@ -275,6 +298,12 @@ class ResizeVmRequest(BaseModel):
 
 class CpuLimitRequest(BaseModel):
     cpu_limit_percent: CpuLimit | None = Field(description="Brak = bez limitu")
+
+
+class MacRequest(BaseModel):
+    """Zmiana MAC karty istniejącej maszyny. Brak = powrót do domyślnego MAC."""
+
+    mac: MacAddress | None = None
 
 
 class PowerRequest(BaseModel):

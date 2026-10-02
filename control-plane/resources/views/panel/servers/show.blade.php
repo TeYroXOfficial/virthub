@@ -193,7 +193,7 @@
                 </dl>
             </div>
 
-            <div class="card">
+            <div class="card" id="network">
                 <h3 class="card-title"><x-icon name="network" :size="16"/> {{ __('Adresy IP') }}</h3>
                 @forelse ($server->ipAddresses as $ip)
                     <dl class="kv" style="margin-bottom:12px">
@@ -210,9 +210,29 @@
                                 <a href="#ports" class="muted">{{ __('mapowanie') }}</a>
                             </dd>
                         @endif
-                        @if ($ip->rdns)
-                            <dt>{{ __('rDNS') }}</dt><dd class="mono">{{ $ip->rdns }}</dd>
+                        @if ($ip->mac_address)
+                            <dt>{{ __('MAC') }}</dt><dd class="mono">{{ $ip->mac_address }}
+                                <div class="hint">{{ __('Wymagany przez dostawcę dla tego adresu — przy instalacji z ISO ustaw kartę z tym MAC-iem.') }}</div></dd>
                         @endif
+                        @unless ($ip->isNat())
+                            <dt>{{ __('rDNS') }}</dt>
+                            <dd>
+                                <span class="mono">{{ $ip->rdns ?? '—' }}</span>
+                                @can('operate', $server)
+                                    <details class="form-block" style="margin-top:6px">
+                                        <summary>{{ __('Zmień rDNS') }}</summary>
+                                        <form method="POST" action="{{ route('panel.servers.rdns', [$server, $ip]) }}" style="margin-top:8px">
+                                            @csrf @method('PUT')
+                                            <div class="field" style="margin-bottom:8px">
+                                                <input name="rdns" type="text" value="{{ $ip->rdns }}" placeholder="mail.example.com" aria-label="{{ __('rDNS') }}">
+                                            </div>
+                                            <button class="btn btn-sm btn-primary" type="submit">{{ __('Zapisz') }}</button>
+                                            <div class="hint">{{ __('Nazwa musi wskazywać rekordem :type na :address. Puste pole usuwa rDNS.', ['type' => $ip->version === 6 ? 'AAAA' : 'A', 'address' => $ip->address]) }}</div>
+                                        </form>
+                                    </details>
+                                @endcan
+                            </dd>
+                        @endunless
                     </dl>
                 @empty
                     <p class="muted">{{ __('Maszyna nie ma jeszcze przypisanego adresu.') }}</p>

@@ -57,6 +57,7 @@ class AgentResultApplier
             'snapshot' => $this->finishSnapshot($job, $result),
             'restore' => $server->markState(ServerState::Running),
             'network' => null,
+            'mac' => null,
             'iso' => $this->finishIso($server->forceFill(['guest_os_checked_at' => null]), $job, $result),
             'password' => $this->finishPassword($server, $job),
             default => Log::warning('Nieznana akcja w wyniku zadania', ['action' => $job->action]),

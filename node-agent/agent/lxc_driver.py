@@ -255,7 +255,7 @@ class IncusDriver(HypervisorDriver):
     def create_vm(self, req: CreateVmRequest) -> dict[str, Any]:
         name = domain_name(req.server_id)
         vm_uuid = str(uuidlib.uuid4())
-        mac = mac_address(req.server_id)
+        mac = req.mac or mac_address(req.server_id)
         target = interface_name(req.server_id)
         alias = self._validate_alias(req.template)
 
@@ -451,6 +451,8 @@ class IncusDriver(HypervisorDriver):
         # rebuild podmienia system plików na świeży z obrazu, zostawiając
         # konfigurację kontenera: limity, interfejs, MAC i nasz UUID.
         self._incus("rebuild", f"local:{alias}", name, timeout=900)
+        if req.mac:
+            self._apply_mac(name, req.mac)
 
         # Nowa konfiguracja cloud-init zmienia identyfikator instancji, więc
         # cloud-init w świeżym systemie wykona się od nowa — z nowym hasłem.
@@ -501,6 +503,27 @@ class IncusDriver(HypervisorDriver):
         aktualnej konfiguracji kontenera."""
         instance = self._query(f"/1.0/instances/{name}") or {}
         return (instance.get("config") or {}).get("cloud-init.network-config")
+
+    def set_mac(self, uuid: str, mac: str | None) -> dict[str, Any]:
+        """MAC karty eth0 kontenera i dopasowanie w konfiguracji sieci cloud-init."""
+        name = self._name_for(uuid)
+        target = mac or mac_address(server_id_from_name(name))
+        changed = self._apply_mac(name, target)
+        return {"uuid": uuid, "mac": target, "changed": changed,
+                "restart_required": changed and self._state(name) == "running"}
+
+    def _apply_mac(self, name: str, mac: str) -> bool:
+        instance = self._query(f"/1.0/instances/{name}") or {}
+        current = str(((instance.get("devices") or {}).get("eth0") or {}).get("hwaddr", "")).lower()
+        if current == mac:
+            return False
+        self._incus("config", "device", "set", name, "eth0", f"hwaddr={mac}")
+        # Konfiguracja sieci cloud-init dopasowuje kartę po MAC — podmieniamy go,
+        # żeby świeży system (reinstalacja) wstał z siecią.
+        network_config = (instance.get("config") or {}).get("cloud-init.network-config")
+        if network_config and current:
+            self._incus("config", "set", name, f"cloud-init.network-config={network_config.replace(current, mac)}")
+        return True
 
     def set_cpu_limit(self, uuid: str, cpu_limit_percent: int | None) -> dict[str, Any]:
         """Twardy przydział czasu CPU — działa od razu, bez restartu kontenera."""
