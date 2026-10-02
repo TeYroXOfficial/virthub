@@ -65,6 +65,17 @@ class ServerPayload
         return $primary?->pool->nameserverList() ?? ['1.1.1.1', '9.9.9.9'];
     }
 
+    /**
+     * MAC karty maszyny: przypisany przez dostawcę do adresu IP (najpierw
+     * głównego). Brak — agent nada stały MAC z puli 52:54:00.
+     */
+    public static function mac(Server $server): ?string
+    {
+        return $server->ipAddresses()->whereNotNull('mac_address')
+            ->orderByDesc('is_primary')->orderBy('version')->orderBy('id')
+            ->value('mac_address');
+    }
+
     /** @param  list<string>  $sshKeys */
     public static function forCreate(Server $server, array $sshKeys = []): array
     {
@@ -81,6 +92,7 @@ class ServerPayload
             'root_password' => $server->root_password,
             'nameservers' => self::nameservers($server),
             'os_type' => self::osType($server->template),
+            'mac' => self::mac($server),
         ];
     }
 

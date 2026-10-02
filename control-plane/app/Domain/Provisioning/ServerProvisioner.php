@@ -371,6 +371,22 @@ class ServerProvisioner
         return $job;
     }
 
+    /**
+     * Wysyła na węzeł MAC karty wynikający z adresów maszyny. Maszyna w trakcie
+     * tworzenia albo reinstalacji dostanie go i tak z tej operacji.
+     */
+    public function syncMac(Server $server, ?User $actor = null): ?ServerJob
+    {
+        if ($server->agent_uuid === null || $server->state->isTransitioning()) {
+            return null;
+        }
+
+        $job = $this->createJobRecord($server, 'mac', $actor, ['mac' => \App\Domain\Agent\ServerPayload::mac($server)]);
+        RunServerActionJob::dispatch($job->id);
+
+        return $job;
+    }
+
     public function syncNetwork(Server $server, ?User $actor = null): ServerJob
     {
         $job = $this->createJobRecord($server, 'network', $actor);

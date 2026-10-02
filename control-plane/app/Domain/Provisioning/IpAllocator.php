@@ -94,6 +94,9 @@ class IpAllocator
 
     public function release(IpAddress $address): void
     {
+        // PTR należy do maszyny — następny właściciel adresu nie może dostać cudzej nazwy.
+        app(\App\Domain\Network\ReverseDns::class)->forget($address);
+
         // Przekierowania należą do maszyny — następny właściciel adresu
         // dostaje czysty blok portów.
         \App\Models\NatPortForward::query()->where('ip_address_id', $address->id)->delete();

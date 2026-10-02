@@ -55,6 +55,7 @@ from .schemas import (
     RebuildVmRequest,
     ResizeVmRequest,
     CpuLimitRequest,
+    MacRequest,
     SnapshotRequest,
     VmStats,
     AppCommandRequest,
@@ -95,6 +96,7 @@ def _handlers() -> dict[str, Any]:
         "cpu_limit": lambda p: driver.set_cpu_limit(
             p["uuid"], CpuLimitRequest(**p["body"]).cpu_limit_percent
         ),
+        "set_mac": lambda p: driver.set_mac(p["uuid"], MacRequest(**p["body"]).mac),
         "delete": lambda p: _delete_vm(p["uuid"]),
         "snapshot": lambda p: driver.snapshot(p["uuid"], p["body"]["name"]),
         "restore": lambda p: driver.restore(p["uuid"], p["body"]["name"]),
@@ -400,6 +402,19 @@ async def rebuild(uuid: str, req: RebuildVmRequest) -> JobAccepted:
 )
 async def cpu_limit(uuid: str, req: CpuLimitRequest) -> JobAccepted:
     job_id = jobs.enqueue("cpu_limit", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.put(
+    "/vm/{uuid}/mac",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def set_mac(uuid: str, req: MacRequest) -> JobAccepted:
+    """MAC karty sieciowej z panelu (wirtualny MAC adresu IP u dostawcy)."""
+    job_id = jobs.enqueue("set_mac", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
     return JobAccepted(job_id=job_id)
 
 

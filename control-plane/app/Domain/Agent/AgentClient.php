@@ -163,6 +163,12 @@ class AgentClient
         return $this->jobId($this->request('PUT', "/vm/{$uuid}/cpu-limit", ['cpu_limit_percent' => $percent]));
     }
 
+    /** MAC karty maszyny (null = domyślny). Zmiana działa po wyłączeniu i włączeniu maszyny. */
+    public function setMac(string $uuid, ?string $mac): string
+    {
+        return $this->jobId($this->request('PUT', "/vm/{$uuid}/mac", ['mac' => $mac]));
+    }
+
     public function delete(string $uuid): string
     {
         return $this->jobId($this->request('DELETE', "/vm/{$uuid}"));

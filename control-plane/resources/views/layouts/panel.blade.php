@@ -48,6 +48,7 @@
                 ['panel.admin.network.ipv4', __('Adresy IPv4'), 'network', 'panel.admin.network.ipv4', 'admin.ip_pools'],
                 ['panel.admin.network.nat', __('Adresy IPv4 NAT'), 'network', 'panel.admin.network.nat', 'admin.ip_pools'],
                 ['panel.admin.network.ipv6', __('Adresy IPv6'), 'network', 'panel.admin.network.ipv6', 'admin.ip_pools'],
+                ['panel.admin.network.dns', __('rDNS (PowerDNS)'), 'network', 'panel.admin.network.dns*', 'admin.settings'],
             ]],
             [__('Oferta'), 'package', [
                 ['panel.admin.packages', __('Pakiety VPS'), 'package', 'panel.admin.packages*', 'admin.packages'],

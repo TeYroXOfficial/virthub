@@ -21,6 +21,7 @@ class IpAddress extends Model
         'is_primary',
         'is_reserved',
         'rdns',
+        'mac_address',
     ];
 
     protected function casts(): array

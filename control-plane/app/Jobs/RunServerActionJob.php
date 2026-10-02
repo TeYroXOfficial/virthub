@@ -72,6 +72,7 @@ class RunServerActionJob implements ShouldQueue
                     'interfaces' => ServerPayload::interfaces($server),
                     'nameservers' => ServerPayload::nameservers($server),
                     'os_type' => ServerPayload::osType($server->template),
+                    'mac' => ServerPayload::mac($server),
                 ]),
                 'password' => $client->resetPassword(
                     $server->agent_uuid,
@@ -91,6 +92,7 @@ class RunServerActionJob implements ShouldQueue
                     'cpu_limit_percent' => $payload['cpu_limit_percent'] ?? null,
                 ]),
                 'cpu_limit' => $client->cpuLimit($server->agent_uuid, $payload['cpu_limit_percent'] ?? null),
+                'mac' => $client->setMac($server->agent_uuid, ServerPayload::mac($server)),
                 'delete' => $client->delete($server->agent_uuid),
                 'snapshot' => $client->snapshot($server->agent_uuid, $payload['name']),
                 'restore' => $client->restore($server->agent_uuid, $payload['name']),

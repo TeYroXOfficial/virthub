@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Web;
 
 use App\Domain\Network\IpPoolManager;
+use App\Domain\Network\MacAddress;
+use App\Domain\Network\ReverseDns;
+use App\Domain\Provisioning\ServerProvisioner;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Hypervisor;
@@ -102,10 +105,38 @@ class NetworkController extends Controller
             : __('Dodano :added adresów.', ['added' => $added]));
     }
 
-    /** Rezerwacja (adres wyłączony z przydziału) albo usunięcie wolnego adresu. */
-    public function address(Request $request, IpAddress $address): RedirectResponse
+    /**
+     * Akcje na adresie: rDNS i MAC (edit), rezerwacja albo usunięcie wolnego adresu.
+     * Nowy MAC adresu przydzielonego maszynie trafia od razu na węzeł.
+     */
+    public function address(Request $request, IpAddress $address, ReverseDns $rdns, ServerProvisioner $provisioner): RedirectResponse
     {
-        $action = $request->validate(['action' => ['required', Rule::in(['reserve', 'unreserve', 'delete'])]])['action'];
+        $action = $request->validate(['action' => ['required', Rule::in(['edit', 'reserve', 'unreserve', 'delete'])]])['action'];
+
+        if ($action === 'edit') {
+            $data = $request->validate([
+                'rdns' => ['nullable', 'string', 'max:253'],
+                'mac_address' => ['nullable', 'string', 'max:17'],
+            ]);
+            $mac = MacAddress::normalize($data['mac_address'] ?? null);
+            if ($mac !== null && IpAddress::query()->where('mac_address', $mac)->whereKeyNot($address->id)
+                ->whereNotNull('server_id')->when($address->server_id, fn ($q, $id) => $q->where('server_id', '!=', $id))->exists()) {
+                throw ValidationException::withMessages(['mac_address' => __('Ten MAC ma już adres innej maszyny — dwie karty z tym samym MAC zablokują sieć.')]);
+            }
+            if (($data['rdns'] ?? null) !== $address->rdns) {
+                $rdns->set($address, $data['rdns'] ?? null, $request->user(), asStaff: true);
+            }
+            $note = '';
+            if ($mac !== $address->mac_address) {
+                AuditLog::record('ip.mac', $address->pool, ['address' => $address->address, 'from' => $address->mac_address, 'to' => $mac], $request->user());
+                $address->forceFill(['mac_address' => $mac])->save();
+                if ($address->server && $provisioner->syncMac($address->server, $request->user())) {
+                    $note = ' '.__('MAC trafi na węzeł; maszyna dostanie go po wyłączeniu i włączeniu.');
+                }
+            }
+
+            return back()->with('status', __('Zapisano adres :address.', ['address' => $address->address]).$note);
+        }
 
         if ($address->server_id !== null) {
             throw ValidationException::withMessages(['address' => __('Adres :address jest przypisany do maszyny — najpierw go zwolnij.', ['address' => $address->address])]);
