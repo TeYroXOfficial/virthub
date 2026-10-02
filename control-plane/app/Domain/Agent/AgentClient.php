@@ -39,6 +39,12 @@ class AgentClient
         return $this->request('GET', '/system/security');
     }
 
+    /** Polityka zagnieżdżonej wirtualizacji: auto (tylko na jądrze z poprawkami) albo allow. */
+    public function setNestedPolicy(string $policy): array
+    {
+        return $this->request('PUT', '/system/nested', ['policy' => $policy]);
+    }
+
     /** Szczegółowe statystyki hosta i usług (strona Monitorowanie). */
     public function monitor(): array
     {

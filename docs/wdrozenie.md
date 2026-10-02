@@ -909,15 +909,20 @@ i można zamówić pierwszą testową maszynę.
 
 Instalator i każda aktualizacja węzła uruchamiają `scripts/harden-host.sh`:
 
-- **zagnieżdżona wirtualizacja wyłączona** (`/etc/modprobe.d/virthub-kvm.conf`:
-  `kvm_intel nested=0`, `kvm_amd nested=0`) — główna droga ataku ucieczek przez
-  shadow MMU KVM (Januscape CVE-2026-53359, Zapscape CVE-2026-64561). Przy
-  działających maszynach modułu nie da się przeładować — zmiana zadziała po
-  restarcie węzła;
+- **zagnieżdżona wirtualizacja zależna od jądra** — węzeł sprawdza, czy changelog
+  pakietu działającego jądra zawiera poprawki Januscape (CVE-2026-53359) i
+  Zapscape (CVE-2026-64561). Z poprawkami zagnieżdżanie jest włączone
+  automatycznie, bez nich wyłączone (`/etc/modprobe.d/virthub-kvm.conf`).
+  Usługa `virthub-harden` sprawdza to przy każdym starcie węzła (przed
+  libvirtd), więc po restarcie na załatane jądro zagnieżdżanie włącza się samo.
+  Administrator może je włączyć wcześniej przełącznikiem w panelu
+  (Infrastruktura → Bezpieczeństwo); przy działających maszynach moduł KVM
+  przeładuje się dopiero po restarcie;
 - **EPT/NPT pilnowane** — linie `ept=0`/`npt=0` z innych plików są wyłączane
   (bez nich KVM używa shadow MMU dla każdej maszyny);
-- **maszyny KVM bez `vmx`/`svm`** w procesorze gościa (nowe maszyny i każda
-  reinstalacja) — niezależnie od ustawienia hosta;
+- **`vmx`/`svm` w procesorze gościa tylko przy włączonym zagnieżdżaniu** — agent
+  dopasowuje definicje maszyn po każdej zmianie (działają po wyłączeniu i
+  włączeniu maszyny);
 - **jądro z najnowszymi poprawkami** z repozytorium i **unattended-upgrades**
   bez automatycznego restartu.
 
@@ -928,6 +933,6 @@ podatnościami procesora i wymaganym restartem. Zapscape na AMD i ITScape
 (CVE-2026-46316, tylko arm64) nie mają pełnego obejścia — potrzebne jest jądro
 z poprawką. Debian 11 nie dostaje już poprawek jądra.
 
-Zagnieżdżanie można świadomie włączyć: `VH_ALLOW_NESTED=1` w
+Zagnieżdżanie na stałe, niezależnie od jądra: `VH_ALLOW_NESTED=1` w
 `/etc/virthub-agent/agent.env`, potem aktualizacja węzła. `VH_KERNEL_UPDATES=0`
 pomija aktualizację jądra przy aktualizacji węzła.

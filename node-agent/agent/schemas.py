@@ -300,6 +300,12 @@ class CpuLimitRequest(BaseModel):
     cpu_limit_percent: CpuLimit | None = Field(description="Brak = bez limitu")
 
 
+class NestedPolicyRequest(BaseModel):
+    """auto — zagnieżdżanie tylko na jądrze z poprawkami; allow — także bez nich."""
+
+    policy: Literal["auto", "allow"]
+
+
 class MacRequest(BaseModel):
     """Zmiana MAC karty istniejącej maszyny. Brak = powrót do domyślnego MAC."""
 

@@ -36,7 +36,7 @@ from .templates import TemplateError, TemplateLibrary
 from .builder import TemplateBuilder
 from .jobs import JobQueue
 from .reporter import CallbackReporter
-from .host_security import HostSecurity
+from .host_security import HardenerMissing, HostSecurity
 from .monitor import HostMonitor
 from .sftp import SftpService
 from .schemas import (
@@ -57,6 +57,7 @@ from .schemas import (
     ResizeVmRequest,
     CpuLimitRequest,
     MacRequest,
+    NestedPolicyRequest,
     SnapshotRequest,
     VmStats,
     AppCommandRequest,
@@ -315,6 +316,16 @@ async def health() -> HostHealth:
 async def host_security_report() -> dict[str, Any]:
     """Świeży audyt ochrony hosta (panel: Infrastruktura → Bezpieczeństwo → „Sprawdź teraz”)."""
     return await run_in_threadpool(host_security.report, True)
+
+
+@app.put("/system/nested", dependencies=[Depends(require_control_plane)], tags=["system"])
+async def nested_policy(req: NestedPolicyRequest) -> dict[str, Any]:
+    """Polityka zagnieżdżonej wirtualizacji: auto (tylko na załatanym jądrze) albo allow.
+    Stosuje ją usługa roota virthub-harden w ciągu kilku sekund."""
+    try:
+        return await run_in_threadpool(host_security.set_nested_policy, req.policy)
+    except HardenerMissing as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.get("/system/monitor", dependencies=[Depends(require_control_plane)], tags=["system"])
