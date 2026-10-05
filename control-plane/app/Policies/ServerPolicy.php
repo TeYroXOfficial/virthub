@@ -55,6 +55,11 @@ class ServerPolicy
 
     public function resize(User $user, Server $server): bool
     {
+        // Z włączonym billingiem większy pakiet to płatna zmiana — klient nie przechodzi na niego sam.
+        if (\App\Domain\Billing\Billing::enabled() && ! $user->isStaff()) {
+            return false;
+        }
+
         return $this->allowed($user, $server, 'servers.resize');
     }
 

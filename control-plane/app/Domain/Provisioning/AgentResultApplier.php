@@ -200,8 +200,11 @@ class AgentResultApplier
     private function finishResize(Server $server, ServerJob $job): void
     {
         $payload = $job->payload ?? [];
+        // Transfer nie dotyczy hypervisora — bierzemy go z pakietu docelowego.
+        $package = isset($payload['package_id']) ? \App\Models\VpsPackage::query()->find($payload['package_id']) : null;
 
         $server->forceFill([
+            'bandwidth_gb' => $package?->bandwidth_gb ?? $server->bandwidth_gb,
             'vcpu' => $payload['vcpu'] ?? $server->vcpu,
             'ram_mb' => $payload['ram_mb'] ?? $server->ram_mb,
             'disk_gb' => $payload['disk_gb'] ?? $server->disk_gb,

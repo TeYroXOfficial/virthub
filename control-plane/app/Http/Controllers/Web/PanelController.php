@@ -50,8 +50,13 @@ class PanelController extends Controller
         return view('panel.servers.show', [
             'server' => $server,
             'recentJobs' => $server->jobs()->limit(10)->get(),
-            'packages' => VpsPackage::query()->active()->orderBy('vcpu')->get()
-                ->filter(fn (VpsPackage $p) => $request->user()->mayOrderPackage($p))
+            // Do zmiany pakietu: dostępne w sprzedaży + obecny (personel przenosi jego nowe parametry).
+            'packages' => VpsPackage::query()
+                ->where(fn ($q) => $q->where('is_active', true)->orWhere('id', $server->vps_package_id))
+                ->orderBy('vcpu')->orderBy('ram_mb')->get()
+                ->filter(fn (VpsPackage $p) => $p->id === $server->vps_package_id
+                    ? $request->user()->isStaff() || $p->is_active
+                    : $request->user()->isStaff() || $request->user()->mayOrderPackage($p))
                 ->values(),
             // Reinstalacja: tylko systemy tego samego typu, z automatyczną instalacją.
             'osChoices' => app(\App\Domain\Provisioning\TemplateCatalog::class)->choices([$server->virtualization->value]),

@@ -840,3 +840,6 @@ tr.ticket-awaiting td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
     padding: 10px 12px; border: 1px dashed var(--border); border-radius: var(--radius-sm);
 }
 .cycle-pop-body .hint { flex-basis: 100%; margin: 0 0 4px; }
+dialog.edit-modal { text-align: left; white-space: normal; padding: 22px 24px; width: min(640px, calc(100vw - 32px)); }
+dialog.edit-modal .grid-3 { gap: 0 14px; }
+@media (max-width: 640px) { dialog.edit-modal .grid-3 { grid-template-columns: 1fr 1fr; } }

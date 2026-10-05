@@ -15,6 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use App\Models\VpsPackage;
 use Illuminate\Validation\Rule;
 
 /** Reinstalacja systemu i płyty ISO z poziomu strony maszyny. */
@@ -51,6 +52,33 @@ class ServerActionsController extends Controller
         }
 
         return redirect()->route('panel.servers.show', $server);
+    }
+
+    /**
+     * Zmiana pakietu maszyny (wymaga zatrzymanej maszyny). Personel może wybrać
+     * także obecny pakiet — tak po edycji pakietu przenosi się jego nowe parametry.
+     */
+    public function resize(Request $request, Server $server): RedirectResponse
+    {
+        $this->authorize('resize', $server);
+        $validated = $request->validate(['package' => ['required', 'integer', Rule::exists(VpsPackage::class, 'id')]]);
+        $package = VpsPackage::query()->findOrFail($validated['package']);
+        $user = $request->user();
+
+        $allowed = $user->isStaff()
+            ? ($package->is_active || $package->id === $server->vps_package_id)
+            : ($package->is_active && $user->mayOrderPackage($package));
+        if (! $allowed) {
+            return back()->withErrors(['package' => __('Pakiet :name nie jest dostępny.', ['name' => $package->name])]);
+        }
+
+        try {
+            $this->provisioner->resize($server, $package, $user);
+        } catch (\DomainException $e) {
+            return back()->withErrors(['package' => $e->getMessage()]);
+        }
+
+        return redirect()->route('panel.servers.show', $server)->with('status', __('Zmiana pakietu zlecona — maszyna dostanie parametry pakietu :name.', ['name' => $package->name]));
     }
 
     public function destroy(Request $request, Server $server): RedirectResponse

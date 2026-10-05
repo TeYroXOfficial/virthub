@@ -63,6 +63,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::get('/servers/{server}', [PanelController::class, 'showServer'])->name('servers.show');
     Route::post('/servers/{server}/console', [ConsoleController::class, 'open'])->name('servers.console');
     Route::post('/servers/{server}/rebuild', [ServerActionsController::class, 'rebuild'])->name('servers.rebuild');
+    Route::post('/servers/{server}/resize', [ServerActionsController::class, 'resize'])->middleware('throttle:10,1')->name('servers.resize');
     Route::post('/servers/{server}/iso', [ServerActionsController::class, 'iso'])->name('servers.iso');
     Route::post('/servers/{server}/password', [ServerActionsController::class, 'resetPassword'])->name('servers.password');
     Route::get('/servers/{server}/status', [ServerActionsController::class, 'status'])->name('servers.status');
@@ -187,6 +188,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::get('/packages', [AdminController::class, 'packages'])->name('packages');
         Route::post('/packages', [AdminController::class, 'storePackage'])->name('packages.store');
         Route::post('/packages/{package}/toggle', [AdminController::class, 'togglePackage'])->name('packages.toggle');
+        Route::put('/packages/{package}', [AdminController::class, 'updatePackage'])->name('packages.update');
     });
 
     Route::middleware('admin:admin.templates')->group(function () {
@@ -253,6 +255,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::get('/plans', 'plans')->name('.plans');
         Route::post('/plans', 'storePlan')->name('.plans.store');
         Route::post('/plans/{plan}/toggle', 'togglePlan')->name('.plans.toggle');
+        Route::put('/plans/{plan}', 'updatePlan')->name('.plans.update');
         Route::delete('/plans/{plan}', 'deletePlan')->name('.plans.destroy');
         Route::get('/pterodactyl', [\App\Http\Controllers\Web\PterodactylMigrationController::class, 'index'])->name('.pterodactyl');
         Route::post('/pterodactyl/connect', [\App\Http\Controllers\Web\PterodactylMigrationController::class, 'connect'])->name('.pterodactyl.connect');
