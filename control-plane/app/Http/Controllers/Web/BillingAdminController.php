@@ -87,7 +87,17 @@ class BillingAdminController extends Controller
             'max_topup' => ['required', $money],
             'min_balance_metered' => ['required', $money],
             'low_balance_hours' => ['required', 'integer', 'between:0,720'],
+            'inactive_delete_count' => ['nullable', 'required_with:inactive_delete_unit', 'integer', 'min:1', 'max:720'],
+            'inactive_delete_unit' => ['nullable', 'required_with:inactive_delete_count', Rule::in(Cycle::UNITS)],
         ]);
+        if (! empty($data['inactive_delete_count'])) {
+            try {
+                $data['inactive_delete'] = Cycle::code((int) $data['inactive_delete_count'], $data['inactive_delete_unit']);
+            } catch (\InvalidArgumentException) {
+                throw ValidationException::withMessages(['inactive_delete_count' => __('Za długi okres.')]);
+            }
+        }
+        unset($data['inactive_delete_count'], $data['inactive_delete_unit']);
         $data['currency'] = strtoupper($data['currency']);
         foreach (['enabled', 'prices_include_tax', 'auto_pay'] as $flag) {
             $data[$flag] = $request->boolean($flag);
@@ -202,6 +212,7 @@ class BillingAdminController extends Controller
                 $service->update([
                     'keepalive_interval' => $product->keepalive_interval,
                     'keepalive_window' => $product->keepalive_window,
+                    'keepalive_delete_after' => $product->keepalive_delete_after,
                     // Nowy wymóg liczy się od teraz — nikt nie traci usługi od razu.
                     'keepalive_until' => $product->keepalive_interval ? Cycle::add(now(), $product->keepalive_interval) : null,
                     'keepalive_notified_at' => null,
@@ -460,6 +471,8 @@ class BillingAdminController extends Controller
             'keepalive_unit' => ['nullable', 'required_if:keepalive,1', Rule::in(Cycle::UNITS)],
             'keepalive_window_count' => ['nullable', 'integer', 'min:1', 'max:720'],
             'keepalive_window_unit' => ['nullable', Rule::in(Cycle::UNITS)],
+            'keepalive_delete_count' => ['nullable', 'integer', 'min:1', 'max:720'],
+            'keepalive_delete_unit' => ['nullable', Rule::in(Cycle::UNITS)],
         ], [], ['prices.*' => __('cena'), 'periods.*.price' => __('cena'), 'periods.*.count' => __('długość okresu')]);
 
         // Okresy: [kod => ['amount' => int, 'renews' => bool]]; null = usuń okres.
@@ -507,12 +520,15 @@ class BillingAdminController extends Controller
         }
 
         // Potwierdzanie aktywności: ważność po kliknięciu i okno, w którym przycisk jest aktywny.
-        $keepalive = $keepaliveWindow = null;
+        $keepalive = $keepaliveWindow = $keepaliveDelete = null;
         if ($request->boolean('keepalive')) {
             try {
                 $keepalive = Cycle::code((int) $data['keepalive_count'], $data['keepalive_unit']);
                 $keepaliveWindow = ! empty($data['keepalive_window_count']) && ! empty($data['keepalive_window_unit'])
                     ? Cycle::code((int) $data['keepalive_window_count'], $data['keepalive_window_unit']) : null;
+                // Puste = domyślny czas z ustawień billingu.
+                $keepaliveDelete = ! empty($data['keepalive_delete_count']) && ! empty($data['keepalive_delete_unit'])
+                    ? Cycle::code((int) $data['keepalive_delete_count'], $data['keepalive_delete_unit']) : null;
             } catch (\InvalidArgumentException) {
                 throw ValidationException::withMessages(['keepalive_count' => __('Za długi okres.')]);
             }
@@ -526,6 +542,7 @@ class BillingAdminController extends Controller
         return [[
             'keepalive_interval' => $keepalive,
             'keepalive_window' => $keepaliveWindow,
+            'keepalive_delete_after' => $keepaliveDelete,
             'product_category_id' => $data['product_category_id'],
             'name' => $data['name'],
             'description' => $data['description'] ?? null,

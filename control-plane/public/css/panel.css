@@ -856,3 +856,4 @@ dialog.edit-modal .grid-3 { gap: 0 14px; }
 .keepalive.is-open .keepalive-bar > i { background: var(--warn); }
 .keepalive.is-suspended { border-color: color-mix(in srgb, var(--critical) 40%, var(--border)); }
 .keepalive-meta { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13px; }
+.keepalive.is-suspended .keepalive-bar > i { background: var(--critical); }

@@ -2586,5 +2586,13 @@
     "Zostało :time do zawieszenia": ":time left until suspension",
     "potwierdzana co :period": "confirmed every :period",
     "ważna do :date": "valid until :date",
-    "zawieszona — brak potwierdzenia aktywności": "suspended — activity not confirmed"
+    "zawieszona — brak potwierdzenia aktywności": "suspended — activity not confirmed",
+    "Bez tego :date zostanie usunięta z serwera razem z danymi.": "Otherwise it will be deleted from the server with its data on :date.",
+    "Licząc od zawieszenia za brak kliknięcia „Przedłuż”. Potem maszyna/aplikacja jest usuwana z serwera razem z danymi. Produkt może mieć własny czas.": "Counted from the suspension for not clicking “Extend”. Then the machine/application is deleted from the server with its data. A product can have its own time.",
+    "Puste = domyślnie z ustawień billingu (:period).": "Empty = default from billing settings (:period).",
+    "Usunięcie po braku aktywności": "Deletion after inactivity",
+    "Usunięcie po zawieszeniu za brak płatności (dni)": "Deletion after suspension for non-payment (days)",
+    "Usunięcie z serwera za :time": "Deleted from the server in :time",
+    "Usuń z serwera po zawieszeniu trwającym": "Delete from the server after a suspension lasting",
+    "usunięcie z serwera :date": "deletion from the server :date"
 }

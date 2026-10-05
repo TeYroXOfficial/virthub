@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Billing\Billing;
 use App\Domain\Billing\Cycle;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,7 +30,7 @@ class BillingService extends Model
     protected $fillable = [
         'user_id', 'product_id', 'name', 'cycle', 'amount', 'status', 'server_id', 'app_server_id', 'config',
         'next_due_at', 'cancel_at_period_end', 'suspend_reason', 'suspended_at', 'terminated_at', 'last_error',
-        'renews', 'metered', 'keepalive_interval', 'keepalive_window', 'keepalive_until', 'keepalive_notified_at',
+        'renews', 'metered', 'keepalive_interval', 'keepalive_window', 'keepalive_until', 'keepalive_notified_at', 'keepalive_delete_after',
     ];
 
     protected $attributes = ['status' => self::STATUS_PENDING, 'cancel_at_period_end' => false, 'renews' => true, 'metered' => false];
@@ -95,6 +96,18 @@ class BillingService extends Model
         $window = $this->keepalive_window && Cycle::valid($this->keepalive_window) ? $this->keepalive_window : $this->keepalive_interval;
 
         return Cycle::sub($this->keepalive_until, $window);
+    }
+
+    /** Kiedy usługa zawieszona za brak aktywności zostanie usunięta z serwerów. */
+    public function inactiveDeleteAt(): ?Carbon
+    {
+        if ($this->status !== self::STATUS_SUSPENDED || $this->suspend_reason !== 'inactive' || $this->suspended_at === null) {
+            return null;
+        }
+        $after = $this->keepalive_delete_after && Cycle::valid($this->keepalive_delete_after)
+            ? $this->keepalive_delete_after : Billing::inactiveDelete();
+
+        return Cycle::add($this->suspended_at, $after);
     }
 
     public function canKeepalive(): bool

@@ -55,7 +55,8 @@
                 @if ($service->needsKeepalive())
                     <dt>{{ __('Aktywność') }}</dt>
                     <dd>{{ __('potwierdzana co :period', ['period' => \App\Domain\Billing\Cycle::duration($service->keepalive_interval)]) }}
-                        <div class="hint">{{ __('ważna do :date', ['date' => $service->keepalive_until?->format('d.m.Y H:i') ?? '—']) }}</div></dd>
+                        <div class="hint">{{ __('ważna do :date', ['date' => $service->keepalive_until?->format('d.m.Y H:i') ?? '—']) }}</div>
+                        @if ($deleteAt = $service->inactiveDeleteAt()) <div class="hint" style="color:var(--critical)">{{ __('usunięcie z serwera :date', ['date' => $deleteAt->format('d.m.Y H:i')]) }}</div> @endif</dd>
                 @endif
                 <dt>{{ __('Zamówiona') }}</dt><dd>{{ $service->created_at->format('d.m.Y H:i') }}</dd>
                 @if ($service->terminated_at) <dt>{{ __('Zakończona') }}</dt><dd>{{ $service->terminated_at->format('d.m.Y H:i') }}</dd> @endif

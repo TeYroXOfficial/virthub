@@ -9,15 +9,17 @@
         $unlock = $service->keepaliveUnlocksAt() ?? $until;
         $last = \App\Domain\Billing\Cycle::sub($until, $service->keepalive_interval);
         $suspended = $service->status === 'suspended';
+        $deleteAt = $service->inactiveDeleteAt();
     @endphp
     <div class="card keepalive {{ $suspended ? 'is-suspended' : '' }}" style="margin-bottom:16px"
-         data-keepalive data-last="{{ $last->getTimestampMs() }}" data-unlock="{{ $unlock->getTimestampMs() }}" data-until="{{ $until->getTimestampMs() }}" data-suspended="{{ $suspended ? 1 : 0 }}">
+         data-keepalive data-last="{{ $last->getTimestampMs() }}" data-unlock="{{ $unlock->getTimestampMs() }}" data-until="{{ $until->getTimestampMs() }}" data-suspended="{{ $suspended ? 1 : 0 }}" data-suspended-at="{{ $service->suspended_at?->getTimestampMs() }}" data-delete="{{ $deleteAt?->getTimestampMs() }}">
         <div class="keepalive-head">
             <div>
                 <h3 class="card-title" style="margin:0"><x-icon name="clock" :size="16"/> {{ __('Potwierdzanie aktywności') }}</h3>
                 <p class="hint" data-keepalive-text style="margin:4px 0 0">
                     @if ($suspended)
                         {{ __('Usługa jest zawieszona, bo nie potwierdzono aktywności. Kliknij „Przedłuż”, a wróci od razu.') }}
+                        @if ($deleteAt) <strong>{{ __('Bez tego :date zostanie usunięta z serwera razem z danymi.', ['date' => $deleteAt->format('d.m.Y H:i')]) }}</strong> @endif
                     @elseif ($unlock->isFuture())
                         {{ __('Następne przedłużenie możliwe :date.', ['date' => $unlock->format('d.m.Y H:i')]) }}
                     @else
@@ -48,6 +50,7 @@
                         expiresIn: @js(__('Zostało :time do zawieszenia')),
                         expired: @js(__('Czas minął — usługa zostanie zaraz zawieszona')),
                         suspended: @js(__('Usługa zawieszona')),
+                        deleteIn: @js(__('Usunięcie z serwera za :time')),
                         d: @js(__(':n d')), h: @js(__(':n godz.')), m: @js(__(':n min')), s: @js(__(':n s')),
                     };
                     function fmt(ms) {
@@ -67,7 +70,11 @@
                         function tick() {
                             var now = Date.now(), pct, text;
                             if (box.dataset.suspended === '1') {
-                                pct = 0; text = T.suspended; btn.disabled = false;
+                                // Zawieszona: pasek maleje do usunięcia z serwera.
+                                var del = +box.dataset.delete, from = +box.dataset.suspendedAt;
+                                pct = del && del > from ? (del - now) / (del - from) * 100 : 0;
+                                text = del ? T.deleteIn.replace(':time', fmt(del - now)) : T.suspended;
+                                btn.disabled = false;
                             } else if (now < unlock) {
                                 pct = unlock > last ? (now - last) / (unlock - last) * 100 : 100;
                                 text = T.unlockIn.replace(':time', fmt(unlock - now));

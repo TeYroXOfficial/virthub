@@ -21,7 +21,8 @@ final class Billing
         'renewal_days' => '7',        // faktura odnowienia tyle dni przed końcem okresu
         'reminder_days' => '2',       // przypomnienie tyle dni przed terminem
         'suspend_days' => '3',        // zawieszenie tyle dni po terminie
-        'terminate_days' => '14',     // usunięcie tyle dni po zawieszeniu
+        'terminate_days' => '14',     // usunięcie tyle dni po zawieszeniu za brak płatności
+        'inactive_delete' => '7d',    // usunięcie po takim czasie zawieszenia za brak aktywności (kod okresu)
         'auto_pay' => '1',            // odnowienia opłacane z portfela, gdy są środki
         'min_topup' => '10',
         'max_topup' => '10000',
@@ -81,6 +82,14 @@ final class Billing
     public static function gross(int $price): int
     {
         return self::pricesIncludeTax() ? $price : $price + Money::mulDiv($price, self::taxRate(), 10000);
+    }
+
+    /** Domyślny czas od zawieszenia za brak aktywności do usunięcia (kod okresu). */
+    public static function inactiveDelete(): string
+    {
+        $code = self::get('inactive_delete');
+
+        return Cycle::valid($code) ? $code : '7d';
     }
 
     /** @return array{name:string, address:string, tax_id:string} */
