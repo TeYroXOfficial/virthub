@@ -117,6 +117,17 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
         Route::post('/decompress', 'decompress')->name('.decompress');
     });
 
+    Route::prefix('/tickets')->name('tickets.')->controller(\App\Http\Controllers\Web\TicketController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/new', 'create')->name('create');
+        Route::post('/', 'store')->middleware('throttle:10,1')->name('store');
+        Route::get('/attachments/{attachment}', 'attachment')->name('attachment');
+        Route::get('/{ticket}', 'show')->name('show');
+        Route::post('/{ticket}/reply', 'reply')->middleware('throttle:20,1')->name('reply');
+        Route::post('/{ticket}/close', 'close')->name('close');
+        Route::post('/{ticket}/reopen', 'reopen')->name('reopen');
+    });
+
     Route::prefix('/servers/{server}/firewall')->name('servers.firewall.')->group(function () {
         Route::post('/policy', [FirewallController::class, 'policy'])->name('policy');
         Route::post('/rules', [FirewallController::class, 'store'])->name('store');
@@ -251,6 +262,22 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::get('/', 'show');
         Route::put('/', 'update')->name('.update');
         Route::post('/test', 'test')->middleware('throttle:5,1')->name('.test');
+    });
+
+    Route::middleware('admin:admin.tickets')->prefix('/tickets')->name('tickets')->controller(\App\Http\Controllers\Web\TicketAdminController::class)->group(function () {
+        Route::get('/', 'index');
+        Route::get('/settings', 'settings')->name('.settings');
+        Route::put('/settings', 'saveSettings')->name('.settings.update');
+        Route::post('/departments', 'storeDepartment')->name('.departments.store');
+        Route::put('/departments/{department}', 'updateDepartment')->name('.departments.update');
+        Route::delete('/departments/{department}', 'destroyDepartment')->name('.departments.destroy');
+        Route::post('/canned', 'storeCanned')->name('.canned.store');
+        Route::put('/canned/{canned}', 'updateCanned')->name('.canned.update');
+        Route::delete('/canned/{canned}', 'destroyCanned')->name('.canned.destroy');
+        Route::get('/{ticket}', 'show')->name('.show');
+        Route::post('/{ticket}/reply', 'reply')->name('.reply');
+        Route::put('/{ticket}', 'update')->name('.update');
+        Route::delete('/{ticket}', 'destroy')->name('.destroy');
     });
 
     Route::get('/services', [AdminController::class, 'services'])->middleware('admin:admin.servers|admin.apps')->name('services');
