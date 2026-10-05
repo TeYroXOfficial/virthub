@@ -52,6 +52,7 @@ class AccountController extends Controller
         // Inne zalogowane urządzenia tracą sesję — nowe hasło ma działać od razu wszędzie.
         $this->endOtherSessions($request);
         AuditLog::record('account.password', $user);
+        app(\App\Domain\Mail\TemplateMailer::class)->send($user, 'account.password_changed', ['ip' => $request->ip()]);
 
         return back()->with('status', __('Hasło zmienione. Pozostałe urządzenia zostały wylogowane.'));
     }

@@ -44,11 +44,16 @@ class AppJobApplier
             $minecraft = in_array('*', $wipe, true) ? null : array_diff_key($job->server->minecraft ?? [], ['mc' => true]);
             $job->server->forceFill(['minecraft' => $minecraft ?: null])->save();
         }
+        $firstInstall = $job->server !== null && $job->server->installed_at === null;
         $job->server?->forceFill([
             'status' => AppServer::STATUS_READY,
             'status_message' => null,
             'installed_at' => now(),
         ])->save();
+
+        if ($job->server && ($job->action === 'reinstall' || ($job->action === 'install' && $firstInstall))) {
+            app(\App\Domain\Mail\Notify::class)->app($job->server, $job->action === 'reinstall' ? 'app.reinstalled' : 'app.created');
+        }
     }
 
     public function fail(AppJob $job, string $error): void

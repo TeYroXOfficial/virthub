@@ -77,6 +77,7 @@ class UserManager
         });
 
         AuditLog::record('user.created', $user, ['role' => $user->role, 'email' => $user->email], $actor);
+        app(\App\Domain\Mail\TemplateMailer::class)->send($user, 'account.welcome', ['login_url' => route('login')]);
 
         return ['user' => $user, 'password' => $generated];
     }

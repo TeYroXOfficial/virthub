@@ -397,7 +397,7 @@ class ServerProvisioner
 
     // --- zawieszanie (używane głównie przez integrację billingową) -----------
 
-    public function suspend(Server $server, string $reason, ?User $actor = null): ServerJob
+    public function suspend(Server $server, string $reason, ?User $actor = null, bool $notify = true): ServerJob
     {
         $server->forceFill([
             'suspended_at' => now(),
@@ -407,11 +407,14 @@ class ServerProvisioner
         $job = $this->createJobRecord($server, 'power', $actor, ['action' => 'stop']);
         AuditLog::record('server.suspend', $server, ['reason' => $reason], $actor);
         RunServerActionJob::dispatch($job->id);
+        if ($notify) {
+            app(\App\Domain\Mail\Notify::class)->server($server, 'server.suspended', ['reason' => $reason]);
+        }
 
         return $job;
     }
 
-    public function unsuspend(Server $server, ?User $actor = null): ServerJob
+    public function unsuspend(Server $server, ?User $actor = null, bool $notify = true): ServerJob
     {
         $server->forceFill([
             'suspended_at' => null,
@@ -421,6 +424,9 @@ class ServerProvisioner
         $job = $this->createJobRecord($server, 'power', $actor, ['action' => 'start']);
         AuditLog::record('server.unsuspend', $server, [], $actor);
         RunServerActionJob::dispatch($job->id);
+        if ($notify) {
+            app(\App\Domain\Mail\Notify::class)->server($server, 'server.unsuspended');
+        }
 
         return $job;
     }

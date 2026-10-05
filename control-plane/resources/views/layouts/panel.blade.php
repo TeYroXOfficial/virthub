@@ -66,6 +66,7 @@
             [__('System'), 'sliders', [
                 ['panel.admin.updates', __('Aktualizacje'), 'refresh', 'panel.admin.updates*', 'admin.updates'],
                 ['panel.admin.mail', __('Poczta (SMTP)'), 'mail', 'panel.admin.mail*', 'admin.settings'],
+                ['panel.admin.emails', __('Szablony e-mail'), 'mail', 'panel.admin.emails*', 'admin.settings'],
                 ['panel.admin.logs', __('Dziennik zdarzeń'), 'archive', 'panel.admin.logs', 'admin'],
             ]],
         ];
