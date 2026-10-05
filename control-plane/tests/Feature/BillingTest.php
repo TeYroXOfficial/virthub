@@ -13,6 +13,7 @@ use App\Enums\ServerState;
 use App\Mail\TemplatedMail;
 use App\Models\AppEgg;
 use App\Models\AppPlan;
+use App\Models\AppServer;
 use App\Models\BillingService;
 use App\Models\Hypervisor;
 use App\Models\HypervisorGroup;
@@ -28,6 +29,7 @@ use App\Models\User;
 use App\Models\VpsPackage;
 use App\Models\WalletTransaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -585,6 +587,62 @@ class BillingTest extends TestCase
         $this->assertSame(0, WalletTransaction::query()->count());
         $this->assertSame(BillingService::STATUS_ACTIVE, $service->fresh()->status);
         $this->assertTrue($service->fresh()->next_due_at->isFuture());
+    }
+
+    public function test_edycja_produktu_z_przeniesieniem_ceny_na_istniejace_uslugi(): void
+    {
+        $this->fund($this->customer, '100');
+        [$monthly] = app(ServiceManager::class)->checkout($this->customer, $this->product, 'monthly', $this->config(), true);
+        [$hourly] = app(ServiceManager::class)->checkout($this->customer, $this->product, 'hourly', $this->config('vps2.example.com'), true);
+        $form = [
+            'product_category_id' => $this->product->product_category_id, 'name' => 'VPS S', 'type' => 'vps',
+            'vps_package_id' => $this->product->vps_package_id, 'is_active' => 1, 'cycle_choice' => 1,
+            'cycles' => ['monthly'], 'prices' => ['monthly' => '59'],
+        ];
+
+        $this->actingAs($this->admin)->get(route('panel.admin.billing.catalog'))->assertOk()->assertSee(route('panel.admin.billing.products.edit', $this->product));
+        $this->actingAs($this->admin)->get(route('panel.admin.billing.products.edit', $this->product))->assertOk()->assertSee('Zmień cenę istniejących usług');
+
+        // Bez zaznaczenia — usługi zachowują cenę.
+        $this->actingAs($this->admin)->put(route('panel.admin.billing.products.update', $this->product), $form)->assertRedirect();
+        $this->assertSame(Money::parse('49'), $monthly->fresh()->amount);
+
+        // Z zaznaczeniem — nowa cena; okres godzinowy wycofany, więc ta usługa zostaje przy starej.
+        $this->actingAs($this->admin)->put(route('panel.admin.billing.products.update', $this->product), $form + ['apply_prices' => 1, 'apply_resources' => 1])
+            ->assertRedirect(route('panel.admin.billing.products.edit', $this->product))->assertSessionHas('status');
+        $this->assertSame(Money::parse('59'), $monthly->fresh()->amount);
+        $this->assertSame(Money::parse('0.07'), $hourly->fresh()->amount);
+
+        // Kolejna faktura odnowienia już z nową ceną.
+        $this->travelTo($monthly->next_due_at->copy()->subDays(2));
+        app(ServiceManager::class)->createRenewals();
+        $this->assertSame(Money::parse('59'), Invoice::query()->latest('id')->first()->total);
+    }
+
+    public function test_edycja_produktu_aplikacji_ustawia_zasoby_planu(): void
+    {
+        Http::fake(['*' => Http::response(['restart_required' => false])]);
+        $node = Hypervisor::factory()->create([
+            'apps_enabled' => true, 'app_port_start' => 25565, 'app_port_end' => 25574, 'ram_mb_total' => 16384, 'ram_mb_used' => 0,
+            'disk_gb_total' => 500, 'disk_gb_used' => 0, 'last_health' => ['apps' => ['available' => true, 'docker_version' => '29.0'], 'public_ipv4' => '203.0.113.10'],
+        ]);
+        $plan = AppPlan::query()->create(['name' => 'Gra S', 'memory_mb' => 2048, 'cpu_percent' => 100, 'disk_mb' => 10240, 'ports' => 1]);
+        app(EggImporter::class)->importBuiltin();
+        $egg = AppEgg::query()->where('builtin_key', 'minecraft-paper')->firstOrFail();
+        $product = Product::create(['product_category_id' => $this->product->product_category_id, 'name' => 'MC', 'type' => Product::TYPE_APP, 'app_plan_id' => $plan->id]);
+        $product->prices()->create(['cycle' => 'monthly', 'amount' => 0]);
+        [$service] = app(ServiceManager::class)->checkout($this->customer, $product, 'monthly', ['egg_id' => $egg->id, 'name' => 'Survival', 'location_id' => null], true);
+        $app = $service->appServer;
+        $app->forceFill(['status' => AppServer::STATUS_READY])->save();
+
+        $plan->update(['memory_mb' => 4096, 'disk_mb' => 20480]);
+        $this->actingAs($this->admin)->put(route('panel.admin.billing.products.update', $product), [
+            'product_category_id' => $product->product_category_id, 'name' => 'MC', 'type' => 'app', 'app_plan_id' => $plan->id,
+            'is_active' => 1, 'cycle_choice' => 1, 'cycles' => ['monthly'], 'apply_resources' => 1,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame([4096, 20480], [$app->fresh()->memory_mb, $app->fresh()->disk_mb]);
+        $this->assertSame($node->id, $app->fresh()->hypervisor_id);
     }
 
     public function test_harmonogram_nic_nie_robi_przy_wylaczonym_billingu(): void
