@@ -53,6 +53,10 @@ class AdminController extends Controller
             'recent' => $recent,
             'recentServices' => $dashboard->recentServices($recent, $canServers, $canApps),
             'recentLogs' => $user->isAdmin() ? $dashboard->recentLogs() : collect(),
+            // Billing na pulpicie — gdy jest włączony i personel ma do niego dostęp.
+            'billing' => $user->hasPermission('admin.billing') && \App\Domain\Billing\Billing::enabled()
+                ? ['stats' => ($s = app(\App\Domain\Billing\BillingStats::class))->summary(), 'daily' => $s->daily(30), 'byProduct' => $s->byProduct()]
+                : null,
         ]);
     }
 

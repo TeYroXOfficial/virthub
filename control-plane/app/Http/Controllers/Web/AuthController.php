@@ -65,6 +65,13 @@ class AuthController extends Controller
 
     public function logout(Request $request): RedirectResponse
     {
+        // Wylogowanie podczas „Zaloguj jako” wraca na konto administratora.
+        if (\App\Domain\Access\Impersonation::active()) {
+            $returnTo = app(\App\Domain\Access\Impersonation::class)->stop($request);
+
+            return $returnTo ? redirect()->to($returnTo) : redirect()->route('login');
+        }
+
         AuditLog::record('auth.logout', $request->user());
 
         Auth::guard('web')->logout();

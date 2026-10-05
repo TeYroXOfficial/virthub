@@ -47,7 +47,17 @@
                     <div class="field"><label for="b-ren">{{ __('Faktura odnowienia przed końcem okresu (dni)') }}</label><input id="b-ren" type="number" name="renewal_days" min="0" max="60" required value="{{ old('renewal_days', $s['renewal_days']) }}"></div>
                     <div class="field"><label for="b-rem">{{ __('Przypomnienie przed terminem (dni)') }}</label><input id="b-rem" type="number" name="reminder_days" min="0" max="30" required value="{{ old('reminder_days', $s['reminder_days']) }}"></div>
                     <div class="field"><label for="b-sus">{{ __('Zawieszenie po terminie (dni)') }}</label><input id="b-sus" type="number" name="suspend_days" min="0" max="90" required value="{{ old('suspend_days', $s['suspend_days']) }}"></div>
-                    <div class="field"><label for="b-ter">{{ __('Usunięcie po zawieszeniu (dni)') }}</label><input id="b-ter" type="number" name="terminate_days" min="1" max="365" required value="{{ old('terminate_days', $s['terminate_days']) }}"></div>
+                    <div class="field"><label for="b-ter">{{ __('Usunięcie po zawieszeniu za brak płatności (dni)') }}</label><input id="b-ter" type="number" name="terminate_days" min="1" max="365" required value="{{ old('terminate_days', $s['terminate_days']) }}"></div>
+                    @php [$idCount, $idUnit] = \App\Domain\Billing\Cycle::parse(\App\Domain\Billing\Billing::inactiveDelete()); @endphp
+                    <div class="field"><label for="b-idel">{{ __('Usunięcie po braku aktywności') }}</label>
+                        <div class="period-row" style="grid-template-columns: 80px minmax(0, 1fr)">
+                            <input id="b-idel" type="number" name="inactive_delete_count" min="1" max="720" required value="{{ old('inactive_delete_count', $idCount) }}">
+                            <select name="inactive_delete_unit" aria-label="{{ __('Jednostka') }}">
+                                @foreach (\App\Domain\Billing\Cycle::unitLabels() as $u => $label) <option value="{{ $u }}" @selected(old('inactive_delete_unit', $idUnit) === $u)>{{ $label }}</option> @endforeach
+                            </select>
+                        </div>
+                        @error('inactive_delete_count') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror
+                        <div class="hint">{{ __('Licząc od zawieszenia za brak kliknięcia „Przedłuż”. Potem maszyna/aplikacja jest usuwana z serwera razem z danymi. Produkt może mieć własny czas.') }}</div></div>
                 </div>
                 <label class="check-line"><input type="checkbox" name="auto_pay" value="1" @checked(old('auto_pay', $s['auto_pay']) === '1')> {{ __('Opłacaj faktury odnowień automatycznie z portfela, gdy są środki') }}</label>
             </div>

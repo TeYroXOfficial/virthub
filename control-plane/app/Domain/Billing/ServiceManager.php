@@ -81,6 +81,7 @@ class ServiceManager
                 'renews' => $renews,
                 'keepalive_interval' => $product->keepalive_interval,
                 'keepalive_window' => $product->keepalive_window,
+                'keepalive_delete_after' => $product->keepalive_delete_after,
                 // Odnawiane godziny/dni — z portfela co okres; jednorazowe zawsze z góry w całości.
                 'metered' => $renews && Cycle::metered($cycle),
                 'status' => BillingService::STATUS_PENDING,
@@ -317,7 +318,7 @@ class ServiceManager
         if ($reason === 'inactive' && $service->user) {
             $this->mailer->send($service->user, 'service.suspended_inactive', [
                 'service' => ['name' => $service->name, 'url' => route('panel.billing.service', $service)],
-                'terminate_at' => now()->addDays(Billing::int('terminate_days'))->format('d.m.Y'),
+                'terminate_at' => $service->fresh()->inactiveDeleteAt()?->format('d.m.Y H:i') ?? '—',
             ]);
         }
         if ($reason === 'unpaid' && $service->user) {
@@ -475,6 +476,14 @@ class ServiceManager
                 }
             });
 
+        // Zawieszone za brak aktywności dłużej niż ustawiony czas — usunięcie z serwerów.
+        BillingService::query()->where('status', BillingService::STATUS_SUSPENDED)->where('suspend_reason', 'inactive')
+            ->each(function (BillingService $service) use (&$actions) {
+                if ($service->inactiveDeleteAt()?->isPast()) {
+                    $actions += (int) $this->terminate($service, 'inactive');
+                }
+            });
+
         return $actions;
     }
 
@@ -603,8 +612,8 @@ class ServiceManager
                 }
             });
 
-        // Usunięcie po N dniach zawieszenia za brak płatności albo brak potwierdzenia aktywności.
-        BillingService::query()->where('status', BillingService::STATUS_SUSPENDED)->whereIn('suspend_reason', ['unpaid', 'inactive'])
+        // Usunięcie po N dniach zawieszenia za brak płatności (brak aktywności — processKeepalive).
+        BillingService::query()->where('status', BillingService::STATUS_SUSPENDED)->where('suspend_reason', 'unpaid')
             ->where('suspended_at', '<', now()->subDays(Billing::int('terminate_days')))
             ->each(function (BillingService $service) use (&$actions) {
                 $actions += (int) $this->terminate($service, $service->suspend_reason);

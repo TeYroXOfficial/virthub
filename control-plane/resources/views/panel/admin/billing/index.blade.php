@@ -21,15 +21,7 @@
             <a href="{{ route('panel.admin.billing.settings') }}">{{ __('Ustawienia') }}</a></div>
     @endunless
 
-    <div class="grid grid-4" style="margin-bottom:16px">
-        <div class="stat"><div class="stat-label">{{ __('Wpłaty w tym miesiącu (faktury)') }}</div><div class="stat-value">{{ Money::format($stats['month']) }}</div></div>
-        <div class="stat"><div class="stat-label">{{ __('Opłaty godzinowe w tym miesiącu') }}</div><div class="stat-value">{{ Money::format(-$stats['metered']) }}</div></div>
-        <a class="stat stat-link" href="{{ route('panel.admin.billing.invoices', ['status' => 'unpaid']) }}"><div class="stat-label"><i class="dot warning"></i> {{ __('Nieopłacone faktury') }}</div><div class="stat-value">{{ Money::format($stats['unpaid']) }}</div></a>
-        <a class="stat stat-link" href="{{ route('panel.admin.billing.invoices', ['status' => 'overdue']) }}"><div class="stat-label"><i class="dot critical"></i> {{ __('Po terminie') }}</div><div class="stat-value">{{ $stats['overdue'] }}</div></a>
-        <a class="stat stat-link" href="{{ route('panel.admin.billing.services', ['status' => 'active']) }}"><div class="stat-label"><i class="dot ok"></i> {{ __('Aktywne usługi') }}</div><div class="stat-value">{{ $stats['active'] }}</div></a>
-        <a class="stat stat-link" href="{{ route('panel.admin.billing.services', ['status' => 'suspended']) }}"><div class="stat-label">{{ __('Zawieszone usługi') }}</div><div class="stat-value">{{ $stats['suspended'] }}</div></a>
-        <a class="stat stat-link" href="{{ route('panel.admin.billing.customers') }}"><div class="stat-label">{{ __('Środki w portfelach') }}</div><div class="stat-value">{{ Money::format($stats['wallets']) }}</div></a>
-    </div>
+    @include('panel.admin.billing._overview')
 
     <div class="card flush">
         <div class="dash-head"><h3 class="card-title" style="margin:0">{{ __('Ostatnie płatności') }}</h3></div>

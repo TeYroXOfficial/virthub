@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Domain\Apps\EggImporter;
 use App\Domain\Billing\Billing;
+use App\Domain\Billing\BillingStats;
 use App\Domain\Billing\Cycle;
 use App\Domain\Billing\InsufficientFunds;
 use App\Domain\Billing\InvoiceManager;
@@ -774,8 +775,9 @@ class BillingTest extends TestCase
         ])->assertSessionHasErrors('keepalive_window_count');
         $this->actingAs($this->admin)->put(route('panel.admin.billing.products.update', $this->product), $base + [
             'keepalive_count' => 1, 'keepalive_unit' => 'd', 'keepalive_window_count' => 12, 'keepalive_window_unit' => 'h',
+            'keepalive_delete_count' => 2, 'keepalive_delete_unit' => 'd',
         ])->assertSessionHasNoErrors();
-        $this->assertSame(['daily', '12h'], [$this->product->fresh()->keepalive_interval, $this->product->fresh()->keepalive_window]);
+        $this->assertSame(['daily', '12h', '2d'], [$this->product->fresh()->keepalive_interval, $this->product->fresh()->keepalive_window, $this->product->fresh()->keepalive_delete_after]);
 
         $this->actingAs($this->customer)->get(route('panel.store.product', $this->product))->assertOk()->assertSee('wymaga potwierdzania aktywności');
         [$service] = app(ServiceManager::class)->checkout($this->customer, $this->product, 'monthly', $this->config(), true);
@@ -808,12 +810,21 @@ class BillingTest extends TestCase
         $this->assertSame(BillingService::STATUS_ACTIVE, $service->fresh()->status);
         $this->assertNull(Server::find($service->server_id)->suspended_at);
 
-        // Zawieszona za brak aktywności dłużej niż N dni → usunięta.
+        // Zawieszona za brak aktywności dłużej niż ustawiony czas produktu (2 dni) → usunięta z serwera.
         $this->travel(25)->hours();
         app(ServiceManager::class)->processKeepalive();
-        $this->travel(6)->days();
-        app(ServiceManager::class)->processOverdue();
+        $service->refresh();
+        $this->assertTrue($service->inactiveDeleteAt()->equalTo($service->suspended_at->copy()->addDays(2)));
+        $this->actingAs($this->customer)->get(route('panel.billing.service', $service))->assertOk()->assertSee('data-delete="'.$service->inactiveDeleteAt()->getTimestampMs().'"', false);
+        $this->travel(1)->days();
+        app(ServiceManager::class)->processKeepalive();
+        app(ServiceManager::class)->processOverdue(); // termin za brak płatności (5 dni) nie dotyczy braku aktywności
+        $this->assertSame(BillingService::STATUS_SUSPENDED, $service->fresh()->status);
+        $this->travel(1)->days();
+        $this->travel(1)->minutes();
+        app(ServiceManager::class)->processKeepalive();
         $this->assertSame(BillingService::STATUS_TERMINATED, $service->fresh()->status);
+        $this->assertSame(ServerState::Deleting, Server::find($service->server_id)->state);
     }
 
     public function test_wymog_aktywnosci_dla_istniejacych_uslug(): void
@@ -833,6 +844,55 @@ class BillingTest extends TestCase
         $this->assertSame('7d', $service->keepalive_interval);
         $this->assertTrue($service->keepalive_until->equalTo(now()->addDays(7)));
         $this->assertTrue($service->keepaliveUnlocksAt()->equalTo(now()->addDays(5)));
+    }
+
+    public function test_globalny_czas_usuniecia_po_braku_aktywnosci(): void
+    {
+        $this->assertSame('7d', Billing::inactiveDelete());
+        $this->actingAs($this->admin)->put(route('panel.admin.billing.settings.update'), [
+            'enabled' => 1, 'currency' => 'PLN', 'tax_rate' => '23', 'invoice_prefix' => 'FV/{Y}/', 'due_days' => 7, 'renewal_days' => 7,
+            'reminder_days' => 2, 'suspend_days' => 3, 'terminate_days' => 14, 'min_topup' => '10', 'max_topup' => '1000',
+            'min_balance_metered' => '5', 'low_balance_hours' => 24, 'inactive_delete_count' => 36, 'inactive_delete_unit' => 'h',
+        ])->assertSessionHasNoErrors();
+        $this->assertSame('36h', Billing::inactiveDelete());
+
+        $service = BillingService::create([
+            'user_id' => $this->customer->id, 'product_id' => $this->product->id, 'name' => 'x', 'cycle' => 'monthly', 'amount' => 0,
+            'status' => BillingService::STATUS_SUSPENDED, 'suspend_reason' => 'inactive', 'suspended_at' => now(), 'keepalive_interval' => 'daily',
+        ]);
+        $this->assertTrue($service->inactiveDeleteAt()->equalTo(now()->addHours(36)));
+        $this->actingAs($this->admin)->get(route('panel.admin.billing.settings'))->assertOk()->assertSee('value="36"', false);
+    }
+
+    public function test_pulpit_i_przeglad_pokazuja_statystyki_i_wykresy(): void
+    {
+        $this->fund($this->customer, '100');
+        [, $invoice] = app(ServiceManager::class)->checkout($this->customer, $this->product, 'monthly', $this->config(), false);
+        app(InvoiceManager::class)->markPaid($invoice, 'manual', 'T1');
+
+        $stats = app(BillingStats::class);
+        $this->assertSame(Money::parse('49'), $stats->summary()['income_month']);
+        $daily = $stats->daily(30);
+        $this->assertCount(30, $daily['income']);
+        $this->assertSame(Money::parse('49'), end($daily['income'])['value']);
+        $this->assertSame(1, end($daily['services'])['value']);
+        $this->assertSame([['label' => 'VPS S', 'value' => 1]], $stats->byProduct());
+
+        $this->actingAs($this->admin)->get(route('panel.admin.index'))->assertOk()
+            ->assertSee('Wpływy — ostatnie 30 dni')->assertSee('data-bar-chart', false)->assertSee('49,00 PLN');
+        $this->actingAs($this->admin)->get(route('panel.admin.billing'))->assertOk()->assertSee('Aktywne usługi według produktu');
+
+        // Bez uprawnienia do billingu — pulpit bez tej sekcji.
+        $support = User::factory()->create(['role' => User::ROLE_SUPPORT, 'permissions' => ['admin.servers']]);
+        $this->actingAs($support)->get(route('panel.admin.index'))->assertOk()->assertDontSee('Wpływy — ostatnie 30 dni');
+    }
+
+    public function test_strona_portfela_klienta_z_tabelami(): void
+    {
+        $this->fund($this->customer, '100');
+        app(ServiceManager::class)->checkout($this->customer, $this->product, 'monthly', $this->config(), true);
+        $this->actingAs($this->admin)->get(route('panel.admin.billing.customer', $this->customer))->assertOk()
+            ->assertSee('<th>Usługa</th>', false)->assertSee('FV/2026/0001')->assertSee(route('panel.admin.users.impersonate', $this->customer));
     }
 
     public function test_harmonogram_nic_nie_robi_przy_wylaczonym_billingu(): void

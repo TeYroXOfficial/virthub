@@ -125,6 +125,7 @@
                     [$kaCount, $kaUnit] = $product->keepalive_interval ? Cycle::parse($product->keepalive_interval) : [1, 'd'];
                     [$kwCount, $kwUnit] = $product->keepalive_window ? Cycle::parse($product->keepalive_window) : [12, 'h'];
                     $kaOn = old('keepalive', $product->keepalive_interval ? 1 : 0);
+                    [$kdCount, $kdUnit] = $product->keepalive_delete_after ? Cycle::parse($product->keepalive_delete_after) : [null, 'd'];
                 @endphp
                 <div class="card" style="margin-top:16px">
                     <h3 class="card-title">{{ __('Potwierdzanie aktywności') }}</h3>
@@ -151,6 +152,18 @@
                             </div>
                             @error('keepalive_window_count') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror
                             <div class="hint">{{ __('Przed tym czasem przycisk jest zablokowany, a pasek odlicza do odblokowania.') }}</div>
+                        </div>
+                        <div class="field">
+                            <label>{{ __('Usuń z serwera po zawieszeniu trwającym') }}</label>
+                            <div class="period-row" style="grid-template-columns: 80px minmax(0, 1fr)">
+                                <input type="number" name="keepalive_delete_count" min="1" max="720" value="{{ old('keepalive_delete_count', $kdCount) }}"
+                                       placeholder="{{ \App\Domain\Billing\Cycle::parse(\App\Domain\Billing\Billing::inactiveDelete())[0] }}" aria-label="{{ __('Długość') }}">
+                                <select name="keepalive_delete_unit" aria-label="{{ __('Jednostka') }}">
+                                    @foreach (Cycle::unitLabels() as $u => $label) <option value="{{ $u }}" @selected(old('keepalive_delete_unit', $kdUnit) === $u)>{{ $label }}</option> @endforeach
+                                </select>
+                            </div>
+                            @error('keepalive_delete_count') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror
+                            <div class="hint">{{ __('Puste = domyślnie z ustawień billingu (:period).', ['period' => Cycle::duration(\App\Domain\Billing\Billing::inactiveDelete())]) }}</div>
                         </div>
                     </div>
                 </div>

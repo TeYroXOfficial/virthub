@@ -108,6 +108,14 @@
         </div>
     </div>
 
+    @if ($billing)
+        <div class="dash-head" style="padding:0 0 10px">
+            <h2 class="section-title" style="margin:0"><x-icon name="wallet" :size="17"/> {{ __('Billing') }}</h2>
+            <a class="card-more" href="{{ route('panel.admin.billing') }}">{{ __('Przegląd billingu') }} →</a>
+        </div>
+        @include('panel.admin.billing._overview', $billing)
+    @endif
+
     {{-- Zasoby węzłów: obciążenie hosta z raportu agenta i przydział zasobów. --}}
     <div class="card flush dash-section">
         <div class="dash-head">

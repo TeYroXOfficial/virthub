@@ -169,7 +169,17 @@
 
         <main class="content">
             <div class="page">
+                @if (\App\Domain\Access\Impersonation::active())
+                    <div class="impersonation-bar" role="status">
+                        <span><x-icon name="users" :size="16"/> {{ __('Jesteś zalogowany jako :email (:by).', ['email' => $user->email, 'by' => \App\Domain\Access\Impersonation::impersonator()?->email ?? '?']) }}</span>
+                        <form method="POST" action="{{ route('impersonate.stop') }}" style="margin:0">
+                            @csrf
+                            <button class="btn btn-sm" type="submit">{{ __('Wróć na swoje konto') }}</button>
+                        </form>
+                    </div>
+                @endif
                 @include('layouts._flash')
+                @error('impersonate') <div class="alert alert-error">{{ $message }}</div> @enderror
                 @yield('content')
             </div>
         </main>
