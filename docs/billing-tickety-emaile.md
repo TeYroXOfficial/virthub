@@ -149,6 +149,31 @@ jedna płatność dostawcy zalicza się raz (unikalny identyfikator),
 nadpłata trafia do portfela, sekrety szyfrowane kluczem panelu, każda
 operacja w dzienniku zdarzeń.
 
+## Uruchomienie (stan po wdrożeniu)
+
+1. **Poczta** — Administracja → System → Poczta (SMTP), potem Szablony e-mail
+   (każdy szablon ma wersję PL i EN, podgląd i wysyłkę testową).
+2. **Zgłoszenia** — działają od razu; działy, gotowe odpowiedzi i automatyczne
+   zamykanie: Administracja → Wsparcie → Działy i odpowiedzi. Personel potrzebuje
+   uprawnienia „Zgłoszenia” (rola support ma je domyślnie).
+3. **Billing**:
+   - Billing → Ustawienia: waluta, VAT, dane sprzedawcy, terminy;
+   - Billing → Produkty: kategorie i produkty z cenami;
+   - na końcu przełącznik „Wbudowany billing” — od tej chwili klienci zamawiają
+     przez Sklep, a personel nadal bezpośrednio.
+4. **Bramki** — Billing → Bramki płatności (tylko administrator):
+   - **Stripe**: klucz tajny i sekret webhooka; endpoint
+     `https://PANEL/billing/webhooks/stripe` ze zdarzeniami
+     `checkout.session.completed` i `checkout.session.async_payment_succeeded`;
+   - **PayPal**: Client ID, Secret, tryb sandbox/produkcja i Webhook ID; endpoint
+     `https://PANEL/billing/webhooks/paypal` ze zdarzeniami
+     `CHECKOUT.ORDER.APPROVED` i `PAYMENT.CAPTURE.COMPLETED`.
+
+Harmonogram (`schedule:run` z crona, instalator panelu go ustawia):
+
+- `virthub:billing` co 5 minut;
+- automatyczne zamykanie zgłoszeń co godzinę.
+
 ## Poza zakresem (kolejne kroki)
 
 Kupony rabatowe, zmiana pakietu z dopłatą proporcjonalną, faktury PDF

@@ -49,6 +49,7 @@
                 ['panel.admin.billing.services', __('Usługi klientów'), 'list', 'panel.admin.billing.service*', 'admin.billing'],
                 ['panel.admin.billing.invoices', __('Faktury'), 'file', 'panel.admin.billing.invoice*', 'admin.billing'],
                 ['panel.admin.billing.customers', __('Portfele'), 'wallet', 'panel.admin.billing.customer*', 'admin.billing'],
+                ['panel.admin.billing.gateways', __('Bramki płatności'), 'key', 'panel.admin.billing.gateways*', 'admin'],
                 ['panel.admin.billing.settings', __('Ustawienia'), 'sliders', 'panel.admin.billing.settings*', 'admin.billing'],
             ]],
             [__('Wsparcie'), 'ticket', [
