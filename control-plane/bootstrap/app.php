@@ -48,6 +48,8 @@ return Application::configure(basePath: dirname(__DIR__))
             // Meldunek instalatora z nowego hypervisora — przychodzi ze skryptu
             // powłoki, nie z przeglądarki. Chroni go jednorazowy bilet w adresie.
             'enroll/*/complete',
+            // Webhooki Stripe/PayPal — podpisane przez dostawcę.
+            'billing/webhooks/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

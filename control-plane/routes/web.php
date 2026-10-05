@@ -132,6 +132,10 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
         Route::get('/services/{service}', 'service')->name('.service');
         Route::post('/services/{service}/cancel', 'cancel')->name('.service.cancel');
     });
+    Route::post('/billing/invoices/{invoice}/pay/{gateway}', [\App\Http\Controllers\Web\PaymentController::class, 'pay'])
+        ->whereIn('gateway', ['stripe', 'paypal'])->middleware('throttle:10,1')->name('billing.pay');
+    Route::get('/billing/invoices/{invoice}/return/{gateway}', [\App\Http\Controllers\Web\PaymentController::class, 'return'])
+        ->whereIn('gateway', ['stripe', 'paypal'])->middleware('throttle:20,1')->name('billing.return');
 
     Route::prefix('/tickets')->name('tickets.')->controller(\App\Http\Controllers\Web\TicketController::class)->group(function () {
         Route::get('/', 'index')->name('index');
@@ -284,6 +288,10 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::get('/', 'index');
         Route::get('/settings', 'settings')->name('.settings');
         Route::put('/settings', 'saveSettings')->name('.settings.update');
+        // Klucze bramek — tylko administrator.
+        Route::get('/gateways', [\App\Http\Controllers\Web\GatewaySettingsController::class, 'show'])->middleware('admin')->name('.gateways');
+        Route::put('/gateways/{gateway}', [\App\Http\Controllers\Web\GatewaySettingsController::class, 'update'])->whereIn('gateway', ['stripe', 'paypal'])->middleware('admin')->name('.gateways.update');
+        Route::post('/gateways/{gateway}/test', [\App\Http\Controllers\Web\GatewaySettingsController::class, 'test'])->whereIn('gateway', ['stripe', 'paypal'])->middleware(['admin', 'throttle:10,1'])->name('.gateways.test');
         Route::get('/catalog', 'catalog')->name('.catalog');
         Route::post('/categories', 'storeCategory')->name('.categories.store');
         Route::put('/categories/{category}', 'updateCategory')->name('.categories.update');
@@ -340,6 +348,11 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::delete('/users/{user}', [UsersController::class, 'destroy'])->name('users.destroy');
     });
 });
+
+// --- webhooki bramek płatności -----------------------------------------------
+// Bez sesji i CSRF: wiarygodność sprawdza bramka (podpis Stripe, weryfikacja PayPal).
+Route::post('/billing/webhooks/{gateway}', [\App\Http\Controllers\Web\PaymentController::class, 'webhook'])
+    ->whereIn('gateway', ['stripe', 'paypal'])->middleware('throttle:120,1')->name('billing.webhook');
 
 // --- rejestracja hypervisora ------------------------------------------------
 // Bez uwierzytelnienia: świeży serwer nie ma jeszcze żadnych poświadczeń.
