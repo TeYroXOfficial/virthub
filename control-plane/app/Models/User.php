@@ -62,6 +62,8 @@ class User extends Authenticatable
             'allowed_package_ids' => 'array',
             'max_servers' => 'integer',
             'last_login_at' => 'datetime',
+            'wallet_balance' => 'integer',
+            'wallet_notified_at' => 'datetime',
         ];
     }
 
@@ -69,6 +71,18 @@ class User extends Authenticatable
     public function servers(): HasMany
     {
         return $this->hasMany(Server::class);
+    }
+
+    /** @return HasMany<BillingService, $this> */
+    public function billingServices(): HasMany
+    {
+        return $this->hasMany(BillingService::class);
+    }
+
+    /** @return HasMany<Invoice, $this> */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
     }
 
     public function isAdmin(): bool

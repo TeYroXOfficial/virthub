@@ -18,12 +18,16 @@
 @auth
     @php
         $user = auth()->user();
-        $nav = [
+        $billingOn = \App\Domain\Billing\Billing::enabled();
+        $nav = array_values(array_filter([
             ['panel.dashboard', __('Moje maszyny'), 'servers', 'panel.dashboard', null],
-            ['panel.servers.create', __('Zamów serwer'), 'plus', 'panel.servers.create', 'servers.order'],
+            // Z włączonym billingiem klient zamawia przez sklep; personel nadal bezpośrednio.
+            $billingOn ? ['panel.store', __('Sklep'), 'plus', 'panel.store*', null] : null,
+            (! $billingOn || $user->isStaff()) ? ['panel.servers.create', __('Zamów serwer'), 'plus', 'panel.servers.create', 'servers.order'] : null,
             ['panel.apps.index', __('Aplikacje'), 'gamepad', 'panel.apps.*', 'apps.order'],
+            $billingOn ? ['panel.billing', __('Rozliczenia'), 'wallet', 'panel.billing*', null] : null,
             ['panel.tickets.index', __('Zgłoszenia'), 'ticket', 'panel.tickets.*', null],
-        ];
+        ]));
         // Administracja w grupach jak w panelach hostingowych: grupa jest
         // zwijana i otwiera się sama, gdy zawiera bieżącą stronę. Pozycje
         // widoczne tylko z odpowiednim uprawnieniem ('admin' = administrator).
@@ -38,6 +42,14 @@
             ]],
             [null, null, [
                 ['panel.admin.users', __('Użytkownicy'), 'users', 'panel.admin.users*', 'admin.users'],
+            ]],
+            [__('Billing'), 'wallet', [
+                ['panel.admin.billing', __('Przegląd'), 'dashboard', 'panel.admin.billing', 'admin.billing'],
+                ['panel.admin.billing.catalog', __('Produkty'), 'package', 'panel.admin.billing.catalog|panel.admin.billing.products*', 'admin.billing'],
+                ['panel.admin.billing.services', __('Usługi klientów'), 'list', 'panel.admin.billing.service*', 'admin.billing'],
+                ['panel.admin.billing.invoices', __('Faktury'), 'file', 'panel.admin.billing.invoice*', 'admin.billing'],
+                ['panel.admin.billing.customers', __('Portfele'), 'wallet', 'panel.admin.billing.customer*', 'admin.billing'],
+                ['panel.admin.billing.settings', __('Ustawienia'), 'sliders', 'panel.admin.billing.settings*', 'admin.billing'],
             ]],
             [__('Wsparcie'), 'ticket', [
                 ['panel.admin.tickets', __('Zgłoszenia'), 'ticket', 'panel.admin.tickets|panel.admin.tickets.show', 'admin.tickets'],

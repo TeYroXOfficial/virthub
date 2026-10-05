@@ -20,6 +20,11 @@ class AppServerPolicy
 
     public function create(User $user): bool
     {
+        // Z włączonym billingiem klient zamawia przez sklep (płatność przed utworzeniem).
+        if (\App\Domain\Billing\Billing::enabled() && ! $user->isStaff()) {
+            return false;
+        }
+
         return ! $user->isSuspended() && $user->hasPermission('apps.order');
     }
 

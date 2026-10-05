@@ -39,6 +39,7 @@ final class Permissions
         'admin.updates' => ['Aktualizacje', 'Aktualizacja panelu i agentów na węzłach.'],
         'admin.apps' => ['Aplikacje', 'Szablony aplikacji (eggi), plany i aplikacje wszystkich klientów.'],
         'admin.settings' => ['Ustawienia panelu', 'Poczta wychodząca (SMTP) i inne ustawienia całego panelu.'],
+        'admin.billing' => ['Billing', 'Katalog produktów, usługi klientów, faktury, płatności i portfele.'],
         'admin.tickets' => ['Zgłoszenia', 'Obsługa zgłoszeń klientów: odpowiedzi, notatki, przypisywanie, działy.'],
     ];
 

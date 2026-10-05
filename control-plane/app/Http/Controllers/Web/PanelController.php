@@ -64,8 +64,11 @@ class PanelController extends Controller
         ]);
     }
 
-    public function createServer(Request $request): View
+    public function createServer(Request $request): View|RedirectResponse
     {
+        if (\App\Domain\Billing\Billing::enabled() && ! $request->user()->isStaff()) {
+            return redirect()->route('panel.store');
+        }
         $this->authorize('create', Server::class);
 
         // Pokazujemy tylko systemy, które da się faktycznie postawić: szablon

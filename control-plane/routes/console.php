@@ -45,3 +45,9 @@ Schedule::command('virthub:warm-content')
 // ustawioną liczbę dni, zamykają się same (Administracja → Wsparcie).
 Schedule::call(fn () => app(App\Domain\Tickets\TicketService::class)->autoClose())
     ->hourly()->name('tickets-autoclose')->withoutOverlapping();
+
+// Billing: opłaty godzinowe z portfela, faktury odnowień, przypomnienia,
+// zawieszanie i usuwanie za brak płatności. Każdy krok jest idempotentny.
+Schedule::command('virthub:billing')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();

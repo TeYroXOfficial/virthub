@@ -12,6 +12,10 @@
             <div class="actions">
                 <a class="btn btn-primary" href="{{ route('panel.servers.create') }}"><x-icon name="plus" :size="16"/> {{ __('Zamów serwer') }}</a>
             </div>
+        @elseif (\App\Domain\Billing\Billing::enabled())
+            <div class="actions">
+                <a class="btn btn-primary" href="{{ route('panel.store') }}"><x-icon name="plus" :size="16"/> {{ __('Zamów serwer') }}</a>
+            </div>
         @endcan
     </div>
 
