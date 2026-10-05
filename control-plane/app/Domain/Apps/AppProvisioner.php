@@ -11,6 +11,7 @@ use App\Models\AppPlan;
 use App\Models\AppServer;
 use App\Models\AuditLog;
 use App\Models\Hypervisor;
+use App\Models\HypervisorGroup;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -25,7 +26,7 @@ class AppProvisioner
     // --- zamówienie -----------------------------------------------------------
 
     /** @param  array<string, string>  $variables */
-    public function order(User $user, AppEgg $egg, AppPlan $plan, string $name, ?string $image = null, array $variables = [], ?Hypervisor $node = null): AppServer
+    public function order(User $user, AppEgg $egg, AppPlan $plan, string $name, ?string $image = null, array $variables = [], ?Hypervisor $node = null, ?HypervisorGroup $location = null): AppServer
     {
         if (! $egg->is_active || ! $plan->is_active) {
             throw new \DomainException(__('Wybrany szablon albo plan nie jest dostępny.'));
@@ -41,10 +42,10 @@ class AppProvisioner
             throw new \DomainException(__('Wybrany obraz nie należy do tego szablonu.'));
         }
 
-        $app = DB::transaction(function () use ($user, $egg, $plan, $name, $image, $variables, $node) {
+        $app = DB::transaction(function () use ($user, $egg, $plan, $name, $image, $variables, $node, $location) {
             $node = $node
                 ? Hypervisor::query()->lockForUpdate()->findOrFail($node->id)
-                : $this->pickNode($plan);
+                : $this->pickNode($plan, $location);
 
             if ($node === null || ! $this->fits($node, $plan)) {
                 throw new \DomainException($this->noRoomMessage($plan, $node, $user));
@@ -74,10 +75,11 @@ class AppProvisioner
         return $app->refresh();
     }
 
-    /** Węzeł z aplikacjami i największą ilością wolnej pamięci. */
-    public function pickNode(AppPlan $plan): ?Hypervisor
+    /** Węzeł z aplikacjami i największą ilością wolnej pamięci (opcjonalnie w danej lokalizacji). */
+    public function pickNode(AppPlan $plan, ?HypervisorGroup $location = null): ?Hypervisor
     {
         return Hypervisor::query()
+            ->when($location, fn ($q) => $q->where('hypervisor_group_id', $location->id))
             ->where('apps_enabled', true)
             ->where('status', Hypervisor::STATUS_ONLINE)
             ->lockForUpdate()

@@ -256,7 +256,7 @@ td.num, .num { font-variant-numeric: tabular-nums; }
 
 label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-2); }
 .hint { font-size: 12.5px; color: var(--muted); font-weight: 400; margin-top: 5px; line-height: 1.5; }
-input[type=text], input[type=search], input[type=email], input[type=password], input[type=number], select, textarea {
+input:not([type]), input[type=text], input[type=datetime-local], input[type=date], input[type=search], input[type=email], input[type=password], input[type=number], select, textarea {
     width: 100%; padding: 9px 12px;
     border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
     background: var(--surface-2); color: var(--text);
@@ -712,6 +712,7 @@ body.is-loading .catalog-grid, body.is-loading .version-list { opacity: .6; tran
 }
 .segmented a[aria-current="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .empty-note { color: var(--muted); font-size: 14px; margin: 6px 0 2px; }
+.card.flush > .empty-note { padding: 0 22px 18px; margin: 0; }
 .nowrap { white-space: nowrap; }
 
 .task-list { list-style: none; margin: 0; padding: 0; font-size: 14px; }
@@ -788,3 +789,40 @@ textarea.prose-input { font-family: inherit; font-size: 14.5px; line-height: 1.5
 .ticket-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
 @media (max-width: 960px) { .ticket-layout { grid-template-columns: 1fr; } }
 tr.ticket-awaiting td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+
+/* --- sklep i rozliczenia ---------------------------------------------------- */
+
+.section-title { font-size: 17px; margin: 0 0 12px; }
+.product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.product-card {
+    display: flex; flex-direction: column; justify-content: space-between; gap: 14px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px;
+}
+.product-card h3 { margin: 8px 0 10px; font-size: 17px; }
+.spec-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+.spec-list strong { color: var(--text); }
+.product-desc { font-size: 13.5px; margin: 10px 0 0; }
+.price-line { display: flex; align-items: baseline; gap: 6px; }
+.price { font-size: 22px; font-weight: 700; }
+.price-sm { display: block; font-weight: 600; }
+.order-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.order-summary { position: sticky; top: 16px; }
+@media (max-width: 960px) { .order-layout { grid-template-columns: 1fr; } .order-summary { position: static; } }
+.cycle-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.cycle-option { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.cycle-option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.cycle-option input { margin-top: 3px; }
+.cycle-option .hint { display: block; margin: 2px 0 0; }
+.check-columns { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 2px 12px; margin-top: 6px; }
+.invoice-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 960px) { .invoice-layout { grid-template-columns: 1fr; } }
+.invoice-head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.invoice-dates { margin: 0; }
+.invoice-parties { margin-bottom: 18px; }
+.invoice-doc tfoot td { border-bottom: 0; }
+@media print {
+    .sidebar, .mobile-bar, .no-print, .alert { display: none !important; }
+    .shell { display: block; }
+    .invoice-layout { display: block; }
+    .invoice-doc { border: 0; box-shadow: none; }
+}

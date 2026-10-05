@@ -41,8 +41,11 @@ class AppController extends Controller
         ]);
     }
 
-    public function create(Request $request): View
+    public function create(Request $request): View|RedirectResponse
     {
+        if (\App\Domain\Billing\Billing::enabled() && ! $request->user()->isStaff()) {
+            return redirect()->route('panel.store');
+        }
         $this->authorize('create', AppServer::class);
 
         return view('panel.apps.create', [

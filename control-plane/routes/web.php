@@ -117,6 +117,22 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
         Route::post('/decompress', 'decompress')->name('.decompress');
     });
 
+    // Sklep i rozliczenia (wbudowany billing).
+    Route::prefix('/store')->name('store')->controller(\App\Http\Controllers\Web\StoreController::class)->group(function () {
+        Route::get('/', 'index');
+        Route::get('/{product}', 'show')->name('.product');
+        Route::post('/{product}', 'order')->middleware('throttle:10,1')->name('.order');
+    });
+    Route::prefix('/billing')->name('billing')->controller(\App\Http\Controllers\Web\BillingController::class)->group(function () {
+        Route::get('/', 'index');
+        Route::get('/wallet', 'wallet')->name('.wallet');
+        Route::post('/wallet', 'topup')->middleware('throttle:10,1')->name('.topup');
+        Route::get('/invoices/{invoice}', 'invoice')->name('.invoice');
+        Route::post('/invoices/{invoice}/wallet', 'payWithWallet')->middleware('throttle:10,1')->name('.invoice.wallet');
+        Route::get('/services/{service}', 'service')->name('.service');
+        Route::post('/services/{service}/cancel', 'cancel')->name('.service.cancel');
+    });
+
     Route::prefix('/tickets')->name('tickets.')->controller(\App\Http\Controllers\Web\TicketController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::get('/new', 'create')->name('create');
@@ -262,6 +278,31 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::get('/', 'show');
         Route::put('/', 'update')->name('.update');
         Route::post('/test', 'test')->middleware('throttle:5,1')->name('.test');
+    });
+
+    Route::middleware('admin:admin.billing')->prefix('/billing')->name('billing')->controller(\App\Http\Controllers\Web\BillingAdminController::class)->group(function () {
+        Route::get('/', 'index');
+        Route::get('/settings', 'settings')->name('.settings');
+        Route::put('/settings', 'saveSettings')->name('.settings.update');
+        Route::get('/catalog', 'catalog')->name('.catalog');
+        Route::post('/categories', 'storeCategory')->name('.categories.store');
+        Route::put('/categories/{category}', 'updateCategory')->name('.categories.update');
+        Route::delete('/categories/{category}', 'destroyCategory')->name('.categories.destroy');
+        Route::get('/products/new', 'createProduct')->name('.products.create');
+        Route::post('/products', 'storeProduct')->name('.products.store');
+        Route::get('/products/{product}', 'editProduct')->name('.products.edit');
+        Route::put('/products/{product}', 'updateProduct')->name('.products.update');
+        Route::delete('/products/{product}', 'destroyProduct')->name('.products.destroy');
+        Route::get('/services', 'services')->name('.services');
+        Route::get('/services/{service}', 'service')->name('.service');
+        Route::put('/services/{service}', 'updateService')->name('.service.update');
+        Route::post('/services/{service}/action', 'serviceAction')->name('.service.action');
+        Route::get('/invoices', 'invoices')->name('.invoices');
+        Route::get('/invoices/{invoice}', 'invoice')->name('.invoice');
+        Route::post('/invoices/{invoice}/action', 'invoiceAction')->name('.invoice.action');
+        Route::get('/customers', 'customers')->name('.customers');
+        Route::get('/customers/{user}', 'customer')->name('.customer');
+        Route::post('/customers/{user}/wallet', 'adjustWallet')->name('.customer.wallet');
     });
 
     Route::middleware('admin:admin.tickets')->prefix('/tickets')->name('tickets')->controller(\App\Http\Controllers\Web\TicketAdminController::class)->group(function () {
