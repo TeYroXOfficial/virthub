@@ -239,6 +239,14 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/test', 'test')->middleware('throttle:10,1')->name('.test');
     });
 
+    Route::middleware('admin:admin.settings')->prefix('/emails')->name('emails')->controller(\App\Http\Controllers\Web\EmailTemplateController::class)->group(function () {
+        Route::get('/', 'index');
+        Route::get('/{key}/{locale}', 'edit')->name('.edit');
+        Route::put('/{key}/{locale}', 'update')->name('.update');
+        Route::delete('/{key}/{locale}', 'reset')->name('.reset');
+        Route::post('/{key}/{locale}/test', 'test')->middleware('throttle:10,1')->name('.test');
+    });
+
     Route::middleware('admin:admin.settings')->prefix('/mail')->name('mail')->controller(\App\Http\Controllers\Web\MailSettingsController::class)->group(function () {
         Route::get('/', 'show');
         Route::put('/', 'update')->name('.update');

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Provisioning;
 
+use App\Domain\Mail\Notify;
 use App\Enums\ServerState;
 use App\Models\Backup;
 use App\Models\Server;
@@ -47,6 +48,11 @@ class AgentResultApplier
         $result ??= [];
         $server = $job->server;
 
+        // Powiadomienie o usunięciu przed sprzątaniem — potem nie ma już adresu ani nazwy.
+        if ($job->action === 'delete') {
+            app(Notify::class)->server($server, 'server.terminated');
+        }
+
         match ($job->action) {
             'create' => $this->finishCreate($server, $result),
             'power' => $this->applyPowerState($server, $result),
@@ -62,6 +68,11 @@ class AgentResultApplier
             'password' => $this->finishPassword($server, $job),
             default => Log::warning('Nieznana akcja w wyniku zadania', ['action' => $job->action]),
         };
+
+        $mail = ['create' => 'server.created', 'rebuild' => 'server.reinstalled', 'password' => 'server.password_reset'][$job->action] ?? null;
+        if ($mail !== null) {
+            app(Notify::class)->server($server, $mail);
+        }
 
         $job->markDone($result);
     }

@@ -49,10 +49,11 @@ class PasswordResetController extends Controller
 
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
-            function (User $user, string $password) {
+            function (User $user, string $password) use ($request) {
                 $user->forceFill(['password' => $password, 'remember_token' => Str::random(60)])->save();
                 event(new PasswordReset($user));
                 AuditLog::record('account.password_reset', $user, [], $user);
+                app(\App\Domain\Mail\TemplateMailer::class)->send($user, 'account.password_changed', ['ip' => $request->ip()]);
             },
         );
 
