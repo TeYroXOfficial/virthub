@@ -2508,5 +2508,18 @@
     "Zmień pakiet": "Change package",
     "obecny": "current",
     "pakiet ma inne parametry": "package has different parameters",
-    "za mały dysk": "disk too small"
+    "za mały dysk": "disk too small",
+    ":count maszyn ma inne parametry niż pakiet :package — zmień je przyciskiem „Zmień pakiet” na stronie maszyny (wymaga zatrzymania).": ":count machines have different parameters than package :package — change them with “Change package” on the machine page (requires stopping).",
+    ":count usług ma okres, którego produkt już nie oferuje — zachowały dotychczasową cenę.": ":count services use a period the product no longer offers — they kept their current price.",
+    "Bez zaznaczenia zmiany dotyczą tylko nowych zamówień.": "Unchecked, changes apply to new orders only.",
+    "Istniejące usługi (:count)": "Existing services (:count)",
+    "Maszynę VPS zmienia się na jej stronie („Zmień pakiet”), bo wymaga to zatrzymania.": "A VPS is changed on its page (“Change package”) because it must be stopped.",
+    "Nowa cena obowiązuje od najbliższej opłaty: kolejnej faktury odnowienia albo naliczenia godzinowego. Faktury już wystawione się nie zmieniają.": "The new price applies from the next charge: the next renewal invoice or hourly charge. Invoices already issued don't change.",
+    "Nowa cena w :count usługach (od najbliższej opłaty).": "New price in :count services (from the next charge).",
+    "Produkt zapisany.": "Product saved.",
+    "RAM i procesor działają od razu, dysk po restarcie aplikacji.": "RAM and CPU apply immediately, disk after the application restarts.",
+    "Sprawdź, które maszyny mają inne parametry niż pakiet": "Check which machines differ from the package",
+    "Ustaw zasoby planu w istniejących aplikacjach": "Apply the plan's resources to existing applications",
+    "Zasoby planu :plan ustawione w :count aplikacjach.": "Plan :plan resources set in :count applications.",
+    "Zmień cenę istniejących usług": "Change the price of existing services"
 }

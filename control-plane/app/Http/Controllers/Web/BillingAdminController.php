@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Domain\Agent\AgentException;
+use App\Domain\Apps\AppProvisioner;
 use App\Domain\Billing\Billing;
 use App\Domain\Billing\Cycle;
 use App\Domain\Billing\InvoiceManager;
@@ -166,7 +168,58 @@ class BillingAdminController extends Controller
         });
         AuditLog::record('billing.product_updated', $product, ['name' => $product->name], $request->user());
 
-        return redirect()->route('panel.admin.billing.catalog')->with('status', __('Produkt zapisany. Działające usługi zachowują swoją cenę.'));
+        $product->refresh()->load('prices', 'package', 'plan');
+        $services = $product->services()->whereIn('status', [BillingService::STATUS_PENDING, ...BillingService::LIVE])
+            ->with('server', 'appServer')->get();
+        $messages = [__('Produkt zapisany.')];
+        $errors = [];
+
+        // Nowa cena dla działających usług — od najbliższej opłaty (faktury już wystawione zostają).
+        if ($request->boolean('apply_prices')) {
+            $prices = $product->configuredPrices();
+            $changed = 0;
+            $skipped = 0;
+            foreach ($services as $service) {
+                $price = $prices[$service->cycle] ?? null;
+                if ($price === null) {
+                    $skipped++;
+                } elseif ($price !== $service->amount) {
+                    AuditLog::record('billing.service_price', $service, ['from' => $service->amount, 'to' => $price], $request->user());
+                    $service->update(['amount' => $price]);
+                    $changed++;
+                }
+            }
+            $messages[] = __('Nowa cena w :count usługach (od najbliższej opłaty).', ['count' => $changed]);
+            if ($skipped > 0) {
+                $messages[] = __(':count usług ma okres, którego produkt już nie oferuje — zachowały dotychczasową cenę.', ['count' => $skipped]);
+            }
+        }
+
+        // Zasoby planu na działające aplikacje; maszyn VPS nie da się zmienić bez zatrzymania.
+        if ($request->boolean('apply_resources')) {
+            if ($product->type === Product::TYPE_APP && $product->plan) {
+                $plan = $product->plan;
+                $updated = 0;
+                foreach ($services->pluck('appServer')->filter() as $app) {
+                    try {
+                        app(AppProvisioner::class)->updateResources($app, $plan->memory_mb, $plan->cpu_percent, $plan->disk_mb, $request->user());
+                        $updated++;
+                    } catch (\DomainException|AgentException) {
+                        $errors[] = $app->name;
+                    }
+                }
+                $messages[] = __('Zasoby planu :plan ustawione w :count aplikacjach.', ['plan' => $plan->name, 'count' => $updated]);
+            } elseif ($product->type === Product::TYPE_VPS && $product->package) {
+                $package = $product->package;
+                $differs = $services->pluck('server')->filter()->filter(fn ($s) => $s->vps_package_id !== $package->id || $s->vcpu !== $package->vcpu
+                    || $s->ram_mb !== $package->ram_mb || $s->disk_gb !== $package->disk_gb)->count();
+                $messages[] = __(':count maszyn ma inne parametry niż pakiet :package — zmień je przyciskiem „Zmień pakiet” na stronie maszyny (wymaga zatrzymania).', ['count' => $differs, 'package' => $package->name]);
+            }
+        }
+
+        $redirect = redirect()->route('panel.admin.billing.products.edit', $product)->with('status', implode(' ', $messages));
+
+        return $errors === [] ? $redirect : $redirect->withErrors(['product' => __('Nie udało się wysłać zmian na węzeł dla: :apps. Panel ma nowe limity — węzeł dostanie je przy najbliższym restarcie lub reinstalacji.', ['apps' => implode(', ', array_slice($errors, 0, 10))])]);
     }
 
     public function destroyProduct(Product $product): RedirectResponse
@@ -342,6 +395,7 @@ class BillingAdminController extends Controller
     {
         return view('panel.admin.billing.product', [
             'product' => $product,
+            'liveCount' => $product->exists ? $product->services()->whereIn('status', [BillingService::STATUS_PENDING, ...BillingService::LIVE])->count() : 0,
             'categories' => ProductCategory::query()->ordered()->get(),
             'packages' => VpsPackage::query()->orderBy('vcpu')->orderBy('ram_mb')->get(),
             'plans' => AppPlan::query()->orderBy('memory_mb')->get(),

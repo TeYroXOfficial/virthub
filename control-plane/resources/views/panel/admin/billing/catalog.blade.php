@@ -69,8 +69,9 @@
                                     @elseif ($product->is_active) <span class="pill ok">{{ __('w sprzedaży') }}</span>
                                     @else <span class="pill neutral">{{ __('wyłączony') }}</span> @endif
                                 </td>
-                                <td style="text-align:right">
-                                    <form method="POST" action="{{ route('panel.admin.billing.products.destroy', $product) }}" style="margin:0" data-confirm="{{ __('Usunąć produkt :name?', ['name' => $product->name]) }}">
+                                <td style="text-align:right; white-space:nowrap">
+                                    <a class="btn btn-sm" href="{{ route('panel.admin.billing.products.edit', $product) }}">{{ __('Edytuj') }}</a>
+                                    <form method="POST" action="{{ route('panel.admin.billing.products.destroy', $product) }}" style="display:inline; margin:0" data-confirm="{{ __('Usunąć produkt :name?', ['name' => $product->name]) }}">
                                         @csrf @method('DELETE')
                                         <button class="btn btn-sm btn-ghost" type="submit" aria-label="{{ __('Usuń') }}"><x-icon name="trash" :size="14"/></button>
                                     </form>

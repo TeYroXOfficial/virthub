@@ -18,6 +18,8 @@
         </div>
     </div>
 
+    @error('product') <div class="alert alert-error">{{ $message }}</div> @enderror
+
     @if ($categories->isEmpty())
         <div class="alert alert-warning">{{ __('Najpierw dodaj kategorię.') }} <a href="{{ route('panel.admin.billing.catalog') }}">{{ __('Produkty') }}</a></div>
     @else
@@ -96,6 +98,19 @@
                         <label class="check-line" style="align-self:end"><input type="checkbox" name="is_active" value="1" @checked(old('is_active', $product->is_active))> {{ __('W sprzedaży') }}</label>
                     </div>
                 </div>
+                @if ($product->exists && $liveCount > 0)
+                    <div class="card" style="margin-top:16px">
+                        <h3 class="card-title">{{ __('Istniejące usługi (:count)', ['count' => $liveCount]) }}</h3>
+                        <p class="hint" style="margin-top:0">{{ __('Bez zaznaczenia zmiany dotyczą tylko nowych zamówień.') }}</p>
+                        <label class="check-line"><input type="checkbox" name="apply_prices" value="1" @checked(old('apply_prices'))> {{ __('Zmień cenę istniejących usług') }}</label>
+                        <p class="hint">{{ __('Nowa cena obowiązuje od najbliższej opłaty: kolejnej faktury odnowienia albo naliczenia godzinowego. Faktury już wystawione się nie zmieniają.') }}</p>
+                        <label class="check-line"><input type="checkbox" name="apply_resources" value="1" @checked(old('apply_resources'))>
+                            {{ $product->type === 'app' ? __('Ustaw zasoby planu w istniejących aplikacjach') : __('Sprawdź, które maszyny mają inne parametry niż pakiet') }}</label>
+                        <p class="hint">{{ $product->type === 'app'
+                            ? __('RAM i procesor działają od razu, dysk po restarcie aplikacji.')
+                            : __('Maszynę VPS zmienia się na jej stronie („Zmień pakiet”), bo wymaga to zatrzymania.') }}</p>
+                    </div>
+                @endif
             </div>
         </div>
         <button class="btn btn-primary" type="submit" style="margin-top:16px">{{ __('Zapisz') }}</button>
