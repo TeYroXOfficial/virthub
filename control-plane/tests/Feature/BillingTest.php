@@ -478,7 +478,9 @@ class BillingTest extends TestCase
 
         $service = BillingService::query()->where('product_id', $product->id)->firstOrFail();
         $this->assertSame(BillingService::STATUS_ACTIVE, $service->status, (string) $service->last_error);
-        $response->assertRedirect(route('panel.apps.show', $service->app_server_id));
+        $response->assertRedirect(route('panel.apps.show', $service->appServer));
+        $this->assertStringContainsString($service->appServer->uuid, $response->headers->get('Location'));
+        $this->actingAs($this->customer)->get($response->headers->get('Location'))->assertOk();
         $this->assertSame($node->id, $service->appServer->hypervisor_id);
         $this->assertSame(Money::parse('8.80'), $this->customer->fresh()->wallet_balance, 'pierwsza doba z góry (ceny brutto)');
     }
