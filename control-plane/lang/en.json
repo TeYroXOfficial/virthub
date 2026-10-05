@@ -2474,5 +2474,18 @@
     "Zwroty na kartę/PayPal robisz w panelu dostawcy; w panelu VirtHub możesz zwrócić kwotę do portfela klienta.": "Card/PayPal refunds are made in the provider's dashboard; in VirtHub you can refund the amount to the customer's wallet.",
     "developer.paypal.com → Apps & Credentials → aplikacja REST.": "developer.paypal.com → Apps & Credentials → REST app.",
     "zapisany — wpisz, żeby zmienić": "saved — type to change",
-    "Płatność jest przetwarzana. Faktura zmieni stan, gdy operator płatności ją potwierdzi.": "The payment is being processed. The invoice will update once the provider confirms it."
+    "Płatność jest przetwarzana. Faktura zmieni stan, gdy operator płatności ją potwierdzi.": "The payment is being processed. The invoice will update once the provider confirms it.",
+    "Bezpłatnie": "Free",
+    "Kategoria :name nie dopuszcza żadnego z wybranych okresów.": "The :name category doesn't allow any of the selected periods.",
+    "Limit na klienta": "Per-customer limit",
+    "Możesz mieć najwyżej :count usługę :name.|Możesz mieć najwyżej :count usługi :name.|Możesz mieć najwyżej :count usług :name.": "You can have at most :count :name service.|You can have at most :count :name services.",
+    "Np. 1 dla darmowego produktu — jeden na konto.": "E.g. 1 for a free product — one per account.",
+    "Okresy": "Periods",
+    "Okresy i ceny": "Periods and prices",
+    "Okresy, w których można kupić produkty tej kategorii. Nic nie zaznaczone = wszystkie.": "Periods in which this category's products can be bought. Nothing selected = all.",
+    "Za darmo": "Free",
+    "Zaznacz co najmniej jeden okres rozliczeniowy.": "Select at least one billing period.",
+    "Zaznacz okresy, które klient może wybrać. Puste pole ceny albo 0 = za darmo. Godzinowe i dzienne są pobierane z portfela, pozostałe — fakturą.": "Select the periods the customer can choose. An empty price or 0 = free. Hourly and daily are charged from the wallet, the rest by invoice.",
+    "kategoria nie dopuszcza": "not allowed by category",
+    "za darmo": "free"
 }

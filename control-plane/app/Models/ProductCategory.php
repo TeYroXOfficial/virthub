@@ -8,19 +8,25 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ProductCategory extends Model
 {
-    protected $fillable = ['name', 'slug', 'description', 'is_active', 'sort_order'];
+    protected $fillable = ['name', 'slug', 'description', 'is_active', 'sort_order', 'allowed_cycles'];
 
     protected $attributes = ['is_active' => true, 'sort_order' => 0];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean', 'sort_order' => 'integer'];
+        return ['is_active' => 'boolean', 'sort_order' => 'integer', 'allowed_cycles' => 'array'];
     }
 
     /** @return HasMany<Product, $this> */
     public function products(): HasMany
     {
         return $this->hasMany(Product::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    /** Czy produkty tej kategorii mogą być sprzedawane w danym cyklu (puste = wszystkie). */
+    public function allowsCycle(string $cycle): bool
+    {
+        return empty($this->allowed_cycles) || in_array($cycle, $this->allowed_cycles, true);
     }
 
     /** @param  Builder<ProductCategory>  $query */

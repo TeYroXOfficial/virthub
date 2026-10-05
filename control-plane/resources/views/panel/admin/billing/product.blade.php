@@ -29,7 +29,7 @@
                 <div class="field"><label for="p-name">{{ __('Nazwa') }}</label><input id="p-name" name="name" required maxlength="100" value="{{ old('name', $product->name) }}"></div>
                 <div class="field"><label for="p-cat">{{ __('Kategoria') }}</label>
                     <select id="p-cat" name="product_category_id" required>
-                        @foreach ($categories as $c) <option value="{{ $c->id }}" @selected(old('product_category_id', $product->product_category_id) == $c->id)>{{ $c->name }}</option> @endforeach
+                        @foreach ($categories as $c) <option value="{{ $c->id }}" data-cycles="{{ implode(',', $c->allowed_cycles ?? []) }}" @selected(old('product_category_id', $product->product_category_id) == $c->id)>{{ $c->name }}</option> @endforeach
                     </select></div>
                 <div class="field"><label for="p-desc">{{ __('Opis') }}</label><textarea id="p-desc" name="description" rows="3" class="prose-input" maxlength="2000">{{ old('description', $product->description) }}</textarea></div>
                 <div class="field"><label>{{ __('Rodzaj') }}</label>
@@ -58,22 +58,29 @@
 
             <div>
                 <div class="card">
-                    <h3 class="card-title">{{ __('Ceny') }}</h3>
-                    <p class="hint" style="margin-top:0">{{ __('Puste pole = cykl niedostępny. Godzinowe i dzienne są pobierane z portfela, pozostałe — fakturą.') }} {{ \App\Domain\Billing\Billing::pricesIncludeTax() ? __('Ceny brutto.') : __('Ceny netto (VAT doliczany).') }}</p>
+                    <h3 class="card-title">{{ __('Okresy i ceny') }}</h3>
+                    <p class="hint" style="margin-top:0">{{ __('Zaznacz okresy, które klient może wybrać. Puste pole ceny albo 0 = za darmo. Godzinowe i dzienne są pobierane z portfela, pozostałe — fakturą.') }} {{ \App\Domain\Billing\Billing::pricesIncludeTax() ? __('Ceny brutto.') : __('Ceny netto (VAT doliczany).') }}</p>
                     @error('prices') <div class="alert alert-error">{{ $message }}</div> @enderror
-                    <div class="grid grid-2">
+                    <input type="hidden" name="cycle_choice" value="1">
+                    <div class="cycle-admin">
                         @foreach (Cycle::ALL as $cycle)
-                            <div class="field">
-                                <label for="p-{{ $cycle }}">{{ ucfirst(Cycle::label($cycle)) }}</label>
-                                <input id="p-{{ $cycle }}" name="prices[{{ $cycle }}]" inputmode="decimal" placeholder="—"
-                                       value="{{ old('prices.'.$cycle, isset($prices[$cycle]) ? Money::input($prices[$cycle]) : '') }}">
-                                @error('prices.'.$cycle) <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror
+                            @php $on = old('cycle_choice') ? in_array($cycle, old('cycles', []), true) : array_key_exists($cycle, $prices); @endphp
+                            <div class="cycle-admin-row" data-cycle="{{ $cycle }}">
+                                <label class="check-line" style="margin:0">
+                                    <input type="checkbox" name="cycles[]" value="{{ $cycle }}" @checked($on)> {{ ucfirst(Cycle::label($cycle)) }}
+                                </label>
+                                <input id="p-{{ $cycle }}" name="prices[{{ $cycle }}]" inputmode="decimal" placeholder="{{ __('za darmo') }}" aria-label="{{ __('Cena') }}: {{ Cycle::label($cycle) }}"
+                                       value="{{ old('prices.'.$cycle, ($prices[$cycle] ?? 0) > 0 ? Money::input($prices[$cycle]) : '') }}">
+                                <span class="hint cycle-blocked" hidden>{{ __('kategoria nie dopuszcza') }}</span>
+                                @error('prices.'.$cycle) <p class="hint" style="color:var(--critical); grid-column:1/-1">{{ $message }}</p> @enderror
                             </div>
                         @endforeach
                     </div>
                     <div class="grid grid-2">
                         <div class="field"><label for="p-setup">{{ __('Opłata instalacyjna') }}</label><input id="p-setup" name="setup_fee" inputmode="decimal" value="{{ old('setup_fee', $product->setup_fee ? Money::input($product->setup_fee) : '') }}" placeholder="0"></div>
                         <div class="field"><label for="p-stock">{{ __('Limit sztuk') }}</label><input id="p-stock" type="number" name="stock" min="0" value="{{ old('stock', $product->stock) }}" placeholder="{{ __('bez limitu') }}"></div>
+                        <div class="field"><label for="p-peruser">{{ __('Limit na klienta') }}</label><input id="p-peruser" type="number" name="per_user_limit" min="1" value="{{ old('per_user_limit', $product->per_user_limit) }}" placeholder="{{ __('bez limitu') }}">
+                            <div class="hint">{{ __('Np. 1 dla darmowego produktu — jeden na konto.') }}</div></div>
                     </div>
                 </div>
                 <div class="card" style="margin-top:16px">
@@ -105,6 +112,25 @@
             }
             document.querySelectorAll('input[name=type]').forEach(function (r) { r.addEventListener('change', sync); });
             sync();
+
+            // Okresy, których wybrana kategoria nie dopuszcza — widoczne, ale oznaczone.
+            var cat = document.getElementById('p-cat');
+            function syncCycles() {
+                var opt = cat && cat.options[cat.selectedIndex];
+                var allowed = opt && opt.dataset.cycles ? opt.dataset.cycles.split(',') : null;
+                document.querySelectorAll('.cycle-admin-row').forEach(function (row) {
+                    var blocked = allowed !== null && allowed.indexOf(row.dataset.cycle) === -1;
+                    row.classList.toggle('is-blocked', blocked);
+                    row.querySelector('.cycle-blocked').hidden = !blocked;
+                });
+                document.querySelectorAll('.cycle-admin-row').forEach(function (row) {
+                    var box = row.querySelector('input[type=checkbox]');
+                    row.querySelector('input[inputmode]').disabled = !box.checked;
+                });
+            }
+            if (cat) cat.addEventListener('change', syncCycles);
+            document.querySelectorAll('.cycle-admin-row input[type=checkbox]').forEach(function (b) { b.addEventListener('change', syncCycles); });
+            syncCycles();
         })();
     </script>
 @endpush

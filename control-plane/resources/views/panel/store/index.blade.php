@@ -23,8 +23,9 @@
                     @php
                         $prices = $product->priceMap();
                         // Na karcie cena miesięczna, a bez niej — najtańsza w przeliczeniu na miesiąc.
-                        $cheapest = array_key_exists('monthly', $prices) ? 'monthly'
-                            : collect($prices)->sortBy(fn ($a, $c) => intdiv($a * 730, Cycle::hours($c)))->keys()->first();
+                        $cheapest = in_array(0, $prices, true) ? array_search(0, $prices, true)
+                            : (array_key_exists('monthly', $prices) ? 'monthly'
+                            : collect($prices)->sortBy(fn ($a, $c) => intdiv($a * 730, Cycle::hours($c)))->keys()->first());
                     @endphp
                     <article class="product-card">
                         <div>
@@ -48,8 +49,13 @@
                         </div>
                         <div>
                             <div class="price-line">
-                                <span class="price">{{ Money::format(Billing::gross($prices[$cheapest])) }}</span>
-                                <span class="muted">{{ Cycle::per($cheapest) }}</span>
+                                @if ($prices[$cheapest] === 0)
+                                    <span class="price">{{ __('Za darmo') }}</span>
+                                    <span class="muted">{{ Cycle::label($cheapest) }}</span>
+                                @else
+                                    <span class="price">{{ Money::format(Billing::gross($prices[$cheapest])) }}</span>
+                                    <span class="muted">{{ Cycle::per($cheapest) }}</span>
+                                @endif
                             </div>
                             @if (count($prices) > 1)
                                 <div class="hint">{{ collect(array_keys($prices))->map(fn ($c) => Cycle::label($c))->join(' · ') }}</div>

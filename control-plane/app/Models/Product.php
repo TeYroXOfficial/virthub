@@ -18,7 +18,7 @@ class Product extends Model
 
     protected $fillable = [
         'product_category_id', 'name', 'description', 'type', 'vps_package_id', 'app_plan_id',
-        'app_egg_ids', 'hypervisor_group_ids', 'setup_fee', 'stock', 'is_active', 'sort_order',
+        'app_egg_ids', 'hypervisor_group_ids', 'setup_fee', 'stock', 'per_user_limit', 'is_active', 'sort_order',
     ];
 
     protected $attributes = ['is_active' => true, 'setup_fee' => 0, 'sort_order' => 0];
@@ -30,6 +30,7 @@ class Product extends Model
             'hypervisor_group_ids' => 'array',
             'setup_fee' => 'integer',
             'stock' => 'integer',
+            'per_user_limit' => 'integer',
             'is_active' => 'boolean',
             'sort_order' => 'integer',
         ];
@@ -71,12 +72,34 @@ class Product extends Model
         $query->where('is_active', true)->whereHas('category', fn ($q) => $q->where('is_active', true));
     }
 
-    /** Ceny w kolejności cykli: ['monthly' => 125000, …]. @return array<string, int> */
+    /**
+     * Cykle w sprzedaży z cenami, w kolejności cykli: ['monthly' => 125000, …].
+     * Cykl jest oferowany, gdy produkt go ma (cena 0 = za darmo) i kategoria
+     * na niego pozwala.
+     *
+     * @return array<string, int>
+     */
     public function priceMap(): array
+    {
+        $category = $this->category;
+
+        return array_filter($this->configuredPrices(), fn ($amount, $cycle) => $category === null || $category->allowsCycle($cycle), ARRAY_FILTER_USE_BOTH);
+    }
+
+    /** Wszystkie cykle ustawione w produkcie — także te, których kategoria teraz nie dopuszcza. @return array<string, int> */
+    public function configuredPrices(): array
     {
         $map = $this->prices->pluck('amount', 'cycle')->map(fn ($a) => (int) $a)->all();
 
         return array_filter(array_replace(array_fill_keys(Cycle::ALL, null), $map), fn ($a) => $a !== null);
+    }
+
+    /** Wszystkie oferowane cykle są darmowe. */
+    public function isFree(): bool
+    {
+        $prices = $this->priceMap();
+
+        return $prices !== [] && max($prices) === 0 && $this->setup_fee === 0;
     }
 
     public function priceFor(string $cycle): ?int

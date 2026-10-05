@@ -347,7 +347,7 @@ class BillingAdminController extends Controller
             'plans' => AppPlan::query()->orderBy('memory_mb')->get(),
             'eggs' => AppEgg::query()->active()->orderBy('category')->orderBy('name')->get(),
             'locations' => HypervisorGroup::query()->ordered()->get(),
-            'prices' => $product->exists ? $product->priceMap() : [],
+            'prices' => $product->exists ? $product->configuredPrices() : [],
         ]);
     }
 
@@ -369,18 +369,36 @@ class BillingAdminController extends Controller
             'hypervisor_group_ids.*' => ['integer', 'exists:hypervisor_groups,id'],
             'setup_fee' => [$moneyRule],
             'stock' => ['nullable', 'integer', 'min:0'],
+            'per_user_limit' => ['nullable', 'integer', 'min:1'],
             'sort_order' => ['nullable', 'integer', 'between:0,10000'],
+            'cycles' => ['nullable', 'array'],
+            'cycles.*' => [Rule::in(Cycle::ALL)],
             'prices' => ['array'],
             'prices.*' => [$moneyRule],
         ], [], ['prices.*' => __('cena')]);
 
+        // Formularz panelu wysyła przełączniki okresów (cycle_choice): zaznaczony okres jest
+        // w ofercie, a puste pole ceny znaczy „za darmo”. Bez nich (API, stare formularze)
+        // okres jest w ofercie, gdy ma cenę.
+        $choice = $request->boolean('cycle_choice');
+        $offered = array_intersect(Cycle::ALL, $data['cycles'] ?? []);
         $prices = [];
         foreach (Cycle::ALL as $cycle) {
             $raw = $data['prices'][$cycle] ?? null;
-            $prices[$cycle] = $raw === null || $raw === '' ? null : Money::parse((string) $raw);
+            $blank = $raw === null || $raw === '';
+            $prices[$cycle] = $choice
+                ? (in_array($cycle, $offered, true) ? ($blank ? 0 : Money::parse((string) $raw)) : null)
+                : ($blank ? null : Money::parse((string) $raw));
         }
-        if (array_filter($prices, fn ($p) => $p !== null) === []) {
-            throw ValidationException::withMessages(['prices' => __('Podaj cenę dla co najmniej jednego cyklu.')]);
+        $chosen = array_keys(array_filter($prices, fn ($p) => $p !== null));
+        if ($chosen === []) {
+            throw ValidationException::withMessages(['prices' => $choice
+                ? __('Zaznacz co najmniej jeden okres rozliczeniowy.')
+                : __('Podaj cenę dla co najmniej jednego cyklu.')]);
+        }
+        $category = ProductCategory::query()->find($data['product_category_id']);
+        if ($category && array_filter($chosen, fn ($c) => $category->allowsCycle($c)) === []) {
+            throw ValidationException::withMessages(['prices' => __('Kategoria :name nie dopuszcza żadnego z wybranych okresów.', ['name' => $category->name])]);
         }
 
         $isVps = $data['type'] === Product::TYPE_VPS;
@@ -396,6 +414,7 @@ class BillingAdminController extends Controller
             'hypervisor_group_ids' => empty($data['hypervisor_group_ids']) ? null : array_map('intval', $data['hypervisor_group_ids']),
             'setup_fee' => ($data['setup_fee'] ?? '') === '' ? 0 : Money::parse((string) $data['setup_fee']),
             'stock' => $data['stock'] ?? null,
+            'per_user_limit' => $data['per_user_limit'] ?? null,
             'sort_order' => $data['sort_order'] ?? 0,
             'is_active' => $request->boolean('is_active'),
         ], $prices];
@@ -419,9 +438,18 @@ class BillingAdminController extends Controller
             'name' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:500'],
             'sort_order' => ['nullable', 'integer', 'between:0,10000'],
+            'cycles' => ['nullable', 'array'],
+            'cycles.*' => [Rule::in(Cycle::ALL)],
         ]);
+        // Nic nie zaznaczone albo wszystko = bez ograniczeń.
+        $cycles = array_values(array_intersect(Cycle::ALL, $data['cycles'] ?? []));
+        unset($data['cycles']);
 
-        return $data + ['is_active' => $request->boolean('is_active'), 'sort_order' => $data['sort_order'] ?? 0];
+        return $data + [
+            'is_active' => $request->boolean('is_active'),
+            'sort_order' => $data['sort_order'] ?? 0,
+            'allowed_cycles' => $cycles === [] || count($cycles) === count(Cycle::ALL) ? null : $cycles,
+        ];
     }
 
     private function uniqueSlug(string $name): string

@@ -42,8 +42,8 @@
                             <input type="radio" name="cycle" value="{{ $cycle }}" data-amount="{{ $amount }}" data-metered="{{ Cycle::metered($cycle) ? 1 : 0 }}" @checked($defaultCycle === $cycle)>
                             <span>
                                 <strong>{{ Cycle::label($cycle) }}</strong>
-                                <span class="price-sm">{{ Money::format($amount) }} <span class="muted">{{ Cycle::per($cycle) }}</span></span>
-                                @if (Cycle::metered($cycle))
+                                <span class="price-sm">@if ($amount === 0) {{ __('Za darmo') }} @else {{ Money::format($amount) }} <span class="muted">{{ Cycle::per($cycle) }}</span> @endif</span>
+                                @if (Cycle::metered($cycle) && $amount > 0)
                                     <span class="hint">{{ __('z portfela, ≈ :month / mies.', ['month' => Money::format(Money::roundCents(intdiv($amount * 730, Cycle::hours($cycle))))]) }}</span>
                                 @endif
                             </span>
@@ -159,10 +159,11 @@
                 if (!picked) return;
                 var amount = parseInt(picked.dataset.amount, 10);
                 var metered = picked.dataset.metered === '1';
-                document.getElementById('sum-price').textContent = fmt(amount);
+                var free = amount + setup === 0;
+                document.getElementById('sum-price').textContent = amount === 0 ? @js(__('Za darmo')) : fmt(amount);
                 document.getElementById('sum-total').textContent = fmt(amount + setup);
-                document.getElementById('pay-recurring').hidden = metered;
-                document.getElementById('pay-metered').hidden = !metered;
+                document.getElementById('pay-recurring').hidden = metered || free;
+                document.getElementById('pay-metered').hidden = !metered || free;
                 if (metered) { form.querySelector('input[name=payment][value=wallet]').checked = true; }
             }
             form.addEventListener('change', update);
