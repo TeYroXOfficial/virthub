@@ -147,10 +147,10 @@ class BillingAdminController extends Controller
 
     public function storeProduct(Request $request): RedirectResponse
     {
-        [$data, $prices] = $this->productData($request);
-        $product = DB::transaction(function () use ($data, $prices) {
+        [$data, $prices, $replace] = $this->productData($request);
+        $product = DB::transaction(function () use ($data, $prices, $replace) {
             $product = Product::create($data);
-            $this->syncPrices($product, $prices);
+            $this->syncPrices($product, $prices, $replace);
 
             return $product;
         });
@@ -161,10 +161,10 @@ class BillingAdminController extends Controller
 
     public function updateProduct(Request $request, Product $product): RedirectResponse
     {
-        [$data, $prices] = $this->productData($request);
-        DB::transaction(function () use ($product, $data, $prices) {
+        [$data, $prices, $replace] = $this->productData($request);
+        DB::transaction(function () use ($product, $data, $prices, $replace) {
             $product->update($data);
-            $this->syncPrices($product, $prices);
+            $this->syncPrices($product, $prices, $replace);
         });
         AuditLog::record('billing.product_updated', $product, ['name' => $product->name], $request->user());
 
@@ -270,7 +270,7 @@ class BillingAdminController extends Controller
                 'unsuspend' => $this->services->unsuspend($service, $actor),
                 'terminate' => $this->services->terminate($service, 'admin', $actor) ?: throw new \DomainException($service->fresh()->last_error ?: __('Nie udało się usunąć usługi.')),
                 'cancel_end' => $service->update(['cancel_at_period_end' => true]),
-                'resume' => $service->update(['cancel_at_period_end' => false]),
+                'resume' => $service->renews ? $service->update(['cancel_at_period_end' => false]) : throw new \DomainException(__('Usługa jest jednorazowa — kończy się z końcem okresu.')),
                 // Uruchomienie bez płatności (np. usługa testowa, płatność poza panelem).
                 'activate' => $this->services->activate($service, 0, $actor) ?: throw new \DomainException($service->fresh()->last_error ?: __('Usługa nie czeka na uruchomienie.')),
             };
@@ -429,26 +429,51 @@ class BillingAdminController extends Controller
             'cycles.*' => [Rule::in(Cycle::ALL)],
             'prices' => ['array'],
             'prices.*' => [$moneyRule],
-        ], [], ['prices.*' => __('cena')]);
+            'periods' => ['nullable', 'array', 'max:30'],
+            'periods.*.count' => ['required', 'integer', 'min:1', 'max:720'],
+            'periods.*.unit' => ['required', Rule::in(Cycle::UNITS)],
+            'periods.*.price' => [$moneyRule],
+            'periods.*.once' => ['nullable', 'boolean'],
+        ], [], ['prices.*' => __('cena'), 'periods.*.price' => __('cena'), 'periods.*.count' => __('długość okresu')]);
 
-        // Formularz panelu wysyła przełączniki okresów (cycle_choice): zaznaczony okres jest
-        // w ofercie, a puste pole ceny znaczy „za darmo”. Bez nich (API, stare formularze)
-        // okres jest w ofercie, gdy ma cenę.
-        $choice = $request->boolean('cycle_choice');
-        $offered = array_intersect(Cycle::ALL, $data['cycles'] ?? []);
-        $prices = [];
-        foreach (Cycle::ALL as $cycle) {
-            $raw = $data['prices'][$cycle] ?? null;
-            $blank = $raw === null || $raw === '';
-            $prices[$cycle] = $choice
-                ? (in_array($cycle, $offered, true) ? ($blank ? 0 : Money::parse((string) $raw)) : null)
-                : ($blank ? null : Money::parse((string) $raw));
+        // Okresy: [kod => ['amount' => int, 'renews' => bool]]; null = usuń okres.
+        if ($request->has('periods') || $request->boolean('period_rows')) {
+            // Formularz panelu: dowolne okresy (liczba + jednostka), puste pole ceny = za darmo.
+            $prices = [];
+            foreach (array_values($data['periods'] ?? []) as $i => $row) {
+                try {
+                    $code = Cycle::code((int) $row['count'], $row['unit']);
+                } catch (\InvalidArgumentException) {
+                    throw ValidationException::withMessages(["periods.{$i}.count" => __('Najdłuższy okres to :max :unit.', ['max' => Cycle::MAX[$row['unit']], 'unit' => Cycle::unitLabels()[$row['unit']]])]);
+                }
+                if (isset($prices[$code])) {
+                    throw ValidationException::withMessages(["periods.{$i}.count" => __('Okres :period jest na liście dwa razy.', ['period' => Cycle::duration($code)])]);
+                }
+                $raw = $row['price'] ?? null;
+                $prices[$code] = [
+                    'amount' => $raw === null || $raw === '' ? 0 : Money::parse((string) $raw),
+                    'renews' => ! filter_var($row['once'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                ];
+            }
+            $replace = true;
+        } else {
+            // Starszy format (API, poprzednie formularze): stałe okresy z polami prices[okres].
+            $choice = $request->boolean('cycle_choice');
+            $offered = array_intersect(Cycle::ALL, $data['cycles'] ?? []);
+            $prices = [];
+            foreach (Cycle::ALL as $cycle) {
+                $raw = $data['prices'][$cycle] ?? null;
+                $blank = $raw === null || $raw === '';
+                $amount = $choice
+                    ? (in_array($cycle, $offered, true) ? ($blank ? 0 : Money::parse((string) $raw)) : null)
+                    : ($blank ? null : Money::parse((string) $raw));
+                $prices[$cycle] = $amount === null ? null : ['amount' => $amount, 'renews' => true];
+            }
+            $replace = false;
         }
         $chosen = array_keys(array_filter($prices, fn ($p) => $p !== null));
         if ($chosen === []) {
-            throw ValidationException::withMessages(['prices' => $choice
-                ? __('Zaznacz co najmniej jeden okres rozliczeniowy.')
-                : __('Podaj cenę dla co najmniej jednego cyklu.')]);
+            throw ValidationException::withMessages(['prices' => __('Dodaj co najmniej jeden okres rozliczeniowy.')]);
         }
         $category = ProductCategory::query()->find($data['product_category_id']);
         if ($category && array_filter($chosen, fn ($c) => $category->allowsCycle($c)) === []) {
@@ -471,17 +496,23 @@ class BillingAdminController extends Controller
             'per_user_limit' => $data['per_user_limit'] ?? null,
             'sort_order' => $data['sort_order'] ?? 0,
             'is_active' => $request->boolean('is_active'),
-        ], $prices];
+        ], $prices, $replace];
     }
 
-    /** @param  array<string, ?int>  $prices */
-    private function syncPrices(Product $product, array $prices): void
+    /**
+     * @param  array<string, array{amount:int, renews:bool}|null>  $prices
+     * @param  bool  $replace  usuń okresy, których nie ma na liście
+     */
+    private function syncPrices(Product $product, array $prices, bool $replace = false): void
     {
-        foreach ($prices as $cycle => $amount) {
-            if ($amount === null) {
+        if ($replace) {
+            $product->prices()->whereNotIn('cycle', array_keys(array_filter($prices)))->delete();
+        }
+        foreach ($prices as $cycle => $price) {
+            if ($price === null) {
                 $product->prices()->where('cycle', $cycle)->delete();
             } else {
-                $product->prices()->updateOrCreate(['cycle' => $cycle], ['amount' => $amount]);
+                $product->prices()->updateOrCreate(['cycle' => $cycle], $price);
             }
         }
     }
@@ -493,16 +524,16 @@ class BillingAdminController extends Controller
             'description' => ['nullable', 'string', 'max:500'],
             'sort_order' => ['nullable', 'integer', 'between:0,10000'],
             'cycles' => ['nullable', 'array'],
-            'cycles.*' => [Rule::in(Cycle::ALL)],
+            'cycles.*' => [Rule::in(Cycle::UNITS)],
         ]);
-        // Nic nie zaznaczone albo wszystko = bez ograniczeń.
-        $cycles = array_values(array_intersect(Cycle::ALL, $data['cycles'] ?? []));
+        // Kategoria ogranicza jednostki okresów (godziny, dni, tygodnie…); nic albo wszystko = bez ograniczeń.
+        $units = array_values(array_intersect(Cycle::UNITS, $data['cycles'] ?? []));
         unset($data['cycles']);
 
         return $data + [
             'is_active' => $request->boolean('is_active'),
             'sort_order' => $data['sort_order'] ?? 0,
-            'allowed_cycles' => $cycles === [] || count($cycles) === count(Cycle::ALL) ? null : $cycles,
+            'allowed_cycles' => $units === [] || count($units) === count(Cycle::UNITS) ? null : $units,
         ];
     }
 

@@ -37,7 +37,7 @@
             @if ($services->isEmpty()) <p class="empty-note">{{ __('Brak usług.') }}</p> @else
                 <ul class="plain-list" style="padding:0 18px 14px">
                     @foreach ($services as $s)
-                        <li><a href="{{ route('panel.admin.billing.service', $s) }}">{{ $s->name }}</a> <span class="pill {{ $s->statusTone() }} plain">{{ $s->statusLabel() }}</span> <span class="hint">{{ Money::format($s->amount) }} {{ Cycle::per($s->cycle) }}</span></li>
+                        <li><a href="{{ route('panel.admin.billing.service', $s) }}">{{ $s->name }}</a> <span class="pill {{ $s->statusTone() }} plain">{{ $s->statusLabel() }}</span> <span class="hint">{{ Money::format($s->amount) }} {{ $s->periodLabel() }}</span></li>
                     @endforeach
                 </ul>
             @endif

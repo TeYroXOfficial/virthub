@@ -89,9 +89,16 @@ class Product extends Model
     /** Wszystkie cykle ustawione w produkcie — także te, których kategoria teraz nie dopuszcza. @return array<string, int> */
     public function configuredPrices(): array
     {
-        $map = $this->prices->pluck('amount', 'cycle')->map(fn ($a) => (int) $a)->all();
+        $map = $this->prices->filter(fn (ProductPrice $p) => Cycle::valid($p->cycle))
+            ->mapWithKeys(fn (ProductPrice $p) => [$p->cycle => (int) $p->amount])->all();
 
-        return array_filter(array_replace(array_fill_keys(Cycle::ALL, null), $map), fn ($a) => $a !== null);
+        return Cycle::sort($map);
+    }
+
+    /** Czy okres się odnawia (false = usługa jednorazowa na ten czas). */
+    public function renews(string $cycle): bool
+    {
+        return (bool) ($this->prices->firstWhere('cycle', $cycle)?->renews ?? true);
     }
 
     /** Wszystkie oferowane cykle są darmowe. */

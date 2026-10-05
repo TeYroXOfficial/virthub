@@ -87,8 +87,11 @@ usunięcia, minimalne doładowanie, minimalne saldo dla usług godzinowych.
 - `products` — kategoria, rodzaj (`vps` z pakietem VPS albo `app` z planem
   aplikacji i dozwolonymi szablonami), dozwolone lokalizacje (grupy węzłów),
   limit sztuk, opłata instalacyjna, aktywny,
-- `product_prices` — cena dla cyklu: `hourly`, `daily`, `monthly`,
-  `quarterly`, `semiannually`, `annually` (cykl bez ceny nie jest oferowany).
+- `product_prices` — cena dla okresu: dowolna liczba + jednostka (godziny,
+  dni, tygodnie, miesiące, lata), np. 6 godzin, 3 dni, 2 tygodnie, 18 miesięcy;
+  popularne okresy mają nazwy (`hourly`, `daily`, `monthly`, `quarterly`,
+  `semiannually`, `annually`). Okres może być **jednorazowy** — płatność z góry
+  za cały czas, potem usługa się kończy (np. darmowe 7 dni na test).
 
 **Usługa rozliczana** `billing_services`: klient, produkt, cykl, cena,
 status (`pending` → `active` → `suspended` → `terminated` / `cancelled`),

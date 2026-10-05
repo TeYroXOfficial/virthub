@@ -28,9 +28,10 @@ class BillingService extends Model
     protected $fillable = [
         'user_id', 'product_id', 'name', 'cycle', 'amount', 'status', 'server_id', 'app_server_id', 'config',
         'next_due_at', 'cancel_at_period_end', 'suspend_reason', 'suspended_at', 'terminated_at', 'last_error',
+        'renews', 'metered',
     ];
 
-    protected $attributes = ['status' => self::STATUS_PENDING, 'cancel_at_period_end' => false];
+    protected $attributes = ['status' => self::STATUS_PENDING, 'cancel_at_period_end' => false, 'renews' => true, 'metered' => false];
 
     protected function casts(): array
     {
@@ -41,6 +42,8 @@ class BillingService extends Model
             'cancel_at_period_end' => 'boolean',
             'suspended_at' => 'datetime',
             'terminated_at' => 'datetime',
+            'renews' => 'boolean',
+            'metered' => 'boolean',
         ];
     }
 
@@ -74,9 +77,16 @@ class BillingService extends Model
         return $this->hasMany(InvoiceItem::class);
     }
 
+    /** Dopisek przy cenie: „/ mies.” albo „za 7 dni, jednorazowo”. */
+    public function periodLabel(): string
+    {
+        return $this->renews ? Cycle::per($this->cycle) : __('za :period, jednorazowo', ['period' => Cycle::duration($this->cycle)]);
+    }
+
+    /** Pobierana z portfela co okres (godziny/dni, odnawiana). */
     public function metered(): bool
     {
-        return Cycle::metered($this->cycle);
+        return (bool) ($this->attributes['metered'] ?? false);
     }
 
     public function isLive(): bool
@@ -99,7 +109,8 @@ class BillingService extends Model
     {
         return match ($this->status) {
             self::STATUS_PENDING => __('oczekuje na płatność'),
-            self::STATUS_ACTIVE => $this->cancel_at_period_end ? __('aktywna do końca okresu') : __('aktywna'),
+            self::STATUS_ACTIVE => ! $this->renews ? __('aktywna do :date', ['date' => $this->next_due_at?->format('d.m.Y H:i') ?? '—'])
+                : ($this->cancel_at_period_end ? __('aktywna do końca okresu') : __('aktywna')),
             self::STATUS_SUSPENDED => __('zawieszona'),
             self::STATUS_TERMINATED => __('usunięta'),
             self::STATUS_CANCELLED => __('anulowana'),
@@ -110,7 +121,7 @@ class BillingService extends Model
     public function statusTone(): string
     {
         return match ($this->status) {
-            self::STATUS_ACTIVE => $this->cancel_at_period_end ? 'warning' : 'ok',
+            self::STATUS_ACTIVE => $this->cancel_at_period_end && $this->renews ? 'warning' : 'ok',
             self::STATUS_PENDING => 'info',
             self::STATUS_SUSPENDED => 'critical',
             default => 'neutral',

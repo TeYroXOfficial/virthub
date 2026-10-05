@@ -42,7 +42,7 @@
                         <tr>
                             <td><a href="{{ route('panel.billing.service', $service) }}" style="font-weight:600">{{ $service->name }}</a></td>
                             <td><span class="pill {{ $service->statusTone() }}">{{ $service->statusLabel() }}</span></td>
-                            <td class="nowrap">{{ Money::format(\App\Domain\Billing\Billing::gross($service->amount)) }} <span class="muted">{{ Cycle::per($service->cycle) }}</span></td>
+                            <td class="nowrap">{{ Money::format(\App\Domain\Billing\Billing::gross($service->amount)) }} <span class="muted">{{ $service->periodLabel() }}</span></td>
                             <td class="muted nowrap">{{ $service->next_due_at?->format('d.m.Y H:i') ?? '—' }}</td>
                             <td style="text-align:right">@if ($url = $service->resourceUrl()) <a class="btn btn-sm" href="{{ $url }}">{{ __('Zarządzaj') }}</a> @endif</td>
                         </tr>

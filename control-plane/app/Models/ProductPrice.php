@@ -7,11 +7,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProductPrice extends Model
 {
-    protected $fillable = ['product_id', 'cycle', 'amount'];
+    protected $fillable = ['product_id', 'cycle', 'amount', 'renews'];
+
+    protected $attributes = ['renews' => true];
 
     protected function casts(): array
     {
-        return ['amount' => 'integer'];
+        return ['amount' => 'integer', 'renews' => 'boolean'];
     }
 
     /** @return BelongsTo<Product, $this> */

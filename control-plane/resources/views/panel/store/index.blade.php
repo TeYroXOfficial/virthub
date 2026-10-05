@@ -51,14 +51,14 @@
                             <div class="price-line">
                                 @if ($prices[$cheapest] === 0)
                                     <span class="price">{{ __('Za darmo') }}</span>
-                                    <span class="muted">{{ Cycle::label($cheapest) }}</span>
+                                    <span class="muted">{{ $product->renews($cheapest) ? Cycle::label($cheapest) : __('na :period', ['period' => Cycle::duration($cheapest)]) }}</span>
                                 @else
                                     <span class="price">{{ Money::format(Billing::gross($prices[$cheapest])) }}</span>
-                                    <span class="muted">{{ Cycle::per($cheapest) }}</span>
+                                    <span class="muted">{{ $product->renews($cheapest) ? Cycle::per($cheapest) : __('za :period', ['period' => Cycle::duration($cheapest)]) }}</span>
                                 @endif
                             </div>
                             @if (count($prices) > 1)
-                                <div class="hint">{{ collect(array_keys($prices))->map(fn ($c) => Cycle::label($c))->join(' · ') }}</div>
+                                <div class="hint">{{ collect(array_keys($prices))->map(fn ($c) => $product->renews($c) ? Cycle::label($c) : Cycle::duration($c))->join(' · ') }}</div>
                             @endif
                             @if (($left = $product->remaining()) !== null && $left === 0)
                                 <span class="btn" aria-disabled="true" style="width:100%; margin-top:12px; opacity:.6">{{ __('Wyprzedane') }}</span>
