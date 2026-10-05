@@ -45,6 +45,34 @@
                         <td class="num">{{ $plan->servers_count }}</td>
                         <td><span class="pill {{ $plan->is_active ? 'ok' : 'neutral' }}">{{ $plan->is_active ? __('w sprzedaży') : __('wycofany') }}</span></td>
                         <td style="text-align:right; white-space:nowrap">
+                            @php $bag = $errors->getBag('edit_'.$plan->id); $mine = $bag->any(); $v = fn ($f, $d) => $mine ? old($f, $d) : $d; @endphp
+                            <button class="btn btn-sm" type="button" onclick="document.getElementById('plan-edit-{{ $plan->id }}').showModal()">{{ __('Edytuj') }}</button>
+                            <dialog class="modal edit-modal" id="plan-edit-{{ $plan->id }}" @if ($mine) data-open @endif>
+                                <form method="POST" action="{{ route('panel.admin.apps.plans.update', $plan) }}">
+                                    @csrf @method('PUT')
+                                    <h3 class="card-title">{{ __('Edytuj plan :name', ['name' => $plan->name]) }}</h3>
+                                    @if ($mine) <div class="alert alert-error"><ul>@foreach ($bag->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div> @endif
+                                    <div class="field"><label>{{ __('Nazwa') }}</label><input name="name" type="text" required maxlength="100" value="{{ $v('name', $plan->name) }}"></div>
+                                    <div class="grid grid-3">
+                                        <div class="field"><label>{{ __('RAM (MB)') }}</label><input name="memory_mb" type="number" min="128" required value="{{ $v('memory_mb', $plan->memory_mb) }}"></div>
+                                        <div class="field"><label>{{ __('Procesor (%)') }}</label><input name="cpu_percent" type="number" min="0" value="{{ $v('cpu_percent', $plan->cpu_percent) }}"></div>
+                                        <div class="field"><label>{{ __('Dysk (MB)') }}</label><input name="disk_mb" type="number" min="256" required value="{{ $v('disk_mb', $plan->disk_mb) }}"></div>
+                                        <div class="field"><label>{{ __('Porty') }}</label><input name="ports" type="number" min="1" max="20" required value="{{ $v('ports', $plan->ports) }}"></div>
+                                        <div class="field"><label>{{ __('Cena (PLN)') }}</label><input name="price_hint" type="text" inputmode="decimal" value="{{ $v('price_hint', $plan->price_hint_cents !== null ? number_format($plan->price_hint_cents / 100, 2, '.', '') : '') }}"></div>
+                                    </div>
+                                    @if ($plan->servers_count > 0)
+                                        <label class="check-line"><input type="checkbox" name="apply_existing" value="1" @checked($mine && old('apply_existing'))>
+                                            {{ __('Zastosuj RAM, procesor i dysk do istniejących aplikacji (:count)', ['count' => $plan->servers_count]) }}</label>
+                                        <p class="hint">{{ __('Limity pamięci i procesora działają od razu, dysk po restarcie aplikacji. Liczba portów dotyczy tylko nowych aplikacji. Zmniejszenie dysku poniżej zajętego miejsca może zatrzymać zapis plików.') }}</p>
+                                    @else
+                                        <p class="hint">{{ __('Plan nie ma jeszcze aplikacji — zmiana dotyczy nowych zamówień.') }}</p>
+                                    @endif
+                                    <div class="btn-row" style="justify-content:flex-end">
+                                        <button class="btn" type="button" onclick="this.closest('dialog').close()">{{ __('Anuluj') }}</button>
+                                        <button class="btn btn-primary" type="submit">{{ __('Zapisz') }}</button>
+                                    </div>
+                                </form>
+                            </dialog>
                             <form method="POST" action="{{ route('panel.admin.apps.plans.toggle', $plan) }}" style="display:inline">
                                 @csrf
                                 <button class="btn btn-sm" type="submit">{{ $plan->is_active ? __('Wycofaj') : __('Przywróć') }}</button>
@@ -65,4 +93,5 @@
             </table>
         </div>
     </div>
+    @include('panel.admin._edit-modal-script')
 @endsection

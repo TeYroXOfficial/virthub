@@ -101,23 +101,66 @@ class AppAdminController extends Controller
 
     public function storePlan(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
+        $plan = AppPlan::query()->create($this->planData($request));
+        AuditLog::record('app_plan.created', $plan, ['name' => $plan->name]);
+
+        return back()->with('status', __('Dodano plan :name.', ['name' => $plan->name]));
+    }
+
+    /**
+     * Edycja planu. Nowe limity RAM/procesora/dysku można od razu przenieść na
+     * działające aplikacje tego planu; liczba portów dotyczy nowych zamówień
+     * (istniejące mają już przydzielone porty).
+     */
+    public function updatePlan(Request $request, AppPlan $plan): RedirectResponse
+    {
+        $before = $plan->only(['name', 'memory_mb', 'cpu_percent', 'disk_mb', 'ports', 'price_hint_cents']);
+        $plan->update($this->planData($request, 'edit_'.$plan->id));
+        AuditLog::record('app_plan.updated', $plan, ['before' => $before, 'after' => $plan->only(array_keys($before))]);
+
+        if (! $request->boolean('apply_existing')) {
+            return back()->with('status', __('Plan :name zapisany. Zmiana dotyczy nowych aplikacji.', ['name' => $plan->name]));
+        }
+
+        $updated = 0;
+        $failed = [];
+        foreach ($plan->servers()->get() as $app) {
+            try {
+                $this->apps->updateResources($app, $plan->memory_mb, $plan->cpu_percent, $plan->disk_mb, $request->user());
+                $updated++;
+            } catch (\DomainException|AgentException $e) {
+                // Zasoby są zapisane w panelu; węzeł dostanie je przy najbliższej operacji na aplikacji.
+                $failed[] = $app->name;
+            }
+        }
+
+        $message = __('Plan :name zapisany, zasoby zmienione w :count aplikacjach.', ['name' => $plan->name, 'count' => $updated]);
+        if ($failed !== []) {
+            return back()->with('status', $message)->withErrors(['plan' => __('Nie udało się wysłać zmian na węzeł dla: :apps. Panel ma nowe limity — węzeł dostanie je przy najbliższym restarcie lub reinstalacji.', ['apps' => implode(', ', array_slice($failed, 0, 10))])]);
+        }
+
+        return back()->with('status', $message);
+    }
+
+    /** @return array<string, mixed> */
+    private function planData(Request $request, ?string $bag = null): array
+    {
+        $rules = [
             'name' => ['required', 'string', 'max:100'],
             'memory_mb' => ['required', 'integer', 'min:128', 'max:1048576'],
             'cpu_percent' => ['nullable', 'integer', 'min:0', 'max:12800'],
             'disk_mb' => ['required', 'integer', 'min:256', 'max:10485760'],
             'ports' => ['required', 'integer', 'min:1', 'max:20'],
             'price_hint' => ['nullable', 'numeric', 'min:0'],
-        ]);
+        ];
+        $validated = $bag ? $request->validateWithBag($bag, $rules) : $request->validate($rules);
+        unset($validated['price_hint']);
 
-        $plan = AppPlan::query()->create([
+        return [
             ...$validated,
             'cpu_percent' => (int) ($validated['cpu_percent'] ?? 0),
-            'price_hint_cents' => isset($validated['price_hint']) ? (int) round($validated['price_hint'] * 100) : null,
-        ]);
-        AuditLog::record('app_plan.created', $plan, ['name' => $plan->name]);
-
-        return back()->with('status', __('Dodano plan :name.', ['name' => $plan->name]));
+            'price_hint_cents' => $request->filled('price_hint') ? (int) round((float) $request->input('price_hint') * 100) : null,
+        ];
     }
 
     public function togglePlan(AppPlan $plan): RedirectResponse

@@ -188,9 +188,40 @@
                         </div>
                     </dd>
                     <dt>{{ __('Szablon') }}</dt><dd>{{ $server->template?->name ?? '—' }}</dd>
-                    <dt>{{ __('Pakiet') }}</dt><dd>{{ $server->package?->name ?? '—' }}</dd>
+                    <dt>{{ __('Pakiet') }}</dt>
+                    <dd>{{ $server->package?->name ?? '—' }}
+                        @php $pkg = $server->package; @endphp
+                        @if ($pkg && ($pkg->vcpu !== $server->vcpu || $pkg->ram_mb !== $server->ram_mb || $pkg->disk_gb !== $server->disk_gb || $pkg->cpu_limit_percent !== $server->cpu_limit_percent))
+                            <span class="pill warning plain" title="{{ __('Pakiet zmieniono po utworzeniu maszyny') }}">{{ __('pakiet ma inne parametry') }}</span>
+                        @endif
+                    </dd>
                     <dt>{{ __('Utworzona') }}</dt><dd>{{ $server->created_at->format('d.m.Y H:i') }}</dd>
                 </dl>
+                @can('resize', $server)
+                    @if ($packages->isNotEmpty())
+                        <details class="form-block" style="margin:14px 0 0" @if ($errors->has('package')) open @endif>
+                            <summary>{{ __('Zmień pakiet') }}</summary>
+                            <form method="POST" action="{{ route('panel.servers.resize', $server) }}"
+                                  data-confirm="{{ __('Zmienić parametry maszyny :name? Maszyna musi być zatrzymana.', ['name' => $server->hostname]) }}">
+                                @csrf
+                                <div class="field">
+                                    <select name="package" aria-label="{{ __('Pakiet') }}">
+                                        @foreach ($packages as $p)
+                                            <option value="{{ $p->id }}" @selected($p->id === $server->vps_package_id) @disabled($p->disk_gb < $server->disk_gb)>
+                                                {{ $p->name }} — {{ $p->vcpu }} vCPU, {{ round($p->ram_mb / 1024, 1) }} GB RAM, {{ $p->disk_gb }} GB
+                                                @if ($p->id === $server->vps_package_id) ({{ __('obecny') }}) @endif
+                                                @if ($p->disk_gb < $server->disk_gb) — {{ __('za mały dysk') }} @endif
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('package') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror
+                                    <div class="hint">{{ __('Wymaga zatrzymanej maszyny. Dysku nie da się zmniejszyć. Liczba adresów IP i typ sieci zostają bez zmian. Wybierz obecny pakiet, żeby przenieść jego zmienione parametry.') }}</div>
+                                </div>
+                                <button class="btn" type="submit">{{ __('Zmień pakiet') }}</button>
+                            </form>
+                        </details>
+                    @endif
+                @endcan
             </div>
 
             <div class="card" id="network">

@@ -289,7 +289,39 @@ class AdminController extends Controller
 
     public function storePackage(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
+        $package = VpsPackage::create($this->packageData($request) + [
+            'slug' => Str::slug($request->string('name')),
+            'currency' => 'PLN',
+            'is_active' => true,
+        ]);
+
+        AuditLog::record('package.created', $package, ['slug' => $package->slug]);
+
+        return back()->with('status', __('Pakiet :name został dodany.', ['name' => $package->name]));
+    }
+
+    /**
+     * Edycja pakietu. Działające maszyny mają parametry skopiowane w chwili
+     * zamówienia — zmiana obejmuje nowe zamówienia. Adres (slug) zostaje,
+     * bo zamawia się po nim przez API.
+     */
+    public function updatePackage(Request $request, VpsPackage $package): RedirectResponse
+    {
+        $before = $package->only(['name', 'vcpu', 'cpu_limit_percent', 'ram_mb', 'disk_gb', 'bandwidth_gb', 'ip_count', 'ipv6_count', 'network_type', 'price_hint_cents']);
+        $package->update($this->packageData($request, 'edit_'.$package->id));
+        AuditLog::record('package.updated', $package, ['before' => $before, 'after' => $package->only(array_keys($before))]);
+
+        $running = $package->servers()->count();
+
+        return back()->with('status', $running > 0
+            ? __('Pakiet :name zapisany. Nowe parametry dotyczą nowych zamówień — :count istniejących maszyn zachowuje dotychczasowe (zmienisz je na stronie maszyny).', ['name' => $package->name, 'count' => $running])
+            : __('Pakiet :name zapisany.', ['name' => $package->name]));
+    }
+
+    /** @return array<string, mixed> */
+    private function packageData(Request $request, ?string $bag = null): array
+    {
+        $rules = [
             'name' => ['required', 'string', 'max:100'],
             'vcpu' => ['required', 'integer', 'min:1', 'max:128'],
             'cpu_limit_percent' => ['nullable', 'integer', 'min:1', 'lte:'.((int) $request->input('vcpu', 1) * 100)],
@@ -300,23 +332,18 @@ class AdminController extends Controller
             'ipv6_count' => ['nullable', 'integer', 'min:0', 'max:16'],
             'network_type' => ['nullable', Rule::in(IpPool::TYPES)],
             'price_hint' => ['nullable', 'numeric', 'min:0'],
-        ]);
+        ];
+        // Błędy edycji w osobnym worku — okno edycji danego pakietu otwiera się z nimi ponownie.
+        $validated = $bag ? $request->validateWithBag($bag, $rules) : $request->validate($rules);
+        unset($validated['price_hint']);
 
-        $package = VpsPackage::create([
+        return [
             ...$validated,
-            'slug' => Str::slug($validated['name']),
+            'cpu_limit_percent' => $validated['cpu_limit_percent'] ?? null,
             'ipv6_count' => $validated['ipv6_count'] ?? 0,
             'network_type' => $validated['network_type'] ?? IpPool::TYPE_PUBLIC,
-            'price_hint_cents' => isset($validated['price_hint'])
-                ? (int) round($validated['price_hint'] * 100)
-                : null,
-            'currency' => 'PLN',
-            'is_active' => true,
-        ]);
-
-        AuditLog::record('package.created', $package, ['slug' => $package->slug]);
-
-        return back()->with('status', __('Pakiet :name został dodany.', ['name' => $package->name]));
+            'price_hint_cents' => $request->filled('price_hint') ? (int) round((float) $request->input('price_hint') * 100) : null,
+        ];
     }
 
     public function togglePackage(VpsPackage $package): RedirectResponse
