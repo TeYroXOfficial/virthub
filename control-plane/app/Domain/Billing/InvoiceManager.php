@@ -198,7 +198,9 @@ class InvoiceManager
         if ($invoice->type === Invoice::TYPE_SERVICE) {
             $services->invoicePaid($invoice, $actor);
         }
-        $this->mailer->send($invoice->user, 'invoice.paid', $this->vars($invoice) + ['payment' => ['method' => Payment::gatewayLabel($gateway)]]);
+        if ($invoice->total > 0) {
+            $this->mailer->send($invoice->user, 'invoice.paid', $this->vars($invoice) + ['payment' => ['method' => Payment::gatewayLabel($gateway)]]);
+        }
         if ($invoice->type === Invoice::TYPE_TOPUP) {
             $user = $invoice->user->fresh();
             $this->mailer->send($user, 'wallet.topup', [

@@ -27,6 +27,7 @@ class Payment extends Model
             'stripe' => 'Stripe',
             'paypal' => 'PayPal',
             'manual' => __('Ręcznie (przelew)'),
+            'free' => __('Bezpłatnie'),
             default => $gateway,
         };
     }

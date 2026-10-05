@@ -24,6 +24,15 @@
                     <input name="description" value="{{ $category->description }}" maxlength="500" placeholder="{{ __('Opis') }}" aria-label="{{ __('Opis') }}" style="flex:1; min-width:180px">
                     <input type="number" name="sort_order" value="{{ $category->sort_order }}" min="0" max="10000" aria-label="{{ __('Kolejność') }}" style="max-width:80px">
                     <label class="check-line" style="margin:0"><input type="checkbox" name="is_active" value="1" @checked($category->is_active)> {{ __('widoczna') }}</label>
+                    <details class="cycle-pop">
+                        <summary class="btn btn-sm">{{ __('Okresy') }}: {{ $category->allowed_cycles ? collect($category->allowed_cycles)->map(fn ($c) => Cycle::label($c))->join(', ') : __('wszystkie') }}</summary>
+                        <div class="cycle-pop-body">
+                            <p class="hint" style="margin-top:0">{{ __('Okresy, w których można kupić produkty tej kategorii. Nic nie zaznaczone = wszystkie.') }}</p>
+                            @foreach (Cycle::ALL as $cycle)
+                                <label class="check-line"><input type="checkbox" name="cycles[]" value="{{ $cycle }}" @checked(in_array($cycle, $category->allowed_cycles ?? [], true))> {{ ucfirst(Cycle::label($cycle)) }}</label>
+                            @endforeach
+                        </div>
+                    </details>
                     <button class="btn btn-sm" type="submit">{{ __('Zapisz') }}</button>
                 </form>
                 <div class="btn-row">
@@ -49,8 +58,9 @@
                                     @else {{ $product->plan?->name ?? __('brak planu') }} @endif
                                 </td>
                                 <td class="nowrap">
-                                    @foreach ($product->priceMap() as $cycle => $amount)
-                                        <div>{{ Money::format($amount) }} <span class="muted">{{ Cycle::per($cycle) }}</span></div>
+                                    @foreach ($product->configuredPrices() as $cycle => $amount)
+                                        <div @unless ($category->allowsCycle($cycle)) class="muted" style="text-decoration:line-through" title="{{ __('kategoria nie dopuszcza') }}" @endunless>
+                                            {{ $amount === 0 ? __('za darmo') : Money::format($amount) }} <span class="muted">{{ Cycle::per($cycle) }}</span></div>
                                     @endforeach
                                 </td>
                                 <td class="num">{{ $product->live_count }}@if ($product->stock !== null) / {{ $product->stock }}@endif</td>

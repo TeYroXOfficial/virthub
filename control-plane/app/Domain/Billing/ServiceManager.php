@@ -62,6 +62,14 @@ class ServiceManager
             if (($left = $locked->remaining()) !== null && $left < 1) {
                 throw new \DomainException(__('Produkt :name jest wyprzedany.', ['name' => $product->name]));
             }
+            // Limit na klienta — ważny zwłaszcza dla produktów za darmo.
+            if ($locked->per_user_limit !== null) {
+                $owned = BillingService::query()->where('user_id', $user->id)->where('product_id', $locked->id)
+                    ->whereIn('status', [BillingService::STATUS_PENDING, ...BillingService::LIVE])->count();
+                if ($owned >= $locked->per_user_limit) {
+                    throw new \DomainException(trans_choice('Możesz mieć najwyżej :count usługę :name.|Możesz mieć najwyżej :count usługi :name.|Możesz mieć najwyżej :count usług :name.', $locked->per_user_limit, ['name' => $product->name]));
+                }
+            }
 
             return BillingService::create([
                 'user_id' => $user->id,
@@ -94,9 +102,14 @@ class ServiceManager
             'period_end' => $end,
         ];
 
-        $canPay = $payFromWallet && $this->wallet->balance($user) >= $this->previewTotal($items);
-        $invoice = $this->invoices->create($user, $items, Invoice::TYPE_SERVICE, null, ! $canPay);
-        if ($canPay) {
+        $total = $this->previewTotal($items);
+        $free = $total === 0;
+        $canPay = ! $free && $payFromWallet && $this->wallet->balance($user) >= $total;
+        $invoice = $this->invoices->create($user, $items, Invoice::TYPE_SERVICE, null, ! $canPay && ! $free);
+        if ($free) {
+            // Darmowy okres: faktura na 0 zł rozliczona od razu, usługa startuje.
+            $this->invoices->markPaid($invoice, 'free', 'free-'.$invoice->id, 0, null, $user);
+        } elseif ($canPay) {
             try {
                 $this->invoices->payWithWallet($invoice, $user);
             } catch (InsufficientFunds) {
@@ -122,7 +135,8 @@ class ServiceManager
     {
         $first = Billing::gross($service->amount);
         $setup = $product->setup_fee > 0 ? Billing::gross($product->setup_fee) : 0;
-        $required = max(Billing::money('min_balance_metered'), $first + $setup);
+        // Darmowa usługa godzinowa nie wymaga salda.
+        $required = $first + $setup > 0 ? max(Billing::money('min_balance_metered'), $first + $setup) : 0;
 
         try {
             DB::transaction(function () use ($user, $service, $first, $setup, $required) {
@@ -133,7 +147,9 @@ class ServiceManager
                 if ($setup > 0) {
                     $this->wallet->debit($user, $setup, 'usage', __('Opłata instalacyjna: :name', ['name' => $service->name]), ['billing_service_id' => $service->id]);
                 }
-                $this->wallet->debit($user, $first, 'usage', $this->usageDescription($service, now()), ['billing_service_id' => $service->id]);
+                if ($first > 0) {
+                    $this->wallet->debit($user, $first, 'usage', $this->usageDescription($service, now()), ['billing_service_id' => $service->id]);
+                }
             });
         } catch (InsufficientFunds $e) {
             $service->update(['status' => BillingService::STATUS_CANCELLED, 'last_error' => $e->getMessage()]);
@@ -409,7 +425,9 @@ class ServiceManager
                 $amount = Billing::gross($service->amount);
                 for ($i = 0; $i < self::MAX_CATCH_UP && $due->lessThanOrEqualTo(now()); $i++) {
                     DB::transaction(function () use ($service, $amount, $due) {
-                        $this->wallet->debit($service->user, $amount, 'usage', $this->usageDescription($service, $due), ['billing_service_id' => $service->id], true);
+                        if ($amount > 0) {
+                            $this->wallet->debit($service->user, $amount, 'usage', $this->usageDescription($service, $due), ['billing_service_id' => $service->id], true);
+                        }
                         $service->update(['next_due_at' => Cycle::add($due, $service->cycle)]);
                     });
                     $due = $service->next_due_at;
@@ -454,9 +472,12 @@ class ServiceManager
                     'period_start' => $start,
                     'period_end' => $end,
                 ]];
-                $autoPay = Billing::get('auto_pay') === '1' && $this->wallet->balance($service->user) >= $this->previewTotal($items);
-                $invoice = $this->invoices->create($service->user, $items, Invoice::TYPE_SERVICE, $start->isPast() ? now() : $start, ! $autoPay);
-                if ($autoPay) {
+                $total = $this->previewTotal($items);
+                $autoPay = $total > 0 && Billing::get('auto_pay') === '1' && $this->wallet->balance($service->user) >= $total;
+                $invoice = $this->invoices->create($service->user, $items, Invoice::TYPE_SERVICE, $start->isPast() ? now() : $start, ! $autoPay && $total > 0);
+                if ($total === 0) {
+                    $this->invoices->markPaid($invoice, 'free', 'free-'.$invoice->id, 0);
+                } elseif ($autoPay) {
                     try {
                         $this->invoices->payWithWallet($invoice);
                     } catch (\DomainException) {

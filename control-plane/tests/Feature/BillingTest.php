@@ -26,6 +26,7 @@ use App\Models\ProductCategory;
 use App\Models\Server;
 use App\Models\User;
 use App\Models\VpsPackage;
+use App\Models\WalletTransaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
@@ -480,6 +481,108 @@ class BillingTest extends TestCase
         $response->assertRedirect(route('panel.apps.show', $service->app_server_id));
         $this->assertSame($node->id, $service->appServer->hypervisor_id);
         $this->assertSame(Money::parse('8.80'), $this->customer->fresh()->wallet_balance, 'pierwsza doba z góry (ceny brutto)');
+    }
+
+    public function test_kategoria_ogranicza_dostepne_okresy(): void
+    {
+        $category = $this->product->category;
+        $this->actingAs($this->admin)->put(route('panel.admin.billing.categories.update', $category), [
+            'name' => 'VPS', 'is_active' => 1, 'cycles' => ['monthly', 'annually'],
+        ])->assertRedirect();
+        $this->assertSame(['monthly', 'annually'], $category->fresh()->allowed_cycles);
+        $this->assertSame(['monthly'], array_keys($this->product->fresh()->load('prices', 'category')->priceMap()));
+
+        $this->actingAs($this->customer)->get(route('panel.store.product', $this->product))->assertOk()->assertDontSee('value="hourly"', false);
+        $this->actingAs($this->customer)->post(route('panel.store.order', $this->product), [
+            'cycle' => 'hourly', 'template' => $this->template->id, 'hostname' => 'a.example.com', 'payment' => 'wallet', 'accept' => 1,
+        ])->assertSessionHasErrors('cycle');
+        try {
+            app(ServiceManager::class)->checkout($this->customer, $this->product, 'hourly', $this->config(), true);
+            $this->fail('Okres zablokowany w kategorii nie może być zamówiony');
+        } catch (\DomainException) {
+        }
+
+        // Wszystkie zaznaczone albo żaden = bez ograniczeń.
+        $this->actingAs($this->admin)->put(route('panel.admin.billing.categories.update', $category), ['name' => 'VPS', 'is_active' => 1])->assertRedirect();
+        $this->assertNull($category->fresh()->allowed_cycles);
+    }
+
+    public function test_formularz_produktu_wybiera_okresy_i_ceny_zerowe(): void
+    {
+        $base = [
+            'product_category_id' => $this->product->product_category_id, 'name' => 'Darmowy', 'type' => 'vps',
+            'vps_package_id' => $this->product->vps_package_id, 'is_active' => 1, 'cycle_choice' => 1,
+        ];
+        $this->actingAs($this->admin)->post(route('panel.admin.billing.products.store'), $base + ['cycles' => []])->assertSessionHasErrors('prices');
+
+        $this->actingAs($this->admin)->post(route('panel.admin.billing.products.store'), $base + [
+            'cycles' => ['monthly', 'annually'], 'prices' => ['monthly' => '', 'annually' => '0', 'daily' => '5'], 'per_user_limit' => 1,
+        ])->assertRedirect();
+        $product = Product::query()->where('name', 'Darmowy')->firstOrFail();
+        // Cena dzienna bez zaznaczenia nie trafia do oferty; puste pole = za darmo.
+        $this->assertSame(['monthly' => 0, 'annually' => 0], $product->configuredPrices());
+        $this->assertTrue($product->isFree());
+        $this->assertSame(1, $product->per_user_limit);
+
+        $this->product->category->update(['allowed_cycles' => ['hourly']]);
+        $this->actingAs($this->admin)->put(route('panel.admin.billing.products.update', $product), $base + ['cycles' => ['monthly']])
+            ->assertSessionHasErrors('prices');
+
+        $this->actingAs($this->admin)->get(route('panel.admin.billing.products.edit', $product))->assertOk()->assertSee('kategoria nie dopuszcza');
+        $this->actingAs($this->admin)->get(route('panel.admin.billing.catalog'))->assertOk()->assertSee('za darmo');
+    }
+
+    public function test_darmowy_produkt_miesieczny_startuje_bez_srodkow_i_odnawia_sie_sam(): void
+    {
+        $this->product->prices()->where('cycle', 'monthly')->update(['amount' => 0]);
+        $this->product->update(['per_user_limit' => 1]);
+
+        $this->actingAs($this->customer)->get(route('panel.store'))->assertOk()->assertSee('Za darmo');
+        $this->actingAs($this->customer)->post(route('panel.store.order', $this->product), [
+            'cycle' => 'monthly', 'template' => $this->template->id, 'hostname' => 'free.example.com', 'payment' => 'invoice', 'accept' => 1,
+        ])->assertRedirect();
+
+        $service = BillingService::query()->firstOrFail();
+        $this->assertSame(BillingService::STATUS_ACTIVE, $service->status);
+        $this->assertNotNull($service->server_id);
+        $invoice = Invoice::query()->firstOrFail();
+        $this->assertSame([Invoice::STATUS_PAID, 0], [$invoice->status, $invoice->total]);
+        $this->assertSame('free', Payment::firstOrFail()->gateway);
+        $this->assertSame(0, $this->customer->fresh()->wallet_balance);
+        Mail::assertNotQueued(TemplatedMail::class, fn (TemplatedMail $m) => in_array($m->templateKey, ['invoice.created', 'invoice.paid'], true));
+
+        // Limit jednej sztuki na klienta.
+        $this->actingAs($this->customer)->post(route('panel.store.order', $this->product), [
+            'cycle' => 'monthly', 'template' => $this->template->id, 'hostname' => 'free2.example.com', 'payment' => 'invoice', 'accept' => 1,
+        ])->assertSessionHasErrors('payment');
+        $this->assertSame(1, BillingService::query()->count());
+
+        // Odnowienie: darmowa faktura rozliczona od razu, kolejny okres, bez zawieszenia.
+        $due = $service->next_due_at->copy();
+        $this->travelTo($due->copy()->subDays(3));
+        $this->assertSame(1, app(ServiceManager::class)->createRenewals());
+        $this->travelTo($due->copy()->addDays(10));
+        app(ServiceManager::class)->processOverdue();
+        $service->refresh();
+        $this->assertSame(BillingService::STATUS_ACTIVE, $service->status);
+        $this->assertTrue($service->next_due_at->equalTo($due->copy()->addMonthNoOverflow()));
+        $this->assertSame(0, Invoice::query()->where('status', Invoice::STATUS_UNPAID)->count());
+    }
+
+    public function test_darmowa_usluga_godzinowa_nie_wymaga_salda(): void
+    {
+        Billing::save(['min_balance_metered' => '5']);
+        $this->product->prices()->where('cycle', 'hourly')->update(['amount' => 0]);
+
+        [$service] = app(ServiceManager::class)->checkout($this->customer, $this->product, 'hourly', $this->config(), true);
+        $this->assertSame(BillingService::STATUS_ACTIVE, $service->status);
+
+        $this->travel(5)->hours();
+        $this->assertSame(5, app(ServiceManager::class)->chargeMetered());
+        $this->assertSame(0, $this->customer->fresh()->wallet_balance);
+        $this->assertSame(0, WalletTransaction::query()->count());
+        $this->assertSame(BillingService::STATUS_ACTIVE, $service->fresh()->status);
+        $this->assertTrue($service->fresh()->next_due_at->isFuture());
     }
 
     public function test_harmonogram_nic_nie_robi_przy_wylaczonym_billingu(): void

@@ -826,3 +826,17 @@ tr.ticket-awaiting td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
     .invoice-layout { display: block; }
     .invoice-doc { border: 0; box-shadow: none; }
 }
+.cycle-admin { display: grid; gap: 8px; margin-bottom: 14px; }
+.cycle-admin-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) 140px; gap: 10px; align-items: center; }
+.cycle-admin-row.is-blocked .check-line { opacity: .55; }
+.cycle-admin-row input:disabled { opacity: .5; }
+@media (max-width: 560px) { .cycle-admin-row { grid-template-columns: 1fr; } }
+.cycle-pop { position: relative; }
+.cycle-pop > summary { list-style: none; }
+.cycle-pop > summary::-webkit-details-marker { display: none; }
+.cycle-pop[open] { flex-basis: 100%; }
+.cycle-pop-body {
+    margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: center;
+    padding: 10px 12px; border: 1px dashed var(--border); border-radius: var(--radius-sm);
+}
+.cycle-pop-body .hint { flex-basis: 100%; margin: 0 0 4px; }
