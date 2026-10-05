@@ -22,6 +22,7 @@
             ['panel.dashboard', __('Moje maszyny'), 'servers', 'panel.dashboard', null],
             ['panel.servers.create', __('Zamów serwer'), 'plus', 'panel.servers.create', 'servers.order'],
             ['panel.apps.index', __('Aplikacje'), 'gamepad', 'panel.apps.*', 'apps.order'],
+            ['panel.tickets.index', __('Zgłoszenia'), 'ticket', 'panel.tickets.*', null],
         ];
         // Administracja w grupach jak w panelach hostingowych: grupa jest
         // zwijana i otwiera się sama, gdy zawiera bieżącą stronę. Pozycje
@@ -37,6 +38,10 @@
             ]],
             [null, null, [
                 ['panel.admin.users', __('Użytkownicy'), 'users', 'panel.admin.users*', 'admin.users'],
+            ]],
+            [__('Wsparcie'), 'ticket', [
+                ['panel.admin.tickets', __('Zgłoszenia'), 'ticket', 'panel.admin.tickets|panel.admin.tickets.show', 'admin.tickets'],
+                ['panel.admin.tickets.settings', __('Działy i odpowiedzi'), 'sliders', 'panel.admin.tickets.settings*', 'admin.tickets'],
             ]],
             [__('Infrastruktura'), 'node', [
                 ['panel.admin.hypervisors', __('Hypervisory'), 'node', 'panel.admin.hypervisors*', 'admin.hypervisors'],

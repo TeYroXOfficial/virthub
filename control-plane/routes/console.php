@@ -40,3 +40,8 @@ Schedule::command('virthub:warm-content')
     ->everyTenMinutes()
     ->withoutOverlapping()
     ->runInBackground();
+
+// Zgłoszenia z odpowiedzią personelu, na które klient nie odpisał przez
+// ustawioną liczbę dni, zamykają się same (Administracja → Wsparcie).
+Schedule::call(fn () => app(App\Domain\Tickets\TicketService::class)->autoClose())
+    ->hourly()->name('tickets-autoclose')->withoutOverlapping();

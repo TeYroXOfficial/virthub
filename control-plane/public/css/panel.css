@@ -768,3 +768,23 @@ table.sortable th[aria-sort="descending"]::after { content: " ▼"; font-size: 9
 .var-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .var-list code { font-size: 12px; padding: 3px 7px; border-radius: 6px; background: var(--surface-3); cursor: pointer; }
 .mail-preview { width: 100%; height: 460px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #f4f6f8; }
+
+/* --- zgłoszenia --------------------------------------------------------------- */
+
+.ticket-thread { display: grid; gap: 12px; }
+.ticket-msg {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 18px; border-left: 3px solid var(--border);
+}
+.ticket-msg.staff { border-left-color: var(--accent); }
+.ticket-msg.internal { border-left-color: var(--warn); background: color-mix(in srgb, var(--warn) 6%, var(--surface)); }
+.ticket-msg header { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.ticket-msg header .hint { margin: 2px 0 0; }
+.ticket-body { white-space: normal; overflow-wrap: anywhere; line-height: 1.55; font-size: 14.5px; }
+.ticket-files { list-style: none; padding: 10px 0 0; margin: 10px 0 0; border-top: 1px dashed var(--border); display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.ticket-files a { display: inline-flex; align-items: center; gap: 4px; }
+textarea.prose-input { font-family: inherit; font-size: 14.5px; line-height: 1.5; }
+.ticket-side .field { margin-bottom: 12px; }
+.ticket-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 960px) { .ticket-layout { grid-template-columns: 1fr; } }
+tr.ticket-awaiting td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
