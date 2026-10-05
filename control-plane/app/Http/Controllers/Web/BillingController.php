@@ -114,6 +114,19 @@ class BillingController extends Controller
             : __('Usługa anulowana.'));
     }
 
+    /** „Przedłuż” — potwierdzenie, że klient nadal korzysta z usługi. */
+    public function keepalive(Request $request, BillingService $service): RedirectResponse
+    {
+        $this->own($request, $service->user_id);
+        try {
+            $this->services->keepalive($service, $request->user());
+        } catch (\DomainException $e) {
+            return back()->withErrors(['keepalive' => $e->getMessage()]);
+        }
+
+        return back()->with('status', __('Usługa przedłużona do :date.', ['date' => $service->fresh()->keepalive_until->format('d.m.Y H:i')]));
+    }
+
     private function own(Request $request, int $ownerId): void
     {
         abort_unless($request->user()->id === $ownerId, 404);

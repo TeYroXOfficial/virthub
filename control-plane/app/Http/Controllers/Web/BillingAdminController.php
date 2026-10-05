@@ -195,6 +195,27 @@ class BillingAdminController extends Controller
             }
         }
 
+        // Wymóg potwierdzania aktywności dla już działających usług.
+        if ($request->boolean('apply_keepalive')) {
+            $count = 0;
+            foreach ($services->where('status', '!=', BillingService::STATUS_PENDING) as $service) {
+                $service->update([
+                    'keepalive_interval' => $product->keepalive_interval,
+                    'keepalive_window' => $product->keepalive_window,
+                    // Nowy wymóg liczy się od teraz — nikt nie traci usługi od razu.
+                    'keepalive_until' => $product->keepalive_interval ? Cycle::add(now(), $product->keepalive_interval) : null,
+                    'keepalive_notified_at' => null,
+                ]);
+                if (! $product->keepalive_interval && $service->status === BillingService::STATUS_SUSPENDED && $service->suspend_reason === 'inactive') {
+                    $this->services->unsuspend($service, $request->user());
+                }
+                $count++;
+            }
+            $messages[] = $product->keepalive_interval
+                ? __('Wymóg potwierdzania aktywności ustawiony w :count usługach.', ['count' => $count])
+                : __('Wymóg potwierdzania aktywności zdjęty z :count usług.', ['count' => $count]);
+        }
+
         // Zasoby planu na działające aplikacje; maszyn VPS nie da się zmienić bez zatrzymania.
         if ($request->boolean('apply_resources')) {
             if ($product->type === Product::TYPE_APP && $product->plan) {
@@ -434,6 +455,11 @@ class BillingAdminController extends Controller
             'periods.*.unit' => ['required', Rule::in(Cycle::UNITS)],
             'periods.*.price' => [$moneyRule],
             'periods.*.once' => ['nullable', 'boolean'],
+            'keepalive' => ['nullable', 'boolean'],
+            'keepalive_count' => ['nullable', 'required_if:keepalive,1', 'integer', 'min:1', 'max:720'],
+            'keepalive_unit' => ['nullable', 'required_if:keepalive,1', Rule::in(Cycle::UNITS)],
+            'keepalive_window_count' => ['nullable', 'integer', 'min:1', 'max:720'],
+            'keepalive_window_unit' => ['nullable', Rule::in(Cycle::UNITS)],
         ], [], ['prices.*' => __('cena'), 'periods.*.price' => __('cena'), 'periods.*.count' => __('długość okresu')]);
 
         // Okresy: [kod => ['amount' => int, 'renews' => bool]]; null = usuń okres.
@@ -480,9 +506,26 @@ class BillingAdminController extends Controller
             throw ValidationException::withMessages(['prices' => __('Kategoria :name nie dopuszcza żadnego z wybranych okresów.', ['name' => $category->name])]);
         }
 
+        // Potwierdzanie aktywności: ważność po kliknięciu i okno, w którym przycisk jest aktywny.
+        $keepalive = $keepaliveWindow = null;
+        if ($request->boolean('keepalive')) {
+            try {
+                $keepalive = Cycle::code((int) $data['keepalive_count'], $data['keepalive_unit']);
+                $keepaliveWindow = ! empty($data['keepalive_window_count']) && ! empty($data['keepalive_window_unit'])
+                    ? Cycle::code((int) $data['keepalive_window_count'], $data['keepalive_window_unit']) : null;
+            } catch (\InvalidArgumentException) {
+                throw ValidationException::withMessages(['keepalive_count' => __('Za długi okres.')]);
+            }
+            if ($keepaliveWindow !== null && Cycle::hours($keepaliveWindow) > Cycle::hours($keepalive)) {
+                throw ValidationException::withMessages(['keepalive_window_count' => __('Przycisk nie może się odblokować wcześniej niż po poprzednim kliknięciu — okno musi być krótsze niż ważność.')]);
+            }
+        }
+
         $isVps = $data['type'] === Product::TYPE_VPS;
 
         return [[
+            'keepalive_interval' => $keepalive,
+            'keepalive_window' => $keepaliveWindow,
             'product_category_id' => $data['product_category_id'],
             'name' => $data['name'],
             'description' => $data['description'] ?? null,

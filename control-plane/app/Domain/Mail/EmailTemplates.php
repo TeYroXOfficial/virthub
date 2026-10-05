@@ -321,6 +321,32 @@ final class EmailTemplates
                     'body' => "Hi {{ user.name }},\n\nthe service **{{ service.name }}** has been suspended for non-payment. If it isn't paid by {{ terminate_at }}, it will be deleted together with its data.\n\n[Go to billing]({{ billing.url }})",
                 ],
             ],
+            'service.keepalive' => [
+                'group' => 'billing',
+                'name' => ['pl' => 'Potwierdź aktywność usługi', 'en' => 'Confirm service activity'],
+                'vars' => ['service.name', 'service.url', 'keepalive.until'],
+                'pl' => [
+                    'subject' => 'Przedłuż usługę {{ service.name }}',
+                    'body' => "Cześć {{ user.name }},\n\nusługa **{{ service.name }}** wymaga potwierdzenia, że nadal z niej korzystasz. Kliknij „Przedłuż” w panelu do {{ keepalive.until }} — inaczej zostanie zawieszona.\n\n[Przedłuż usługę]({{ service.url }})",
+                ],
+                'en' => [
+                    'subject' => 'Extend your service {{ service.name }}',
+                    'body' => "Hi {{ user.name }},\n\nthe service **{{ service.name }}** needs you to confirm you're still using it. Click “Extend” in the panel by {{ keepalive.until }} — otherwise it will be suspended.\n\n[Extend the service]({{ service.url }})",
+                ],
+            ],
+            'service.suspended_inactive' => [
+                'group' => 'billing',
+                'name' => ['pl' => 'Usługa zawieszona (brak aktywności)', 'en' => 'Service suspended (inactivity)'],
+                'vars' => ['service.name', 'service.url', 'terminate_at'],
+                'pl' => [
+                    'subject' => 'Usługa {{ service.name }} zawieszona — brak potwierdzenia aktywności',
+                    'body' => "Cześć {{ user.name }},\n\nusługa **{{ service.name }}** została zawieszona, bo nie potwierdzono aktywności na czas. Kliknij „Przedłuż” w panelu, a wróci od razu. Bez tego {{ terminate_at }} zostanie usunięta razem z danymi.\n\n[Przywróć usługę]({{ service.url }})",
+                ],
+                'en' => [
+                    'subject' => 'Service {{ service.name }} suspended — activity not confirmed',
+                    'body' => "Hi {{ user.name }},\n\nthe service **{{ service.name }}** has been suspended because activity wasn't confirmed in time. Click “Extend” in the panel and it will come back right away. Otherwise it will be deleted with its data on {{ terminate_at }}.\n\n[Restore the service]({{ service.url }})",
+                ],
+            ],
             'service.terminated_unpaid' => [
                 'group' => 'billing',
                 'name' => ['pl' => 'Usługa usunięta (brak płatności)', 'en' => 'Service terminated (unpaid)'],
@@ -376,7 +402,8 @@ final class EmailTemplates
             'customer' => ['email' => 'klient@example.com'], 'staff' => ['name' => 'Anna'],
             'invoice' => ['number' => 'FV/2026/0042', 'total' => '49,00 PLN', 'due_at' => now()->addDays(7)->format('d.m.Y'), 'url' => url('/panel')],
             'payment' => ['method' => 'Stripe'], 'wallet' => ['balance' => '120,50 PLN', 'url' => url('/panel')],
-            'service' => ['name' => 'VPS S — vps1.example.com'], 'billing' => ['url' => url('/panel')],
+            'service' => ['name' => 'VPS S — vps1.example.com', 'url' => url('/panel')], 'billing' => ['url' => url('/panel')],
+            'keepalive' => ['until' => now()->addDay()->format('d.m.Y H:i')],
         ];
     }
 }

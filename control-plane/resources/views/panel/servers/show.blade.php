@@ -79,6 +79,12 @@
         </div>
     @endif
 
+    @php
+        $keepaliveService = \App\Models\BillingService::query()->where('server_id', $server->id)->where('user_id', auth()->id())
+            ->whereNotNull('keepalive_interval')->whereIn('status', \App\Models\BillingService::LIVE)->first();
+    @endphp
+    @if ($keepaliveService) @include('panel.billing._keepalive', ['service' => $keepaliveService]) @endif
+
     @if ($rootPassword)
         <div class="alert alert-info">
             <strong>{{ $server->osFamily() === 'windows' ? __('Hasło Administratora — zapisz je teraz.') : __('Hasło roota — zapisz je teraz.') }}</strong>

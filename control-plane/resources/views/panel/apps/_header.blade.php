@@ -86,3 +86,9 @@
         <script src="{{ asset('js/app-console.js') }}?v={{ @filemtime(public_path('js/app-console.js')) }}"></script>
     @endif
 @endpush
+
+@php
+    $keepaliveService = \App\Models\BillingService::query()->where('app_server_id', $app->id)->where('user_id', auth()->id())
+        ->whereNotNull('keepalive_interval')->whereIn('status', \App\Models\BillingService::LIVE)->first();
+@endphp
+@if ($keepaliveService) @include('panel.billing._keepalive', ['service' => $keepaliveService]) @endif

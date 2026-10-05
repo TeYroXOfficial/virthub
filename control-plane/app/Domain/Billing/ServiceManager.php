@@ -79,6 +79,8 @@ class ServiceManager
                 'cycle' => $cycle,
                 'amount' => $price,
                 'renews' => $renews,
+                'keepalive_interval' => $product->keepalive_interval,
+                'keepalive_window' => $product->keepalive_window,
                 // Odnawiane godziny/dni — z portfela co okres; jednorazowe zawsze z góry w całości.
                 'metered' => $renews && Cycle::metered($cycle),
                 'status' => BillingService::STATUS_PENDING,
@@ -223,6 +225,7 @@ class ServiceManager
             'next_due_at' => Cycle::add(now(), $service->cycle),
             // Okres jednorazowy: po jego końcu usługa jest usuwana, bez faktury odnowienia.
             'cancel_at_period_end' => ! $service->renews,
+            'keepalive_until' => $service->needsKeepalive() ? Cycle::add(now(), $service->keepalive_interval) : null,
             'last_error' => null,
         ]);
         AuditLog::record('billing.activated', $service, $links, $actor);
@@ -294,11 +297,15 @@ class ServiceManager
             return;
         }
         $service->update(['status' => BillingService::STATUS_SUSPENDED, 'suspend_reason' => $reason, 'suspended_at' => now()]);
-        $text = $reason === 'unpaid' ? __('Brak płatności') : __('Zawieszona przez administratora');
+        $text = match ($reason) {
+            'unpaid' => __('Brak płatności'),
+            'inactive' => __('Brak potwierdzenia aktywności'),
+            default => __('Zawieszona przez administratora'),
+        };
 
         try {
             if ($service->server && ! $service->server->isSuspended()) {
-                app(ServerProvisioner::class)->suspend($service->server, $text, $actor, $reason !== 'unpaid');
+                app(ServerProvisioner::class)->suspend($service->server, $text, $actor, $reason === 'admin');
             } elseif ($service->appServer && ! $service->appServer->isSuspended()) {
                 app(AppProvisioner::class)->suspend($service->appServer, $text, $actor);
             }
@@ -307,6 +314,12 @@ class ServiceManager
         }
         AuditLog::record('billing.suspended', $service, ['reason' => $reason], $actor);
 
+        if ($reason === 'inactive' && $service->user) {
+            $this->mailer->send($service->user, 'service.suspended_inactive', [
+                'service' => ['name' => $service->name, 'url' => route('panel.billing.service', $service)],
+                'terminate_at' => now()->addDays(Billing::int('terminate_days'))->format('d.m.Y'),
+            ]);
+        }
         if ($reason === 'unpaid' && $service->user) {
             $this->mailer->send($service->user, 'service.suspended_unpaid', [
                 'service' => ['name' => $service->name],
@@ -416,7 +429,53 @@ class ServiceManager
             'expired' => $this->endCancelled(),
             'overdue' => $this->processOverdue(),
             'low_balance' => $this->warnLowBalance(),
+            'keepalive' => $this->processKeepalive(),
         ];
+    }
+
+    /**
+     * Przedłużenie ważności przyciskiem klienta. Usługa zawieszona za brak
+     * potwierdzenia wraca od razu.
+     */
+    public function keepalive(BillingService $service, ?User $actor = null): void
+    {
+        if (! $service->canKeepalive()) {
+            throw new \DomainException(__('Usługę można przedłużyć dopiero od :date.', ['date' => $service->keepaliveUnlocksAt()?->format('d.m.Y H:i') ?? '—']));
+        }
+        $service->update([
+            'keepalive_until' => Cycle::add(now(), $service->keepalive_interval),
+            'keepalive_notified_at' => null,
+        ]);
+        AuditLog::record('billing.keepalive', $service, ['until' => $service->keepalive_until->toIso8601String()], $actor);
+        if ($service->status === BillingService::STATUS_SUSPENDED && $service->suspend_reason === 'inactive') {
+            $this->unsuspend($service, $actor);
+        }
+    }
+
+    /** Przypomnienie, gdy przycisk się odblokuje, i zawieszenie po wygaśnięciu. */
+    public function processKeepalive(): int
+    {
+        $actions = 0;
+        BillingService::query()->with('user')->where('status', BillingService::STATUS_ACTIVE)
+            ->whereNotNull('keepalive_interval')->whereNotNull('keepalive_until')
+            ->each(function (BillingService $service) use (&$actions) {
+                if ($service->keepalive_until->isPast()) {
+                    $this->suspend($service, 'inactive');
+                    $actions++;
+
+                    return;
+                }
+                if ($service->keepalive_notified_at === null && ($service->keepaliveUnlocksAt()?->isPast() ?? false) && $service->user) {
+                    $service->update(['keepalive_notified_at' => now()]);
+                    $this->mailer->send($service->user, 'service.keepalive', [
+                        'service' => ['name' => $service->name, 'url' => route('panel.billing.service', $service)],
+                        'keepalive' => ['until' => $service->keepalive_until->format('d.m.Y H:i')],
+                    ]);
+                    $actions++;
+                }
+            });
+
+        return $actions;
     }
 
     /** Opłaty godzinowe/dzienne z portfela; saldo poniżej zera → zawieszenie usług godzinowych. */
@@ -544,11 +603,11 @@ class ServiceManager
                 }
             });
 
-        // Usunięcie po N dniach zawieszenia za brak płatności.
-        BillingService::query()->where('status', BillingService::STATUS_SUSPENDED)->where('suspend_reason', 'unpaid')
+        // Usunięcie po N dniach zawieszenia za brak płatności albo brak potwierdzenia aktywności.
+        BillingService::query()->where('status', BillingService::STATUS_SUSPENDED)->whereIn('suspend_reason', ['unpaid', 'inactive'])
             ->where('suspended_at', '<', now()->subDays(Billing::int('terminate_days')))
             ->each(function (BillingService $service) use (&$actions) {
-                $actions += (int) $this->terminate($service, 'unpaid');
+                $actions += (int) $this->terminate($service, $service->suspend_reason);
             });
 
         return $actions;
