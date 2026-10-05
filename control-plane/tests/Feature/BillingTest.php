@@ -760,6 +760,81 @@ class BillingTest extends TestCase
         $this->assertTrue($service->fresh()->next_due_at->equalTo($due->copy()->addWeeks(2)), 'odnowienie opłacone z portfela');
     }
 
+    public function test_potwierdzanie_aktywnosci_przyciskiem_przedluz(): void
+    {
+        Billing::save(['terminate_days' => '5']);
+        $this->product->prices()->where('cycle', 'monthly')->update(['amount' => 0]);
+        $base = [
+            'product_category_id' => $this->product->product_category_id, 'name' => 'VPS Free', 'type' => 'vps',
+            'vps_package_id' => $this->product->vps_package_id, 'is_active' => 1, 'period_rows' => 1,
+            'periods' => [['count' => 1, 'unit' => 'm', 'price' => '']], 'keepalive' => 1,
+        ];
+        $this->actingAs($this->admin)->put(route('panel.admin.billing.products.update', $this->product), $base + [
+            'keepalive_count' => 1, 'keepalive_unit' => 'd', 'keepalive_window_count' => 2, 'keepalive_window_unit' => 'd',
+        ])->assertSessionHasErrors('keepalive_window_count');
+        $this->actingAs($this->admin)->put(route('panel.admin.billing.products.update', $this->product), $base + [
+            'keepalive_count' => 1, 'keepalive_unit' => 'd', 'keepalive_window_count' => 12, 'keepalive_window_unit' => 'h',
+        ])->assertSessionHasNoErrors();
+        $this->assertSame(['daily', '12h'], [$this->product->fresh()->keepalive_interval, $this->product->fresh()->keepalive_window]);
+
+        $this->actingAs($this->customer)->get(route('panel.store.product', $this->product))->assertOk()->assertSee('wymaga potwierdzania aktywności');
+        [$service] = app(ServiceManager::class)->checkout($this->customer, $this->product, 'monthly', $this->config(), true);
+        $this->assertTrue($service->keepalive_until->equalTo(now()->addDay()));
+        $this->assertFalse($service->canKeepalive());
+
+        // Karta z paskiem na stronie usługi i maszyny; przycisk jeszcze zablokowany.
+        $this->actingAs($this->customer)->get(route('panel.billing.service', $service))->assertOk()->assertSee('data-keepalive', false)->assertSee('Przedłuż');
+        $this->actingAs($this->customer)->get(route('panel.servers.show', $service->server_id))->assertOk()->assertSee(route('panel.billing.service.keepalive', $service));
+        $this->actingAs($this->customer)->post(route('panel.billing.service.keepalive', $service))->assertSessionHasErrors('keepalive');
+        $this->actingAs(User::factory()->create())->post(route('panel.billing.service.keepalive', $service))->assertNotFound();
+
+        // Okno otwarte: przypomnienie raz, kliknięcie przedłuża o dobę od teraz.
+        $this->travel(13)->hours();
+        $this->assertSame(1, app(ServiceManager::class)->processKeepalive());
+        $this->assertSame(0, app(ServiceManager::class)->processKeepalive());
+        Mail::assertQueued(TemplatedMail::class, fn (TemplatedMail $m) => $m->templateKey === 'service.keepalive');
+        $this->actingAs($this->customer)->post(route('panel.billing.service.keepalive', $service))->assertSessionHasNoErrors()->assertSessionHas('status');
+        $this->assertTrue($service->fresh()->keepalive_until->equalTo(now()->addDay()));
+        $this->assertNull($service->fresh()->keepalive_notified_at);
+
+        // Brak kliknięcia → zawieszenie; kliknięcie przywraca.
+        $this->travel(25)->hours();
+        app(ServiceManager::class)->processKeepalive();
+        $service->refresh();
+        $this->assertSame([BillingService::STATUS_SUSPENDED, 'inactive'], [$service->status, $service->suspend_reason]);
+        $this->assertNotNull(Server::find($service->server_id)->suspended_at);
+        Mail::assertQueued(TemplatedMail::class, fn (TemplatedMail $m) => $m->templateKey === 'service.suspended_inactive');
+        $this->actingAs($this->customer)->post(route('panel.billing.service.keepalive', $service))->assertSessionHasNoErrors();
+        $this->assertSame(BillingService::STATUS_ACTIVE, $service->fresh()->status);
+        $this->assertNull(Server::find($service->server_id)->suspended_at);
+
+        // Zawieszona za brak aktywności dłużej niż N dni → usunięta.
+        $this->travel(25)->hours();
+        app(ServiceManager::class)->processKeepalive();
+        $this->travel(6)->days();
+        app(ServiceManager::class)->processOverdue();
+        $this->assertSame(BillingService::STATUS_TERMINATED, $service->fresh()->status);
+    }
+
+    public function test_wymog_aktywnosci_dla_istniejacych_uslug(): void
+    {
+        $this->fund($this->customer, '49');
+        [$service] = app(ServiceManager::class)->checkout($this->customer, $this->product, 'monthly', $this->config(), true);
+        $this->assertFalse($service->needsKeepalive());
+
+        $this->actingAs($this->admin)->put(route('panel.admin.billing.products.update', $this->product), [
+            'product_category_id' => $this->product->product_category_id, 'name' => 'VPS S', 'type' => 'vps',
+            'vps_package_id' => $this->product->vps_package_id, 'is_active' => 1, 'period_rows' => 1,
+            'periods' => [['count' => 1, 'unit' => 'm', 'price' => '49']],
+            'keepalive' => 1, 'keepalive_count' => 7, 'keepalive_unit' => 'd', 'keepalive_window_count' => 2, 'keepalive_window_unit' => 'd',
+            'apply_keepalive' => 1,
+        ])->assertSessionHasNoErrors();
+        $service->refresh();
+        $this->assertSame('7d', $service->keepalive_interval);
+        $this->assertTrue($service->keepalive_until->equalTo(now()->addDays(7)));
+        $this->assertTrue($service->keepaliveUnlocksAt()->equalTo(now()->addDays(5)));
+    }
+
     public function test_harmonogram_nic_nie_robi_przy_wylaczonym_billingu(): void
     {
         Billing::save(['enabled' => false]);

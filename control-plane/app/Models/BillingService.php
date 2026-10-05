@@ -6,6 +6,7 @@ use App\Domain\Billing\Cycle;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * Usługa rozliczana: zamówiony produkt, cykl i cena oraz powiązana maszyna
@@ -28,7 +29,7 @@ class BillingService extends Model
     protected $fillable = [
         'user_id', 'product_id', 'name', 'cycle', 'amount', 'status', 'server_id', 'app_server_id', 'config',
         'next_due_at', 'cancel_at_period_end', 'suspend_reason', 'suspended_at', 'terminated_at', 'last_error',
-        'renews', 'metered',
+        'renews', 'metered', 'keepalive_interval', 'keepalive_window', 'keepalive_until', 'keepalive_notified_at',
     ];
 
     protected $attributes = ['status' => self::STATUS_PENDING, 'cancel_at_period_end' => false, 'renews' => true, 'metered' => false];
@@ -43,6 +44,8 @@ class BillingService extends Model
             'suspended_at' => 'datetime',
             'terminated_at' => 'datetime',
             'renews' => 'boolean',
+            'keepalive_until' => 'datetime',
+            'keepalive_notified_at' => 'datetime',
             'metered' => 'boolean',
         ];
     }
@@ -75,6 +78,35 @@ class BillingService extends Model
     public function invoiceItems(): HasMany
     {
         return $this->hasMany(InvoiceItem::class);
+    }
+
+    /** Usługa wymaga potwierdzania aktywności przyciskiem „Przedłuż”. */
+    public function needsKeepalive(): bool
+    {
+        return $this->keepalive_interval !== null && Cycle::valid($this->keepalive_interval);
+    }
+
+    /** Od kiedy klient może kliknąć „Przedłuż” (null = od razu). */
+    public function keepaliveUnlocksAt(): ?Carbon
+    {
+        if (! $this->needsKeepalive() || $this->keepalive_until === null) {
+            return null;
+        }
+        $window = $this->keepalive_window && Cycle::valid($this->keepalive_window) ? $this->keepalive_window : $this->keepalive_interval;
+
+        return Cycle::sub($this->keepalive_until, $window);
+    }
+
+    public function canKeepalive(): bool
+    {
+        if (! $this->needsKeepalive()) {
+            return false;
+        }
+        if ($this->status === self::STATUS_SUSPENDED) {
+            return $this->suspend_reason === 'inactive';
+        }
+
+        return $this->status === self::STATUS_ACTIVE && ($this->keepaliveUnlocksAt()?->isPast() ?? true);
     }
 
     /** Dopisek przy cenie: „/ mies.” albo „za 7 dni, jednorazowo”. */
@@ -111,7 +143,7 @@ class BillingService extends Model
             self::STATUS_PENDING => __('oczekuje na płatność'),
             self::STATUS_ACTIVE => ! $this->renews ? __('aktywna do :date', ['date' => $this->next_due_at?->format('d.m.Y H:i') ?? '—'])
                 : ($this->cancel_at_period_end ? __('aktywna do końca okresu') : __('aktywna')),
-            self::STATUS_SUSPENDED => __('zawieszona'),
+            self::STATUS_SUSPENDED => $this->suspend_reason === 'inactive' ? __('zawieszona — brak potwierdzenia aktywności') : __('zawieszona'),
             self::STATUS_TERMINATED => __('usunięta'),
             self::STATUS_CANCELLED => __('anulowana'),
             default => $this->status,

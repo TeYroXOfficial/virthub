@@ -107,6 +107,20 @@ final class Cycle
         };
     }
 
+    public static function sub(Carbon $from, string $cycle): Carbon
+    {
+        [$n, $unit] = self::parse($cycle);
+        $date = $from->copy();
+
+        return match ($unit) {
+            'h' => $date->subHours($n),
+            'd' => $date->subDays($n),
+            'w' => $date->subWeeks($n),
+            'm' => $date->subMonthsNoOverflow($n),
+            'y' => $date->subYearsNoOverflow($n),
+        };
+    }
+
     /** Przybliżona liczba godzin w okresie — do sortowania i porównań cen „za miesiąc”. */
     public static function hours(string $cycle): int
     {

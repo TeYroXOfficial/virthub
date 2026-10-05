@@ -19,6 +19,7 @@ class Product extends Model
     protected $fillable = [
         'product_category_id', 'name', 'description', 'type', 'vps_package_id', 'app_plan_id',
         'app_egg_ids', 'hypervisor_group_ids', 'setup_fee', 'stock', 'per_user_limit', 'is_active', 'sort_order',
+        'keepalive_interval', 'keepalive_window',
     ];
 
     protected $attributes = ['is_active' => true, 'setup_fee' => 0, 'sort_order' => 0];

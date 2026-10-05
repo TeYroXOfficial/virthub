@@ -121,6 +121,39 @@
                             <div class="hint">{{ __('Np. 1 dla darmowego produktu — jeden na konto.') }}</div></div>
                     </div>
                 </div>
+                @php
+                    [$kaCount, $kaUnit] = $product->keepalive_interval ? Cycle::parse($product->keepalive_interval) : [1, 'd'];
+                    [$kwCount, $kwUnit] = $product->keepalive_window ? Cycle::parse($product->keepalive_window) : [12, 'h'];
+                    $kaOn = old('keepalive', $product->keepalive_interval ? 1 : 0);
+                @endphp
+                <div class="card" style="margin-top:16px">
+                    <h3 class="card-title">{{ __('Potwierdzanie aktywności') }}</h3>
+                    <label class="check-line"><input type="checkbox" name="keepalive" value="1" @checked($kaOn) data-keepalive-toggle> {{ __('Klient musi co jakiś czas kliknąć „Przedłuż”') }}</label>
+                    <p class="hint">{{ __('Np. dla usług za darmo: bez kliknięcia na czas usługa jest zawieszana, a po dniach ustawionych w billingu usuwana. Kliknięcie przywraca zawieszoną usługę.') }}</p>
+                    <div class="grid grid-2" data-keepalive-fields>
+                        <div class="field">
+                            <label>{{ __('Ważność po kliknięciu') }}</label>
+                            <div class="period-row" style="grid-template-columns: 80px minmax(0, 1fr)">
+                                <input type="number" name="keepalive_count" min="1" max="720" value="{{ old('keepalive_count', $kaCount) }}" aria-label="{{ __('Długość') }}">
+                                <select name="keepalive_unit" aria-label="{{ __('Jednostka') }}">
+                                    @foreach (Cycle::unitLabels() as $u => $label) <option value="{{ $u }}" @selected(old('keepalive_unit', $kaUnit) === $u)>{{ $label }}</option> @endforeach
+                                </select>
+                            </div>
+                            @error('keepalive_count') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror
+                        </div>
+                        <div class="field">
+                            <label>{{ __('Przycisk aktywny na ostatnie') }}</label>
+                            <div class="period-row" style="grid-template-columns: 80px minmax(0, 1fr)">
+                                <input type="number" name="keepalive_window_count" min="1" max="720" value="{{ old('keepalive_window_count', $kwCount) }}" aria-label="{{ __('Długość') }}">
+                                <select name="keepalive_window_unit" aria-label="{{ __('Jednostka') }}">
+                                    @foreach (Cycle::unitLabels() as $u => $label) <option value="{{ $u }}" @selected(old('keepalive_window_unit', $kwUnit) === $u)>{{ $label }}</option> @endforeach
+                                </select>
+                            </div>
+                            @error('keepalive_window_count') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror
+                            <div class="hint">{{ __('Przed tym czasem przycisk jest zablokowany, a pasek odlicza do odblokowania.') }}</div>
+                        </div>
+                    </div>
+                </div>
                 <div class="card" style="margin-top:16px">
                     <h3 class="card-title">{{ __('Lokalizacje') }}</h3>
                     <div class="hint">{{ __('Nic nie zaznaczone = każda publiczna grupa hypervisorów. Zaznaczone = klient musi wybrać jedną z nich.') }}</div>
@@ -140,6 +173,8 @@
                         <p class="hint" style="margin-top:0">{{ __('Bez zaznaczenia zmiany dotyczą tylko nowych zamówień.') }}</p>
                         <label class="check-line"><input type="checkbox" name="apply_prices" value="1" @checked(old('apply_prices'))> {{ __('Zmień cenę istniejących usług') }}</label>
                         <p class="hint">{{ __('Nowa cena obowiązuje od najbliższej opłaty: kolejnej faktury odnowienia albo naliczenia godzinowego. Faktury już wystawione się nie zmieniają.') }}</p>
+                        <label class="check-line"><input type="checkbox" name="apply_keepalive" value="1" @checked(old('apply_keepalive'))> {{ __('Zastosuj ustawienie potwierdzania aktywności do istniejących usług') }}</label>
+                        <p class="hint">{{ __('Czas liczy się od chwili zapisu. Wyłączenie potwierdzania przywraca usługi zawieszone za jego brak.') }}</p>
                         <label class="check-line"><input type="checkbox" name="apply_resources" value="1" @checked(old('apply_resources'))>
                             {{ $product->type === 'app' ? __('Ustaw zasoby planu w istniejących aplikacjach') : __('Sprawdź, które maszyny mają inne parametry niż pakiet') }}</label>
                         <p class="hint">{{ $product->type === 'app'
@@ -163,6 +198,10 @@
             }
             document.querySelectorAll('input[name=type]').forEach(function (r) { r.addEventListener('change', sync); });
             sync();
+
+            var kaToggle = document.querySelector('[data-keepalive-toggle]');
+            function syncKeepalive() { document.querySelector('[data-keepalive-fields]').hidden = !kaToggle.checked; }
+            if (kaToggle) { kaToggle.addEventListener('change', syncKeepalive); syncKeepalive(); }
 
             // Wiersze okresów: dodawanie, usuwanie i oznaczanie jednostek, których kategoria nie dopuszcza.
             var list = document.getElementById('period-list');

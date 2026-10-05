@@ -17,6 +17,8 @@
         @endif
     </div>
 
+    @include('panel.billing._keepalive', ['service' => $service])
+
     <div class="grid grid-2">
         <div class="card">
             <dl class="kv">

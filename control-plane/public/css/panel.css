@@ -848,3 +848,11 @@ dialog.edit-modal .grid-3 { gap: 0 14px; }
 .period-row .cycle-blocked { grid-column: 1 / -1; margin: -4px 0 0; color: var(--warn); }
 .period-row.is-blocked > input, .period-row.is-blocked > select { border-color: var(--warn); }
 @media (max-width: 560px) { .period-row { grid-template-columns: 70px 1fr; } }
+
+/* --- potwierdzanie aktywności usługi ---------------------------------------- */
+.keepalive-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.keepalive-bar { height: 10px; border-radius: 6px; background: var(--surface-3); overflow: hidden; margin: 14px 0 8px; }
+.keepalive-bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 1s linear; }
+.keepalive.is-open .keepalive-bar > i { background: var(--warn); }
+.keepalive.is-suspended { border-color: color-mix(in srgb, var(--critical) 40%, var(--border)); }
+.keepalive-meta { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13px; }

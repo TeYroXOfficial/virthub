@@ -52,6 +52,11 @@
                     @else — @endif
                 </dd>
                 <dt>{{ __('Konfiguracja') }}</dt><dd class="mono" style="font-size:12px">{{ json_encode(collect($service->config ?? [])->except('ssh_keys'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</dd>
+                @if ($service->needsKeepalive())
+                    <dt>{{ __('Aktywność') }}</dt>
+                    <dd>{{ __('potwierdzana co :period', ['period' => \App\Domain\Billing\Cycle::duration($service->keepalive_interval)]) }}
+                        <div class="hint">{{ __('ważna do :date', ['date' => $service->keepalive_until?->format('d.m.Y H:i') ?? '—']) }}</div></dd>
+                @endif
                 <dt>{{ __('Zamówiona') }}</dt><dd>{{ $service->created_at->format('d.m.Y H:i') }}</dd>
                 @if ($service->terminated_at) <dt>{{ __('Zakończona') }}</dt><dd>{{ $service->terminated_at->format('d.m.Y H:i') }}</dd> @endif
             </dl>

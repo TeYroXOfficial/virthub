@@ -132,6 +132,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
         Route::post('/invoices/{invoice}/wallet', 'payWithWallet')->middleware('throttle:10,1')->name('.invoice.wallet');
         Route::get('/services/{service}', 'service')->name('.service');
         Route::post('/services/{service}/cancel', 'cancel')->name('.service.cancel');
+        Route::post('/services/{service}/keepalive', 'keepalive')->middleware('throttle:20,1')->name('.service.keepalive');
     });
     Route::post('/billing/invoices/{invoice}/pay/{gateway}', [\App\Http\Controllers\Web\PaymentController::class, 'pay'])
         ->whereIn('gateway', ['stripe', 'paypal'])->middleware('throttle:10,1')->name('billing.pay');

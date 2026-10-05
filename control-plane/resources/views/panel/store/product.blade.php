@@ -30,6 +30,9 @@
     </div>
 
     @if ($product->description) <p class="muted" style="max-width:760px">{{ $product->description }}</p> @endif
+    @if ($product->keepalive_interval)
+        <div class="alert alert-info" style="max-width:760px">{{ __('Ta usługa wymaga potwierdzania aktywności: co :period kliknij „Przedłuż” w panelu, inaczej zostanie zawieszona.', ['period' => \App\Domain\Billing\Cycle::duration($product->keepalive_interval)]) }}</div>
+    @endif
 
     <form method="POST" action="{{ route('panel.store.order', $product) }}" class="order-layout" id="order-form">
         @csrf
