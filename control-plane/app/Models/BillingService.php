@@ -87,9 +87,10 @@ class BillingService extends Model
     /** Link do maszyny/aplikacji w panelu klienta. */
     public function resourceUrl(): ?string
     {
+        // Model, nie samo ID — aplikacje mają w adresie UUID, a nie numer.
         return match (true) {
-            $this->server_id !== null => route('panel.servers.show', $this->server_id),
-            $this->app_server_id !== null => route('panel.apps.show', $this->app_server_id),
+            $this->server !== null => route('panel.servers.show', $this->server),
+            $this->appServer !== null => route('panel.apps.show', $this->appServer),
             default => null,
         };
     }
