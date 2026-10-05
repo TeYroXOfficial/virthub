@@ -155,6 +155,7 @@
         <h2>{{ __('Działania na koncie') }}</h2>
         <div class="card">
             <div class="btn-row">
+                @include('panel.admin._impersonate-button', ['target' => $user])
                 <form method="POST" action="{{ route('panel.admin.users.password', $user) }}" style="margin:0"
                       data-confirm="{{ __('Wygenerować nowe hasło? Stare przestanie działać, a tokeny API zostaną unieważnione.') }}">
                     @csrf

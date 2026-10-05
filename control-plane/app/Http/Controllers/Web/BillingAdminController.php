@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Domain\Agent\AgentException;
 use App\Domain\Apps\AppProvisioner;
 use App\Domain\Billing\Billing;
+use App\Domain\Billing\BillingStats;
 use App\Domain\Billing\Cycle;
 use App\Domain\Billing\InvoiceManager;
 use App\Domain\Billing\Money;
@@ -43,20 +44,12 @@ class BillingAdminController extends Controller
 
     // --- pulpit i ustawienia -------------------------------------------------------------
 
-    public function index(): View
+    public function index(BillingStats $billingStats): View
     {
-        $paid = Invoice::query()->where('status', Invoice::STATUS_PAID)->where('type', Invoice::TYPE_SERVICE);
-
         return view('panel.admin.billing.index', [
-            'stats' => [
-                'month' => (int) (clone $paid)->where('paid_at', '>=', now()->startOfMonth())->sum('total'),
-                'unpaid' => (int) Invoice::query()->where('status', Invoice::STATUS_UNPAID)->sum('total'),
-                'overdue' => Invoice::query()->where('status', Invoice::STATUS_UNPAID)->where('due_at', '<', now())->count(),
-                'active' => BillingService::query()->where('status', BillingService::STATUS_ACTIVE)->count(),
-                'suspended' => BillingService::query()->where('status', BillingService::STATUS_SUSPENDED)->count(),
-                'wallets' => (int) User::query()->sum('wallet_balance'),
-                'metered' => (int) WalletTransaction::query()->where('type', 'usage')->where('created_at', '>=', now()->startOfMonth())->sum('amount'),
-            ],
+            'stats' => $billingStats->summary(),
+            'daily' => $billingStats->daily(30),
+            'byProduct' => $billingStats->byProduct(),
             'recent' => Payment::query()->with('invoice.user')->latest('id')->limit(10)->get(),
             'enabled' => Billing::enabled(),
         ]);

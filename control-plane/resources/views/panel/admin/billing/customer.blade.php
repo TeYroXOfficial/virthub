@@ -10,7 +10,13 @@
             <a class="muted" href="{{ route('panel.admin.billing.customers') }}" style="font-size:13px">{{ __('← Portfele') }}</a>
             <h1>{{ $customer->name ?: $customer->email }}</h1>
             <div class="meta-line"><span>{{ $customer->email }}</span>
-                @if (auth()->user()->hasPermission('admin.users')) <span class="sep">·</span><a href="{{ route('panel.admin.users.edit', $customer) }}">{{ __('Konto') }}</a> @endif</div>
+                @if ($customer->isSuspended()) <span class="sep">·</span><span class="pill critical">{{ __('konto zawieszone') }}</span> @endif</div>
+        </div>
+        <div class="actions">
+            @if (auth()->user()->hasPermission('admin.users'))
+                <a class="btn" href="{{ route('panel.admin.users.edit', $customer) }}"><x-icon name="users" :size="15"/> {{ __('Konto') }}</a>
+            @endif
+            @include('panel.admin._impersonate-button', ['target' => $customer])
         </div>
     </div>
 
@@ -31,27 +37,38 @@
         </div>
     </div>
 
-    <div class="grid grid-2">
-        <div class="card flush">
-            <div class="dash-head"><h3 class="card-title" style="margin:0">{{ __('Usługi') }}</h3></div>
-            @if ($services->isEmpty()) <p class="empty-note">{{ __('Brak usług.') }}</p> @else
-                <ul class="plain-list" style="padding:0 18px 14px">
+    <div class="card flush dash-section">
+        <div class="dash-head"><h3 class="card-title" style="margin:0">{{ __('Usługi') }}</h3>
+            <a class="card-more" href="{{ route('panel.admin.billing.services', ['q' => $customer->email]) }}">{{ __('Wszystkie') }} →</a></div>
+        @if ($services->isEmpty())
+            <p class="empty-note">{{ __('Brak usług.') }}</p>
+        @else
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>{{ __('Usługa') }}</th><th>{{ __('Stan') }}</th><th>{{ __('Cena') }}</th><th>{{ __('Następna płatność') }}</th></tr></thead>
+                    <tbody>
                     @foreach ($services as $s)
-                        <li><a href="{{ route('panel.admin.billing.service', $s) }}">{{ $s->name }}</a> <span class="pill {{ $s->statusTone() }} plain">{{ $s->statusLabel() }}</span> <span class="hint">{{ Money::format($s->amount) }} {{ $s->periodLabel() }}</span></li>
+                        <tr>
+                            <td><a href="{{ route('panel.admin.billing.service', $s) }}" style="font-weight:600">{{ $s->name }}</a></td>
+                            <td><span class="pill {{ $s->statusTone() }}">{{ $s->statusLabel() }}</span></td>
+                            <td class="nowrap">{{ $s->amount === 0 ? __('za darmo') : Money::format($s->amount) }} <span class="muted">{{ $s->periodLabel() }}</span></td>
+                            <td class="muted nowrap">{{ $s->next_due_at?->format('d.m.Y H:i') ?? '—' }}</td>
+                        </tr>
                     @endforeach
-                </ul>
-            @endif
-        </div>
-        <div class="card flush">
-            <div class="dash-head"><h3 class="card-title" style="margin:0">{{ __('Faktury') }}</h3></div>
-            @if ($invoices->isEmpty()) <p class="empty-note">{{ __('Brak faktur.') }}</p> @else
-                <ul class="plain-list" style="padding:0 18px 14px">
-                    @foreach ($invoices as $i)
-                        <li><a class="mono" href="{{ route('panel.admin.billing.invoice', $i) }}">{{ $i->number }}</a> {{ Money::format($i->total, $i->currency) }} <span class="pill {{ $i->statusTone() }} plain">{{ $i->statusLabel() }}</span></li>
-                    @endforeach
-                </ul>
-            @endif
-        </div>
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </div>
+
+    <div class="card flush dash-section" style="margin-top:16px">
+        <div class="dash-head"><h3 class="card-title" style="margin:0">{{ __('Faktury') }}</h3>
+            <a class="card-more" href="{{ route('panel.admin.billing.invoices', ['q' => $customer->email]) }}">{{ __('Wszystkie') }} →</a></div>
+        @if ($invoices->isEmpty())
+            <p class="empty-note">{{ __('Brak faktur.') }}</p>
+        @else
+            @include('panel.billing._invoice-table', ['invoices' => $invoices, 'admin' => true, 'showCustomer' => false])
+        @endif
     </div>
 
     <div class="card flush" style="margin-top:16px">

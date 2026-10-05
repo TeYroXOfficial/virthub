@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Domain\Apps\EggImporter;
 use App\Domain\Billing\Billing;
+use App\Domain\Billing\BillingStats;
 use App\Domain\Billing\Cycle;
 use App\Domain\Billing\InsufficientFunds;
 use App\Domain\Billing\InvoiceManager;
@@ -861,6 +862,37 @@ class BillingTest extends TestCase
         ]);
         $this->assertTrue($service->inactiveDeleteAt()->equalTo(now()->addHours(36)));
         $this->actingAs($this->admin)->get(route('panel.admin.billing.settings'))->assertOk()->assertSee('value="36"', false);
+    }
+
+    public function test_pulpit_i_przeglad_pokazuja_statystyki_i_wykresy(): void
+    {
+        $this->fund($this->customer, '100');
+        [, $invoice] = app(ServiceManager::class)->checkout($this->customer, $this->product, 'monthly', $this->config(), false);
+        app(InvoiceManager::class)->markPaid($invoice, 'manual', 'T1');
+
+        $stats = app(BillingStats::class);
+        $this->assertSame(Money::parse('49'), $stats->summary()['income_month']);
+        $daily = $stats->daily(30);
+        $this->assertCount(30, $daily['income']);
+        $this->assertSame(Money::parse('49'), end($daily['income'])['value']);
+        $this->assertSame(1, end($daily['services'])['value']);
+        $this->assertSame([['label' => 'VPS S', 'value' => 1]], $stats->byProduct());
+
+        $this->actingAs($this->admin)->get(route('panel.admin.index'))->assertOk()
+            ->assertSee('Wpływy — ostatnie 30 dni')->assertSee('data-bar-chart', false)->assertSee('49,00 PLN');
+        $this->actingAs($this->admin)->get(route('panel.admin.billing'))->assertOk()->assertSee('Aktywne usługi według produktu');
+
+        // Bez uprawnienia do billingu — pulpit bez tej sekcji.
+        $support = User::factory()->create(['role' => User::ROLE_SUPPORT, 'permissions' => ['admin.servers']]);
+        $this->actingAs($support)->get(route('panel.admin.index'))->assertOk()->assertDontSee('Wpływy — ostatnie 30 dni');
+    }
+
+    public function test_strona_portfela_klienta_z_tabelami(): void
+    {
+        $this->fund($this->customer, '100');
+        app(ServiceManager::class)->checkout($this->customer, $this->product, 'monthly', $this->config(), true);
+        $this->actingAs($this->admin)->get(route('panel.admin.billing.customer', $this->customer))->assertOk()
+            ->assertSee('<th>Usługa</th>', false)->assertSee('FV/2026/0001')->assertSee(route('panel.admin.users.impersonate', $this->customer));
     }
 
     public function test_harmonogram_nic_nie_robi_przy_wylaczonym_billingu(): void

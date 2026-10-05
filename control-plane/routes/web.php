@@ -42,6 +42,10 @@ Route::post('/logout', [AuthController::class, 'logout'])
 // mieć już aktywną sesję na inne konto (np. wsparcie testujące zgłoszenie).
 Route::get('/sso/{token}', SsoController::class)->name('sso.consume');
 
+// Powrót z „Zaloguj jako” na konto administratora.
+Route::post('/impersonate/stop', [\App\Http\Controllers\Web\ImpersonationController::class, 'stop'])
+    ->middleware('auth')->name('impersonate.stop');
+
 Route::get('/avatars/{user}', [\App\Http\Controllers\Web\AccountController::class, 'avatar'])
     ->middleware('auth')->whereNumber('user')->name('avatar');
 
@@ -51,9 +55,9 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
 
     Route::prefix('/account')->name('account')->controller(\App\Http\Controllers\Web\AccountController::class)->group(function () {
         Route::get('/', 'show');
-        Route::put('/profile', 'updateProfile')->name('.profile');
-        Route::put('/password', 'updatePassword')->middleware('throttle:10,1')->name('.password');
-        Route::post('/logout-others', 'logoutOthers')->middleware('throttle:10,1')->name('.logout-others');
+        Route::put('/profile', 'updateProfile')->middleware('not-impersonating')->name('.profile');
+        Route::put('/password', 'updatePassword')->middleware(['not-impersonating', 'throttle:10,1'])->name('.password');
+        Route::post('/logout-others', 'logoutOthers')->middleware(['not-impersonating', 'throttle:10,1'])->name('.logout-others');
         Route::post('/avatar', 'uploadAvatar')->name('.avatar');
         Route::delete('/avatar', 'deleteAvatar')->name('.avatar.delete');
     });
@@ -350,6 +354,8 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/users/{user}/unsuspend', [UsersController::class, 'unsuspend'])->name('users.unsuspend');
         Route::post('/users/{user}/password', [UsersController::class, 'resetPassword'])->name('users.password');
         Route::delete('/users/{user}', [UsersController::class, 'destroy'])->name('users.destroy');
+        Route::post('/users/{user}/impersonate', [\App\Http\Controllers\Web\ImpersonationController::class, 'start'])
+            ->middleware(['admin', 'throttle:20,1'])->name('users.impersonate');
     });
 });
 

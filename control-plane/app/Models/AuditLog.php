@@ -41,6 +41,10 @@ class AuditLog extends Model
         ?User $actor = null,
     ): self {
         $actor ??= Auth::user();
+        // Działania wykonane jako klient — z dopiskiem, kto był zalogowany naprawdę.
+        if (\App\Domain\Access\Impersonation::active() && $actor?->id === Auth::id()) {
+            $meta['impersonated_by'] = \App\Domain\Access\Impersonation::impersonator()?->email;
+        }
 
         return self::create([
             'actor_id' => $actor?->id,
