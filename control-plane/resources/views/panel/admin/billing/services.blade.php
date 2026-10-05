@@ -34,7 +34,7 @@
                             <td class="mono muted">{{ $service->id }}</td>
                             <td><a href="{{ route('panel.admin.billing.service', $service) }}" style="font-weight:600">{{ $service->name }}</a></td>
                             <td>@if ($service->user) <a href="{{ route('panel.admin.billing.customer', $service->user) }}">{{ $service->user->email }}</a> @else — @endif</td>
-                            <td class="nowrap">{{ Money::format($service->amount) }} <span class="muted">{{ Cycle::per($service->cycle) }}</span></td>
+                            <td class="nowrap">{{ Money::format($service->amount) }} <span class="muted">{{ $service->periodLabel() }}</span></td>
                             <td><span class="pill {{ $service->statusTone() }}">{{ $service->statusLabel() }}</span></td>
                             <td class="muted nowrap">{{ $service->next_due_at?->format('d.m.Y H:i') ?? '—' }}</td>
                         </tr>

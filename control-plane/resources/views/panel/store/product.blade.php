@@ -39,11 +39,14 @@
                 <div class="cycle-grid">
                     @foreach ($gross as $cycle => $amount)
                         <label class="cycle-option">
-                            <input type="radio" name="cycle" value="{{ $cycle }}" data-amount="{{ $amount }}" data-metered="{{ Cycle::metered($cycle) ? 1 : 0 }}" @checked($defaultCycle === $cycle)>
+                            <input type="radio" name="cycle" value="{{ $cycle }}" data-amount="{{ $amount }}" data-metered="{{ $product->renews($cycle) && Cycle::metered($cycle) ? 1 : 0 }}" @checked($defaultCycle === $cycle)>
                             <span>
-                                <strong>{{ Cycle::label($cycle) }}</strong>
-                                <span class="price-sm">@if ($amount === 0) {{ __('Za darmo') }} @else {{ Money::format($amount) }} <span class="muted">{{ Cycle::per($cycle) }}</span> @endif</span>
-                                @if (Cycle::metered($cycle) && $amount > 0)
+                                <strong>{{ $product->renews($cycle) ? Cycle::label($cycle) : Cycle::duration($cycle) }}</strong>
+                                <span class="price-sm">@if ($amount === 0) {{ __('Za darmo') }} @else {{ Money::format($amount) }} <span class="muted">{{ $product->renews($cycle) ? Cycle::per($cycle) : '' }}</span> @endif</span>
+                                @unless ($product->renews($cycle))
+                                    <span class="hint">{{ __('jednorazowo na :period — potem usługa się kończy', ['period' => Cycle::duration($cycle)]) }}</span>
+                                @endunless
+                                @if ($product->renews($cycle) && Cycle::metered($cycle) && $amount > 0)
                                     <span class="hint">{{ __('z portfela, ≈ :month / mies.', ['month' => Money::format(Money::roundCents(intdiv($amount * 730, Cycle::hours($cycle))))]) }}</span>
                                 @endif
                             </span>

@@ -56,7 +56,8 @@ class ServiceManager
             throw new \DomainException(__('Ten produkt nie jest dostępny w wybranym cyklu.'));
         }
 
-        $service = DB::transaction(function () use ($user, $product, $cycle, $config, $price) {
+        $renews = $product->renews($cycle);
+        $service = DB::transaction(function () use ($user, $product, $cycle, $config, $price, $renews) {
             // Blokada produktu — dwa równoległe zamówienia nie przekroczą limitu sztuk.
             $locked = Product::query()->lockForUpdate()->findOrFail($product->id);
             if (($left = $locked->remaining()) !== null && $left < 1) {
@@ -77,13 +78,16 @@ class ServiceManager
                 'name' => mb_substr($product->name.' — '.($config['hostname'] ?? $config['name'] ?? ''), 0, 150),
                 'cycle' => $cycle,
                 'amount' => $price,
+                'renews' => $renews,
+                // Odnawiane godziny/dni — z portfela co okres; jednorazowe zawsze z góry w całości.
+                'metered' => $renews && Cycle::metered($cycle),
                 'status' => BillingService::STATUS_PENDING,
                 'config' => $config,
             ]);
         });
         AuditLog::record('billing.ordered', $service, ['product' => $product->name, 'cycle' => $cycle], $user);
 
-        if (Cycle::metered($cycle)) {
+        if ($service->metered()) {
             return [$this->startMetered($user, $service, $product), null];
         }
 
@@ -217,6 +221,8 @@ class ServiceManager
         $service->update($links + [
             'status' => BillingService::STATUS_ACTIVE,
             'next_due_at' => Cycle::add(now(), $service->cycle),
+            // Okres jednorazowy: po jego końcu usługa jest usuwana, bez faktury odnowienia.
+            'cancel_at_period_end' => ! $service->renews,
             'last_error' => null,
         ]);
         AuditLog::record('billing.activated', $service, $links, $actor);
@@ -275,7 +281,7 @@ class ServiceManager
 
         if ($this->wallet->balance($user) > 0) {
             BillingService::query()->where('user_id', $user->id)->where('status', BillingService::STATUS_SUSPENDED)
-                ->where('suspend_reason', 'unpaid')->whereIn('cycle', [Cycle::HOURLY, Cycle::DAILY])->get()
+                ->where('suspend_reason', 'unpaid')->where('metered', true)->get()
                 ->each(fn (BillingService $s) => $this->unsuspend($s, $actor));
         }
     }
@@ -419,7 +425,7 @@ class ServiceManager
         $charged = 0;
         $users = [];
         BillingService::query()->with('user')->where('status', BillingService::STATUS_ACTIVE)
-            ->whereIn('cycle', [Cycle::HOURLY, Cycle::DAILY])->where('next_due_at', '<=', now())
+            ->where('metered', true)->where('next_due_at', '<=', now())
             ->each(function (BillingService $service) use (&$charged, &$users) {
                 $due = $service->next_due_at;
                 $amount = Billing::gross($service->amount);
@@ -439,7 +445,7 @@ class ServiceManager
         foreach ($users as $user) {
             if ($this->wallet->balance($user) < 0) {
                 BillingService::query()->where('user_id', $user->id)->where('status', BillingService::STATUS_ACTIVE)
-                    ->whereIn('cycle', [Cycle::HOURLY, Cycle::DAILY])->get()
+                    ->where('metered', true)->get()
                     ->each(fn (BillingService $s) => $this->suspend($s, 'unpaid'));
             }
         }
@@ -453,7 +459,7 @@ class ServiceManager
         $created = 0;
         $horizon = now()->addDays(Billing::int('renewal_days'));
         BillingService::query()->with('user')->whereIn('status', BillingService::LIVE)
-            ->whereNotIn('cycle', [Cycle::HOURLY, Cycle::DAILY])->where('cancel_at_period_end', false)
+            ->where('metered', false)->where('cancel_at_period_end', false)
             ->whereNotNull('next_due_at')->where('next_due_at', '<=', $horizon)
             ->each(function (BillingService $service) use (&$created) {
                 $start = $service->next_due_at->copy();
@@ -557,7 +563,7 @@ class ServiceManager
         }
         $sent = 0;
         $byUser = BillingService::query()->where('status', BillingService::STATUS_ACTIVE)
-            ->whereIn('cycle', [Cycle::HOURLY, Cycle::DAILY])->get()->groupBy('user_id');
+            ->where('metered', true)->get()->groupBy('user_id');
         foreach ($byUser as $userId => $services) {
             $user = User::query()->find($userId);
             if ($user === null || $user->wallet_notified_at !== null) {
@@ -624,7 +630,10 @@ class ServiceManager
 
     private function periodDescription(BillingService $service, Carbon $start, Carbon $end): string
     {
-        return __(':name (:from – :to)', ['name' => $service->name, 'from' => $start->format('d.m.Y'), 'to' => $end->format('d.m.Y')]);
+        // Okresy godzinowe i dzienne z godziną — inaczej „15.10 – 15.10” nic nie mówi.
+        $format = in_array(Cycle::unit($service->cycle), ['h', 'd'], true) ? 'd.m.Y H:i' : 'd.m.Y';
+
+        return __(':name (:from – :to)', ['name' => $service->name, 'from' => $start->format($format), 'to' => $end->format($format)]);
     }
 
     private function usageDescription(BillingService $service, Carbon $from): string

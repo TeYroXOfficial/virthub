@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Domain\Apps\EggImporter;
 use App\Domain\Billing\Billing;
+use App\Domain\Billing\Cycle;
 use App\Domain\Billing\InsufficientFunds;
 use App\Domain\Billing\InvoiceManager;
 use App\Domain\Billing\Money;
@@ -491,9 +492,9 @@ class BillingTest extends TestCase
     {
         $category = $this->product->category;
         $this->actingAs($this->admin)->put(route('panel.admin.billing.categories.update', $category), [
-            'name' => 'VPS', 'is_active' => 1, 'cycles' => ['monthly', 'annually'],
+            'name' => 'VPS', 'is_active' => 1, 'cycles' => ['m', 'y'],
         ])->assertRedirect();
-        $this->assertSame(['monthly', 'annually'], $category->fresh()->allowed_cycles);
+        $this->assertSame(['m', 'y'], $category->fresh()->allowed_cycles);
         $this->assertSame(['monthly'], array_keys($this->product->fresh()->load('prices', 'category')->priceMap()));
 
         $this->actingAs($this->customer)->get(route('panel.store.product', $this->product))->assertOk()->assertDontSee('value="hourly"', false);
@@ -643,6 +644,120 @@ class BillingTest extends TestCase
 
         $this->assertSame([4096, 20480], [$app->fresh()->memory_mb, $app->fresh()->disk_mb]);
         $this->assertSame($node->id, $app->fresh()->hypervisor_id);
+    }
+
+    public function test_dowolne_okresy_kody_i_nazwy(): void
+    {
+        $this->assertSame('quarterly', Cycle::code(3, 'm'));
+        $this->assertSame('annually', Cycle::code(12, 'm'));
+        $this->assertSame('2y', Cycle::code(24, 'm'));
+        $this->assertSame('3d', Cycle::code(3, 'd'));
+        $this->assertSame([6, 'm'], Cycle::parse('semiannually'));
+        $this->assertFalse(Cycle::valid('800h'));
+        $this->assertFalse(Cycle::valid('0d'));
+        $this->assertTrue(now()->addWeeks(2)->equalTo(Cycle::add(now(), '2w')));
+        $this->assertSame(36, Cycle::hours('36h'));
+
+        app()->setLocale('pl');
+        $this->assertSame('3 dni', Cycle::duration('3d'));
+        $this->assertSame('2 tygodnie', Cycle::duration('2w'));
+        $this->assertSame('5 miesięcy', Cycle::duration('5m'));
+        $this->assertSame('1 rok', Cycle::duration('annually'));
+        $this->assertSame('/ 6 godzin', Cycle::per('6h'));
+        app()->setLocale('en');
+        $this->assertSame('3 days', Cycle::duration('3d'));
+        $this->assertSame('1 week', Cycle::duration('1w'));
+    }
+
+    public function test_formularz_produktu_z_dowolnymi_okresami(): void
+    {
+        $base = [
+            'product_category_id' => $this->product->product_category_id, 'name' => 'Elastyczny', 'type' => 'vps',
+            'vps_package_id' => $this->product->vps_package_id, 'is_active' => 1, 'period_rows' => 1,
+        ];
+        $this->actingAs($this->admin)->post(route('panel.admin.billing.products.store'), $base)->assertSessionHasErrors('prices');
+        $this->actingAs($this->admin)->post(route('panel.admin.billing.products.store'), $base + ['periods' => [
+            ['count' => 3, 'unit' => 'd', 'price' => '5'], ['count' => 3, 'unit' => 'd', 'price' => '6'],
+        ]])->assertSessionHasErrors('periods.1.count');
+        $this->actingAs($this->admin)->post(route('panel.admin.billing.products.store'), $base + ['periods' => [
+            ['count' => 400, 'unit' => 'd', 'price' => '5'],
+        ]])->assertSessionHasErrors('periods.0.count');
+
+        $this->actingAs($this->admin)->post(route('panel.admin.billing.products.store'), $base + ['periods' => [
+            ['count' => 6, 'unit' => 'h', 'price' => '0,30'],
+            ['count' => 2, 'unit' => 'w', 'price' => '15', 'once' => 1],
+            ['count' => 1, 'unit' => 'm', 'price' => '29'],
+            ['count' => 12, 'unit' => 'm', 'price' => ''],
+        ]])->assertRedirect(route('panel.admin.billing.catalog'));
+        $product = Product::query()->where('name', 'Elastyczny')->firstOrFail();
+        $this->assertSame(['6h' => Money::parse('0.30'), '2w' => Money::parse('15'), 'monthly' => Money::parse('29'), 'annually' => 0], $product->configuredPrices());
+        $this->assertFalse($product->renews('2w'));
+        $this->assertTrue($product->renews('6h'));
+
+        // Edycja zastępuje listę okresów.
+        $this->actingAs($this->admin)->get(route('panel.admin.billing.products.edit', $product))->assertOk()->assertSee('periods[3][count]', false);
+        $this->actingAs($this->admin)->put(route('panel.admin.billing.products.update', $product), $base + ['periods' => [
+            ['count' => 7, 'unit' => 'd', 'price' => '10'],
+        ]])->assertRedirect();
+        $this->assertSame(['7d' => Money::parse('10')], $product->fresh()->load('prices')->configuredPrices());
+
+        $this->actingAs($this->customer)->get(route('panel.store.product', $product))->assertOk()->assertSee('co 7 dni');
+    }
+
+    public function test_okres_szesciogodzinny_pobierany_z_portfela(): void
+    {
+        $this->product->prices()->create(['cycle' => '6h', 'amount' => Money::parse('0.30')]);
+        $this->fund($this->customer, '10');
+
+        [$service] = app(ServiceManager::class)->checkout($this->customer, $this->product, '6h', $this->config(), true);
+        $this->assertTrue($service->metered());
+        $this->assertSame(Money::parse('9.70'), $this->customer->fresh()->wallet_balance);
+        $this->assertTrue($service->next_due_at->equalTo(now()->addHours(6)));
+
+        $this->travel(7)->hours();
+        $this->assertSame(1, app(ServiceManager::class)->chargeMetered());
+        $this->assertSame(Money::parse('9.40'), $this->customer->fresh()->wallet_balance);
+        $this->assertTrue($service->fresh()->next_due_at->equalTo(now()->subHours(7)->addHours(12)));
+    }
+
+    public function test_okres_jednorazowy_konczy_usluge_bez_odnowienia(): void
+    {
+        $this->product->prices()->create(['cycle' => '7d', 'amount' => Money::parse('10'), 'renews' => false]);
+        $this->fund($this->customer, '10');
+
+        $this->actingAs($this->customer)->get(route('panel.store.product', $this->product))->assertOk()->assertSee('jednorazowo na 7 dni', false);
+        [$service, $invoice] = app(ServiceManager::class)->checkout($this->customer, $this->product, '7d', $this->config(), true);
+
+        // Jednorazowy okres w dniach nie jest naliczany co dobę — płatność z góry fakturą/portfelem.
+        $this->assertFalse($service->metered());
+        $this->assertFalse($service->renews);
+        $this->assertSame(Invoice::STATUS_PAID, $invoice->status);
+        $this->assertSame(Money::parse('10'), $invoice->total);
+        $this->assertSame(BillingService::STATUS_ACTIVE, $service->status);
+        $this->assertTrue($service->cancel_at_period_end);
+        $this->assertTrue($service->next_due_at->equalTo(now()->addDays(7)));
+        $this->actingAs($this->customer)->get(route('panel.billing.service', $service))->assertOk()->assertSee('Usługa jednorazowa');
+
+        $this->travelTo($service->next_due_at->copy()->subDays(2));
+        $this->assertSame(0, app(ServiceManager::class)->createRenewals());
+        $this->actingAs($this->admin)->post(route('panel.admin.billing.service.action', $service), ['action' => 'resume'])->assertSessionHasErrors('service');
+
+        $this->travelTo($service->next_due_at->copy()->addMinute());
+        $this->assertSame(1, app(ServiceManager::class)->endCancelled());
+        $this->assertSame(BillingService::STATUS_TERMINATED, $service->fresh()->status);
+    }
+
+    public function test_odnowienie_okresu_dwutygodniowego(): void
+    {
+        $this->product->prices()->create(['cycle' => '2w', 'amount' => Money::parse('20')]);
+        $this->fund($this->customer, '40');
+        [$service] = app(ServiceManager::class)->checkout($this->customer, $this->product, '2w', $this->config(), true);
+        $due = $service->next_due_at->copy();
+        $this->assertTrue($due->equalTo(now()->addWeeks(2)));
+
+        $this->travelTo($due->copy()->subDays(3));
+        $this->assertSame(1, app(ServiceManager::class)->createRenewals());
+        $this->assertTrue($service->fresh()->next_due_at->equalTo($due->copy()->addWeeks(2)), 'odnowienie opłacone z portfela');
     }
 
     public function test_harmonogram_nic_nie_robi_przy_wylaczonym_billingu(): void

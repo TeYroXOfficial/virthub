@@ -11,7 +11,7 @@
         $service->status === 'active' ? $act('suspend', __('Zawieś'), 'btn') : null,
         $service->status === 'suspended' ? $act('unsuspend', __('Odwieś'), 'btn btn-primary') : null,
         $service->isLive() && ! $service->metered() && ! $service->cancel_at_period_end ? $act('cancel_end', __('Usuń z końcem okresu'), 'btn') : null,
-        $service->isLive() && $service->cancel_at_period_end ? $act('resume', __('Cofnij rezygnację'), 'btn') : null,
+        $service->isLive() && $service->cancel_at_period_end && $service->renews ? $act('resume', __('Cofnij rezygnację'), 'btn') : null,
         in_array($service->status, ['pending', 'active', 'suspended'], true) ? $act('terminate', __('Usuń teraz'), 'btn btn-danger', __('Usunąć usługę :name razem z maszyną/aplikacją i danymi?', ['name' => $service->name])) : null,
     ]);
 @endphp
@@ -44,7 +44,7 @@
         <div class="card">
             <dl class="kv">
                 <dt>{{ __('Produkt') }}</dt><dd>@if ($service->product) <a href="{{ route('panel.admin.billing.products.edit', $service->product) }}">{{ $service->product->name }}</a> @else — @endif</dd>
-                <dt>{{ __('Cykl') }}</dt><dd>{{ Cycle::label($service->cycle) }}</dd>
+                <dt>{{ __('Okres') }}</dt><dd>{{ $service->renews ? Cycle::label($service->cycle) : __(':period, jednorazowo', ['period' => Cycle::duration($service->cycle)]) }}</dd>
                 <dt>{{ __('Zasób') }}</dt>
                 <dd>
                     @if ($service->server) <a href="{{ route('panel.servers.show', $service->server) }}">{{ $service->server->hostname }}</a>

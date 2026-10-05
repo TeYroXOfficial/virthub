@@ -61,23 +61,59 @@
             <div>
                 <div class="card">
                     <h3 class="card-title">{{ __('Okresy i ceny') }}</h3>
-                    <p class="hint" style="margin-top:0">{{ __('Zaznacz okresy, które klient może wybrać. Puste pole ceny albo 0 = za darmo. Godzinowe i dzienne są pobierane z portfela, pozostałe — fakturą.') }} {{ \App\Domain\Billing\Billing::pricesIncludeTax() ? __('Ceny brutto.') : __('Ceny netto (VAT doliczany).') }}</p>
+                    <p class="hint" style="margin-top:0">{{ __('Ustal, na jak długo klient kupuje usługę: liczba i jednostka (godziny, dni, tygodnie, miesiące, lata). Puste pole ceny albo 0 = za darmo.') }}
+                        {{ __('Odnawiane godziny i dni są pobierane z portfela za każdy rozpoczęty okres, tygodnie, miesiące i lata — fakturą. „Jednorazowo” = płatność z góry za cały okres, potem usługa się kończy.') }}
+                        {{ \App\Domain\Billing\Billing::pricesIncludeTax() ? __('Ceny brutto.') : __('Ceny netto (VAT doliczany).') }}</p>
                     @error('prices') <div class="alert alert-error">{{ $message }}</div> @enderror
-                    <input type="hidden" name="cycle_choice" value="1">
-                    <div class="cycle-admin">
-                        @foreach (Cycle::ALL as $cycle)
-                            @php $on = old('cycle_choice') ? in_array($cycle, old('cycles', []), true) : array_key_exists($cycle, $prices); @endphp
-                            <div class="cycle-admin-row" data-cycle="{{ $cycle }}">
-                                <label class="check-line" style="margin:0">
-                                    <input type="checkbox" name="cycles[]" value="{{ $cycle }}" @checked($on)> {{ ucfirst(Cycle::label($cycle)) }}
-                                </label>
-                                <input id="p-{{ $cycle }}" name="prices[{{ $cycle }}]" inputmode="decimal" placeholder="{{ __('za darmo') }}" aria-label="{{ __('Cena') }}: {{ Cycle::label($cycle) }}"
-                                       value="{{ old('prices.'.$cycle, ($prices[$cycle] ?? 0) > 0 ? Money::input($prices[$cycle]) : '') }}">
+                    @foreach ($errors->getMessages() as $key => $msgs)
+                        @if (str_starts_with($key, 'periods.')) <div class="alert alert-error">{{ $msgs[0] }}</div> @endif
+                    @endforeach
+                    <input type="hidden" name="period_rows" value="1">
+                    @php
+                        $rows = old('period_rows')
+                            ? array_values(old('periods', []))
+                            : collect($prices)->map(function ($amount, $code) use ($product) {
+                                [$count, $unit] = Cycle::parse($code);
+                                return ['count' => $count, 'unit' => $unit, 'price' => $amount > 0 ? Money::input($amount) : '', 'once' => ! $product->renews($code)];
+                            })->values()->all();
+                        if (! $product->exists && ! old('period_rows')) {
+                            $rows = [['count' => 1, 'unit' => 'm', 'price' => '', 'once' => false]];
+                        }
+                        $units = Cycle::unitLabels();
+                    @endphp
+                    <div class="period-list" id="period-list">
+                        @foreach ($rows as $i => $row)
+                            <div class="period-row" data-unit="{{ $row['unit'] }}">
+                                <input type="number" name="periods[{{ $i }}][count]" min="1" max="720" required value="{{ $row['count'] }}" aria-label="{{ __('Długość') }}">
+                                <select name="periods[{{ $i }}][unit]" aria-label="{{ __('Jednostka') }}">
+                                    @foreach ($units as $u => $label) <option value="{{ $u }}" @selected($row['unit'] === $u)>{{ $label }}</option> @endforeach
+                                </select>
+                                <input name="periods[{{ $i }}][price]" inputmode="decimal" placeholder="{{ __('za darmo') }}" value="{{ $row['price'] }}" aria-label="{{ __('Cena') }}">
+                                <label class="check-line" style="margin:0"><input type="checkbox" name="periods[{{ $i }}][once]" value="1" @checked(! empty($row['once']))> {{ __('jednorazowo') }}</label>
+                                <button class="btn btn-sm btn-ghost" type="button" data-remove aria-label="{{ __('Usuń okres') }}"><x-icon name="trash" :size="14"/></button>
                                 <span class="hint cycle-blocked" hidden>{{ __('kategoria nie dopuszcza') }}</span>
-                                @error('prices.'.$cycle) <p class="hint" style="color:var(--critical); grid-column:1/-1">{{ $message }}</p> @enderror
                             </div>
                         @endforeach
                     </div>
+                    <div class="btn-row" style="margin:6px 0 16px; flex-wrap:wrap">
+                        <button class="btn btn-sm" type="button" data-add-period data-count="1" data-unit="m"><x-icon name="plus" :size="14"/> {{ __('Dodaj okres') }}</button>
+                        <span class="hint" style="margin:0">{{ __('Szybko:') }}</span>
+                        @foreach ([[1, 'h'], [1, 'd'], [7, 'd'], [1, 'w'], [1, 'm'], [3, 'm'], [6, 'm'], [12, 'm']] as [$c, $u])
+                            <button class="btn btn-sm btn-ghost" type="button" data-add-period data-count="{{ $c }}" data-unit="{{ $u }}">{{ Cycle::duration(Cycle::code($c, $u)) }}</button>
+                        @endforeach
+                    </div>
+                    <template id="period-template">
+                        <div class="period-row" data-unit="m">
+                            <input type="number" data-name="count" min="1" max="720" required value="1" aria-label="{{ __('Długość') }}">
+                            <select data-name="unit" aria-label="{{ __('Jednostka') }}">
+                                @foreach ($units as $u => $label) <option value="{{ $u }}">{{ $label }}</option> @endforeach
+                            </select>
+                            <input data-name="price" inputmode="decimal" placeholder="{{ __('za darmo') }}" aria-label="{{ __('Cena') }}">
+                            <label class="check-line" style="margin:0"><input type="checkbox" data-name="once" value="1"> {{ __('jednorazowo') }}</label>
+                            <button class="btn btn-sm btn-ghost" type="button" data-remove aria-label="{{ __('Usuń okres') }}"><x-icon name="trash" :size="14"/></button>
+                            <span class="hint cycle-blocked" hidden>{{ __('kategoria nie dopuszcza') }}</span>
+                        </div>
+                    </template>
                     <div class="grid grid-2">
                         <div class="field"><label for="p-setup">{{ __('Opłata instalacyjna') }}</label><input id="p-setup" name="setup_fee" inputmode="decimal" value="{{ old('setup_fee', $product->setup_fee ? Money::input($product->setup_fee) : '') }}" placeholder="0"></div>
                         <div class="field"><label for="p-stock">{{ __('Limit sztuk') }}</label><input id="p-stock" type="number" name="stock" min="0" value="{{ old('stock', $product->stock) }}" placeholder="{{ __('bez limitu') }}"></div>
@@ -128,24 +164,45 @@
             document.querySelectorAll('input[name=type]').forEach(function (r) { r.addEventListener('change', sync); });
             sync();
 
-            // Okresy, których wybrana kategoria nie dopuszcza — widoczne, ale oznaczone.
+            // Wiersze okresów: dodawanie, usuwanie i oznaczanie jednostek, których kategoria nie dopuszcza.
+            var list = document.getElementById('period-list');
+            var tpl = document.getElementById('period-template');
             var cat = document.getElementById('p-cat');
+            var next = list ? list.children.length : 0;
             function syncCycles() {
                 var opt = cat && cat.options[cat.selectedIndex];
                 var allowed = opt && opt.dataset.cycles ? opt.dataset.cycles.split(',') : null;
-                document.querySelectorAll('.cycle-admin-row').forEach(function (row) {
-                    var blocked = allowed !== null && allowed.indexOf(row.dataset.cycle) === -1;
+                list.querySelectorAll('.period-row').forEach(function (row) {
+                    var unit = row.querySelector('select').value;
+                    var blocked = allowed !== null && allowed.indexOf(unit) === -1;
                     row.classList.toggle('is-blocked', blocked);
                     row.querySelector('.cycle-blocked').hidden = !blocked;
                 });
-                document.querySelectorAll('.cycle-admin-row').forEach(function (row) {
-                    var box = row.querySelector('input[type=checkbox]');
-                    row.querySelector('input[inputmode]').disabled = !box.checked;
-                });
             }
-            if (cat) cat.addEventListener('change', syncCycles);
-            document.querySelectorAll('.cycle-admin-row input[type=checkbox]').forEach(function (b) { b.addEventListener('change', syncCycles); });
-            syncCycles();
+            function addRow(count, unit) {
+                var row = tpl.content.firstElementChild.cloneNode(true);
+                row.querySelectorAll('[data-name]').forEach(function (el) {
+                    el.name = 'periods[' + next + '][' + el.dataset.name + ']';
+                });
+                row.querySelector('[data-name=count]').value = count;
+                row.querySelector('[data-name=unit]').value = unit;
+                list.appendChild(row);
+                next++;
+                syncCycles();
+                row.querySelector('[data-name=price]').focus();
+            }
+            if (list) {
+                document.querySelectorAll('[data-add-period]').forEach(function (b) {
+                    b.addEventListener('click', function () { addRow(b.dataset.count, b.dataset.unit); });
+                });
+                list.addEventListener('click', function (e) {
+                    var btn = e.target.closest('[data-remove]');
+                    if (btn) { btn.closest('.period-row').remove(); }
+                });
+                list.addEventListener('change', syncCycles);
+                if (cat) cat.addEventListener('change', syncCycles);
+                syncCycles();
+            }
         })();
     </script>
 @endpush

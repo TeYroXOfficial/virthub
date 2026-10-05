@@ -21,8 +21,8 @@
         <div class="card">
             <dl class="kv">
                 <dt>{{ __('Produkt') }}</dt><dd>{{ $service->product?->name ?? '—' }}</dd>
-                <dt>{{ __('Cykl') }}</dt><dd>{{ Cycle::label($service->cycle) }}</dd>
-                <dt>{{ __('Cena') }}</dt><dd>{{ Money::format(Billing::gross($service->amount)) }} {{ Cycle::per($service->cycle) }}</dd>
+                <dt>{{ __('Okres') }}</dt><dd>{{ $service->renews ? Cycle::label($service->cycle) : __(':period, jednorazowo', ['period' => Cycle::duration($service->cycle)]) }}</dd>
+                <dt>{{ __('Cena') }}</dt><dd>{{ Money::format(Billing::gross($service->amount)) }} {{ $service->periodLabel() }}</dd>
                 <dt>{{ $service->metered() ? __('Następne naliczenie') : __('Opłacone do') }}</dt><dd>{{ $service->next_due_at?->format('d.m.Y H:i') ?? '—' }}</dd>
                 <dt>{{ __('Zamówiona') }}</dt><dd>{{ $service->created_at->format('d.m.Y H:i') }}</dd>
                 @if ($service->last_error) <dt>{{ __('Błąd') }}</dt><dd style="color:var(--critical)">{{ $service->last_error }}</dd> @endif
@@ -31,7 +31,7 @@
         <div class="card">
             <h3 class="card-title">{{ __('Rezygnacja') }}</h3>
             @error('service') <div class="alert alert-error">{{ $message }}</div> @enderror
-            @if ($service->status === 'pending' || ($service->isLive() && ! $service->cancel_at_period_end))
+            @if ($service->status === 'pending' || ($service->isLive() && ! $service->cancel_at_period_end && $service->renews))
                 <p class="muted">
                     @if ($service->status === 'pending') {{ __('Zamówienie nie zostało opłacone — możesz je anulować.') }}
                     @elseif ($service->metered()) {{ __('Usługa godzinowa zostanie usunięta od razu razem z danymi. Opłaty przestaną być naliczane.') }}
@@ -42,6 +42,8 @@
                     @csrf <input type="hidden" name="confirm" value="1">
                     <button class="btn btn-danger" type="submit">{{ $service->status === 'pending' ? __('Anuluj zamówienie') : __('Zrezygnuj z usługi') }}</button>
                 </form>
+            @elseif (! $service->renews && $service->isLive())
+                <p class="muted">{{ __('Usługa jednorazowa — kończy się :date i zostanie wtedy usunięta razem z danymi.', ['date' => $service->next_due_at?->format('d.m.Y H:i')]) }}</p>
             @elseif ($service->cancel_at_period_end)
                 <p class="muted">{{ __('Rezygnacja zgłoszona — usługa zostanie usunięta :date.', ['date' => $service->next_due_at?->format('d.m.Y H:i')]) }}</p>
             @else
