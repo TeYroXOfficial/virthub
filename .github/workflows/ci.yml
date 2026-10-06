@@ -61,6 +61,31 @@ jobs:
           VIRTHUB_TEST_MYSQL_PASSWORD: vhadmin-pass
         run: php artisan test
 
+  license-server:
+    name: License server (Laravel)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_sqlite, sqlite3, sodium, zip
+          coverage: none
+
+      - name: Instalacja zależności
+        working-directory: license-server
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Testy
+        working-directory: license-server
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan test
+
   node-agent:
     name: Node agent (FastAPI)
     runs-on: ubuntu-latest
