@@ -6,6 +6,8 @@
     $can = fn (string $c) => in_array($c, $capabilities, true);
     $ready = $server->remote_id !== null && ! $server->isSuspended() && ! in_array($server->status, ['pending', 'deleted'], true);
     $running = $server->status === 'running';
+    // Dostawca bez stanu zasilania (np. Onidel): przyciski Start/Stop zawsze aktywne.
+    $knowsPower = in_array('power_state', $capabilities, true);
     $transitional = in_array($server->status, \App\Models\ExternalServer::TRANSITIONAL, true);
     $staff = auth()->user()->isStaff();
 @endphp
@@ -33,13 +35,13 @@
                     @can('console', $server)
                         <form method="POST" action="{{ route('panel.cloud.console', $server) }}" target="_blank" style="margin:0">
                             @csrf
-                            <button class="btn btn-primary" type="submit" @disabled(! $running)><x-icon name="monitor" :size="16"/> {{ __('Konsola') }}</button>
+                            <button class="btn btn-primary" type="submit" @disabled($knowsPower && ! $running)><x-icon name="monitor" :size="16"/> {{ __('Konsola') }}</button>
                         </form>
                     @endcan
                 @endif
                 @can('power', $server)
                     <div class="btn-group">
-                        @foreach (['start' => [__('Start'), 'play', ! $running], 'reboot' => [__('Restart'), 'refresh', $running], 'stop' => [__('Stop'), 'stop', $running]] as $action => [$label, $icon, $enabled])
+                        @foreach (['start' => [__('Start'), 'play', ! $knowsPower || ! $running], 'reboot' => [__('Restart'), 'refresh', ! $knowsPower || $running], 'stop' => [__('Stop'), 'stop', ! $knowsPower || $running]] as $action => [$label, $icon, $enabled])
                             @if ($can($action))
                                 <form method="POST" action="{{ route('panel.cloud.power', $server) }}" style="margin:0; display:inline">
                                     @csrf <input type="hidden" name="action" value="{{ $action }}">
