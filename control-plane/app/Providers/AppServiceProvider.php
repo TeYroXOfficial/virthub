@@ -2,6 +2,11 @@
 
 namespace App\Providers;
 
+use App\Domain\Apps\Databases\DatabaseServer;
+use App\Domain\Apps\Databases\MysqlDatabaseServer;
+use App\Domain\Settings\MailSettings;
+use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\ServiceProvider;
 
@@ -9,6 +14,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->bind(DatabaseServer::class, MysqlDatabaseServer::class);
         //
     }
 
@@ -22,13 +28,13 @@ class AppServiceProvider extends ServiceProvider
         Paginator::defaultSimpleView('pagination::simple-default');
 
         // Poczta ustawiona w Administracji nadpisuje MAIL_* z .env.
-        \App\Domain\Settings\MailSettings::apply();
+        MailSettings::apply();
 
         // E-mail z linkiem do nowego hasła w języku panelu (domyślny jest po angielsku).
-        \Illuminate\Auth\Notifications\ResetPassword::toMailUsing(function ($user, string $token) {
+        ResetPassword::toMailUsing(function ($user, string $token) {
             $url = route('password.reset', ['token' => $token, 'email' => $user->getEmailForPasswordReset()]);
 
-            return (new \Illuminate\Notifications\Messages\MailMessage)
+            return (new MailMessage)
                 ->subject(__('Ustawienie nowego hasła — :brand', ['brand' => config('virthub.brand')]))
                 ->greeting(__('Cześć!'))
                 ->line(__('Ktoś (miejmy nadzieję, że Ty) poprosił o ustawienie nowego hasła do panelu :brand.', ['brand' => config('virthub.brand')]))

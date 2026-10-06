@@ -1,17 +1,44 @@
 <?php
 
 use App\Http\Controllers\EnrollmentController;
+use App\Http\Controllers\Web\AccountController;
 use App\Http\Controllers\Web\AdminController;
+use App\Http\Controllers\Web\AppAdminController;
+use App\Http\Controllers\Web\AppContentController;
+use App\Http\Controllers\Web\AppController;
+use App\Http\Controllers\Web\AppDatabaseController;
+use App\Http\Controllers\Web\AppFilesController;
+use App\Http\Controllers\Web\AppNetworkController;
 use App\Http\Controllers\Web\AuthController;
+use App\Http\Controllers\Web\BillingAdminController;
+use App\Http\Controllers\Web\BillingController;
 use App\Http\Controllers\Web\ConsoleController;
+use App\Http\Controllers\Web\DatabaseHostController;
+use App\Http\Controllers\Web\EmailTemplateController;
 use App\Http\Controllers\Web\FirewallController;
+use App\Http\Controllers\Web\GatewaySettingsController;
+use App\Http\Controllers\Web\ImpersonationController;
 use App\Http\Controllers\Web\IsoController;
-use App\Http\Controllers\Web\ServerActionsController;
+use App\Http\Controllers\Web\MailSettingsController;
+use App\Http\Controllers\Web\MonitoringController;
+use App\Http\Controllers\Web\NetworkController;
+use App\Http\Controllers\Web\NodeSecurityController;
 use App\Http\Controllers\Web\PanelController;
+use App\Http\Controllers\Web\PasswordResetController;
+use App\Http\Controllers\Web\PaymentController;
+use App\Http\Controllers\Web\PortForwardController;
+use App\Http\Controllers\Web\PterodactylMigrationController;
+use App\Http\Controllers\Web\ReverseDnsSettingsController;
+use App\Http\Controllers\Web\ServerActionsController;
 use App\Http\Controllers\Web\SsoController;
+use App\Http\Controllers\Web\StoreController;
+use App\Http\Controllers\Web\TicketAdminController;
+use App\Http\Controllers\Web\TicketController;
 use App\Http\Controllers\Web\UpdatesController;
 use App\Http\Controllers\Web\UsersController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Validation\Rule;
 
 Route::get('/', fn () => redirect()->route('panel.dashboard'));
 
@@ -19,15 +46,15 @@ Route::get('/', fn () => redirect()->route('panel.dashboard'));
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login']);
-    Route::get('/forgot-password', [\App\Http\Controllers\Web\PasswordResetController::class, 'request'])->name('password.request');
-    Route::post('/forgot-password', [\App\Http\Controllers\Web\PasswordResetController::class, 'send'])->middleware('throttle:5,1')->name('password.email');
-    Route::get('/reset-password/{token}', [\App\Http\Controllers\Web\PasswordResetController::class, 'edit'])->name('password.reset');
-    Route::post('/reset-password', [\App\Http\Controllers\Web\PasswordResetController::class, 'update'])->middleware('throttle:10,1')->name('password.update');
+    Route::get('/forgot-password', [PasswordResetController::class, 'request'])->name('password.request');
+    Route::post('/forgot-password', [PasswordResetController::class, 'send'])->middleware('throttle:5,1')->name('password.email');
+    Route::get('/reset-password/{token}', [PasswordResetController::class, 'edit'])->name('password.reset');
+    Route::post('/reset-password', [PasswordResetController::class, 'update'])->middleware('throttle:10,1')->name('password.update');
 });
 
 // Zmiana języka — także przed zalogowaniem (strona logowania).
-Route::post('/locale', function (\Illuminate\Http\Request $request) {
-    $locale = $request->validate(['locale' => ['required', \Illuminate\Validation\Rule::in(array_keys(config('virthub.locales')))]])['locale'];
+Route::post('/locale', function (Request $request) {
+    $locale = $request->validate(['locale' => ['required', Rule::in(array_keys(config('virthub.locales')))]])['locale'];
     $request->session()->put('locale', $locale);
     $request->user()?->forceFill(['locale' => $locale])->save();
 
@@ -43,17 +70,17 @@ Route::post('/logout', [AuthController::class, 'logout'])
 Route::get('/sso/{token}', SsoController::class)->name('sso.consume');
 
 // Powrót z „Zaloguj jako” na konto administratora.
-Route::post('/impersonate/stop', [\App\Http\Controllers\Web\ImpersonationController::class, 'stop'])
+Route::post('/impersonate/stop', [ImpersonationController::class, 'stop'])
     ->middleware('auth')->name('impersonate.stop');
 
-Route::get('/avatars/{user}', [\App\Http\Controllers\Web\AccountController::class, 'avatar'])
+Route::get('/avatars/{user}', [AccountController::class, 'avatar'])
     ->middleware('auth')->whereNumber('user')->name('avatar');
 
 // --- panel ------------------------------------------------------------------
 Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->group(function () {
     Route::get('/', [PanelController::class, 'dashboard'])->name('dashboard');
 
-    Route::prefix('/account')->name('account')->controller(\App\Http\Controllers\Web\AccountController::class)->group(function () {
+    Route::prefix('/account')->name('account')->controller(AccountController::class)->group(function () {
         Route::get('/', 'show');
         Route::put('/profile', 'updateProfile')->middleware('not-impersonating')->name('.profile');
         Route::put('/password', 'updatePassword')->middleware(['not-impersonating', 'throttle:10,1'])->name('.password');
@@ -77,11 +104,11 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/traffic', [ServerActionsController::class, 'traffic'])->name('servers.traffic');
     Route::post('/servers/{server}/cpu-limit', [ServerActionsController::class, 'cpuLimit'])->name('servers.cpu-limit');
     Route::put('/servers/{server}/ips/{address}/rdns', [ServerActionsController::class, 'rdns'])->middleware('throttle:10,1')->name('servers.rdns');
-    Route::post('/servers/{server}/ports', [\App\Http\Controllers\Web\PortForwardController::class, 'store'])->name('servers.ports.store');
-    Route::delete('/servers/{server}/ports/{forward}', [\App\Http\Controllers\Web\PortForwardController::class, 'destroy'])->name('servers.ports.destroy');
+    Route::post('/servers/{server}/ports', [PortForwardController::class, 'store'])->name('servers.ports.store');
+    Route::delete('/servers/{server}/ports/{forward}', [PortForwardController::class, 'destroy'])->name('servers.ports.destroy');
 
     // --- aplikacje (serwery gier, boty) ---
-    Route::prefix('/apps')->name('apps.')->controller(\App\Http\Controllers\Web\AppController::class)->group(function () {
+    Route::prefix('/apps')->name('apps.')->controller(AppController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::get('/new', 'create')->name('create');
         Route::post('/', 'store')->name('store');
@@ -100,7 +127,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
         Route::post('/{app}/command', 'command')->name('command');
         Route::post('/{app}/console', 'consoleSession')->name('console');
     });
-    Route::prefix('/apps/{app}')->name('apps.')->controller(\App\Http\Controllers\Web\AppContentController::class)->group(function () {
+    Route::prefix('/apps/{app}')->name('apps.')->controller(AppContentController::class)->group(function () {
         Route::get('/modpacks', 'modpacks')->name('modpacks');
         Route::get('/modpacks/{source}/{project}', 'modpack')->where(['source' => '[a-z]+', 'project' => '[A-Za-z0-9._-]+'])->name('modpacks.show');
         Route::post('/modpacks', 'installModpack')->middleware('throttle:10,1')->name('modpacks.install');
@@ -110,7 +137,27 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
         Route::post('/addons', 'installAddon')->middleware('throttle:30,1')->name('addons.install');
         Route::delete('/addons/{addon}', 'removeAddon')->name('addons.destroy');
     });
-    Route::prefix('/apps/{app}/files')->name('apps.files')->controller(\App\Http\Controllers\Web\AppFilesController::class)->group(function () {
+    Route::prefix('/apps/{app}')->name('apps.')->controller(AppNetworkController::class)->group(function () {
+        Route::get('/network', 'index')->name('network');
+        Route::post('/ports', 'store')->middleware('throttle:20,1')->name('ports.store');
+        Route::post('/ports/{allocation}/primary', 'primary')->name('ports.primary');
+        Route::put('/ports/{allocation}/note', 'note')->name('ports.note');
+        Route::delete('/ports/{allocation}', 'destroy')->name('ports.destroy');
+        Route::put('/ports-limit', 'limit')->name('ports.limit');
+    });
+    Route::prefix('/apps/{app}/databases')->name('apps.databases')->controller(AppDatabaseController::class)->group(function () {
+        Route::get('/', 'index');
+        Route::post('/', 'store')->middleware('throttle:10,1')->name('.store');
+        Route::put('/limit', 'limit')->name('.limit');
+        Route::post('/{database}/password', 'password')->middleware('throttle:10,1')->name('.password');
+        Route::delete('/{database}', 'destroy')->name('.destroy');
+        Route::get('/{database}/browse', 'browse')->name('.browse');
+        Route::post('/{database}/query', 'query')->middleware('throttle:60,1')->name('.query');
+        Route::get('/{database}/tables/{table}', 'table')->where('table', '[A-Za-z0-9_$\-]{1,64}')->name('.table');
+        Route::get('/{database}/export', 'export')->middleware('throttle:10,1')->name('.export');
+        Route::post('/{database}/import', 'import')->middleware('throttle:10,1')->name('.import');
+    });
+    Route::prefix('/apps/{app}/files')->name('apps.files')->controller(AppFilesController::class)->group(function () {
         Route::get('/', 'index');
         Route::get('/edit', 'edit')->name('.edit');
         Route::put('/edit', 'save')->name('.save');
@@ -123,12 +170,12 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     });
 
     // Sklep i rozliczenia (wbudowany billing).
-    Route::prefix('/store')->name('store')->controller(\App\Http\Controllers\Web\StoreController::class)->group(function () {
+    Route::prefix('/store')->name('store')->controller(StoreController::class)->group(function () {
         Route::get('/', 'index');
         Route::get('/{product}', 'show')->name('.product');
         Route::post('/{product}', 'order')->middleware('throttle:10,1')->name('.order');
     });
-    Route::prefix('/billing')->name('billing')->controller(\App\Http\Controllers\Web\BillingController::class)->group(function () {
+    Route::prefix('/billing')->name('billing')->controller(BillingController::class)->group(function () {
         Route::get('/', 'index');
         Route::get('/wallet', 'wallet')->name('.wallet');
         Route::post('/wallet', 'topup')->middleware('throttle:10,1')->name('.topup');
@@ -138,12 +185,12 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
         Route::post('/services/{service}/cancel', 'cancel')->name('.service.cancel');
         Route::post('/services/{service}/keepalive', 'keepalive')->middleware('throttle:20,1')->name('.service.keepalive');
     });
-    Route::post('/billing/invoices/{invoice}/pay/{gateway}', [\App\Http\Controllers\Web\PaymentController::class, 'pay'])
+    Route::post('/billing/invoices/{invoice}/pay/{gateway}', [PaymentController::class, 'pay'])
         ->whereIn('gateway', ['stripe', 'paypal'])->middleware('throttle:10,1')->name('billing.pay');
-    Route::get('/billing/invoices/{invoice}/return/{gateway}', [\App\Http\Controllers\Web\PaymentController::class, 'return'])
+    Route::get('/billing/invoices/{invoice}/return/{gateway}', [PaymentController::class, 'return'])
         ->whereIn('gateway', ['stripe', 'paypal'])->middleware('throttle:20,1')->name('billing.return');
 
-    Route::prefix('/tickets')->name('tickets.')->controller(\App\Http\Controllers\Web\TicketController::class)->group(function () {
+    Route::prefix('/tickets')->name('tickets.')->controller(TicketController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::get('/new', 'create')->name('create');
         Route::post('/', 'store')->middleware('throttle:10,1')->name('store');
@@ -174,13 +221,13 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
     Route::middleware('admin:admin.hypervisors')->group(function () {
         Route::get('/hypervisors', [AdminController::class, 'hypervisors'])->name('hypervisors');
         Route::get('/hypervisors/{hypervisor}', [AdminController::class, 'showHypervisor'])->name('hypervisors.show');
-        Route::get('/monitoring', [\App\Http\Controllers\Web\MonitoringController::class, 'index'])->name('monitoring');
-        Route::get('/security', [\App\Http\Controllers\Web\NodeSecurityController::class, 'index'])->name('security');
-        Route::post('/security/{hypervisor}/check', [\App\Http\Controllers\Web\NodeSecurityController::class, 'check'])
+        Route::get('/monitoring', [MonitoringController::class, 'index'])->name('monitoring');
+        Route::get('/security', [NodeSecurityController::class, 'index'])->name('security');
+        Route::post('/security/{hypervisor}/check', [NodeSecurityController::class, 'check'])
             ->middleware('throttle:20,1')->name('security.check');
-        Route::put('/security/{hypervisor}/nested', [\App\Http\Controllers\Web\NodeSecurityController::class, 'nested'])
+        Route::put('/security/{hypervisor}/nested', [NodeSecurityController::class, 'nested'])
             ->middleware('throttle:10,1')->name('security.nested');
-        Route::get('/monitoring/{hypervisor}/data', [\App\Http\Controllers\Web\MonitoringController::class, 'data'])
+        Route::get('/monitoring/{hypervisor}/data', [MonitoringController::class, 'data'])
             ->middleware('throttle:60,1')->name('monitoring.data');
         Route::post('/hypervisors', [AdminController::class, 'storeHypervisor'])->name('hypervisors.store');
         Route::post('/hypervisors/{hypervisor}/enrollment', [AdminController::class, 'regenerateEnrollment'])->name('hypervisors.enrollment');
@@ -221,7 +268,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
 
     Route::middleware('admin:admin.ip_pools')->group(function () {
         // Sieć: bloki IP i przegląd adresów.
-        Route::controller(\App\Http\Controllers\Web\NetworkController::class)->group(function () {
+        Route::controller(NetworkController::class)->group(function () {
             Route::get('/ip-pools', 'blocks')->name('ip-pools');
             Route::post('/ip-pools', 'store')->name('ip-pools.store');
             Route::get('/ip-pools/{pool}', 'show')->name('ip-pools.show');
@@ -250,7 +297,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/updates/nodes/{hypervisor}', [UpdatesController::class, 'updateNode'])->name('updates.node');
     });
 
-    Route::middleware('admin:admin.apps')->prefix('/apps')->name('apps')->controller(\App\Http\Controllers\Web\AppAdminController::class)->group(function () {
+    Route::middleware('admin:admin.apps')->prefix('/apps')->name('apps')->controller(AppAdminController::class)->group(function () {
         Route::get('/', 'index');
         Route::get('/eggs', 'eggs')->name('.eggs');
         Route::post('/eggs', 'importEgg')->name('.eggs.import');
@@ -262,23 +309,29 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/plans/{plan}/toggle', 'togglePlan')->name('.plans.toggle');
         Route::put('/plans/{plan}', 'updatePlan')->name('.plans.update');
         Route::delete('/plans/{plan}', 'deletePlan')->name('.plans.destroy');
-        Route::get('/pterodactyl', [\App\Http\Controllers\Web\PterodactylMigrationController::class, 'index'])->name('.pterodactyl');
-        Route::post('/pterodactyl/connect', [\App\Http\Controllers\Web\PterodactylMigrationController::class, 'connect'])->name('.pterodactyl.connect');
-        Route::post('/pterodactyl/disconnect', [\App\Http\Controllers\Web\PterodactylMigrationController::class, 'disconnect'])->name('.pterodactyl.disconnect');
-        Route::post('/pterodactyl/migrate', [\App\Http\Controllers\Web\PterodactylMigrationController::class, 'migrate'])->name('.pterodactyl.migrate');
+        Route::get('/databases', [DatabaseHostController::class, 'index'])->name('.databases');
+        // Serwery baz (konta administracyjne MySQL) — tylko administrator.
+        Route::post('/database-hosts', [DatabaseHostController::class, 'store'])->middleware('admin')->name('.database-hosts.store');
+        Route::put('/database-hosts/{host}', [DatabaseHostController::class, 'update'])->middleware('admin')->name('.database-hosts.update');
+        Route::post('/database-hosts/{host}/test', [DatabaseHostController::class, 'test'])->middleware(['admin', 'throttle:20,1'])->name('.database-hosts.test');
+        Route::delete('/database-hosts/{host}', [DatabaseHostController::class, 'destroy'])->middleware('admin')->name('.database-hosts.destroy');
+        Route::get('/pterodactyl', [PterodactylMigrationController::class, 'index'])->name('.pterodactyl');
+        Route::post('/pterodactyl/connect', [PterodactylMigrationController::class, 'connect'])->name('.pterodactyl.connect');
+        Route::post('/pterodactyl/disconnect', [PterodactylMigrationController::class, 'disconnect'])->name('.pterodactyl.disconnect');
+        Route::post('/pterodactyl/migrate', [PterodactylMigrationController::class, 'migrate'])->name('.pterodactyl.migrate');
         Route::post('/{app}/suspend', 'suspend')->name('.suspend');
         Route::put('/{app}/resources', 'resources')->name('.resources');
         Route::post('/{app}/abuse-exempt', 'abuseExempt')->name('.abuse-exempt');
         Route::post('/{app}/purge', 'purge')->name('.purge');
     });
 
-    Route::middleware('admin:admin.settings')->prefix('/network/dns')->name('network.dns')->controller(\App\Http\Controllers\Web\ReverseDnsSettingsController::class)->group(function () {
+    Route::middleware('admin:admin.settings')->prefix('/network/dns')->name('network.dns')->controller(ReverseDnsSettingsController::class)->group(function () {
         Route::get('/', 'show');
         Route::put('/', 'update')->name('.update');
         Route::post('/test', 'test')->middleware('throttle:10,1')->name('.test');
     });
 
-    Route::middleware('admin:admin.settings')->prefix('/emails')->name('emails')->controller(\App\Http\Controllers\Web\EmailTemplateController::class)->group(function () {
+    Route::middleware('admin:admin.settings')->prefix('/emails')->name('emails')->controller(EmailTemplateController::class)->group(function () {
         Route::get('/', 'index');
         Route::get('/{key}/{locale}', 'edit')->name('.edit');
         Route::put('/{key}/{locale}', 'update')->name('.update');
@@ -286,20 +339,20 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/{key}/{locale}/test', 'test')->middleware('throttle:10,1')->name('.test');
     });
 
-    Route::middleware('admin:admin.settings')->prefix('/mail')->name('mail')->controller(\App\Http\Controllers\Web\MailSettingsController::class)->group(function () {
+    Route::middleware('admin:admin.settings')->prefix('/mail')->name('mail')->controller(MailSettingsController::class)->group(function () {
         Route::get('/', 'show');
         Route::put('/', 'update')->name('.update');
         Route::post('/test', 'test')->middleware('throttle:5,1')->name('.test');
     });
 
-    Route::middleware('admin:admin.billing')->prefix('/billing')->name('billing')->controller(\App\Http\Controllers\Web\BillingAdminController::class)->group(function () {
+    Route::middleware('admin:admin.billing')->prefix('/billing')->name('billing')->controller(BillingAdminController::class)->group(function () {
         Route::get('/', 'index');
         Route::get('/settings', 'settings')->name('.settings');
         Route::put('/settings', 'saveSettings')->name('.settings.update');
         // Klucze bramek — tylko administrator.
-        Route::get('/gateways', [\App\Http\Controllers\Web\GatewaySettingsController::class, 'show'])->middleware('admin')->name('.gateways');
-        Route::put('/gateways/{gateway}', [\App\Http\Controllers\Web\GatewaySettingsController::class, 'update'])->whereIn('gateway', ['stripe', 'paypal'])->middleware('admin')->name('.gateways.update');
-        Route::post('/gateways/{gateway}/test', [\App\Http\Controllers\Web\GatewaySettingsController::class, 'test'])->whereIn('gateway', ['stripe', 'paypal'])->middleware(['admin', 'throttle:10,1'])->name('.gateways.test');
+        Route::get('/gateways', [GatewaySettingsController::class, 'show'])->middleware('admin')->name('.gateways');
+        Route::put('/gateways/{gateway}', [GatewaySettingsController::class, 'update'])->whereIn('gateway', ['stripe', 'paypal'])->middleware('admin')->name('.gateways.update');
+        Route::post('/gateways/{gateway}/test', [GatewaySettingsController::class, 'test'])->whereIn('gateway', ['stripe', 'paypal'])->middleware(['admin', 'throttle:10,1'])->name('.gateways.test');
         Route::get('/catalog', 'catalog')->name('.catalog');
         Route::post('/categories', 'storeCategory')->name('.categories.store');
         Route::put('/categories/{category}', 'updateCategory')->name('.categories.update');
@@ -321,7 +374,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/customers/{user}/wallet', 'adjustWallet')->name('.customer.wallet');
     });
 
-    Route::middleware('admin:admin.tickets')->prefix('/tickets')->name('tickets')->controller(\App\Http\Controllers\Web\TicketAdminController::class)->group(function () {
+    Route::middleware('admin:admin.tickets')->prefix('/tickets')->name('tickets')->controller(TicketAdminController::class)->group(function () {
         Route::get('/', 'index');
         Route::get('/settings', 'settings')->name('.settings');
         Route::put('/settings', 'saveSettings')->name('.settings.update');
@@ -354,14 +407,14 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/users/{user}/unsuspend', [UsersController::class, 'unsuspend'])->name('users.unsuspend');
         Route::post('/users/{user}/password', [UsersController::class, 'resetPassword'])->name('users.password');
         Route::delete('/users/{user}', [UsersController::class, 'destroy'])->name('users.destroy');
-        Route::post('/users/{user}/impersonate', [\App\Http\Controllers\Web\ImpersonationController::class, 'start'])
+        Route::post('/users/{user}/impersonate', [ImpersonationController::class, 'start'])
             ->middleware(['admin', 'throttle:20,1'])->name('users.impersonate');
     });
 });
 
 // --- webhooki bramek płatności -----------------------------------------------
 // Bez sesji i CSRF: wiarygodność sprawdza bramka (podpis Stripe, weryfikacja PayPal).
-Route::post('/billing/webhooks/{gateway}', [\App\Http\Controllers\Web\PaymentController::class, 'webhook'])
+Route::post('/billing/webhooks/{gateway}', [PaymentController::class, 'webhook'])
     ->whereIn('gateway', ['stripe', 'paypal'])->middleware('throttle:120,1')->name('billing.webhook');
 
 // --- rejestracja hypervisora ------------------------------------------------

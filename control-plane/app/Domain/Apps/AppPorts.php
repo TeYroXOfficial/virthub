@@ -79,6 +79,75 @@ class AppPorts
         });
     }
 
+    /** Ile portów może mieć aplikacja: limit aplikacji, inaczej planu. */
+    public function limit(AppServer $app): int
+    {
+        return (int) ($app->port_limit ?? $app->plan?->ports ?? max(1, $app->allocations()->count()));
+    }
+
+    /**
+     * Dodaje port: konkretny (tylko personel) albo kolejny wolny z zakresu węzła.
+     * Klient dodaje porty do limitu, personel także ponad niego.
+     */
+    public function add(AppServer $app, ?int $port = null, bool $staff = false): AppAllocation
+    {
+        $node = $app->hypervisor ?? throw new \DomainException(__('Aplikacja nie jest przypisana do węzła.'));
+        if (! $staff && $app->allocations()->count() >= $this->limit($app)) {
+            throw new \DomainException(__('Osiągnięto limit :limit portów tej aplikacji.', ['limit' => $this->limit($app)]));
+        }
+        if ($port === null) {
+            $allocation = $this->allocate($app, $node, 1)[0];
+            $allocation->update(['is_primary' => ! $app->allocations()->whereKeyNot($allocation->id)->exists()]);
+
+            return $allocation;
+        }
+
+        return DB::transaction(function () use ($app, $node, $port) {
+            if (! $node->app_port_start || $port < $node->app_port_start || $port > $node->app_port_end) {
+                throw new \DomainException(__('Port :port jest poza zakresem portów aplikacji na węźle (:from–:to).', ['port' => $port, 'from' => $node->app_port_start, 'to' => $node->app_port_end]));
+            }
+            foreach ($this->natSpans($node) as $span) {
+                if ($port >= $span['from'] && $port <= $span['to']) {
+                    throw new \DomainException(__('Port :port należy do bloku portów NAT maszyn.', ['port' => $port]));
+                }
+            }
+            $taken = AppAllocation::query()->where('hypervisor_id', $node->id)->where('port', $port)->lockForUpdate()->first();
+            if ($taken?->app_server_id !== null) {
+                throw new \DomainException(__('Port :port jest już zajęty.', ['port' => $port]));
+            }
+
+            return AppAllocation::query()->updateOrCreate(
+                ['hypervisor_id' => $node->id, 'port' => $port],
+                ['app_server_id' => $app->id, 'is_primary' => ! $app->allocations()->exists(), 'notes' => null],
+            );
+        });
+    }
+
+    public function remove(AppServer $app, AppAllocation $allocation): void
+    {
+        $this->assertOwned($app, $allocation);
+        if ($allocation->is_primary) {
+            throw new \DomainException(__('Nie można usunąć portu głównego — najpierw ustaw inny port jako główny.'));
+        }
+        $allocation->delete();
+    }
+
+    public function makePrimary(AppServer $app, AppAllocation $allocation): void
+    {
+        $this->assertOwned($app, $allocation);
+        DB::transaction(function () use ($app, $allocation) {
+            AppAllocation::query()->where('app_server_id', $app->id)->update(['is_primary' => false]);
+            $allocation->update(['is_primary' => true]);
+        });
+    }
+
+    private function assertOwned(AppServer $app, AppAllocation $allocation): void
+    {
+        if ($allocation->app_server_id !== $app->id) {
+            throw new \DomainException(__('Ten port nie należy do aplikacji.'));
+        }
+    }
+
     public function release(AppServer $app): void
     {
         AppAllocation::query()->where('app_server_id', $app->id)->delete();

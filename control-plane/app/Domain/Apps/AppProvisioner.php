@@ -4,6 +4,7 @@ namespace App\Domain\Apps;
 
 use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
+use App\Domain\Apps\Databases\DatabaseManager;
 use App\Jobs\InstallAppJob;
 use App\Models\AppEgg;
 use App\Models\AppJob;
@@ -238,6 +239,12 @@ class AppProvisioner
         $this->pushSpec($app);
     }
 
+    /** Wysyła aktualną specyfikację na węzeł (np. po zmianie portów). True — zmiana wymaga restartu. */
+    public function syncSpec(AppServer $app): bool
+    {
+        return $this->pushSpec($app->refresh());
+    }
+
     /** Wysyła nową specyfikację na węzeł. Zwraca true, gdy zmiana wymaga restartu. */
     private function pushSpec(AppServer $app): bool
     {
@@ -280,6 +287,8 @@ class AppProvisioner
             $this->client($app)->appDelete($app->uuid);
         }
 
+        // Bazy danych aplikacji znikają razem z nią (błąd serwera bazy nie blokuje usunięcia).
+        app(DatabaseManager::class)->deleteAllFor($app, $actor);
         AuditLog::record('app.delete', $app, ['name' => $app->name, 'panel_only' => $panelOnly], $actor);
         DB::transaction(function () use ($app) {
             $this->ports->release($app);

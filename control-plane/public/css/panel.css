@@ -895,3 +895,21 @@ dialog.edit-modal .grid-3 { gap: 0 14px; }
     font-size: 14px; font-weight: 600;
 }
 .impersonation-bar > span { display: inline-flex; align-items: center; gap: 8px; }
+
+/* Bazy danych aplikacji */
+.db-item { padding: 16px 20px; border-top: 1px solid var(--border); }
+.db-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.db-head .hint { display: block; margin-top: 2px; }
+.db-kv { font-size: 13px; }
+.input-prefix { display: flex; align-items: stretch; }
+.input-prefix > span { display: flex; align-items: center; padding: 0 10px; border: 1px solid var(--border); border-right: 0; border-radius: 8px 0 0 8px; background: var(--surface-2); color: var(--muted); font-size: 13px; }
+.input-prefix > input { border-radius: 0 8px 8px 0; flex: 1; min-width: 0; }
+.sql-editor { width: 100%; min-height: 140px; font-family: var(--mono); font-size: 13px; resize: vertical; }
+.db-grid td, .db-grid th { font-family: var(--mono); font-size: 12px; white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+.db-grid td.null { color: var(--muted); font-style: italic; }
+.db-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; align-items: start; }
+.db-tables { list-style: none; margin: 0; padding: 6px 0; max-height: 70vh; overflow: auto; }
+.db-tables a { display: flex; justify-content: space-between; gap: 8px; padding: 6px 14px; color: inherit; text-decoration: none; font-size: 13px; }
+.db-tables a:hover, .db-tables a[aria-current] { background: var(--surface-3); }
+.db-tables .hint { font-size: 11px; }
+@media (max-width: 800px) { .db-layout { grid-template-columns: 1fr; } .db-tables { max-height: 240px; } }

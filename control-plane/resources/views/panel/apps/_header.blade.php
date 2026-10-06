@@ -66,6 +66,8 @@
             $addonKind = (new \App\Domain\Apps\Content\ServerProfile($app))->addonKind();
             $tabs['addons'] = [$addonKind === 'mod' ? __('Mody') : __('Pluginy'), route('panel.apps.addons', $app)];
         }
+        $tabs['network'] = [__('Sieć'), route('panel.apps.network', $app)];
+        $tabs['databases'] = [__('Bazy danych'), route('panel.apps.databases', $app)];
         $tabs['startup'] = [__('Uruchamianie'), route('panel.apps.startup', $app)];
         $tabs['settings'] = [__('Ustawienia'), route('panel.apps.settings', $app)];
     @endphp

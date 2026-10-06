@@ -9,9 +9,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /** Plan zasobów aplikacji: pamięć, procesor, dysk i liczba portów. */
 class AppPlan extends Model
 {
-    protected $fillable = ['name', 'memory_mb', 'cpu_percent', 'disk_mb', 'ports', 'price_hint_cents', 'currency', 'is_active'];
+    protected $fillable = ['name', 'memory_mb', 'cpu_percent', 'disk_mb', 'ports', 'databases', 'price_hint_cents', 'currency', 'is_active'];
 
-    protected $attributes = ['is_active' => true, 'cpu_percent' => 0, 'ports' => 1, 'currency' => 'PLN'];
+    protected $attributes = ['is_active' => true, 'cpu_percent' => 0, 'ports' => 1, 'databases' => 0, 'currency' => 'PLN'];
 
     protected function casts(): array
     {
