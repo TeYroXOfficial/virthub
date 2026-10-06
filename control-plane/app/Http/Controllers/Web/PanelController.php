@@ -31,6 +31,8 @@ class PanelController extends Controller
 
         return view('panel.dashboard', [
             'servers' => $servers,
+            // VPS-y u dostawców zewnętrznych (reselling) — klient widzi je jak zwykłe maszyny.
+            'cloud' => \App\Models\ExternalServer::query()->where('user_id', $user->id)->latest()->get(),
             'running' => $servers->where('state', ServerState::Running)->count(),
             'building' => $servers->filter(fn (Server $s) => $s->state->isTransitioning())->count(),
             // Podsumowanie floty ma sens tylko dla personelu — klientowi

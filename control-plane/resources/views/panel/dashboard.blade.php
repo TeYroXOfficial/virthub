@@ -41,7 +41,7 @@
         </div>
     @endif
 
-    @if ($servers->isEmpty())
+    @if ($servers->isEmpty() && $cloud->isEmpty())
         <div class="card empty">
             <x-icon name="servers" :size="40"/>
             <p>{{ __('Nie masz jeszcze żadnej maszyny.') }}</p>
@@ -90,6 +90,17 @@
                                 {{ __(':vcpu vCPU · :ram_mb GB · :disk_gb GB', ['vcpu' => $server->vcpu, 'ram_mb' => round($server->ram_mb / 1024, 1), 'disk_gb' => $server->disk_gb]) }}
                             </td>
                             <td style="text-align:right"><a class="btn btn-sm" href="{{ route('panel.servers.show', $server) }}">{{ __('Zarządzaj') }}</a></td>
+                        </tr>
+                    @endforeach
+                    @foreach ($cloud as $vm)
+                        <tr>
+                            <td><a href="{{ route('panel.cloud.show', $vm) }}" style="font-weight:600">{{ $vm->name }}</a>
+                                @if ($vm->name !== $vm->hostname) <div class="hint">{{ $vm->hostname }}</div> @endif</td>
+                            <td><span class="pill {{ $vm->statusTone() }}">{{ $vm->statusLabel() }}</span></td>
+                            <td class="mono">{{ $vm->ipv4 ?? '—' }}</td>
+                            <td>{{ $vm->image_name ?? '—' }}</td>
+                            <td class="num">@if ($vm->cpu) {{ __(':vcpu vCPU · :ram_mb GB · :disk_gb GB', ['vcpu' => $vm->cpu, 'ram_mb' => round($vm->ram_mb / 1024, 1), 'disk_gb' => $vm->disk_gb]) }} @else — @endif</td>
+                            <td style="text-align:right"><a class="btn btn-sm" href="{{ route('panel.cloud.show', $vm) }}">{{ __('Zarządzaj') }}</a></td>
                         </tr>
                     @endforeach
                     </tbody>

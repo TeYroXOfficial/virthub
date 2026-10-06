@@ -16,8 +16,11 @@ class Product extends Model
 
     public const TYPE_APP = 'app';
 
+    /** VPS u dostawcy zewnętrznego (reselling przez addon). */
+    public const TYPE_EXTERNAL = 'external';
+
     protected $fillable = [
-        'product_category_id', 'name', 'description', 'type', 'vps_package_id', 'app_plan_id',
+        'product_category_id', 'name', 'description', 'type', 'vps_package_id', 'app_plan_id', 'provider_account_id', 'external_config',
         'app_egg_ids', 'hypervisor_group_ids', 'setup_fee', 'stock', 'per_user_limit', 'is_active', 'sort_order',
         'keepalive_interval', 'keepalive_window', 'keepalive_delete_after',
     ];
@@ -28,6 +31,7 @@ class Product extends Model
     {
         return [
             'app_egg_ids' => 'array',
+            'external_config' => 'array',
             'hypervisor_group_ids' => 'array',
             'setup_fee' => 'integer',
             'stock' => 'integer',
@@ -53,6 +57,22 @@ class Product extends Model
     public function plan(): BelongsTo
     {
         return $this->belongsTo(AppPlan::class, 'app_plan_id');
+    }
+
+    /** @return BelongsTo<ProviderAccount, $this> */
+    public function providerAccount(): BelongsTo
+    {
+        return $this->belongsTo(ProviderAccount::class);
+    }
+
+    /**
+     * Systemy do wyboru w produkcie zewnętrznym.
+     *
+     * @return list<array{id:string, name:string}>
+     */
+    public function externalImages(): array
+    {
+        return array_values(array_filter((array) ($this->external_config['images'] ?? []), fn ($i) => is_array($i) && isset($i['id'], $i['name'])));
     }
 
     /** @return HasMany<ProductPrice, $this> */
@@ -118,9 +138,12 @@ class Product extends Model
     /** Usługa, którą produkt tworzy, istnieje i jest aktywna. */
     public function deliverable(): bool
     {
-        return $this->type === self::TYPE_VPS
-            ? $this->package !== null && $this->package->is_active
-            : $this->plan !== null && $this->plan->is_active;
+        return match ($this->type) {
+            self::TYPE_VPS => $this->package !== null && $this->package->is_active,
+            self::TYPE_EXTERNAL => $this->providerAccount !== null && $this->providerAccount->is_active
+                && $this->providerAccount->driverAvailable() && $this->externalImages() !== [],
+            default => $this->plan !== null && $this->plan->is_active,
+        };
     }
 
     /** Ile sztuk jeszcze można sprzedać (null = bez limitu). */
@@ -137,6 +160,9 @@ class Product extends Model
     /** Lokalizacje do wyboru: publiczne grupy, ograniczone listą produktu. @return Collection<int, HypervisorGroup> */
     public function locations(): Collection
     {
+        if ($this->type === self::TYPE_EXTERNAL) {
+            return new Collection; // lokalizacja jest częścią konfiguracji produktu u dostawcy
+        }
         $query = HypervisorGroup::query()->where('is_public', true)->where('accepts_new_servers', true)->ordered();
         if ($this->hypervisor_group_ids) {
             $query->whereIn('id', array_map('intval', $this->hypervisor_group_ids));
@@ -161,6 +187,9 @@ class Product extends Model
 
     public function typeLabel(): string
     {
-        return $this->type === self::TYPE_VPS ? __('Serwer VPS') : __('Aplikacja');
+        return match ($this->type) {
+            self::TYPE_VPS, self::TYPE_EXTERNAL => __('Serwer VPS'),
+            default => __('Aplikacja'),
+        };
     }
 }

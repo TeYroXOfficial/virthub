@@ -3,12 +3,14 @@
 namespace App\Domain\Billing;
 
 use App\Domain\Apps\AppProvisioner;
+use App\Domain\External\ExternalServerManager;
 use App\Domain\Mail\TemplateMailer;
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Models\AppEgg;
 use App\Models\AppServer;
 use App\Models\AuditLog;
 use App\Models\BillingService;
+use App\Models\ExternalServer;
 use App\Models\HypervisorGroup;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
@@ -203,6 +205,23 @@ class ServiceManager
                     location: $location,
                 );
                 $links = ['server_id' => $server->id];
+            } elseif ($product->type === Product::TYPE_EXTERNAL) {
+                $account = $product->providerAccount ?? throw new \DomainException(__('Konto dostawcy produktu nie istnieje.'));
+                $spec = (array) $product->external_config;
+                $image = collect($product->externalImages())->firstWhere('id', (string) ($config['image'] ?? ''))
+                    ?? throw new \DomainException(__('Wybrany system nie jest już dostępny.'));
+                $external = app(ExternalServerManager::class)->order(
+                    user: $service->user,
+                    account: $account,
+                    spec: ['location' => (string) ($spec['location'] ?? ''), 'plan' => (string) ($spec['plan'] ?? ''),
+                        'cpu' => $spec['cpu'] ?? null, 'ram_mb' => $spec['ram_mb'] ?? null, 'disk_gb' => $spec['disk_gb'] ?? null],
+                    image: (string) $image['id'],
+                    imageName: (string) $image['name'],
+                    hostname: (string) $config['hostname'],
+                    sshKeys: $config['ssh_keys'] ?? [],
+                    actor: $actor,
+                );
+                $links = ['external_server_id' => $external->id];
             } else {
                 $plan = $product->plan ?? throw new \DomainException(__('Plan produktu nie istnieje.'));
                 $egg = AppEgg::query()->find($config['egg_id'] ?? 0) ?? throw new \DomainException(__('Wybrany szablon aplikacji nie jest już dostępny.'));
@@ -309,6 +328,8 @@ class ServiceManager
                 app(ServerProvisioner::class)->suspend($service->server, $text, $actor, $reason === 'admin');
             } elseif ($service->appServer && ! $service->appServer->isSuspended()) {
                 app(AppProvisioner::class)->suspend($service->appServer, $text, $actor);
+            } elseif ($service->externalServer && ! $service->externalServer->isSuspended()) {
+                app(ExternalServerManager::class)->suspend($service->externalServer, $actor);
             }
         } catch (Throwable $e) {
             $service->update(['last_error' => mb_substr($e->getMessage(), 0, 500)]);
@@ -347,6 +368,8 @@ class ServiceManager
                 app(ServerProvisioner::class)->unsuspend($service->server, $actor);
             } elseif ($service->appServer?->isSuspended()) {
                 app(AppProvisioner::class)->unsuspend($service->appServer, $actor);
+            } elseif ($service->externalServer?->isSuspended()) {
+                app(ExternalServerManager::class)->unsuspend($service->externalServer, $actor);
             }
         } catch (Throwable $e) {
             $service->update(['last_error' => mb_substr($e->getMessage(), 0, 500)]);
@@ -372,6 +395,9 @@ class ServiceManager
             $app = $service->appServer;
             if ($app !== null) {
                 app(AppProvisioner::class)->destroy($app, $actor, $app->hypervisor === null);
+            }
+            if ($service->externalServer !== null) {
+                app(ExternalServerManager::class)->destroy($service->externalServer, $actor);
             }
         } catch (Throwable $e) {
             $service->update(['last_error' => mb_substr($e->getMessage(), 0, 500)]);
@@ -660,9 +686,11 @@ class ServiceManager
             ->each(function (BillingService $service) use (&$synced) {
                 $server = $service->server_id ? Server::withTrashed()->find($service->server_id) : null;
                 $app = $service->app_server_id ? AppServer::query()->find($service->app_server_id) : null;
-                $gone = ($service->server_id === null && $service->app_server_id === null)
+                $external = $service->external_server_id ? ExternalServer::withTrashed()->find($service->external_server_id) : null;
+                $gone = ($service->server_id === null && $service->app_server_id === null && $service->external_server_id === null)
                     || ($service->server_id !== null && ($server === null || $server->trashed()))
-                    || ($service->app_server_id !== null && $app === null);
+                    || ($service->app_server_id !== null && $app === null)
+                    || ($service->external_server_id !== null && ($external === null || $external->trashed()));
                 if ($gone) {
                     $service->update(['status' => BillingService::STATUS_TERMINATED, 'terminated_at' => now()]);
                     $this->cancelOpenInvoices($service, null);

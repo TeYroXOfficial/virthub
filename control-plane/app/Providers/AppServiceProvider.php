@@ -4,6 +4,9 @@ namespace App\Providers;
 
 use App\Domain\Apps\Databases\DatabaseServer;
 use App\Domain\Apps\Databases\MysqlDatabaseServer;
+use App\Domain\External\ProviderRegistry;
+use App\Domain\Licensing\AddonManager;
+use App\Domain\Licensing\LicenseManager;
 use App\Domain\Settings\MailSettings;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -15,7 +18,9 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(DatabaseServer::class, MysqlDatabaseServer::class);
-        //
+        $this->app->singleton(LicenseManager::class);
+        $this->app->singleton(AddonManager::class);
+        $this->app->singleton(ProviderRegistry::class);
     }
 
     public function boot(): void
@@ -25,6 +30,16 @@ class AppServiceProvider extends ServiceProvider
         // budowania assetów). Prosty wariant renderuje czyste listy, które
         // stylujemy razem z resztą interfejsu.
         Paginator::defaultView('pagination::simple-default');
+
+        // Addony objęte licencją (ich ServiceProvidery rejestrują np. sterowniki
+        // dostawców). Brak tabel (świeża instalacja, migracje) nie blokuje startu.
+        try {
+            $this->app->make(AddonManager::class)->boot();
+        } catch (\Illuminate\Database\QueryException) {
+            // brak tabeli ustawień — przed pierwszą migracją
+        } catch (\Throwable $e) {
+            report($e);
+        }
         Paginator::defaultSimpleView('pagination::simple-default');
 
         // Poczta ustawiona w Administracji nadpisuje MAIL_* z .env.

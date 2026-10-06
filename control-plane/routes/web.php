@@ -92,6 +92,16 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::get('/servers/new', [PanelController::class, 'createServer'])->name('servers.create');
     Route::post('/servers', [PanelController::class, 'storeServer'])->name('servers.store');
     Route::get('/servers/{server}', [PanelController::class, 'showServer'])->name('servers.show');
+    // VPS u dostawców zewnętrznych (reselling przez addony).
+    Route::prefix('/cloud/{server}')->name('cloud.')->controller(\App\Http\Controllers\Web\CloudServerController::class)->group(function () {
+        Route::get('/', 'show')->name('show');
+        Route::get('/status', 'status')->name('status');
+        Route::post('/power', 'power')->middleware('throttle:20,1')->name('power');
+        Route::post('/reinstall', 'reinstall')->middleware('throttle:5,1')->name('reinstall');
+        Route::post('/console', 'console')->middleware('throttle:20,1')->name('console');
+        Route::post('/rdns', 'rdns')->middleware('throttle:10,1')->name('rdns');
+        Route::put('/name', 'rename')->name('rename');
+    });
     Route::post('/servers/{server}/console', [ConsoleController::class, 'open'])->name('servers.console');
     Route::post('/servers/{server}/rebuild', [ServerActionsController::class, 'rebuild'])->name('servers.rebuild');
     Route::post('/servers/{server}/resize', [ServerActionsController::class, 'resize'])->middleware('throttle:10,1')->name('servers.resize');
@@ -288,6 +298,26 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::put('/hypervisor-groups/{group}', [AdminController::class, 'updateHypervisorGroup'])->name('hypervisor-groups.update');
         Route::delete('/hypervisor-groups/{group}', [AdminController::class, 'destroyHypervisorGroup'])->name('hypervisor-groups.destroy');
     });
+
+    // Licencja, addony i konta dostawców zewnętrznych — tylko administrator.
+    Route::middleware('admin')->group(function () {
+        Route::get('/license', [\App\Http\Controllers\Web\LicenseController::class, 'index'])->name('license');
+        Route::post('/license', [\App\Http\Controllers\Web\LicenseController::class, 'activate'])->middleware('throttle:10,1')->name('license.activate');
+        Route::post('/license/refresh', [\App\Http\Controllers\Web\LicenseController::class, 'refresh'])->middleware('throttle:10,1')->name('license.refresh');
+        Route::delete('/license', [\App\Http\Controllers\Web\LicenseController::class, 'remove'])->name('license.remove');
+        Route::post('/addons/{addon}/install', [\App\Http\Controllers\Web\LicenseController::class, 'install'])->middleware('throttle:10,1')->where('addon', '[a-z][a-z0-9-]{1,39}')->name('addons.install');
+        Route::post('/addons/{addon}/toggle', [\App\Http\Controllers\Web\LicenseController::class, 'toggle'])->where('addon', '[a-z][a-z0-9-]{1,39}')->name('addons.toggle');
+        Route::delete('/addons/{addon}', [\App\Http\Controllers\Web\LicenseController::class, 'uninstall'])->where('addon', '[a-z][a-z0-9-]{1,39}')->name('addons.uninstall');
+
+        Route::get('/providers', [\App\Http\Controllers\Web\ProviderAccountController::class, 'index'])->name('providers');
+        Route::post('/providers', [\App\Http\Controllers\Web\ProviderAccountController::class, 'store'])->middleware('throttle:10,1')->name('providers.store');
+        Route::put('/providers/{account}', [\App\Http\Controllers\Web\ProviderAccountController::class, 'update'])->name('providers.update');
+        Route::post('/providers/{account}/test', [\App\Http\Controllers\Web\ProviderAccountController::class, 'test'])->middleware('throttle:20,1')->name('providers.test');
+        Route::delete('/providers/{account}', [\App\Http\Controllers\Web\ProviderAccountController::class, 'destroy'])->name('providers.destroy');
+    });
+    // Katalog dostawcy dla formularza produktu (personel billingu).
+    Route::get('/providers/{account}/catalog', [\App\Http\Controllers\Web\ProviderAccountController::class, 'catalog'])
+        ->middleware(['admin:admin.billing', 'throttle:30,1'])->name('providers.catalog');
 
     Route::middleware('admin:admin.updates')->group(function () {
         Route::get('/updates', [UpdatesController::class, 'index'])->name('updates');

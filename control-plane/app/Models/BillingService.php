@@ -28,7 +28,7 @@ class BillingService extends Model
     public const LIVE = [self::STATUS_ACTIVE, self::STATUS_SUSPENDED];
 
     protected $fillable = [
-        'user_id', 'product_id', 'name', 'cycle', 'amount', 'status', 'server_id', 'app_server_id', 'config',
+        'user_id', 'product_id', 'name', 'cycle', 'amount', 'status', 'server_id', 'app_server_id', 'external_server_id', 'config',
         'next_due_at', 'cancel_at_period_end', 'suspend_reason', 'suspended_at', 'terminated_at', 'last_error',
         'renews', 'metered', 'keepalive_interval', 'keepalive_window', 'keepalive_until', 'keepalive_notified_at', 'keepalive_delete_after',
     ];
@@ -73,6 +73,12 @@ class BillingService extends Model
     public function appServer(): BelongsTo
     {
         return $this->belongsTo(AppServer::class);
+    }
+
+    /** @return BelongsTo<ExternalServer, $this> */
+    public function externalServer(): BelongsTo
+    {
+        return $this->belongsTo(ExternalServer::class);
     }
 
     /** @return HasMany<InvoiceItem, $this> */
@@ -146,6 +152,7 @@ class BillingService extends Model
         return match (true) {
             $this->server !== null => route('panel.servers.show', $this->server),
             $this->appServer !== null => route('panel.apps.show', $this->appServer),
+            $this->externalServer !== null => route('panel.cloud.show', $this->externalServer),
             default => null,
         };
     }

@@ -38,7 +38,7 @@ class StoreController extends Controller
     public function show(Request $request, Product $product): View
     {
         $this->assertOrderable($product);
-        $product->load('prices', 'package', 'plan', 'category');
+        $product->load('prices', 'package', 'plan', 'category', 'providerAccount');
 
         return view('panel.store.product', [
             'product' => $product,
@@ -64,10 +64,17 @@ class StoreController extends Controller
             'payment' => ['required', Rule::in(['wallet', 'invoice'])],
             'accept' => ['accepted'],
         ];
+        $hostnameRule = ['required', 'string', 'max:253', 'regex:/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/i'];
         if ($product->type === Product::TYPE_VPS) {
             $rules += [
                 'template' => ['required', 'integer', Rule::in($this->templates($product)->pluck('id')->all())],
-                'hostname' => ['required', 'string', 'max:253', 'regex:/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/i'],
+                'hostname' => $hostnameRule,
+                'ssh_key' => ['nullable', 'string', 'max:1000', new SshPublicKey],
+            ];
+        } elseif ($product->type === Product::TYPE_EXTERNAL) {
+            $rules += [
+                'image' => ['required', 'string', Rule::in(array_column($product->externalImages(), 'id'))],
+                'hostname' => $hostnameRule,
                 'ssh_key' => ['nullable', 'string', 'max:1000', new SshPublicKey],
             ];
         } else {
@@ -90,9 +97,12 @@ class StoreController extends Controller
         }
 
         $config = ['location_id' => isset($data['location']) ? (int) $data['location'] : null];
-        $config += $product->type === Product::TYPE_VPS
-            ? ['template_id' => (int) $data['template'], 'hostname' => strtolower($data['hostname']), 'ssh_keys' => array_values(array_filter([trim((string) ($data['ssh_key'] ?? ''))]))]
-            : ['egg_id' => (int) $data['egg'], 'name' => $data['name']];
+        $sshKeys = array_values(array_filter([trim((string) ($data['ssh_key'] ?? ''))]));
+        $config += match ($product->type) {
+            Product::TYPE_VPS => ['template_id' => (int) $data['template'], 'hostname' => strtolower($data['hostname']), 'ssh_keys' => $sshKeys],
+            Product::TYPE_EXTERNAL => ['image' => (string) $data['image'], 'hostname' => strtolower($data['hostname']), 'ssh_keys' => $sshKeys],
+            default => ['egg_id' => (int) $data['egg'], 'name' => $data['name']],
+        };
 
         try {
             [$service, $invoice] = $this->services->checkout($user, $product, $data['cycle'], $config, $data['payment'] === 'wallet');

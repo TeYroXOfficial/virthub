@@ -72,6 +72,7 @@
             [__('Oferta'), 'package', [
                 ['panel.admin.packages', __('Pakiety VPS'), 'package', 'panel.admin.packages*', 'admin.packages'],
                 ['panel.admin.apps.plans', __('Plany aplikacji'), 'sliders', 'panel.admin.apps.plans*', 'admin.apps'],
+                ['panel.admin.providers', __('Dostawcy zewnętrzni'), 'network', 'panel.admin.providers*', 'admin'],
             ]],
             [__('Media'), 'disc', [
                 ['panel.admin.templates', __('Szablony systemów'), 'disc', 'panel.admin.templates*', 'admin.templates'],
@@ -83,6 +84,7 @@
             ]],
             [__('System'), 'sliders', [
                 ['panel.admin.updates', __('Aktualizacje'), 'refresh', 'panel.admin.updates*', 'admin.updates'],
+                ['panel.admin.license', __('Licencja i addony'), 'key', 'panel.admin.license*', 'admin'],
                 ['panel.admin.mail', __('Poczta (SMTP)'), 'mail', 'panel.admin.mail*', 'admin.settings'],
                 ['panel.admin.emails', __('Szablony e-mail'), 'mail', 'panel.admin.emails*', 'admin.settings'],
                 ['panel.admin.logs', __('Dziennik zdarzeń'), 'archive', 'panel.admin.logs', 'admin'],
