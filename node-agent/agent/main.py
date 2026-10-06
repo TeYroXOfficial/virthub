@@ -12,9 +12,10 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, status
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 try:
     from docker import errors as docker_errors  # type: ignore[import-not-found]
@@ -71,6 +72,7 @@ from .schemas import (
 )
 from .security import check_signature, require_control_plane
 from .updates import Updates, UpdaterMissing
+from .mariadb import MariaDbSetup, MariaDbSetupMissing, PanelAddressUnknown, panel_address
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,6 +84,7 @@ settings = get_settings()
 settings.ensure_directories()
 driver = build_driver(settings)
 updates = Updates(settings)
+mariadb_setup = MariaDbSetup(settings)
 
 
 def _handlers() -> dict[str, Any]:
@@ -353,6 +356,39 @@ async def request_update() -> dict[str, Any]:
         return updates.request()
     except UpdaterMissing as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+# --- serwer baz MariaDB dla aplikacji ------------------------------------------
+
+class MariaDbRequest(BaseModel):
+    open_firewall: bool = False
+
+
+@app.get("/system/mariadb", dependencies=[Depends(require_control_plane)], tags=["system"])
+async def mariadb_status() -> dict[str, Any]:
+    return mariadb_setup.status()
+
+
+@app.post(
+    "/system/mariadb",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["system"],
+)
+async def mariadb_install(req: MariaDbRequest, request: Request) -> dict[str, Any]:
+    """Zleca instalację MariaDB; wykonuje ją usługa roota virthub-mariadb.
+    Konto administracyjne dostaje dostęp tylko z adresu, z którego przyszło to żądanie."""
+    try:
+        host = panel_address(request.headers.get("x-real-ip"))
+        return mariadb_setup.request(host, req.open_firewall)
+    except (MariaDbSetupMissing, PanelAddressUnknown) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.delete("/system/mariadb/credentials", dependencies=[Depends(require_control_plane)], tags=["system"])
+async def mariadb_forget() -> dict[str, Any]:
+    """Panel zapisał dane konta — usuwamy je z dysku węzła."""
+    return mariadb_setup.forget_credentials()
 
 
 @app.get(

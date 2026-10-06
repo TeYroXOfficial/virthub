@@ -47,6 +47,8 @@ fi
 # Drop-in (np. lxc.conf z grupą incus-admin) zostaje nietknięty.
 cp "$AGENT_DIR/systemd/virthub-agent.service" /etc/systemd/system/virthub-agent.service
 bash "$AGENT_DIR/scripts/install-updater.sh"
+[ -f "$AGENT_DIR/scripts/install-mariadb-unit.sh" ] \
+    && { bash "$AGENT_DIR/scripts/install-mariadb-unit.sh" || warn "Nie udało się zainstalować usługi MariaDB"; }
 systemctl daemon-reload
 ok "Jednostki systemd zaktualizowane"
 
@@ -76,6 +78,12 @@ if [ -f "$NGINX_SITE" ]; then
         [ -f "$NGINX_SITE.bak" ] || cp "$NGINX_SITE" "$NGINX_SITE.bak"
         sed -i '0,/^\(\s*\)location \/ {/s//\1client_max_body_size 100m;\n\n&/' "$NGINX_SITE"
         ok "nginx: limit rozmiaru żądania 100 MB (wgrywanie plików)"
+    fi
+    # Adres panelu dla agenta (konto administracyjne MariaDB tylko z tego adresu).
+    if ! grep -q 'X-Real-IP' "$NGINX_SITE"; then
+        [ -f "$NGINX_SITE.bak" ] || cp "$NGINX_SITE" "$NGINX_SITE.bak"
+        sed -i 's|^\(\s*\)proxy_set_header Host \$host;|&\n\1proxy_set_header X-Real-IP $remote_addr;|' "$NGINX_SITE"
+        ok "nginx: agent dostaje adres panelu (X-Real-IP)"
     fi
     if nginx -t >/dev/null 2>&1; then
         systemctl reload nginx

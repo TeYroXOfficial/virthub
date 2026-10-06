@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Domain\Agent\AgentException;
 use App\Domain\Apps\Databases\DatabaseException;
 use App\Domain\Apps\Databases\DatabaseServer;
+use App\Domain\Apps\Databases\NodeDatabaseInstaller;
 use App\Http\Controllers\Controller;
 use App\Models\AppDatabase;
 use App\Models\AuditLog;
@@ -16,11 +18,17 @@ use Illuminate\View\View;
 /** Administracja → Aplikacje → Bazy danych: serwery MySQL/MariaDB i bazy klientów. */
 class DatabaseHostController extends Controller
 {
-    public function __construct(private readonly DatabaseServer $server) {}
+    public function __construct(private readonly DatabaseServer $server, private readonly NodeDatabaseInstaller $installer) {}
 
     public function index(): View
     {
+        if ($this->installer->pending()) {
+            $this->installer->syncPending();
+        }
+
         return view('panel.admin.apps.databases', [
+            'installs' => $this->installer->all(),
+            'installPending' => $this->installer->pending(),
             'hosts' => DatabaseHost::query()->with('hypervisor')->withCount('databases')->orderBy('name')->get(),
             'databases' => AppDatabase::query()->with('app.user', 'host')->latest('id')->paginate(30),
             'nodes' => Hypervisor::query()->orderBy('name')->get(),
@@ -55,6 +63,27 @@ class DatabaseHostController extends Controller
         AuditLog::record('database_host.updated', $host, ['host' => $host->host], $request->user());
 
         return back()->with('status', __('Serwer baz :name zapisany.', ['name' => $host->name]));
+    }
+
+    /** „Zainstaluj MariaDB na węźle” — reszta dzieje się sama (patrz NodeDatabaseInstaller). */
+    public function install(Request $request): RedirectResponse
+    {
+        $data = $request->validate(['hypervisor_id' => ['required', 'integer', 'exists:hypervisors,id']]);
+        $node = Hypervisor::query()->findOrFail($data['hypervisor_id']);
+        try {
+            $this->installer->start($node, $request->boolean('open_firewall'), $request->user());
+        } catch (AgentException $e) {
+            return back()->withErrors(['install' => $e->getMessage()]);
+        }
+
+        return back()->with('status', __('Zlecono instalację MariaDB na :node. Serwer baz pojawi się na liście sam, gdy instalacja się skończy.', ['node' => $node->name]));
+    }
+
+    public function dismissInstall(Hypervisor $node): RedirectResponse
+    {
+        $this->installer->dismiss($node);
+
+        return back();
     }
 
     public function test(DatabaseHost $host): RedirectResponse

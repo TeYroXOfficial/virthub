@@ -51,3 +51,12 @@ Schedule::call(fn () => app(App\Domain\Tickets\TicketService::class)->autoClose(
 Schedule::command('virthub:billing')
     ->everyFiveMinutes()
     ->withoutOverlapping();
+
+// Instalacje MariaDB zlecone z panelu (Aplikacje → Bazy danych) — dodanie
+// serwera baz, gdy węzeł skończy, nawet jeśli nikt nie trzyma otwartej strony.
+Schedule::call(function () {
+    $installer = app(App\Domain\Apps\Databases\NodeDatabaseInstaller::class);
+    if ($installer->pending()) {
+        $installer->syncPending();
+    }
+})->everyMinute()->name('mariadb-installs')->withoutOverlapping();

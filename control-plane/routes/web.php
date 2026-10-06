@@ -311,6 +311,8 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::delete('/plans/{plan}', 'deletePlan')->name('.plans.destroy');
         Route::get('/databases', [DatabaseHostController::class, 'index'])->name('.databases');
         // Serwery baz (konta administracyjne MySQL) — tylko administrator.
+        Route::post('/database-hosts/install', [DatabaseHostController::class, 'install'])->middleware(['admin', 'throttle:5,1'])->name('.database-hosts.install');
+        Route::delete('/database-hosts/install/{node}', [DatabaseHostController::class, 'dismissInstall'])->middleware('admin')->name('.database-hosts.install.dismiss');
         Route::post('/database-hosts', [DatabaseHostController::class, 'store'])->middleware('admin')->name('.database-hosts.store');
         Route::put('/database-hosts/{host}', [DatabaseHostController::class, 'update'])->middleware('admin')->name('.database-hosts.update');
         Route::post('/database-hosts/{host}/test', [DatabaseHostController::class, 'test'])->middleware(['admin', 'throttle:20,1'])->name('.database-hosts.test');
