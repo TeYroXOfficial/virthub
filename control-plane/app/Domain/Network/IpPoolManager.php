@@ -5,6 +5,7 @@ namespace App\Domain\Network;
 use App\Domain\Provisioning\IpAllocator;
 use App\Models\AuditLog;
 use App\Models\Hypervisor;
+use App\Models\IpAddress;
 use App\Models\IpPool;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -216,7 +217,7 @@ class IpPoolManager
 
         $added = 0;
         foreach (array_chunk($rows, 500) as $chunk) {
-            $added += \App\Models\IpAddress::query()->insertOrIgnore($chunk);
+            $added += IpAddress::query()->insertOrIgnore($chunk);
         }
 
         AuditLog::record('ip_pool.addresses_added', $pool, ['mode' => $data['mode'], 'added' => $added, 'requested' => count($list)]);
@@ -559,7 +560,7 @@ class IpPoolManager
 
         foreach ($list as $ns) {
             if (IpMath::version($ns) === null) {
-                $this->fail('nameservers', "Serwer DNS {$ns} nie jest poprawnym adresem IP.");
+                $this->fail('nameservers', __('Serwer DNS :address nie jest poprawnym adresem IP.', ['address' => $ns]));
             }
         }
 

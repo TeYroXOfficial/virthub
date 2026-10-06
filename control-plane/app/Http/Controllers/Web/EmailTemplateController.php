@@ -12,7 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
-/** System → Szablony e-mail: treść powiadomień w obu językach, podgląd i wysyłka testowa. */
+/** System → Szablony e-mail: treść powiadomień w każdym języku panelu, podgląd i wysyłka testowa. */
 class EmailTemplateController extends Controller
 {
     public function index(): View
@@ -78,6 +78,6 @@ class EmailTemplateController extends Controller
 
     private function assertKnown(string $key, string $locale): void
     {
-        abort_unless(EmailTemplates::exists($key) && in_array($locale, EmailTemplates::LOCALES, true), 404);
+        abort_unless(EmailTemplates::exists($key) && in_array($locale, EmailTemplates::locales(), true), 404);
     }
 }

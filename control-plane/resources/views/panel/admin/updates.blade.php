@@ -18,7 +18,7 @@
     $versionPill = function (?string $sha) use ($latestSha) {
         if ($sha === null) return ['nieznana', 'neutral'];
         if ($latestSha === null) return ['?', 'neutral'];
-        return $sha === $latestSha ? ['aktualna', 'ok'] : [__('dostępna nowsza'), 'warning'];
+        return $sha === $latestSha ? [__('aktualna'), 'ok'] : [__('dostępna nowsza'), 'warning'];
     };
 @endphp
 
@@ -199,7 +199,7 @@
                             row.querySelector('[data-build]').textContent = short(node.build);
                             const pill = row.querySelector('[data-version-pill]');
                             const current = data.latest && node.build === data.latest;
-                            pill.textContent = data.latest ? (current ? __('aktualna') : __('dostępna nowsza')) : '?';
+                            pill.textContent = data.latest ? (current ? @js(__('aktualna')) : @js(__('dostępna nowsza'))) : '?';
                             pill.className = 'pill ' + (data.latest ? (current ? 'ok' : 'warning') : 'neutral');
                         }
                         busy = busy || ['queued', 'running'].includes(node.state);

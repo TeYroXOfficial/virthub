@@ -227,7 +227,7 @@
                 const proto = form.querySelector('#fw-protocol').value;
                 form.querySelectorAll('[data-ports]').forEach(el => el.hidden = !['tcp', 'udp'].includes(proto));
                 form.querySelector('[data-peer-label]').textContent =
-                    form.querySelector('#fw-direction').value === 'in' ? @js(__('Adres źródłowy')) : __('Adres docelowy');
+                    form.querySelector('#fw-direction').value === 'in' ? @js(__('Adres źródłowy')) : @js(__('Adres docelowy'));
             };
             form.addEventListener('change', sync);
             sync();

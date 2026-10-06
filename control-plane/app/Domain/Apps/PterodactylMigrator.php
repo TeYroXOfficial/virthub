@@ -136,6 +136,9 @@ class PterodactylMigrator
         $url = $api->downloadUrl($identifier, $source['archive']);
         $quoted = "'".str_replace("'", "'\\''", $url)."'";
 
+        $msgStart = escapeshellarg('[VirtHub] '.__('Pobieram i rozpakowuję pliki z Pterodactyla…'));
+        $msgDone = escapeshellarg('[VirtHub] '.__('Pliki przeniesione.'));
+
         return [
             'image' => 'ghcr.io/pterodactyl/installers:alpine',
             'entrypoint' => 'ash',
@@ -146,9 +149,9 @@ set -eo pipefail
 command -v curl >/dev/null 2>&1 || apk add --no-cache curl tar >/dev/null
 mkdir -p /mnt/server
 cd /mnt/server
-echo "[VirtHub] Pobieram i rozpakowuję pliki z Pterodactyla…"
+echo {$msgStart}
 curl -fSL --retry 3 --connect-timeout 30 {$quoted} | tar -xzf - -C /mnt/server
-echo "[VirtHub] Pliki przeniesione."
+echo {$msgDone}
 SH,
         ];
     }

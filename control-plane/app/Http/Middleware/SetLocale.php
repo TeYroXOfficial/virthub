@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Setting;
 use Carbon\Carbon;
 use Closure;
 use Illuminate\Http\Request;
@@ -10,7 +11,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Język panelu: wybór zapisany na koncie, potem w sesji (przed zalogowaniem),
- * potem nagłówek Accept-Language przeglądarki, na końcu domyślny instalacji.
+ * potem nagłówek Accept-Language przeglądarki (jeśli włączone w Administracji →
+ * Języki), na końcu domyślny instalacji.
  */
 class SetLocale
 {
@@ -21,7 +23,7 @@ class SetLocale
 
         $locale = $valid($request->user()?->locale)
             ?? $valid($request->hasSession() ? $request->session()->get('locale') : null)
-            ?? $this->fromBrowser($request, $available)
+            ?? (Setting::get('locale.detect_browser', '1') === '1' ? $this->fromBrowser($request, $available) : null)
             ?? config('virthub.default_locale');
 
         App::setLocale($locale);

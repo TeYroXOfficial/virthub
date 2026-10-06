@@ -2,6 +2,8 @@
 
 namespace App\Domain\Provisioning;
 
+use App\Domain\Agent\ServerPayload;
+use App\Domain\Mail\Notify;
 use App\Enums\ServerState;
 use App\Jobs\ProvisionServerJob;
 use App\Jobs\RunServerActionJob;
@@ -56,7 +58,7 @@ class ServerProvisioner
     ): Server {
         if (! $template->isSelfService()) {
             throw new \InvalidArgumentException(
-                "Szablon {$template->name} nie wspiera automatycznej instalacji."
+                __('Szablon :name nie wspiera automatycznej instalacji.', ['name' => $template->name])
             );
         }
 
@@ -381,7 +383,7 @@ class ServerProvisioner
             return null;
         }
 
-        $job = $this->createJobRecord($server, 'mac', $actor, ['mac' => \App\Domain\Agent\ServerPayload::mac($server)]);
+        $job = $this->createJobRecord($server, 'mac', $actor, ['mac' => ServerPayload::mac($server)]);
         RunServerActionJob::dispatch($job->id);
 
         return $job;
@@ -408,7 +410,7 @@ class ServerProvisioner
         AuditLog::record('server.suspend', $server, ['reason' => $reason], $actor);
         RunServerActionJob::dispatch($job->id);
         if ($notify) {
-            app(\App\Domain\Mail\Notify::class)->server($server, 'server.suspended', ['reason' => $reason]);
+            app(Notify::class)->server($server, 'server.suspended', ['reason' => $reason]);
         }
 
         return $job;
@@ -425,7 +427,7 @@ class ServerProvisioner
         AuditLog::record('server.unsuspend', $server, [], $actor);
         RunServerActionJob::dispatch($job->id);
         if ($notify) {
-            app(\App\Domain\Mail\Notify::class)->server($server, 'server.unsuspended');
+            app(Notify::class)->server($server, 'server.unsuspended');
         }
 
         return $job;

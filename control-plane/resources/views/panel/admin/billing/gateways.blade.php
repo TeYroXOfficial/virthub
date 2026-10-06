@@ -61,12 +61,12 @@
                     </select>
                 </div>
                 <div class="field">
-                    <label for="pp-id">Client ID</label>
+                    <label for="pp-id">{{ __('Identyfikator klienta (Client ID)') }}</label>
                     <input id="pp-id" type="text" name="client_id" value="{{ old('client_id', $paypal['client_id']) }}">
                     @error('client_id') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror
                 </div>
                 <div class="field">
-                    <label for="pp-secret">Secret</label>
+                    <label for="pp-secret">{{ __('Klucz tajny (Secret)') }}</label>
                     <input id="pp-secret" type="password" name="client_secret" placeholder="{{ $paypal['has_secret'] ? __('zapisany — wpisz, żeby zmienić') : '' }}">
                     <div class="hint">{{ __('developer.paypal.com → Apps & Credentials → aplikacja REST.') }}</div>
                 </div>

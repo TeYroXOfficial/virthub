@@ -279,7 +279,10 @@ class Loaders
     /** Uniwersalny start: Forge/NeoForge (argumenty z bibliotek), Fabric, Quilt, stary Forge, vanilla. */
     public static function startScript(): string
     {
-        return <<<'SH'
+        return str_replace('__VIRTHUB_NO_SERVER__', escapeshellarg('[VirtHub] '.__('Brak serwera do uruchomienia — zainstaluj modpack albo loader w zakładce Modpacki.')), self::START_SCRIPT);
+    }
+
+    private const START_SCRIPT = <<<'SH'
 #!/bin/bash
 # VirtHub: start serwera Minecraft z loaderem (Forge, NeoForge, Fabric, Quilt, Paper, Purpur, vanilla).
 # Plik jest nadpisywany przy instalacji modpacka albo loadera.
@@ -297,8 +300,7 @@ JAR=$(ls forge-*.jar neoforge-*.jar 2>/dev/null | grep -v installer | head -n 1)
 if [ -f server.jar ]; then
     exec java $JAVA_OPTS -jar server.jar nogui "$@"
 fi
-echo "[VirtHub] Brak serwera do uruchomienia — zainstaluj modpack albo loader w zakładce Modpacki."
+echo __VIRTHUB_NO_SERVER__
 exit 1
 SH;
-    }
 }

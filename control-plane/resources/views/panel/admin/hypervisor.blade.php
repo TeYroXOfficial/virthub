@@ -229,7 +229,7 @@
             </div>
             <div class="field">
                 <label for="n-notes">{{ __('Notatki') }} <span class="muted">{{ __('(dla personelu)') }}</span></label>
-                <textarea id="n-notes" name="notes" rows="3" placeholder="Dostawca, numer szafy, kontakt do DC…">{{ old('notes', $node->notes) }}</textarea>
+                <textarea id="n-notes" name="notes" rows="3" placeholder="{{ __('Dostawca, numer szafy, kontakt do DC…') }}">{{ old('notes', $node->notes) }}</textarea>
             </div>
             <div class="field">
                 <label class="check-line">

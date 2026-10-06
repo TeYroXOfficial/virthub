@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
 use App\Domain\Apps\AppProvisioner;
 use App\Http\Controllers\Controller;
@@ -106,7 +107,7 @@ class AppFilesController extends Controller
 
         return response($data, 200, [
             'Content-Type' => 'application/octet-stream',
-            'Content-Disposition' => 'attachment; filename="'.addcslashes(basename($path) ?: 'plik', '"\\').'"',
+            'Content-Disposition' => 'attachment; filename="'.addcslashes(basename($path) ?: __('plik'), '"\\').'"',
             'X-Content-Type-Options' => 'nosniff',
         ]);
     }
@@ -139,7 +140,7 @@ class AppFilesController extends Controller
      * Plik na węzeł kawałkami po 4 MB: każde żądanie mieści się w limicie
      * nginx węzła, a panel nie trzyma w pamięci całego pliku w base64.
      */
-    private function sendInChunks(\App\Domain\Agent\AgentClient $client, AppServer $app, string $path, string $source): void
+    private function sendInChunks(AgentClient $client, AppServer $app, string $path, string $source): void
     {
         $handle = fopen($source, 'rb');
         if ($handle === false) {

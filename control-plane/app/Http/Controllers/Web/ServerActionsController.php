@@ -4,18 +4,25 @@ namespace App\Http\Controllers\Web;
 
 use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
+use App\Domain\Metrics\Traffic;
+use App\Domain\Network\ReverseDns;
 use App\Domain\Provisioning\AgentResultApplier;
+use App\Domain\Provisioning\GuestOs;
 use App\Domain\Provisioning\ServerProvisioner;
+use App\Enums\ServerState;
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
+use App\Models\IpAddress;
 use App\Models\IsoImage;
 use App\Models\OsTemplate;
 use App\Models\Server;
 use App\Models\ServerJob;
+use App\Models\VpsPackage;
+use App\Rules\SshPublicKey;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use App\Models\VpsPackage;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 
 /** Reinstalacja systemu i płyty ISO z poziomu strony maszyny. */
@@ -32,7 +39,7 @@ class ServerActionsController extends Controller
 
         $validated = $request->validate([
             'template' => ['required', Rule::exists(OsTemplate::class, 'id')->where('is_active', true)],
-            'ssh_key' => ['nullable', 'string', 'max:1000', new \App\Rules\SshPublicKey],
+            'ssh_key' => ['nullable', 'string', 'max:1000', new SshPublicKey],
             // Kasuje dysk bezpowrotnie — wymagamy świadomego potwierdzenia.
             'confirm' => ['accepted'],
         ], [
@@ -88,13 +95,13 @@ class ServerActionsController extends Controller
             'confirm.accepted' => __('Potwierdź, że maszyna ma zostać usunięta razem z dyskiem.'),
         ]);
 
-        if ($server->state === \App\Enums\ServerState::Deleting) {
+        if ($server->state === ServerState::Deleting) {
             return back()->withErrors(['delete' => __('Maszyna jest już usuwana. Jeśli to trwa zbyt długo, administrator może usunąć ją tylko z panelu.')]);
         }
 
         $this->provisioner->destroy($server, $request->user());
 
-        return $this->afterDelete($request, $server, "Maszyna {$server->hostname} jest usuwana.");
+        return $this->afterDelete($request, $server, __('Maszyna :hostname jest usuwana.', ['hostname' => $server->hostname]));
     }
 
     public function purge(Request $request, Server $server): RedirectResponse
@@ -119,7 +126,7 @@ class ServerActionsController extends Controller
     }
 
     /** Personel: limit transferu maszyny albo wyzerowanie licznika. */
-    public function traffic(Request $request, Server $server, \App\Domain\Metrics\Traffic $traffic): RedirectResponse
+    public function traffic(Request $request, Server $server, Traffic $traffic): RedirectResponse
     {
         $this->authorize('manageTraffic', $server);
 
@@ -134,7 +141,7 @@ class ServerActionsController extends Controller
         } else {
             $old = $server->bandwidth_gb;
             $server->forceFill(['bandwidth_gb' => (int) $validated['bandwidth_gb']])->save();
-            \App\Models\AuditLog::record('server.traffic_limit', $server, ['from' => $old, 'to' => $server->bandwidth_gb], $request->user());
+            AuditLog::record('server.traffic_limit', $server, ['from' => $old, 'to' => $server->bandwidth_gb], $request->user());
             $traffic->releaseEligible($server);
             $message = __('Zapisano limit transferu.');
         }
@@ -164,7 +171,7 @@ class ServerActionsController extends Controller
     }
 
     /** rDNS adresu maszyny — klient ustawia nazwę, która wskazuje na ten adres. */
-    public function rdns(Request $request, Server $server, \App\Models\IpAddress $address, \App\Domain\Network\ReverseDns $reverseDns): RedirectResponse
+    public function rdns(Request $request, Server $server, IpAddress $address, ReverseDns $reverseDns): RedirectResponse
     {
         $this->authorize('operate', $server);
         abort_unless($address->server_id === $server->id, 404);
@@ -183,7 +190,7 @@ class ServerActionsController extends Controller
     }
 
     /** Odczyt systemu z wnętrza maszyny na żądanie (normalnie co kilka godzin). */
-    public function detectOs(Server $server, \App\Domain\Provisioning\GuestOs $guestOs): RedirectResponse
+    public function detectOs(Server $server, GuestOs $guestOs): RedirectResponse
     {
         $this->authorize('operate', $server);
 
