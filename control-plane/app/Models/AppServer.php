@@ -82,6 +82,12 @@ class AppServer extends Model
     }
 
     /** @return HasMany<AppAllocation, $this> */
+    /** @return HasMany<AppDatabase, $this> */
+    public function databases(): HasMany
+    {
+        return $this->hasMany(AppDatabase::class)->orderBy('id');
+    }
+
     public function allocations(): HasMany
     {
         return $this->hasMany(AppAllocation::class)->orderByDesc('is_primary')->orderBy('port');

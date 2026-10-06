@@ -114,7 +114,7 @@ class AppAdminController extends Controller
      */
     public function updatePlan(Request $request, AppPlan $plan): RedirectResponse
     {
-        $before = $plan->only(['name', 'memory_mb', 'cpu_percent', 'disk_mb', 'ports', 'price_hint_cents']);
+        $before = $plan->only(['name', 'memory_mb', 'cpu_percent', 'disk_mb', 'ports', 'databases', 'price_hint_cents']);
         $plan->update($this->planData($request, 'edit_'.$plan->id));
         AuditLog::record('app_plan.updated', $plan, ['before' => $before, 'after' => $plan->only(array_keys($before))]);
 
@@ -151,10 +151,13 @@ class AppAdminController extends Controller
             'cpu_percent' => ['nullable', 'integer', 'min:0', 'max:12800'],
             'disk_mb' => ['required', 'integer', 'min:256', 'max:10485760'],
             'ports' => ['required', 'integer', 'min:1', 'max:20'],
+            'databases' => ['nullable', 'integer', 'min:0', 'max:50'],
             'price_hint' => ['nullable', 'numeric', 'min:0'],
         ];
         $validated = $bag ? $request->validateWithBag($bag, $rules) : $request->validate($rules);
         unset($validated['price_hint']);
+
+        $validated['databases'] = (int) ($validated['databases'] ?? 0);
 
         return [
             ...$validated,

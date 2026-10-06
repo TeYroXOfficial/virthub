@@ -17,10 +17,11 @@
                 <div class="field"><label for="p-cpu">{{ __('Procesor (%)') }}</label><input id="p-cpu" name="cpu_percent" inputmode="numeric" value="{{ old('cpu_percent', 100) }}" placeholder="0"></div>
                 <div class="field"><label for="p-disk">{{ __('Dysk (MB)') }}</label><input id="p-disk" name="disk_mb" inputmode="numeric" required value="{{ old('disk_mb', 10240) }}"></div>
                 <div class="field"><label for="p-ports">{{ __('Porty') }}</label><input id="p-ports" name="ports" inputmode="numeric" required value="{{ old('ports', 1) }}"></div>
+                <div class="field"><label for="p-db">{{ __('Bazy danych') }}</label><input id="p-db" name="databases" inputmode="numeric" value="{{ old('databases', 0) }}"></div>
                 <div class="field"><label for="p-price">{{ __('Cena (PLN)') }}</label><input id="p-price" name="price_hint" inputmode="decimal" value="{{ old('price_hint') }}" placeholder="{{ __('opcjonalnie') }}"></div>
             </div>
-            <p class="hint">{{ __('Procesor: 100 = jeden rdzeń, 0 = bez limitu. Porty: ile portów z puli węzła dostaje aplikacja (pierwszy to port główny).') }}</p>
-            @foreach (['name', 'memory_mb', 'cpu_percent', 'disk_mb', 'ports'] as $field)
+            <p class="hint">{{ __('Procesor: 100 = jeden rdzeń, 0 = bez limitu. Porty: ile portów z puli węzła dostaje aplikacja (pierwszy to port główny). Bazy danych: ile baz MySQL klient może założyć.') }}</p>
+            @foreach (['name', 'memory_mb', 'cpu_percent', 'disk_mb', 'ports', 'databases'] as $field)
                 @error($field) <div class="hint" style="color:var(--critical)">{{ $message }}</div> @enderror
             @endforeach
             <button class="btn btn-primary" type="submit">{{ __('Dodaj plan') }}</button>
@@ -31,7 +32,7 @@
         <div class="table-wrap">
             <table>
                 <thead>
-                <tr><th>{{ __('Plan') }}</th><th class="num">{{ __('RAM') }}</th><th class="num">{{ __('Procesor') }}</th><th class="num">{{ __('Dysk') }}</th><th class="num">{{ __('Porty') }}</th><th class="num">{{ __('Aplikacje') }}</th><th>{{ __('Status') }}</th><th></th></tr>
+                <tr><th>{{ __('Plan') }}</th><th class="num">{{ __('RAM') }}</th><th class="num">{{ __('Procesor') }}</th><th class="num">{{ __('Dysk') }}</th><th class="num">{{ __('Porty') }}</th><th class="num">{{ __('Bazy') }}</th><th class="num">{{ __('Aplikacje') }}</th><th>{{ __('Status') }}</th><th></th></tr>
                 </thead>
                 <tbody>
                 @forelse ($plans as $plan)
@@ -42,6 +43,7 @@
                         <td class="num">{{ $plan->cpu_percent ? $plan->cpu_percent.'%' : '∞' }}</td>
                         <td class="num">{{ round($plan->disk_mb / 1024, 1) }} GB</td>
                         <td class="num">{{ $plan->ports }}</td>
+                        <td class="num">{{ $plan->databases }}</td>
                         <td class="num">{{ $plan->servers_count }}</td>
                         <td><span class="pill {{ $plan->is_active ? 'ok' : 'neutral' }}">{{ $plan->is_active ? __('w sprzedaży') : __('wycofany') }}</span></td>
                         <td style="text-align:right; white-space:nowrap">
@@ -58,12 +60,13 @@
                                         <div class="field"><label>{{ __('Procesor (%)') }}</label><input name="cpu_percent" type="number" min="0" value="{{ $v('cpu_percent', $plan->cpu_percent) }}"></div>
                                         <div class="field"><label>{{ __('Dysk (MB)') }}</label><input name="disk_mb" type="number" min="256" required value="{{ $v('disk_mb', $plan->disk_mb) }}"></div>
                                         <div class="field"><label>{{ __('Porty') }}</label><input name="ports" type="number" min="1" max="20" required value="{{ $v('ports', $plan->ports) }}"></div>
+                                        <div class="field"><label>{{ __('Bazy danych') }}</label><input name="databases" type="number" min="0" max="50" value="{{ $v('databases', $plan->databases) }}"></div>
                                         <div class="field"><label>{{ __('Cena (PLN)') }}</label><input name="price_hint" type="text" inputmode="decimal" value="{{ $v('price_hint', $plan->price_hint_cents !== null ? number_format($plan->price_hint_cents / 100, 2, '.', '') : '') }}"></div>
                                     </div>
                                     @if ($plan->servers_count > 0)
                                         <label class="check-line"><input type="checkbox" name="apply_existing" value="1" @checked($mine && old('apply_existing'))>
                                             {{ __('Zastosuj RAM, procesor i dysk do istniejących aplikacji (:count)', ['count' => $plan->servers_count]) }}</label>
-                                        <p class="hint">{{ __('Limity pamięci i procesora działają od razu, dysk po restarcie aplikacji. Liczba portów dotyczy tylko nowych aplikacji. Zmniejszenie dysku poniżej zajętego miejsca może zatrzymać zapis plików.') }}</p>
+                                        <p class="hint">{{ __('Limity pamięci i procesora działają od razu, dysk po restarcie aplikacji. Liczba portów i baz to limit, do którego klient sam dodaje porty i bazy. Zmniejszenie dysku poniżej zajętego miejsca może zatrzymać zapis plików.') }}</p>
                                     @else
                                         <p class="hint">{{ __('Plan nie ma jeszcze aplikacji — zmiana dotyczy nowych zamówień.') }}</p>
                                     @endif
@@ -87,7 +90,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="muted" style="text-align:center; padding:24px">{{ __('Brak planów.') }}</td></tr>
+                    <tr><td colspan="9" class="muted" style="text-align:center; padding:24px">{{ __('Brak planów.') }}</td></tr>
                 @endforelse
                 </tbody>
             </table>

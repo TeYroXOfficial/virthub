@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /** Port węzła przydzielony aplikacji (TCP i UDP). */
 class AppAllocation extends Model
 {
-    protected $fillable = ['hypervisor_id', 'app_server_id', 'port', 'is_primary'];
+    protected $fillable = ['hypervisor_id', 'app_server_id', 'port', 'is_primary', 'notes'];
 
     protected function casts(): array
     {
