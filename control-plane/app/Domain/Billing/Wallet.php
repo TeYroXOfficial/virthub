@@ -16,7 +16,7 @@ class Wallet
     public function credit(User $user, int $amount, string $type, string $description, array $links = [], ?User $actor = null): WalletTransaction
     {
         if ($amount <= 0) {
-            throw new \InvalidArgumentException('Kwota uznania musi być dodatnia.');
+            throw new \InvalidArgumentException(__('Kwota uznania musi być dodatnia.'));
         }
 
         return $this->apply($user, $amount, $type, $description, $links, $actor, true);
@@ -31,7 +31,7 @@ class Wallet
     public function debit(User $user, int $amount, string $type, string $description, array $links = [], bool $allowNegative = false, ?User $actor = null): WalletTransaction
     {
         if ($amount <= 0) {
-            throw new \InvalidArgumentException('Kwota obciążenia musi być dodatnia.');
+            throw new \InvalidArgumentException(__('Kwota obciążenia musi być dodatnia.'));
         }
 
         return $this->apply($user, -$amount, $type, $description, $links, $actor, $allowNegative);
@@ -41,7 +41,7 @@ class Wallet
     public function adjust(User $user, int $amount, string $description, User $actor): WalletTransaction
     {
         if ($amount === 0) {
-            throw new \InvalidArgumentException('Korekta nie może być zerowa.');
+            throw new \InvalidArgumentException(__('Korekta nie może być zerowa.'));
         }
 
         return $this->apply($user, $amount, 'adjustment', $description, [], $actor, true);

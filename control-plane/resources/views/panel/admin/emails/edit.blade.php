@@ -1,7 +1,8 @@
 @extends('layouts.panel')
 
 @php
-    $lang = app()->getLocale() === 'en' ? 'en' : 'pl';
+    $lang = \App\Domain\Mail\EmailTemplates::baseOf(app()->getLocale());
+    $mailLocales = collect(app(\App\Domain\Settings\Languages::class)->all())->pluck('name', 'code')->all() ?: ['pl' => 'Polski', 'en' => 'English'];
     // Znaczniki zmiennych składamy w PHP — w szablonie Blade „{{” w tekście myli parser.
     $token = fn (string $var) => '{'.'{ '.$var.' }'.'}';
 @endphp
@@ -16,7 +17,7 @@
             <div class="meta-line">
                 <span class="mono">{{ $key }}</span>
                 <span class="sep">·</span>
-                @foreach (['pl' => __('Polski'), 'en' => __('Angielski')] as $loc => $label)
+                @foreach ($mailLocales as $loc => $label)
                     <a href="{{ route('panel.admin.emails.edit', [$key, $loc]) }}" class="pill {{ $loc === $locale ? 'info' : 'neutral' }} plain">{{ $label }}</a>
                 @endforeach
                 @if ($template['custom']) <span class="pill info">{{ __('zmieniony') }}</span> @endif

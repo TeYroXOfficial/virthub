@@ -58,7 +58,7 @@ final class TemplateRenderer
     {
         return match (true) {
             $value === null => '—',
-            is_bool($value) => $value ? 'tak' : 'nie',
+            is_bool($value) => $value ? __('tak') : __('nie'),
             is_scalar($value) || $value instanceof \Stringable => (string) $value,
             default => '—',
         };

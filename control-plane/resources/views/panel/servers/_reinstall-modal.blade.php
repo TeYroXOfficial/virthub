@@ -18,7 +18,7 @@
 
         <details class="modal-more" @if(old('ssh_key')) open @endif>
             <summary>{{ __('Dodaj klucz SSH (opcjonalnie)') }}</summary>
-            <textarea name="ssh_key" rows="2" placeholder="ssh-ed25519 AAAA… twoj@komputer">{{ old('ssh_key') }}</textarea>
+            <textarea name="ssh_key" rows="2" placeholder="ssh-ed25519 AAAA… {{ __('twoj@komputer') }}">{{ old('ssh_key') }}</textarea>
             <div class="hint">{{ __('Hasło roota wygenerujemy zawsze i pokażemy po zakończeniu.') }}</div>
         </details>
 

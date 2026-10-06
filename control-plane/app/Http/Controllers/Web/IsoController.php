@@ -46,7 +46,7 @@ class IsoController extends Controller
     {
         $iso->update(['is_public' => ! $iso->is_public]);
 
-        return back()->with('status', $iso->is_public ? __(':name jest widoczny dla klientów.', ['name' => $iso->name]) : "{$iso->name} jest teraz tylko dla personelu.");
+        return back()->with('status', $iso->is_public ? __(':name jest widoczny dla klientów.', ['name' => $iso->name]) : __(':name jest teraz tylko dla personelu.', ['name' => $iso->name]));
     }
 
     public function destroy(Request $request, IsoImage $iso): RedirectResponse

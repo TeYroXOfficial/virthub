@@ -12,6 +12,7 @@ use App\Http\Controllers\Web\AppNetworkController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\BillingAdminController;
 use App\Http\Controllers\Web\BillingController;
+use App\Http\Controllers\Web\CloudServerController;
 use App\Http\Controllers\Web\ConsoleController;
 use App\Http\Controllers\Web\DatabaseHostController;
 use App\Http\Controllers\Web\EmailTemplateController;
@@ -19,6 +20,8 @@ use App\Http\Controllers\Web\FirewallController;
 use App\Http\Controllers\Web\GatewaySettingsController;
 use App\Http\Controllers\Web\ImpersonationController;
 use App\Http\Controllers\Web\IsoController;
+use App\Http\Controllers\Web\LanguageController;
+use App\Http\Controllers\Web\LicenseController;
 use App\Http\Controllers\Web\MailSettingsController;
 use App\Http\Controllers\Web\MonitoringController;
 use App\Http\Controllers\Web\NetworkController;
@@ -27,6 +30,7 @@ use App\Http\Controllers\Web\PanelController;
 use App\Http\Controllers\Web\PasswordResetController;
 use App\Http\Controllers\Web\PaymentController;
 use App\Http\Controllers\Web\PortForwardController;
+use App\Http\Controllers\Web\ProviderAccountController;
 use App\Http\Controllers\Web\PterodactylMigrationController;
 use App\Http\Controllers\Web\ReverseDnsSettingsController;
 use App\Http\Controllers\Web\ServerActionsController;
@@ -93,7 +97,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers', [PanelController::class, 'storeServer'])->name('servers.store');
     Route::get('/servers/{server}', [PanelController::class, 'showServer'])->name('servers.show');
     // VPS u dostawców zewnętrznych (reselling przez addony).
-    Route::prefix('/cloud/{server}')->name('cloud.')->controller(\App\Http\Controllers\Web\CloudServerController::class)->group(function () {
+    Route::prefix('/cloud/{server}')->name('cloud.')->controller(CloudServerController::class)->group(function () {
         Route::get('/', 'show')->name('show');
         Route::get('/status', 'status')->name('status');
         Route::post('/power', 'power')->middleware('throttle:20,1')->name('power');
@@ -301,22 +305,33 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
 
     // Licencja, addony i konta dostawców zewnętrznych — tylko administrator.
     Route::middleware('admin')->group(function () {
-        Route::get('/license', [\App\Http\Controllers\Web\LicenseController::class, 'index'])->name('license');
-        Route::post('/license', [\App\Http\Controllers\Web\LicenseController::class, 'activate'])->middleware('throttle:10,1')->name('license.activate');
-        Route::post('/license/refresh', [\App\Http\Controllers\Web\LicenseController::class, 'refresh'])->middleware('throttle:10,1')->name('license.refresh');
-        Route::delete('/license', [\App\Http\Controllers\Web\LicenseController::class, 'remove'])->name('license.remove');
-        Route::post('/addons/{addon}/install', [\App\Http\Controllers\Web\LicenseController::class, 'install'])->middleware('throttle:10,1')->where('addon', '[a-z][a-z0-9-]{1,39}')->name('addons.install');
-        Route::post('/addons/{addon}/toggle', [\App\Http\Controllers\Web\LicenseController::class, 'toggle'])->where('addon', '[a-z][a-z0-9-]{1,39}')->name('addons.toggle');
-        Route::delete('/addons/{addon}', [\App\Http\Controllers\Web\LicenseController::class, 'uninstall'])->where('addon', '[a-z][a-z0-9-]{1,39}')->name('addons.uninstall');
+        Route::get('/license', [LicenseController::class, 'index'])->name('license');
+        Route::post('/license', [LicenseController::class, 'activate'])->middleware('throttle:10,1')->name('license.activate');
+        Route::post('/license/refresh', [LicenseController::class, 'refresh'])->middleware('throttle:10,1')->name('license.refresh');
+        Route::delete('/license', [LicenseController::class, 'remove'])->name('license.remove');
+        Route::post('/addons/{addon}/install', [LicenseController::class, 'install'])->middleware('throttle:10,1')->where('addon', '[a-z][a-z0-9-]{1,39}')->name('addons.install');
+        Route::post('/addons/{addon}/toggle', [LicenseController::class, 'toggle'])->where('addon', '[a-z][a-z0-9-]{1,39}')->name('addons.toggle');
+        Route::delete('/addons/{addon}', [LicenseController::class, 'uninstall'])->where('addon', '[a-z][a-z0-9-]{1,39}')->name('addons.uninstall');
 
-        Route::get('/providers', [\App\Http\Controllers\Web\ProviderAccountController::class, 'index'])->name('providers');
-        Route::post('/providers', [\App\Http\Controllers\Web\ProviderAccountController::class, 'store'])->middleware('throttle:10,1')->name('providers.store');
-        Route::put('/providers/{account}', [\App\Http\Controllers\Web\ProviderAccountController::class, 'update'])->name('providers.update');
-        Route::post('/providers/{account}/test', [\App\Http\Controllers\Web\ProviderAccountController::class, 'test'])->middleware('throttle:20,1')->name('providers.test');
-        Route::delete('/providers/{account}', [\App\Http\Controllers\Web\ProviderAccountController::class, 'destroy'])->name('providers.destroy');
+        Route::prefix('/languages')->name('languages')->controller(LanguageController::class)->group(function () {
+            Route::get('/', 'index');
+            Route::post('/', 'store')->name('.store');
+            Route::post('/default', 'setDefault')->name('.default');
+            Route::put('/{language}', 'update')->name('.update');
+            Route::delete('/{language}', 'destroy')->name('.destroy');
+            Route::get('/{language}/translations', 'translations')->name('.translations');
+            Route::put('/{language}/translations', 'saveTranslations')->name('.translations.save');
+            Route::get('/{language}/export', 'export')->name('.export');
+            Route::post('/{language}/import', 'import')->middleware('throttle:10,1')->name('.import');
+        });
+        Route::get('/providers', [ProviderAccountController::class, 'index'])->name('providers');
+        Route::post('/providers', [ProviderAccountController::class, 'store'])->middleware('throttle:10,1')->name('providers.store');
+        Route::put('/providers/{account}', [ProviderAccountController::class, 'update'])->name('providers.update');
+        Route::post('/providers/{account}/test', [ProviderAccountController::class, 'test'])->middleware('throttle:20,1')->name('providers.test');
+        Route::delete('/providers/{account}', [ProviderAccountController::class, 'destroy'])->name('providers.destroy');
     });
     // Katalog dostawcy dla formularza produktu (personel billingu).
-    Route::get('/providers/{account}/catalog', [\App\Http\Controllers\Web\ProviderAccountController::class, 'catalog'])
+    Route::get('/providers/{account}/catalog', [ProviderAccountController::class, 'catalog'])
         ->middleware(['admin:admin.billing', 'throttle:30,1'])->name('providers.catalog');
 
     Route::middleware('admin:admin.updates')->group(function () {

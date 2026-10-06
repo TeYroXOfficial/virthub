@@ -2,23 +2,37 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Domain\Admin\Dashboard;
+use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
+use App\Domain\Billing\Billing;
+use App\Domain\Billing\BillingStats;
 use App\Domain\Network\HypervisorGroupManager;
 use App\Domain\Provisioning\HypervisorEnrollment;
+use App\Domain\Provisioning\ServerProvisioner;
 use App\Domain\Provisioning\TemplateDistributor;
 use App\Enums\ServerState;
 use App\Enums\Virtualization;
 use App\Http\Controllers\Controller;
+use App\Jobs\DownloadIsoJob;
+use App\Jobs\PrefetchTemplateJob;
+use App\Models\AppServer;
 use App\Models\AuditLog;
 use App\Models\Hypervisor;
 use App\Models\HypervisorGroup;
 use App\Models\IpPool;
+use App\Models\IsoDownload;
 use App\Models\OsTemplate;
 use App\Models\OsTemplateGroup;
 use App\Models\Server;
+use App\Models\TemplateDownload;
 use App\Models\VpsPackage;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -30,13 +44,13 @@ class AdminController extends Controller
 
     // --- przegląd -----------------------------------------------------------
 
-    public function index(Request $request, \App\Domain\Admin\Dashboard $dashboard): View
+    public function index(Request $request, Dashboard $dashboard): View
     {
         $user = $request->user();
         $canServers = $user->hasPermission('admin.servers');
         $canApps = $user->hasPermission('admin.apps');
         $nodes = Hypervisor::query()->withCount('servers')->orderBy('name')->get();
-        $recent = in_array($request->integer('recent'), \App\Domain\Admin\Dashboard::RECENT_SIZES, true) ? $request->integer('recent') : 5;
+        $recent = in_array($request->integer('recent'), Dashboard::RECENT_SIZES, true) ? $request->integer('recent') : 5;
 
         return view('panel.admin.index', [
             'canServers' => $canServers,
@@ -54,8 +68,8 @@ class AdminController extends Controller
             'recentServices' => $dashboard->recentServices($recent, $canServers, $canApps),
             'recentLogs' => $user->isAdmin() ? $dashboard->recentLogs() : collect(),
             // Billing na pulpicie — gdy jest włączony i personel ma do niego dostęp.
-            'billing' => $user->hasPermission('admin.billing') && \App\Domain\Billing\Billing::enabled()
-                ? ['stats' => ($s = app(\App\Domain\Billing\BillingStats::class))->summary(), 'daily' => $s->daily(30), 'byProduct' => $s->byProduct()]
+            'billing' => $user->hasPermission('admin.billing') && Billing::enabled()
+                ? ['stats' => ($s = app(BillingStats::class))->summary(), 'daily' => $s->daily(30), 'byProduct' => $s->byProduct()]
                 : null,
         ]);
     }
@@ -114,7 +128,7 @@ class AdminController extends Controller
         ]);
     }
 
-    /** @return \Illuminate\Support\Collection<int, HypervisorGroup> */
+    /** @return Collection<int, HypervisorGroup> */
     private function groupsForView()
     {
         return HypervisorGroup::query()
@@ -231,7 +245,7 @@ class AdminController extends Controller
         }
 
         try {
-            $health = (new \App\Domain\Agent\AgentClient($hypervisor))->health();
+            $health = (new AgentClient($hypervisor))->health();
         } catch (AgentException $e) {
             $hypervisor->forceFill(['status' => Hypervisor::STATUS_OFFLINE])->save();
 
@@ -253,7 +267,7 @@ class AdminController extends Controller
         ));
     }
 
-    public function destroyHypervisor(Request $request, Hypervisor $hypervisor, \App\Domain\Provisioning\ServerProvisioner $provisioner): RedirectResponse
+    public function destroyHypervisor(Request $request, Hypervisor $hypervisor, ServerProvisioner $provisioner): RedirectResponse
     {
         // Martwy węzeł z maszynami: administrator może usunąć go razem z ich
         // wpisami w panelu (bez kontaktu z węzłem) — po wpisaniu nazwy węzła.
@@ -461,7 +475,7 @@ class AdminController extends Controller
             $queued = $distributor->distribute($template);
 
             return back()->with('status', __('Szablon :name został dodany. ', ['name' => $template->name])
-                ."Pobieranie zlecone na {$queued} ".($queued === 1 ? 'węźle' : 'węzłach').__(' kontenerów.'));
+                .trans_choice('Pobieranie zlecone na :count węźle kontenerów.|Pobieranie zlecone na :count węzłach kontenerów.|Pobieranie zlecone na :count węzłach kontenerów.', $queued));
         }
 
         return back()->with('status', __('Szablon :name został dodany. ', ['name' => $template->name])
@@ -638,19 +652,19 @@ class AdminController extends Controller
      * Postęp pobierań szablonów i obrazów ISO na żywo. Pyta węzły o trwające
      * zadania (cache 2 s), więc pasek nie czeka na kolejny obieg kolejki.
      */
-    public function downloadsStatus(): \Illuminate\Http\JsonResponse
+    public function downloadsStatus(): JsonResponse
     {
         $rows = [];
 
         $track = function ($download, string $kind, callable $apply) use (&$rows) {
             $state = null;
             if ($download->agent_job_id && $download->hypervisor) {
-                $state = \Illuminate\Support\Facades\Cache::remember(
+                $state = Cache::remember(
                     "agent-job:{$download->agent_job_id}",
                     now()->addSeconds(2),
                     function () use ($download) {
                         try {
-                            return (new \App\Domain\Agent\AgentClient($download->hypervisor))->job($download->agent_job_id);
+                            return (new AgentClient($download->hypervisor))->job($download->agent_job_id);
                         } catch (AgentException) {
                             return null;
                         }
@@ -674,10 +688,10 @@ class AdminController extends Controller
 
         $inProgress = fn ($q) => $q->whereIn('status', ['queued', 'downloading']);
 
-        \App\Models\TemplateDownload::query()->with('hypervisor')->where($inProgress)->get()
-            ->each(fn ($d) => $track($d, 'template', [\App\Jobs\PrefetchTemplateJob::class, 'apply']));
-        \App\Models\IsoDownload::query()->with(['hypervisor', 'iso'])->where($inProgress)->get()
-            ->each(fn ($d) => $track($d, 'iso', [\App\Jobs\DownloadIsoJob::class, 'apply']));
+        TemplateDownload::query()->with('hypervisor')->where($inProgress)->get()
+            ->each(fn ($d) => $track($d, 'template', [PrefetchTemplateJob::class, 'apply']));
+        IsoDownload::query()->with(['hypervisor', 'iso'])->where($inProgress)->get()
+            ->each(fn ($d) => $track($d, 'iso', [DownloadIsoJob::class, 'apply']));
 
         return response()->json(['data' => $rows]);
     }
@@ -735,9 +749,6 @@ class AdminController extends Controller
     }
 
     // --- pule adresów -------------------------------------------------------
-
-
-
 
     // --- grupy węzłów -------------------------------------------------------
 
@@ -865,10 +876,10 @@ class AdminController extends Controller
                 ->orWhere('label', 'like', "%{$term}%")
                 ->orWhereHas('user', $users)
                 ->orWhereHas('ipAddresses', fn ($ip) => $ip->where('address', 'like', "{$term}%"))));
-        $apps = \App\Models\AppServer::query()
+        $apps = AppServer::query()
             ->selectRaw("'app' as kind, id, created_at")
             ->when($node, fn ($q) => $q->where('hypervisor_id', $node))
-            ->when($status === 'problem', fn ($q) => $q->where(fn ($s) => $s->where('status', \App\Models\AppServer::STATUS_INSTALL_FAILED)
+            ->when($status === 'problem', fn ($q) => $q->where(fn ($s) => $s->where('status', AppServer::STATUS_INSTALL_FAILED)
                 ->orWhereNotNull('suspended_at')->orWhereNotNull('abuse_detected_at')))
             ->when($status === 'suspended', fn ($q) => $q->whereNotNull('suspended_at'))
             ->when($term !== '', fn ($q) => $q->where(fn ($s) => $s->where('name', 'like', "%{$term}%")
@@ -886,13 +897,13 @@ class AdminController extends Controller
 
         $page = $union
             ? DB::query()->fromSub($union, 'services')->orderByDesc('created_at')->orderByDesc('id')->paginate(50)->withQueryString()
-            : new \Illuminate\Pagination\LengthAwarePaginator([], 0, 50);
+            : new LengthAwarePaginator([], 0, 50);
 
         // Jeden odczyt na rodzaj — z relacjami potrzebnymi w tabeli.
         $rows = collect($page->items());
         $serverModels = Server::query()->with(['user:id,name,email', 'hypervisor', 'ipAddresses', 'template'])
             ->whereIn('id', $rows->where('kind', 'server')->pluck('id'))->get()->keyBy('id');
-        $appModels = \App\Models\AppServer::query()->with(['user:id,name,email', 'hypervisor', 'egg', 'allocations'])
+        $appModels = AppServer::query()->with(['user:id,name,email', 'hypervisor', 'egg', 'allocations'])
             ->whereIn('id', $rows->where('kind', 'app')->pluck('id'))->get()->keyBy('id');
         $items = $rows->map(fn ($row) => $row->kind === 'server' ? $serverModels->get($row->id) : $appModels->get($row->id))->filter();
 
@@ -905,13 +916,13 @@ class AdminController extends Controller
             'totals' => [
                 'kvm' => $canServers ? Server::query()->where('virtualization', 'kvm')->count() : null,
                 'lxc' => $canServers ? Server::query()->where('virtualization', 'lxc')->count() : null,
-                'app' => $canApps ? \App\Models\AppServer::query()->count() : null,
+                'app' => $canApps ? AppServer::query()->count() : null,
             ],
         ]);
     }
 
     /** Usuwanie wielu maszyn naraz — np. sprzątanie starych, nieudanych wpisów. */
-    public function bulkServers(Request $request, \App\Domain\Provisioning\ServerProvisioner $provisioner): RedirectResponse
+    public function bulkServers(Request $request, ServerProvisioner $provisioner): RedirectResponse
     {
         // Przycisk przy pojedynczej maszynie wysyła „akcja:id" zamiast zaznaczeń.
         if (preg_match('/^(delete|purge):(\d+)$/', (string) $request->input('row'), $m)) {

@@ -79,7 +79,7 @@ class UsersController extends Controller
     {
         $this->users->unsuspend($request->user(), $user);
 
-        return back()->with('status', "Konto {$user->email} jest znowu aktywne.");
+        return back()->with('status', __('Konto :email jest znowu aktywne.', ['email' => $user->email]));
     }
 
     public function resetPassword(Request $request, User $user): RedirectResponse

@@ -110,6 +110,54 @@ class LocaleTest extends TestCase
         $this->assertSame([], array_values(array_unique($missing)));
     }
 
+    /**
+     * Wszystkie teksty muszą dać się przetłumaczyć (Administracja → Języki):
+     * żadnego polskiego tekstu wpisanego na sztywno w widoku — ani w treści,
+     * ani w atrybutach (placeholder, title…), ani w skryptach (tylko przez @js(__())).
+     */
+    public function test_widoki_nie_maja_tekstow_poza_tlumaczeniami(): void
+    {
+        $polish = '/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/u';
+        $found = [];
+        foreach ((new Finder)->files()->name('*.blade.php')->in(resource_path('views')) as $file) {
+            $s = $file->getContents();
+            $s = preg_replace(['/\{\{--.*?--\}\}/s', '/@php.*?@endphp/s', '/<pre\b.*?<\/pre>/si'], '', $s);
+            // Skrypty: wycinamy @js(...)/@json(...) z zagnieżdżonymi nawiasami, reszta nie może mieć polskich napisów.
+            preg_match_all('/<script\b.*?<\/script>/si', $s, $scripts);
+            foreach ($scripts[0] as $script) {
+                $script = preg_replace('/@(js|json)(\((?:[^()]++|(?2))*\))/', '', $script);
+                $script = preg_replace(['/\{\{.*?\}\}/s', '#//[^\n]*#'], '', $script);
+                // __() w JavaScripcie nie istnieje — tekst musi przejść przez @js(__('…')).
+                if (preg_match('/(?<![\w.$])__\(/', $script)) {
+                    $found[] = $file->getRelativePathname().' (skrypt): __() bez @js()';
+                }
+                preg_match_all('/([\'"`])((?:\\\\.|(?!\1).)*?)\1/s', $script, $m);
+                foreach ($m[2] as $literal) {
+                    if (preg_match($polish, $literal)) {
+                        $found[] = $file->getRelativePathname().' (skrypt): '.mb_substr($literal, 0, 80);
+                    }
+                }
+            }
+            $s = preg_replace(['/<script\b.*?<\/script>/si', '/<style\b.*?<\/style>/si', '/\{\{.*?\}\}/s', '/\{!!.*?!!\}/s'], '', $s);
+            // Teksty w __('…') w argumentach dyrektyw (@foreach ([… => __('…')] …)) są przetłumaczalne.
+            $s = preg_replace("/(?:__|trans_choice)\\(\\s*'(?:[^'\\\\]|\\\\.)*'/", '', $s);
+            preg_match_all('/\b(?:placeholder|title|aria-label|alt|data-confirm)="([^"]*)"/', $s, $m);
+            foreach ($m[1] as $attribute) {
+                if (preg_match($polish, $attribute)) {
+                    $found[] = $file->getRelativePathname().' (atrybut): '.$attribute;
+                }
+            }
+            $text = preg_replace(['/@\w+(\((?:[^()]++|(?1))*\))?/', '/<[^>]*>/s'], ' ', $s);
+            foreach (preg_split('/\R/', $text) as $line) {
+                if (preg_match($polish, $line)) {
+                    $found[] = $file->getRelativePathname().': '.mb_substr(trim($line), 0, 80);
+                }
+            }
+        }
+
+        $this->assertSame([], $found);
+    }
+
     public function test_tlumaczenia_zachowuja_zmienne(): void
     {
         $en = json_decode(file_get_contents(lang_path('en.json')), true, flags: JSON_THROW_ON_ERROR);

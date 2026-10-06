@@ -2,6 +2,7 @@
 
 namespace App\Domain\Mail;
 
+use App\Domain\Settings\Languages;
 use App\Models\EmailTemplate;
 
 /**
@@ -372,16 +373,36 @@ final class EmailTemplates
     public static function resolve(string $key, string $locale): array
     {
         $definition = self::definitions()[$key] ?? throw new \InvalidArgumentException("Nieznany szablon: {$key}");
-        $locale = in_array($locale, self::LOCALES, true) ? $locale : 'pl';
-
-        $override = EmailTemplate::query()->where('key', $key)->where('locale', $locale)->first();
+        // Język dodany w panelu: własna wersja szablonu, a domyślna treść z jego języka bazowego.
+        $base = self::baseOf($locale);
+        $override = EmailTemplate::query()->where('key', $key)->where('locale', in_array($locale, self::locales(), true) ? $locale : $base)->first();
 
         return [
-            'subject' => $override?->subject ?? $definition[$locale]['subject'],
-            'body' => $override?->body ?? $definition[$locale]['body'],
+            'subject' => $override?->subject ?? $definition[$base]['subject'],
+            'body' => $override?->body ?? $definition[$base]['body'],
             'enabled' => $override?->enabled ?? true,
             'custom' => $override !== null,
         ];
+    }
+
+    /** Języki, w których można edytować szablony (wszystkie z Administracji → Języki). @return list<string> */
+    public static function locales(): array
+    {
+        $codes = array_column(app(Languages::class)->all(), 'code');
+
+        return $codes !== [] ? $codes : self::LOCALES;
+    }
+
+    /** Wbudowany język (pl/en), z którego pochodzi domyślna treść szablonu w danym języku. */
+    public static function baseOf(string $locale): string
+    {
+        if (in_array($locale, self::LOCALES, true)) {
+            return $locale;
+        }
+        $language = collect(app(Languages::class)->all())->firstWhere('code', $locale);
+        $base = $language['base'] ?? 'en';
+
+        return in_array($base, self::LOCALES, true) ? $base : 'en';
     }
 
     /** @return list<string> */

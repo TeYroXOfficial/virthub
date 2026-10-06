@@ -79,7 +79,7 @@
             <div class="field">
                 <label for="ssh_key">{{ __('Klucz publiczny SSH') }} <span class="muted">{{ __('(opcjonalnie)') }}</span></label>
                 <textarea id="ssh_key" name="ssh_keys[]" rows="3"
-                          placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... twoj@komputer">{{ old('ssh_keys.0') }}</textarea>
+                          placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... {{ __('twoj@komputer') }}">{{ old('ssh_keys.0') }}</textarea>
                 <div class="hint">
                     {{ __('Możesz zostawić puste. Hasło roota generujemy zawsze i pokazujemy na stronie maszyny zaraz po zamówieniu — zapisz je, po utworzeniu maszyny zniknie z panelu.') }}
                 </div>

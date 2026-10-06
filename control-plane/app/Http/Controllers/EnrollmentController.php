@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use PharData;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -25,9 +26,6 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  */
 class EnrollmentController extends Controller
 {
-    private const BAD_TOKEN = 'Bilet rejestracyjny jest nieprawidlowy, wygasl albo zostal juz '
-        .'uzyty. Wygeneruj nowy w panelu administratora (Administracja -> Hypervisory).';
-
     public function __construct(private readonly HypervisorEnrollment $enrollment) {}
 
     /** Skrypt instalacyjny — to jego pobiera `curl … | bash`. */
@@ -36,7 +34,7 @@ class EnrollmentController extends Controller
         $hypervisor = $this->enrollment->findByToken($token);
 
         if ($hypervisor === null) {
-            return $this->problem(self::BAD_TOKEN, 404);
+            return $this->problem(__('Bilet rejestracyjny jest nieprawidlowy, wygasl albo zostal juz uzyty. Wygeneruj nowy w panelu administratora (Administracja -> Hypervisory).'), 404);
         }
 
         $script = strtr(
@@ -74,16 +72,15 @@ class EnrollmentController extends Controller
     public function agentBundle(string $token): BinaryFileResponse|Response
     {
         if ($this->enrollment->findByToken($token) === null) {
-            return $this->problem(self::BAD_TOKEN, 404);
+            return $this->problem(__('Bilet rejestracyjny jest nieprawidlowy, wygasl albo zostal juz uzyty. Wygeneruj nowy w panelu administratora (Administracja -> Hypervisory).'), 404);
         }
 
         $source = config('virthub.agent_source_path');
 
         if (! is_dir($source) || ! is_file($source.'/requirements.txt')) {
             return $this->problem(
-                'Panel nie ma dostepu do kodu agenta. Wgraj katalog node-agent na serwer '
-                .'panelu i wskaz go zmienna VIRTHUB_AGENT_SOURCE_PATH w pliku .env, '
-                ."potem wykonaj: php artisan config:cache\nSzukano w: {$source}",
+                __('Panel nie ma dostepu do kodu agenta. Wgraj katalog node-agent na serwer panelu i wskaz go zmienna VIRTHUB_AGENT_SOURCE_PATH w pliku .env, potem wykonaj: php artisan config:cache')
+                ."\n".__('Szukano w: :path', ['path' => $source]),
                 503,
             );
         }
@@ -103,7 +100,7 @@ class EnrollmentController extends Controller
             'disk_gb' => ['required', 'integer', 'min:10'],
             'tls_cert' => ['required', 'string', 'max:8192'],
             // Starsze instalatory nie wysyłały tego pola — wtedy węzeł to KVM.
-            'virtualization' => ['nullable', \Illuminate\Validation\Rule::in(['kvm', 'lxc'])],
+            'virtualization' => ['nullable', Rule::in(['kvm', 'lxc'])],
         ]);
 
         if (! str_contains($validated['tls_cert'], 'BEGIN CERTIFICATE')) {
@@ -128,7 +125,7 @@ class EnrollmentController extends Controller
     {
         $hypervisor = $this->enrollment->findByToken($token);
 
-        abort_if($hypervisor === null, 404, self::BAD_TOKEN);
+        abort_if($hypervisor === null, 404, __('Bilet rejestracyjny jest nieprawidlowy, wygasl albo zostal juz uzyty. Wygeneruj nowy w panelu administratora (Administracja -> Hypervisory).'));
 
         return $hypervisor;
     }

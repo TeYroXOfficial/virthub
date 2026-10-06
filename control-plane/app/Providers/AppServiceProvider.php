@@ -7,11 +7,16 @@ use App\Domain\Apps\Databases\MysqlDatabaseServer;
 use App\Domain\External\ProviderRegistry;
 use App\Domain\Licensing\AddonManager;
 use App\Domain\Licensing\LicenseManager;
+use App\Domain\Settings\Languages;
 use App\Domain\Settings\MailSettings;
+use App\Support\TranslationLoader;
 use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Database\QueryException;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Translation\FileLoader;
+use Illuminate\Translation\TranslationServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -21,6 +26,17 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(LicenseManager::class);
         $this->app->singleton(AddonManager::class);
         $this->app->singleton(ProviderRegistry::class);
+        $this->app->singleton(Languages::class);
+
+        // Tłumaczenia z panelu (storage/app/lang) nakładane na pliki z lang/. Dostawca
+        // tłumaczeń Laravela jest odroczony — rejestrujemy go teraz, inaczej przy
+        // pierwszym użyciu nadpisałby nasz loader swoim.
+        $this->app->register(TranslationServiceProvider::class);
+        $this->app->extend('translation.loader', fn ($loader, $app) => new TranslationLoader(
+            $app['files'],
+            $loader instanceof FileLoader ? $loader->paths() : [$app->langPath()],
+            storage_path('app/lang'),
+        ));
     }
 
     public function boot(): void
@@ -31,11 +47,18 @@ class AppServiceProvider extends ServiceProvider
         // stylujemy razem z resztą interfejsu.
         Paginator::defaultView('pagination::simple-default');
 
+        // Języki z Administracji (domyślny, włączone, dodane) zamiast z config.
+        try {
+            $this->app->make(Languages::class)->apply();
+        } catch (QueryException) {
+            // przed migracjami — zostają języki z config/virthub.php
+        }
+
         // Addony objęte licencją (ich ServiceProvidery rejestrują np. sterowniki
         // dostawców). Brak tabel (świeża instalacja, migracje) nie blokuje startu.
         try {
             $this->app->make(AddonManager::class)->boot();
-        } catch (\Illuminate\Database\QueryException) {
+        } catch (QueryException) {
             // brak tabeli ustawień — przed pierwszą migracją
         } catch (\Throwable $e) {
             report($e);
