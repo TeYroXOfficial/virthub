@@ -56,3 +56,20 @@ usunięcia aplikacji (trafia do dziennika).
 
 **Testy**: logika na atrapie serwera baz; dodatkowo test integracyjny na
 prawdziwym MariaDB (w CI jako usługa), pomijany, gdy baza nie jest dostępna.
+
+## Instalacja MariaDB na węźle jednym kliknięciem
+
+**Administracja → Aplikacje → Bazy danych → „Zainstaluj MariaDB na węźle”.**
+
+1. Panel zleca instalację agentowi (`POST /system/mariadb`). Agent nie ma roota —
+   zostawia plik-zlecenie, a jednostka `virthub-mariadb.path` uruchamia jako root
+   `scripts/setup-mariadb.sh` (tak samo jak zdalna aktualizacja węzła).
+2. Skrypt instaluje `mariadb-server`, ustawia nasłuchiwanie na wszystkich adresach
+   i zakłada konto `virthub_panel` z losowym hasłem (40 znaków) **dostępne tylko z
+   adresu panelu**. Adres pochodzi z nagłówka `X-Real-IP`, który ustawia nginx węzła;
+   bez niego instalacja jest odrzucana — konto nigdy nie dostaje hosta `%`.
+3. Port w zaporze (ufw) jest otwierany tylko po zaznaczeniu tej opcji przy zleceniu.
+4. Panel odpytuje stan (strona odświeża się co 10 s, harmonogram co minutę), po
+   zakończeniu sam dodaje serwer baz, sprawdza połączenie i każe węzłowi usunąć
+   plik z hasłem. Gdy połączenie się nie uda (np. zapora), serwer zostaje zapisany
+   jako wyłączony z komunikatem, co poprawić.

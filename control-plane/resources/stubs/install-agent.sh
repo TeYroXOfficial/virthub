@@ -679,6 +679,10 @@ fi
 if [ -f "$AGENT_DIR/scripts/install-updater.sh" ]; then
     bash "$AGENT_DIR/scripts/install-updater.sh"
 fi
+# Serwer baz MariaDB instalowany z panelu (Aplikacje → Bazy danych).
+if [ -f "$AGENT_DIR/scripts/install-mariadb-unit.sh" ]; then
+    bash "$AGENT_DIR/scripts/install-mariadb-unit.sh" || warn "Nie udało się zainstalować usługi MariaDB."
+fi
 systemctl daemon-reload
 systemctl enable --now virthub-agent >/dev/null 2>&1
 sleep 2
@@ -717,6 +721,8 @@ server {
     location / {
         proxy_pass http://127.0.0.1:8899;
         proxy_set_header Host \$host;
+        # Adres panelu dla agenta (np. konto administracyjne MariaDB tylko z niego).
+        proxy_set_header X-Real-IP \$remote_addr;
         # Konsola maszyn idzie WebSocketem przez ten sam port.
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;

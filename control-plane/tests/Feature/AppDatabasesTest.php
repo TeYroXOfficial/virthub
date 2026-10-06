@@ -6,6 +6,7 @@ use App\Domain\Apps\AppProvisioner;
 use App\Domain\Apps\Databases\DatabaseException;
 use App\Domain\Apps\Databases\DatabaseManager;
 use App\Domain\Apps\Databases\DatabaseServer;
+use App\Domain\Apps\Databases\NodeDatabaseInstaller;
 use App\Domain\Apps\EggImporter;
 use App\Models\AppDatabase;
 use App\Models\AppEgg;
@@ -13,8 +14,11 @@ use App\Models\AppPlan;
 use App\Models\AppServer;
 use App\Models\DatabaseHost;
 use App\Models\Hypervisor;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Factory;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -177,6 +181,70 @@ class AppDatabasesTest extends TestCase
 
         // Klient nie ma dostępu do administracji.
         $this->actingAs($this->customer)->get(route('panel.admin.apps.databases'))->assertForbidden();
+    }
+
+    public function test_instalacja_mariadb_na_wezle_jednym_kliknieciem(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $node = $this->gameApp->hypervisor;
+        $node->forceFill(['agent_url' => 'https://198.51.100.20:8443', 'status' => Hypervisor::STATUS_ONLINE])->save();
+        $sent = [];
+        Http::swap(new Factory);
+        Http::fake(function (Request $r) use (&$sent) {
+            $sent[] = $r->method().' '.parse_url($r->url(), PHP_URL_PATH);
+            if ($r->method() === 'POST') {
+                return Http::response(['state' => 'queued'], 202);
+            }
+            if ($r->method() === 'DELETE') {
+                return Http::response(['state' => 'done']);
+            }
+            $done = in_array('POST /system/mariadb', $sent, true) && count($sent) >= 3;
+
+            return Http::response($done
+                ? ['state' => 'done', 'version' => '10.11.6-MariaDB', 'credentials' => ['username' => 'virthub_panel', 'password' => str_repeat('p', 40), 'port' => 3306, 'allowed_from' => '203.0.113.1']]
+                : ['state' => 'running', 'message' => 'Instalacja MariaDB…']);
+        });
+
+        // Klient i moderator bez pełnych uprawnień nie zlecają instalacji.
+        $this->actingAs($this->customer)->post(route('panel.admin.apps.database-hosts.install'), ['hypervisor_id' => $node->id])->assertForbidden();
+
+        $this->actingAs($admin)->post(route('panel.admin.apps.database-hosts.install'), ['hypervisor_id' => $node->id, 'open_firewall' => 1])
+            ->assertSessionHasNoErrors()->assertSessionHas('status');
+        Http::assertSent(fn ($r) => $r->method() === 'POST' && str_ends_with($r->url(), '/system/mariadb') && $r['open_firewall'] === true);
+
+        // Pierwsze odpytanie: trwa.
+        $this->actingAs($admin)->get(route('panel.admin.apps.databases'))->assertOk()->assertSee(__('instalacja…'))->assertSee('http-equiv="refresh"', false);
+        $this->assertSame(0, DatabaseHost::query()->count());
+
+        // Harmonogram odbiera wynik: serwer baz dodany, hasło usunięte z węzła.
+        app(NodeDatabaseInstaller::class)->syncPending();
+        $host = DatabaseHost::query()->sole();
+        $this->assertSame('198.51.100.20', $host->host);
+        $this->assertSame($node->id, $host->hypervisor_id);
+        $this->assertSame('virthub_panel', $host->username);
+        $this->assertSame(str_repeat('p', 40), $host->secret());
+        $this->assertTrue($host->is_active);
+        $this->assertContains('DELETE /system/mariadb/credentials', $sent);
+
+        $this->actingAs($admin)->get(route('panel.admin.apps.databases'))->assertOk()->assertSee(__('gotowe'))->assertDontSee('http-equiv="refresh"', false);
+        // Od razu można tworzyć bazy na tym serwerze.
+        $this->actingAs($this->customer)->post(route('panel.apps.databases.store', $this->gameApp), ['name' => 'main'])->assertSessionHasNoErrors();
+        $this->assertSame($host->id, AppDatabase::query()->sole()->database_host_id);
+    }
+
+    public function test_instalacja_bez_polaczenia_zapisuje_serwer_wylaczony(): void
+    {
+        $node = $this->gameApp->hypervisor;
+        $node->forceFill(['agent_url' => 'https://198.51.100.20:8443'])->save();
+        Http::swap(new Factory);
+        Http::fake(['*/system/mariadb' => Http::response(['state' => 'done', 'version' => '10.11', 'credentials' => ['username' => 'virthub_panel', 'password' => 'x', 'port' => 3306, 'allowed_from' => '203.0.113.1']]), '*' => Http::response([])]);
+        Setting::put(['mariadb_install.'.$node->id => json_encode(['state' => 'running', 'at' => time()])]);
+        $this->server->failing = true;
+
+        app(NodeDatabaseInstaller::class)->syncPending();
+
+        $this->assertFalse(DatabaseHost::query()->sole()->is_active);
+        $this->assertSame('warning', app(NodeDatabaseInstaller::class)->all()[$node->id]['state']);
     }
 }
 

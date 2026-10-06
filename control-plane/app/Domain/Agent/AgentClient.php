@@ -119,6 +119,24 @@ class AgentClient
         return $this->request('POST', '/system/update');
     }
 
+    /** Stan instalacji MariaDB na węźle; po zakończeniu — jednorazowo dane konta panelu. */
+    public function mariadbStatus(): array
+    {
+        return $this->request('GET', '/system/mariadb');
+    }
+
+    /** Zleca instalację MariaDB (usługa roota na węźle); konto panelu tylko z adresu panelu. */
+    public function installMariadb(bool $openFirewall): array
+    {
+        return $this->request('POST', '/system/mariadb', ['open_firewall' => $openFirewall]);
+    }
+
+    /** Panel zapisał dane konta — węzeł usuwa je z dysku. */
+    public function forgetMariadbCredentials(): array
+    {
+        return $this->request('DELETE', '/system/mariadb/credentials');
+    }
+
     /**
      * Parametry połączenia WebSocket z konsolą maszyny — dla przekaźnika
      * konsoli, który sam nie zna sekretu węzła. Podpis obejmuje ścieżkę, więc

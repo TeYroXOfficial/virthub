@@ -8,9 +8,63 @@
     @include('panel.admin.apps._nav')
     @error('host') <div class="alert alert-error">{{ $message }}</div> @enderror
 
+    @if ($installPending)
+        @push('head') <meta http-equiv="refresh" content="10"> @endpush
+    @endif
+
     @if ($isAdmin)
-        <details class="card" style="margin-bottom:16px" @if ($hosts->isEmpty() || old('_new')) open @endif>
-            <summary><strong>{{ __('Nowy serwer baz danych') }}</strong></summary>
+        <div class="card" style="margin-bottom:16px">
+            <h3 class="card-title"><x-icon name="database" :size="16"/> {{ __('Zainstaluj MariaDB na węźle') }}</h3>
+            <p class="muted">{{ __('Jedno kliknięcie: węzeł instaluje MariaDB, a panel sam dodaje serwer baz. Konto administracyjne panelu działa tylko z adresu panelu.') }}</p>
+            @error('install') <div class="alert alert-error">{{ $message }}</div> @enderror
+            <form method="POST" action="{{ route('panel.admin.apps.database-hosts.install') }}" class="filter-bar">
+                @csrf
+                <div class="field" style="margin:0">
+                    <label for="mi-node">{{ __('Węzeł') }}</label>
+                    <select id="mi-node" name="hypervisor_id" required>
+                        @foreach ($nodes as $node)
+                            <option value="{{ $node->id }}" @disabled(! $node->isOnline())>{{ $node->name }}@unless ($node->isOnline()) ({{ __('offline') }})@endunless</option>
+                        @endforeach
+                    </select>
+                </div>
+                <label class="check-line" style="margin:0"><input type="checkbox" name="open_firewall" value="1">
+                    {{ __('Otwórz port bazy w zaporze węzła (ufw)') }}</label>
+                <button class="btn btn-primary" type="submit" @disabled($nodes->isEmpty())>{{ __('Zainstaluj') }}</button>
+            </form>
+            <p class="hint">{{ __('Aplikacje i klienci łączą się z bazą po porcie 3306 — jeśli na węźle działa zapora, zaznacz otwarcie portu albo zrób to sam. Węzeł musi być zaktualizowany do najnowszej wersji.') }}</p>
+
+            @if ($installs)
+                <div class="table-wrap" style="margin-top:8px">
+                    <table>
+                        <thead><tr><th>{{ __('Węzeł') }}</th><th>{{ __('Status') }}</th><th>{{ __('Szczegóły') }}</th><th></th></tr></thead>
+                        <tbody>
+                        @foreach ($installs as $nodeId => $install)
+                            @php
+                                $pill = ['queued' => 'neutral', 'running' => 'info', 'done' => 'ok', 'warning' => 'warning', 'failed' => 'critical'][$install['state']] ?? 'neutral';
+                                $label = ['queued' => __('w kolejce'), 'running' => __('instalacja…'), 'done' => __('gotowe'), 'warning' => __('wymaga uwagi'), 'failed' => __('błąd')][$install['state']] ?? $install['state'];
+                            @endphp
+                            <tr>
+                                <td>{{ $nodes->firstWhere('id', $nodeId)?->name ?? '#'.$nodeId }}</td>
+                                <td><span class="pill {{ $pill }}">{{ $label }}</span></td>
+                                <td>{{ $install['message'] ?? '—' }} <span class="hint">{{ \Illuminate\Support\Carbon::createFromTimestamp($install['at'])->diffForHumans() }}</span></td>
+                                <td style="text-align:right">
+                                    @unless (in_array($install['state'], ['queued', 'running'], true))
+                                        <form method="POST" action="{{ route('panel.admin.apps.database-hosts.install.dismiss', $nodeId) }}" style="margin:0">
+                                            @csrf @method('DELETE')
+                                            <button class="btn btn-sm btn-ghost" type="submit">{{ __('Ukryj') }}</button>
+                                        </form>
+                                    @endunless
+                                </td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </div>
+
+        <details class="card" style="margin-bottom:16px" @if (old('_new')) open @endif>
+            <summary><strong>{{ __('Dodaj istniejący serwer ręcznie') }}</strong></summary>
             <form method="POST" action="{{ route('panel.admin.apps.database-hosts.store') }}" style="margin-top:14px" autocomplete="off">
                 @csrf
                 <input type="hidden" name="_new" value="1">
