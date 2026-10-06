@@ -2758,5 +2758,6 @@
     "Zlecono instalację MariaDB na :node. Serwer baz pojawi się na liście sam, gdy instalacja się skończy.": "MariaDB installation requested on :node. The database server will appear in the list by itself once it finishes.",
     "Zlecono instalację — trwa zwykle 1–3 minuty.": "Installation requested — it usually takes 1–3 minutes.",
     "gotowe": "done",
-    "instalacja…": "installing…"
+    "instalacja…": "installing…",
+    "Błąd panelu przy odbieraniu instalacji: :error": "Panel error while collecting the installation: :error"
 }

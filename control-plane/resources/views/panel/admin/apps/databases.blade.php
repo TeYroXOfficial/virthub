@@ -40,15 +40,15 @@
                         <tbody>
                         @foreach ($installs as $nodeId => $install)
                             @php
-                                $pill = ['queued' => 'neutral', 'running' => 'info', 'done' => 'ok', 'warning' => 'warning', 'failed' => 'critical'][$install['state']] ?? 'neutral';
-                                $label = ['queued' => __('w kolejce'), 'running' => __('instalacja…'), 'done' => __('gotowe'), 'warning' => __('wymaga uwagi'), 'failed' => __('błąd')][$install['state']] ?? $install['state'];
+                                $pill = ['queued' => 'neutral', 'running' => 'info', 'done' => 'ok', 'warning' => 'warning', 'failed' => 'critical'][$install['state'] ?? ''] ?? 'neutral';
+                                $label = ['queued' => __('w kolejce'), 'running' => __('instalacja…'), 'done' => __('gotowe'), 'warning' => __('wymaga uwagi'), 'failed' => __('błąd')][$install['state'] ?? ''] ?? ($install['state'] ?? '?');
                             @endphp
                             <tr>
                                 <td>{{ $nodes->firstWhere('id', $nodeId)?->name ?? '#'.$nodeId }}</td>
                                 <td><span class="pill {{ $pill }}">{{ $label }}</span></td>
-                                <td>{{ $install['message'] ?? '—' }} <span class="hint">{{ \Illuminate\Support\Carbon::createFromTimestamp($install['at'])->diffForHumans() }}</span></td>
+                                <td>{{ $install['message'] ?? '—' }} <span class="hint">{{ \Illuminate\Support\Carbon::createFromTimestamp((int) ($install['at'] ?? time()))->diffForHumans() }}</span></td>
                                 <td style="text-align:right">
-                                    @unless (in_array($install['state'], ['queued', 'running'], true))
+                                    @unless (in_array($install['state'] ?? null, ['queued', 'running'], true))
                                         <form method="POST" action="{{ route('panel.admin.apps.database-hosts.install.dismiss', $nodeId) }}" style="margin:0">
                                             @csrf @method('DELETE')
                                             <button class="btn btn-sm btn-ghost" type="submit">{{ __('Ukryj') }}</button>

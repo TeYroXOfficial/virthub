@@ -246,6 +246,20 @@ class AppDatabasesTest extends TestCase
         $this->assertFalse(DatabaseHost::query()->sole()->is_active);
         $this->assertSame('warning', app(NodeDatabaseInstaller::class)->all()[$node->id]['state']);
     }
+
+    public function test_nieoczekiwany_blad_przy_odbiorze_nie_wywraca_strony(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $node = $this->gameApp->hypervisor;
+        $node->forceFill(['agent_url' => 'https://198.51.100.20:8443'])->save();
+        Http::swap(new Factory);
+        Http::fake(['*' => Http::response(['state' => 'done', 'version' => '10.11', 'credentials' => ['username' => 'virthub_panel', 'password' => 'x', 'port' => 3306, 'allowed_from' => '203.0.113.1']])]);
+        Setting::put(['mariadb_install.'.$node->id => json_encode(['state' => 'running', 'at' => time()])]);
+        $this->server->crash = true;
+
+        $this->actingAs($admin)->get(route('panel.admin.apps.databases'))->assertOk()->assertSee('niespodziewany błąd');
+        $this->assertSame('failed', app(NodeDatabaseInstaller::class)->all()[$node->id]['state']);
+    }
 }
 
 /** Atrapa serwera MySQL: trzyma bazy i hasła w pamięci. */
@@ -257,6 +271,8 @@ class FakeDatabaseServer implements DatabaseServer
 
     public bool $failing = false;
 
+    public bool $crash = false;
+
     private function check(): void
     {
         if ($this->failing) {
@@ -266,6 +282,9 @@ class FakeDatabaseServer implements DatabaseServer
 
     public function version(DatabaseHost $host): string
     {
+        if ($this->crash) {
+            throw new \RuntimeException('niespodziewany błąd');
+        }
         $this->check();
 
         return '10.11.0-MariaDB';

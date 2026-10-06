@@ -9,6 +9,8 @@ use App\Models\DatabaseHost;
 use App\Models\Hypervisor;
 use App\Models\Setting;
 use App\Models\User;
+use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * „Zainstaluj MariaDB na węźle” — jednym kliknięciem.
@@ -50,12 +52,27 @@ class NodeDatabaseInstaller
         return collect($this->all())->contains(fn ($i) => in_array($i['state'], ['queued', 'running'], true));
     }
 
-    /** Odpytuje węzły z trwającą instalacją. */
+    /**
+     * Odpytuje węzły z trwającą instalacją. Nieoczekiwany błąd jednego węzła
+     * nie wywraca strony ani harmonogramu — trafia do logu i do tabeli instalacji.
+     */
     public function syncPending(): void
     {
         foreach ($this->all() as $nodeId => $install) {
-            if (in_array($install['state'], ['queued', 'running'], true) && ($node = Hypervisor::query()->find($nodeId))) {
+            if (! in_array($install['state'] ?? null, ['queued', 'running'], true)) {
+                continue;
+            }
+            $node = Hypervisor::query()->find($nodeId);
+            if (! $node) {
+                $this->dismiss($nodeId);
+
+                continue;
+            }
+            try {
                 $this->sync($node);
+            } catch (Throwable $e) {
+                report($e);
+                $this->remember($node, ['state' => 'failed', 'message' => __('Błąd panelu przy odbieraniu instalacji: :error', ['error' => class_basename($e).': '.Str::limit($e->getMessage(), 300)])]);
             }
         }
     }
