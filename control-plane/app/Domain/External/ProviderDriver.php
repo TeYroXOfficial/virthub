@@ -58,9 +58,11 @@ interface ProviderDriver
     public function rename(string $id, string $name): void;
 
     /**
-     * Co sterownik umie — panel ukrywa resztę przycisków.
+     * Co sterownik umie — panel ukrywa resztę przycisków. `power_state` = stan
+     * z get() odróżnia maszynę włączoną od zatrzymanej; bez niego panel nie
+     * blokuje przycisków Start/Stop na podstawie stanu.
      *
-     * @return list<'start'|'stop'|'reboot'|'kill'|'reinstall'|'console'|'rdns'|'rename'>
+     * @return list<'start'|'stop'|'reboot'|'kill'|'reinstall'|'console'|'rdns'|'rename'|'power_state'>
      */
     public function capabilities(): array;
 }

@@ -59,8 +59,15 @@ class AddonManager
      */
     public function boot(): void
     {
+        // Tworzenie addonów: rozpakowany katalog bez licencji, tylko lokalnie i w testach.
+        // Najpierw — nie potrzebuje bazy (testy ładują aplikację przed migracjami).
+        $dev = config('virthub.addon_dev_path');
+        if ($dev && app()->environment('local', 'testing') && is_dir($dev)) {
+            $this->load($dev, null);
+        }
+
         foreach ($this->installed() as $id => $addon) {
-            if (! ($addon['enabled'] ?? false) || ! $this->license->hasAddon($id)) {
+            if (! ($addon['enabled'] ?? false) || isset($this->loaded[$id]) || ! $this->license->hasAddon($id)) {
                 continue;
             }
             try {
@@ -68,12 +75,6 @@ class AddonManager
             } catch (Throwable $e) {
                 Log::error('Nie udało się załadować addonu', ['addon' => $id, 'error' => $e->getMessage()]);
             }
-        }
-
-        // Tworzenie addonów: rozpakowany katalog bez licencji, tylko lokalnie.
-        $dev = config('virthub.addon_dev_path');
-        if ($dev && app()->environment('local', 'testing') && is_dir($dev)) {
-            $this->load($dev, null);
         }
     }
 

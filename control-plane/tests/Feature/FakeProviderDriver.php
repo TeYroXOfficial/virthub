@@ -121,6 +121,6 @@ class FakeProviderDriver implements ProviderDriver
 
     public function capabilities(): array
     {
-        return ['start', 'stop', 'reboot', 'reinstall', 'console', 'rdns'];
+        return ['start', 'stop', 'reboot', 'reinstall', 'console', 'rdns', 'power_state'];
     }
 }
