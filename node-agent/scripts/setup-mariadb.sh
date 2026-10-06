@@ -74,8 +74,8 @@ bind-address = 0.0.0.0
 max_connections = 500
 character-set-server = utf8mb4
 collation-server = utf8mb4_unicode_ci
-# Konta są przypisane do adresów IP — bez odpytywania DNS przy logowaniu.
-skip-name-resolve
+# Bez skip-name-resolve: na serwerze z panelem jego konto to 'virthub'@'localhost',
+# a z tą opcją połączenia TCP z 127.0.0.1 przestają pasować do „localhost”.
 CNF
 
 systemctl enable mariadb >/dev/null 2>&1 || true

@@ -62,5 +62,7 @@ def test_skrypt_nie_otwiera_konta_ani_zapory_bez_zgody():
     assert "fail \"Zlecenie nie zawiera poprawnego adresu panelu.\"" in script
     assert "'%'" not in script
     assert 'if [ "$OPEN_FIREWALL" = "1" ]' in script
+    # Odcięło bazę panelu stojącego na tym samym serwerze ('virthub'@'localhost').
+    assert "\nskip-name-resolve" not in script
     unit = (Path(__file__).parents[1] / "scripts" / "install-mariadb-unit.sh").read_text()
     assert "ExecStartPre=/bin/mv -f $STATE_DIR/request $STATE_DIR/request.run" in unit
