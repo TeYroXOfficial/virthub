@@ -21,6 +21,11 @@
                 <span>{{ $product->category?->name }}</span>
                 @if ($product->type === 'vps' && $product->package)
                     <span class="sep">·</span><span>{{ $product->package->vcpu }} vCPU · {{ round($product->package->ram_mb / 1024, 1) }} GB RAM · {{ $product->package->disk_gb }} GB</span>
+                @elseif ($product->type === 'external')
+                    @php $ext = $product->external_config ?? []; @endphp
+                    @if (! empty($ext['cpu']) || ! empty($ext['ram_mb']))
+                        <span class="sep">·</span><span>{{ $ext['cpu'] ?? '?' }} vCPU · {{ round(($ext['ram_mb'] ?? 0) / 1024, 1) }} GB RAM · {{ $ext['disk_gb'] ?? '?' }} GB</span>
+                    @endif
                 @elseif ($product->plan)
                     <span class="sep">·</span><span>{{ round($product->plan->memory_mb / 1024, 1) }} GB RAM · {{ round($product->plan->disk_mb / 1024, 1) }} GB</span>
                 @endif
@@ -78,6 +83,17 @@
 
             <div class="card" style="margin-top:16px">
                 <h3 class="card-title">{{ __('Konfiguracja') }}</h3>
+                @if ($product->type === 'external')
+                    <div class="field">
+                        <label for="o-image">{{ __('System operacyjny') }}</label>
+                        <select id="o-image" name="image" required>
+                            @foreach ($product->externalImages() as $image)
+                                <option value="{{ $image['id'] }}" @selected(old('image') == $image['id'])>{{ $image['name'] }}</option>
+                            @endforeach
+                        </select>
+                        @error('image') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror
+                    </div>
+                @endif
                 @if ($product->type === 'vps')
                     <div class="field">
                         <label for="o-template">{{ __('System operacyjny') }}</label>
@@ -88,6 +104,8 @@
                         </select>
                         @error('template') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror
                     </div>
+                @endif
+                @if (in_array($product->type, ['vps', 'external'], true))
                     <div class="field">
                         <label for="o-host">{{ __('Nazwa hosta') }}</label>
                         <input id="o-host" name="hostname" required maxlength="253" placeholder="vps1.example.com" value="{{ old('hostname') }}">

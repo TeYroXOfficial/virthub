@@ -38,6 +38,9 @@
                     <div class="btn-row">
                         <label class="check-line" style="margin:0"><input type="radio" name="type" value="vps" @checked($type === 'vps')> {{ __('Serwer VPS') }}</label>
                         <label class="check-line" style="margin:0"><input type="radio" name="type" value="app" @checked($type === 'app')> {{ __('Aplikacja') }}</label>
+                        @if ($providerAccounts->isNotEmpty() || $type === 'external')
+                            <label class="check-line" style="margin:0"><input type="radio" name="type" value="external" @checked($type === 'external')> {{ __('VPS u dostawcy') }}</label>
+                        @endif
                     </div></div>
                 <div class="field" data-type="vps"><label for="p-pkg">{{ __('Pakiet VPS') }}</label>
                     <select id="p-pkg" name="vps_package_id">
@@ -45,6 +48,44 @@
                         @foreach ($packages as $p) <option value="{{ $p->id }}" @selected(old('vps_package_id', $product->vps_package_id) == $p->id)>{{ $p->name }} — {{ $p->vcpu }} vCPU, {{ round($p->ram_mb / 1024, 1) }} GB RAM, {{ $p->disk_gb }} GB @unless ($p->is_active) ({{ __('nieaktywny') }}) @endunless</option> @endforeach
                     </select>
                     @error('vps_package_id') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror</div>
+                @php
+                    $ext = $product->external_config ?? [];
+                    $extState = [
+                        'account' => (string) old('provider_account_id', $product->provider_account_id),
+                        'location' => (string) old('ext_location', $ext['location'] ?? ''),
+                        'plan' => (string) old('ext_plan', $ext['plan'] ?? ''),
+                        'cpu' => old('ext_cpu', $ext['cpu'] ?? null),
+                        'ram_mb' => old('ext_ram_mb', $ext['ram_mb'] ?? null),
+                        'disk_gb' => old('ext_disk_gb', $ext['disk_gb'] ?? null),
+                        'images' => array_map('strval', old('ext_images', array_column($ext['images'] ?? [], 'id'))),
+                    ];
+                @endphp
+                <div data-type="external" id="ext-config" data-state='@json($extState)' data-catalog-url="{{ url('/panel/admin/providers') }}">
+                    <div class="field"><label for="p-acc">{{ __('Konto dostawcy') }}</label>
+                        <select id="p-acc" name="provider_account_id">
+                            <option value="">{{ __('— wybierz —') }}</option>
+                            @foreach ($providerAccounts as $a) <option value="{{ $a->id }}" @selected($extState['account'] === (string) $a->id)>{{ $a->name }} ({{ $a->driverName() }})</option> @endforeach
+                        </select>
+                        @error('provider_account_id') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror</div>
+                    <p class="hint" data-ext-status></p>
+                    <div class="grid grid-2">
+                        <div class="field"><label for="p-ext-loc">{{ __('Lokalizacja') }}</label><select id="p-ext-loc" name="ext_location"></select>
+                            @error('ext_location') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror</div>
+                        <div class="field"><label for="p-ext-plan">{{ __('Typ instancji') }}</label><select id="p-ext-plan" name="ext_plan"></select>
+                            @error('ext_plan') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror</div>
+                    </div>
+                    <div class="grid grid-3" data-ext-resources>
+                        <div class="field"><label for="p-ext-cpu">vCPU</label><input id="p-ext-cpu" type="number" name="ext_cpu" min="1">
+                            @error('ext_cpu') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror</div>
+                        <div class="field"><label for="p-ext-ram">{{ __('RAM (MB)') }}</label><input id="p-ext-ram" type="number" name="ext_ram_mb" min="256" step="256">
+                            @error('ext_ram_mb') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror</div>
+                        <div class="field"><label for="p-ext-disk">{{ __('Dysk (GB)') }}</label><input id="p-ext-disk" type="number" name="ext_disk_gb" min="1">
+                            @error('ext_disk_gb') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror</div>
+                    </div>
+                    <div class="field"><label>{{ __('Systemy do wyboru przez klienta') }}</label>
+                        <div class="check-columns" data-ext-images></div>
+                        @error('ext_images') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror</div>
+                </div>
                 <div class="field" data-type="app"><label for="p-plan">{{ __('Plan aplikacji') }}</label>
                     <select id="p-plan" name="app_plan_id">
                         <option value="">—</option>
@@ -167,7 +208,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="card" style="margin-top:16px">
+                <div class="card" style="margin-top:16px" data-type-hide="external">
                     <h3 class="card-title">{{ __('Lokalizacje') }}</h3>
                     <div class="hint">{{ __('Nic nie zaznaczone = każda publiczna grupa hypervisorów. Zaznaczone = klient musi wybrać jedną z nich.') }}</div>
                     <div class="check-columns">
@@ -208,7 +249,59 @@
             function sync() {
                 var t = (document.querySelector('input[name=type]:checked') || {}).value;
                 document.querySelectorAll('[data-type]').forEach(function (el) { el.hidden = el.dataset.type !== t; });
+                document.querySelectorAll('[data-type-hide]').forEach(function (el) { el.hidden = el.dataset.typeHide === t; });
+                if (t === 'external') loadCatalog();
             }
+
+            // VPS u dostawcy: katalog (lokalizacje, typy, systemy) pobierany z API dostawcy przez panel.
+            var ext = document.getElementById('ext-config'), extLoaded = null;
+            function opt(sel, items, current) {
+                sel.innerHTML = '';
+                items.forEach(function (i) { var o = new Option(i.name, i.id, false, String(i.id) === String(current)); sel.add(o); });
+            }
+            function loadCatalog() {
+                if (!ext) return;
+                var state = JSON.parse(ext.dataset.state), acc = document.getElementById('p-acc').value, status = ext.querySelector('[data-ext-status]');
+                if (!acc || extLoaded === acc) return;
+                extLoaded = acc; status.textContent = @json(__('Pobieranie katalogu dostawcy…'));
+                fetch(ext.dataset.catalogUrl + '/' + acc + '/catalog', {headers: {Accept: 'application/json'}})
+                    .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.message || r.status); return j; }); })
+                    .then(function (cat) {
+                        status.textContent = '';
+                        var loc = document.getElementById('p-ext-loc'), plan = document.getElementById('p-ext-plan');
+                        opt(loc, cat.locations, state.location);
+                        function plans() {
+                            var avail = cat.plans.filter(function (p) { return !p.locations || !p.locations.length || p.locations.indexOf(loc.value) >= 0; });
+                            opt(plan, avail.map(function (p) {
+                                return {id: p.id, name: p.name + (p.configurable ? ' — ' + @json(__('konfigurowalny')) : (p.cpu ? ' — ' + p.cpu + ' vCPU, ' + Math.round(p.ram_mb / 102.4) / 10 + ' GB, ' + p.disk_gb + ' GB' : ''))};
+                            }), state.plan);
+                            resources();
+                        }
+                        function resources() {
+                            var p = cat.plans.find(function (x) { return x.id === plan.value; }) || {};
+                            var box = ext.querySelector('[data-ext-resources]');
+                            box.hidden = !p.configurable;
+                            [['p-ext-cpu', 'max_cpu', 'cpu'], ['p-ext-ram', 'max_ram_mb', 'ram_mb'], ['p-ext-disk', 'max_disk_gb', 'disk_gb']].forEach(function (f) {
+                                var input = document.getElementById(f[0]);
+                                input.disabled = !p.configurable;
+                                if (p[f[1]]) input.max = p[f[1]];
+                                if (state[f[2]] && !input.value) input.value = state[f[2]];
+                            });
+                        }
+                        loc.onchange = plans; plan.onchange = resources; plans();
+                        var imgBox = ext.querySelector('[data-ext-images]');
+                        imgBox.innerHTML = '';
+                        cat.images.forEach(function (i) {
+                            var label = document.createElement('label'), box = document.createElement('input');
+                            label.className = 'check-line'; box.type = 'checkbox'; box.name = 'ext_images[]'; box.value = i.id;
+                            box.checked = state.images.indexOf(String(i.id)) >= 0;
+                            label.append(box, ' ' + i.name); imgBox.append(label);
+                        });
+                    })
+                    .catch(function (e) { status.textContent = @json(__('Nie udało się pobrać katalogu:')) + ' ' + e.message; extLoaded = null; });
+            }
+            var accSel = document.getElementById('p-acc');
+            if (accSel) accSel.addEventListener('change', function () { extLoaded = null; loadCatalog(); });
             document.querySelectorAll('input[name=type]').forEach(function (r) { r.addEventListener('change', sync); });
             sync();
 

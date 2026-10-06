@@ -60,3 +60,11 @@ Schedule::call(function () {
         $installer->syncPending();
     }
 })->everyMinute()->name('mariadb-installs')->withoutOverlapping();
+
+// Licencja: świeży podpisany token co 12 h (bez kontaktu panel ufa staremu przez okres łaski).
+Schedule::call(fn () => app(App\Domain\Licensing\LicenseManager::class)->refresh())
+    ->twiceDaily(3, 15)->name('license-refresh')->withoutOverlapping();
+
+// VPS-y u dostawców zewnętrznych w trakcie tworzenia/operacji — stan, IP, hasło.
+Schedule::call(fn () => app(App\Domain\External\ExternalServerManager::class)->syncTransitional())
+    ->everyMinute()->name('external-servers-sync')->withoutOverlapping();

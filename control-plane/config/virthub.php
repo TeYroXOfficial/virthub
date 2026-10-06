@@ -14,6 +14,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Licencja i addony
+    |--------------------------------------------------------------------------
+    | Serwer licencji wydaje tokeny licencji i paczki addonów podpisane kluczem
+    | Ed25519. Panel zna tylko klucz PUBLICZNY (base64) — tokenu ani paczki nie
+    | da się podrobić bez klucza prywatnego, który jest wyłącznie na serwerze
+    | licencji. Bez ustawionego klucza panel działa normalnie, tylko bez addonów.
+    */
+
+    'license' => [
+        'server' => rtrim((string) env('VIRTHUB_LICENSE_SERVER', ''), '/'),
+        'public_key' => env('VIRTHUB_LICENSE_PUBLIC_KEY', ''),
+        // Tyle dni panel ufa ostatniemu tokenowi, gdy serwer licencji nie odpowiada.
+        'grace_days' => (int) env('VIRTHUB_LICENSE_GRACE_DAYS', 7),
+    ],
+
+    // Zainstalowane addony (poza kodem panelu — przetrwają aktualizację).
+    'addons_path' => env('VIRTHUB_ADDONS_PATH', storage_path('app/addons')),
+    // Tylko środowisko lokalne: rozpakowany addon w trakcie tworzenia, bez licencji.
+    'addon_dev_path' => env('VIRTHUB_ADDON_DEV_PATH'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Konsola
     |--------------------------------------------------------------------------
     | Przeglądarka łączy się z /console-ws/{sesja} na tym samym serwerze —

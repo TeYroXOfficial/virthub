@@ -11,6 +11,7 @@ use App\Domain\Billing\InvoiceManager;
 use App\Domain\Billing\Money;
 use App\Domain\Billing\ServiceManager;
 use App\Domain\Billing\Wallet;
+use App\Domain\External\ExternalServerManager;
 use App\Http\Controllers\Controller;
 use App\Models\AppEgg;
 use App\Models\AppPlan;
@@ -21,6 +22,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\ProviderAccount;
 use App\Models\User;
 use App\Models\VpsPackage;
 use App\Models\WalletTransaction;
@@ -427,6 +429,7 @@ class BillingAdminController extends Controller
             'eggs' => AppEgg::query()->active()->orderBy('category')->orderBy('name')->get(),
             'locations' => HypervisorGroup::query()->ordered()->get(),
             'prices' => $product->exists ? $product->configuredPrices() : [],
+            'providerAccounts' => ProviderAccount::query()->where('is_active', true)->orderBy('name')->get()->filter->driverAvailable()->values(),
         ]);
     }
 
@@ -439,7 +442,15 @@ class BillingAdminController extends Controller
             'product_category_id' => ['required', 'integer', 'exists:product_categories,id'],
             'name' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:2000'],
-            'type' => ['required', Rule::in([Product::TYPE_VPS, Product::TYPE_APP])],
+            'type' => ['required', Rule::in([Product::TYPE_VPS, Product::TYPE_APP, Product::TYPE_EXTERNAL])],
+            'provider_account_id' => ['nullable', 'required_if:type,external', 'integer', 'exists:provider_accounts,id'],
+            'ext_location' => ['nullable', 'required_if:type,external', 'string', 'max:100'],
+            'ext_plan' => ['nullable', 'required_if:type,external', 'string', 'max:100'],
+            'ext_cpu' => ['nullable', 'integer', 'min:1', 'max:512'],
+            'ext_ram_mb' => ['nullable', 'integer', 'min:256', 'max:4194304'],
+            'ext_disk_gb' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'ext_images' => ['nullable', 'required_if:type,external', 'array'],
+            'ext_images.*' => ['string', 'max:100'],
             'vps_package_id' => ['nullable', 'required_if:type,vps', 'integer', 'exists:vps_packages,id'],
             'app_plan_id' => ['nullable', 'required_if:type,app', 'integer', 'exists:app_plans,id'],
             'app_egg_ids' => ['nullable', 'array'],
@@ -531,6 +542,8 @@ class BillingAdminController extends Controller
         }
 
         $isVps = $data['type'] === Product::TYPE_VPS;
+        $isApp = $data['type'] === Product::TYPE_APP;
+        $external = $data['type'] === Product::TYPE_EXTERNAL ? $this->externalConfig($data) : null;
 
         return [[
             'keepalive_interval' => $keepalive,
@@ -541,15 +554,61 @@ class BillingAdminController extends Controller
             'description' => $data['description'] ?? null,
             'type' => $data['type'],
             'vps_package_id' => $isVps ? $data['vps_package_id'] : null,
-            'app_plan_id' => $isVps ? null : $data['app_plan_id'],
-            'app_egg_ids' => $isVps || empty($data['app_egg_ids']) ? null : array_map('intval', $data['app_egg_ids']),
-            'hypervisor_group_ids' => empty($data['hypervisor_group_ids']) ? null : array_map('intval', $data['hypervisor_group_ids']),
+            'app_plan_id' => $isApp ? $data['app_plan_id'] : null,
+            'app_egg_ids' => ! $isApp || empty($data['app_egg_ids']) ? null : array_map('intval', $data['app_egg_ids']),
+            'provider_account_id' => $external !== null ? (int) $data['provider_account_id'] : null,
+            'external_config' => $external,
+            'hypervisor_group_ids' => $external !== null || empty($data['hypervisor_group_ids']) ? null : array_map('intval', $data['hypervisor_group_ids']),
             'setup_fee' => ($data['setup_fee'] ?? '') === '' ? 0 : Money::parse((string) $data['setup_fee']),
             'stock' => $data['stock'] ?? null,
             'per_user_limit' => $data['per_user_limit'] ?? null,
             'sort_order' => $data['sort_order'] ?? 0,
             'is_active' => $request->boolean('is_active'),
         ], $prices, $replace];
+    }
+
+    /**
+     * Konfiguracja produktu u dostawcy, sprawdzona z jego katalogiem
+     * (lokalizacja, typ instancji, zasoby w granicach typu, nazwy systemów).
+     *
+     * @return array{location:string, plan:string, cpu:?int, ram_mb:?int, disk_gb:?int, images:list<array{id:string, name:string}>}
+     */
+    private function externalConfig(array $data): array
+    {
+        $account = ProviderAccount::query()->findOrFail($data['provider_account_id']);
+        try {
+            $catalog = app(ExternalServerManager::class)->catalog($account);
+        } catch (\Throwable $e) {
+            throw ValidationException::withMessages(['provider_account_id' => __('Nie udało się pobrać katalogu dostawcy: :error', ['error' => $e->getMessage()])]);
+        }
+        $plan = collect($catalog['plans'])->firstWhere('id', $data['ext_plan'])
+            ?? throw ValidationException::withMessages(['ext_plan' => __('Dostawca nie ma takiego typu instancji.')]);
+        if (! collect($catalog['locations'])->contains('id', $data['ext_location'])) {
+            throw ValidationException::withMessages(['ext_location' => __('Dostawca nie ma takiej lokalizacji.')]);
+        }
+        if (! empty($plan['locations']) && ! in_array($data['ext_location'], $plan['locations'], true)) {
+            throw ValidationException::withMessages(['ext_plan' => __('Ten typ instancji nie jest dostępny w wybranej lokalizacji.')]);
+        }
+        $resources = ['cpu' => $plan['cpu'] ?? null, 'ram_mb' => $plan['ram_mb'] ?? null, 'disk_gb' => $plan['disk_gb'] ?? null];
+        if ($plan['configurable'] ?? false) {
+            foreach (['cpu' => 'max_cpu', 'ram_mb' => 'max_ram_mb', 'disk_gb' => 'max_disk_gb'] as $field => $max) {
+                $value = $data['ext_'.$field] ?? null;
+                if ($value === null) {
+                    throw ValidationException::withMessages(['ext_'.$field => __('Podaj zasoby maszyny.')]);
+                }
+                if (! empty($plan[$max]) && $value > $plan[$max]) {
+                    throw ValidationException::withMessages(['ext_'.$field => __('Maksimum dla tego typu: :max.', ['max' => $plan[$max]])]);
+                }
+                $resources[$field] = (int) $value;
+            }
+        }
+        $images = collect($catalog['images'])->whereIn('id', array_map('strval', $data['ext_images'] ?? []))
+            ->map(fn ($i) => ['id' => (string) $i['id'], 'name' => (string) $i['name']])->values()->all();
+        if ($images === []) {
+            throw ValidationException::withMessages(['ext_images' => __('Wybierz co najmniej jeden system.')]);
+        }
+
+        return ['location' => (string) $data['ext_location'], 'plan' => (string) $data['ext_plan']] + $resources + ['images' => $images];
     }
 
     /**
