@@ -29,7 +29,7 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
 2. ✅ **Webhooki.**
    - Podpisane (HMAC-SHA256) powiadomienia o zdarzeniach: serwer utworzony/zbudowany/usunięty/zasilanie/zmiana IP/migracja, użytkownik utworzony/zmieniony/usunięty, kopie, mailouty, oraz „wszystkie zdarzenia”.
    - Historia dostarczeń, ponowienia.
-3. **Mailouty.**
+3. ✅ **Mailouty.**
    - Masowa wysyłka e-maili według szablonu ze zmiennymi.
    - Grupy odbiorców: wszyscy, z aktywnymi serwerami, na wybranym hypervisorze, z wybranym produktem.
    - Kolejka i postęp wysyłki.

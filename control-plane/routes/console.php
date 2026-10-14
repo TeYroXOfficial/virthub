@@ -1,5 +1,12 @@
 <?php
 
+use App\Domain\Apps\Databases\NodeDatabaseInstaller;
+use App\Domain\External\ExternalServerManager;
+use App\Domain\Licensing\LicenseManager;
+use App\Domain\Mail\Mailouts;
+use App\Domain\Tickets\TicketService;
+use App\Domain\Webhooks\Webhooks;
+use App\Models\ServerMetric;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -31,7 +38,7 @@ Schedule::command('virthub:collect-metrics')
 // Retencja surowych próbek: 8 dni — tyle potrzebuje wykres tygodniowy. Bez
 // tego server_metrics rośnie w nieskończoność.
 Schedule::call(function () {
-    App\Models\ServerMetric::where('sampled_at', '<', now()->subDays(8))->delete();
+    ServerMetric::where('sampled_at', '<', now()->subDays(8))->delete();
 })->daily()->name('prune-metrics');
 
 // Katalogi modpacków, pluginów i modów — klient dostaje listy z cache od
@@ -43,7 +50,7 @@ Schedule::command('virthub:warm-content')
 
 // Zgłoszenia z odpowiedzią personelu, na które klient nie odpisał przez
 // ustawioną liczbę dni, zamykają się same (Administracja → Wsparcie).
-Schedule::call(fn () => app(App\Domain\Tickets\TicketService::class)->autoClose())
+Schedule::call(fn () => app(TicketService::class)->autoClose())
     ->hourly()->name('tickets-autoclose')->withoutOverlapping();
 
 // Billing: opłaty godzinowe z portfela, faktury odnowień, przypomnienia,
@@ -55,20 +62,24 @@ Schedule::command('virthub:billing')
 // Instalacje MariaDB zlecone z panelu (Aplikacje → Bazy danych) — dodanie
 // serwera baz, gdy węzeł skończy, nawet jeśli nikt nie trzyma otwartej strony.
 Schedule::call(function () {
-    $installer = app(App\Domain\Apps\Databases\NodeDatabaseInstaller::class);
+    $installer = app(NodeDatabaseInstaller::class);
     if ($installer->pending()) {
         $installer->syncPending();
     }
 })->everyMinute()->name('mariadb-installs')->withoutOverlapping();
 
 // Licencja: świeży podpisany token co 12 h (bez kontaktu panel ufa staremu przez okres łaski).
-Schedule::call(fn () => app(App\Domain\Licensing\LicenseManager::class)->refresh())
+Schedule::call(fn () => app(LicenseManager::class)->refresh())
     ->twiceDaily(3, 15)->name('license-refresh')->withoutOverlapping();
 
 // VPS-y u dostawców zewnętrznych w trakcie tworzenia/operacji — stan, IP, hasło.
-Schedule::call(fn () => app(App\Domain\External\ExternalServerManager::class)->syncTransitional())
+Schedule::call(fn () => app(ExternalServerManager::class)->syncTransitional())
     ->everyMinute()->name('external-servers-sync')->withoutOverlapping();
 
 // Webhooki: ponowienia nieudanych dostarczeń i sprzątanie historii.
-Schedule::call(fn () => app(App\Domain\Webhooks\Webhooks::class)->retryDue())
+Schedule::call(fn () => app(Webhooks::class)->retryDue())
     ->everyMinute()->name('webhooks-retry')->withoutOverlapping();
+
+// Mailouty: kolejna partia wiadomości.
+Schedule::call(fn () => app(Mailouts::class)->process())
+    ->everyMinute()->name('mailouts')->withoutOverlapping();

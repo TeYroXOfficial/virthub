@@ -60,6 +60,15 @@
                 </div>
                 <button class="btn btn-primary" type="submit">{{ __('Zapisz') }}</button>
             </form>
+            <form method="POST" action="{{ route('panel.account.mailouts') }}" style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border)">
+                @csrf @method('PUT')
+                <label style="font-weight:400; display:flex; gap:8px; align-items:center">
+                    <input type="checkbox" name="mailouts" value="1" style="width:auto" @checked(! $user->mailout_opt_out) onchange="this.form.submit()">
+                    {{ __('Chcę dostawać ogłoszenia i newsletter') }}
+                </label>
+                <div class="hint">{{ __('Wiadomości o Twoich usługach (faktury, awarie, prace serwisowe) przychodzą zawsze.') }}</div>
+                <noscript><button class="btn btn-sm" type="submit">{{ __('Zapisz') }}</button></noscript>
+            </form>
         </div>
 
         <div class="card">

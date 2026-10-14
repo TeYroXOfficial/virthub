@@ -87,6 +87,7 @@
                 ['panel.admin.license', __('Licencja i addony'), 'key', 'panel.admin.license*', 'admin'],
                 ['panel.admin.languages', __('Języki'), 'list', 'panel.admin.languages*', 'admin'],
                 ['panel.admin.webhooks', __('Webhooki'), 'bot', 'panel.admin.webhooks*', 'admin'],
+                ['panel.admin.mailouts', __('Mailouty'), 'mail', 'panel.admin.mailouts*', 'admin'],
                 ['panel.admin.mail', __('Poczta (SMTP)'), 'mail', 'panel.admin.mail*', 'admin.settings'],
                 ['panel.admin.emails', __('Szablony e-mail'), 'mail', 'panel.admin.emails*', 'admin.settings'],
                 ['panel.admin.logs', __('Dziennik zdarzeń'), 'archive', 'panel.admin.logs', 'admin'],
