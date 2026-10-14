@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Domain\Access\Impersonation;
+use App\Domain\Webhooks\Webhooks;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Auth;
@@ -34,6 +36,18 @@ class AuditLog extends Model
         return $this->belongsTo(User::class, 'actor_id');
     }
 
+    protected static function booted(): void
+    {
+        // Część zdarzeń z dziennika idzie też do webhooków (Administracja → Webhooki).
+        static::created(function (self $log) {
+            try {
+                app(Webhooks::class)->fromAudit($log);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        });
+    }
+
     public static function record(
         string $action,
         ?Model $subject = null,
@@ -42,8 +56,8 @@ class AuditLog extends Model
     ): self {
         $actor ??= Auth::user();
         // Działania wykonane jako klient — z dopiskiem, kto był zalogowany naprawdę.
-        if (\App\Domain\Access\Impersonation::active() && $actor?->id === Auth::id()) {
-            $meta['impersonated_by'] = \App\Domain\Access\Impersonation::impersonator()?->email;
+        if (Impersonation::active() && $actor?->id === Auth::id()) {
+            $meta['impersonated_by'] = Impersonation::impersonator()?->email;
         }
 
         return self::create([

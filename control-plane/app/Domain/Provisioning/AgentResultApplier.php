@@ -3,10 +3,12 @@
 namespace App\Domain\Provisioning;
 
 use App\Domain\Mail\Notify;
+use App\Domain\Webhooks\Webhooks;
 use App\Enums\ServerState;
 use App\Models\Backup;
 use App\Models\Server;
 use App\Models\ServerJob;
+use App\Models\VpsPackage;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 
@@ -49,8 +51,10 @@ class AgentResultApplier
         $server = $job->server;
 
         // Powiadomienie o usunięciu przed sprzątaniem — potem nie ma już adresu ani nazwy.
+        $webhooks = app(Webhooks::class);
         if ($job->action === 'delete') {
             app(Notify::class)->server($server, 'server.terminated');
+            $webhooks->dispatch('server.destroyed', $webhooks->describe($server));
         }
 
         match ($job->action) {
@@ -74,6 +78,15 @@ class AgentResultApplier
             app(Notify::class)->server($server, $mail);
         }
 
+        $event = ['create' => 'server.built', 'power' => 'server.power', 'rebuild' => 'server.rebuilt', 'resize' => 'server.resized',
+            'snapshot' => 'backup.created', 'restore' => 'backup.restored'][$job->action] ?? null;
+        if ($event !== null) {
+            $webhooks->dispatch($event, $webhooks->describe($server->fresh() ?? $server) + array_filter([
+                'power_action' => $job->action === 'power' ? ($job->payload['action'] ?? null) : null,
+                'backup_id' => in_array($job->action, ['snapshot', 'restore'], true) ? ($job->payload['backup_id'] ?? null) : null,
+            ]));
+        }
+
         $job->markDone($result);
     }
 
@@ -93,6 +106,12 @@ class AgentResultApplier
 
         $this->rollbackState($job, $error);
         $job->markFailed($error);
+
+        $event = ['create' => 'server.build_failed', 'snapshot' => 'backup.failed'][$job->action] ?? null;
+        if ($event !== null) {
+            $webhooks = app(Webhooks::class);
+            $webhooks->dispatch($event, $webhooks->describe($server) + ['error' => $error]);
+        }
     }
 
     /**
@@ -201,7 +220,7 @@ class AgentResultApplier
     {
         $payload = $job->payload ?? [];
         // Transfer nie dotyczy hypervisora — bierzemy go z pakietu docelowego.
-        $package = isset($payload['package_id']) ? \App\Models\VpsPackage::query()->find($payload['package_id']) : null;
+        $package = isset($payload['package_id']) ? VpsPackage::query()->find($payload['package_id']) : null;
 
         $server->forceFill([
             'bandwidth_gb' => $package?->bandwidth_gb ?? $server->bandwidth_gb,
