@@ -104,15 +104,21 @@ class AgentClient
 
     /** Płyta w maszynie i kolejność rozruchu; restart = zastosuj od razu. */
     /** @param  array{type:string, config:array<string, mixed>}  $target */
-    public function backup(string $uuid, string $key, array $target, bool $compress): string
+    public function backup(string $uuid, string $key, array $target, bool $compress, ?string $checkpoint = null, ?string $incrementalFrom = null): string
     {
-        return $this->jobId($this->request('POST', "/vm/{$uuid}/backups", ['key' => $key, 'target' => $target, 'compress' => $compress]));
+        return $this->jobId($this->request('POST', "/vm/{$uuid}/backups", array_filter([
+            'key' => $key, 'target' => $target, 'compress' => $compress, 'checkpoint' => $checkpoint, 'incremental_from' => $incrementalFrom,
+        ], fn ($v) => $v !== null)));
     }
 
     /** @param  array{type:string, config:array<string, mixed>}  $target */
-    public function restoreBackup(string $uuid, string $key, array $target, ?string $sha256): string
+    /**
+     * @param  array{type:string, config:array<string, mixed>}  $target
+     * @param  list<array{key:string, sha256:?string}>  $chain  wcześniejsze ogniwa łańcucha (od kopii pełnej)
+     */
+    public function restoreBackup(string $uuid, string $key, array $target, ?string $sha256, array $chain = []): string
     {
-        return $this->jobId($this->request('POST', "/vm/{$uuid}/backups/restore", array_filter(['key' => $key, 'target' => $target, 'sha256' => $sha256])));
+        return $this->jobId($this->request('POST', "/vm/{$uuid}/backups/restore", array_filter(['key' => $key, 'target' => $target, 'sha256' => $sha256, 'chain' => $chain])));
     }
 
     /**

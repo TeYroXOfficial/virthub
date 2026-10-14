@@ -265,6 +265,17 @@ class AgentResultApplier
             'size_bytes' => $bytes,
             'size_mb' => $bytes !== null ? (int) ceil($bytes / 1048576) : null,
         ])->save();
+        // Agent mógł zrobić pełną zamiast przyrostowej (brak checkpointu rodzica, maszyna zatrzymana).
+        $incremental = ($result['kind'] ?? Backup::KIND_FULL) === Backup::KIND_INCREMENTAL;
+        $backup->forceFill([
+            'kind' => $incremental ? Backup::KIND_INCREMENTAL : Backup::KIND_FULL,
+            'checkpoint' => $result['checkpoint'] ?? null,
+            'parent_id' => $incremental ? $backup->parent_id : null,
+        ])->save();
+        if ($backup->checkpoint !== null) {
+            // Agent trzyma tylko najnowszy checkpoint — starsze kopie nie mogą już być rodzicami.
+            Backup::query()->where('server_id', $backup->server_id)->where('id', '!=', $backup->id)->whereNotNull('checkpoint')->update(['checkpoint' => null]);
+        }
         app(RemoteBackups::class)->prune($job->server);
     }
 

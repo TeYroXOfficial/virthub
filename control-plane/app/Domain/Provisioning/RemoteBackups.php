@@ -7,6 +7,7 @@ use App\Domain\Agent\AgentException;
 use App\Jobs\RunServerActionJob;
 use App\Models\AuditLog;
 use App\Models\Backup;
+use App\Models\BackupPlan;
 use App\Models\BackupTarget;
 use App\Models\Hypervisor;
 use App\Models\Server;
@@ -27,7 +28,7 @@ class RemoteBackups
     public function __construct(private readonly ServerProvisioner $provisioner) {}
 
     /** Ręczna albo planowa kopia. */
-    public function create(Server $server, BackupTarget $target, bool $compress = true, ?User $actor = null): ServerJob
+    public function create(Server $server, BackupTarget $target, bool $compress = true, ?User $actor = null, ?BackupPlan $plan = null): ServerJob
     {
         if ($server->isContainer()) {
             throw new \DomainException(__('Kopie na zewnętrzne cele są dostępne tylko dla maszyn KVM.'));
@@ -41,8 +42,11 @@ class RemoteBackups
         if ($server->agent_uuid === null || $server->state->isTransitioning()) {
             throw new \DomainException(__('Maszyna nie jest gotowa do wykonania kopii.'));
         }
-        $name = 'backup-'.now()->format('Ymd-His');
+        $parent = $plan?->incremental ? $this->chainParent($server, $target, $plan) : null;
+        $name = ($parent ? 'incr-' : 'backup-').now()->format('Ymd-His');
         $backup = Backup::create([
+            'parent_id' => $parent?->id,
+            'kind' => $parent ? Backup::KIND_INCREMENTAL : Backup::KIND_FULL,
             'server_id' => $server->id,
             'name' => $name,
             'type' => Backup::TYPE_REMOTE,
@@ -50,6 +54,10 @@ class RemoteBackups
             'backup_target_id' => $target->id,
             'remote_key' => 'vm'.$server->id.'/'.$name.'.qcow2',
         ]);
+        if ($plan?->incremental) {
+            // Nazwę checkpointu zna panel; agent zwróci ją w wyniku, jeśli go utworzył.
+            $backup->forceFill(['checkpoint' => 'vh-'.$backup->id])->save();
+        }
         $job = ServerJob::create([
             'server_id' => $server->id,
             'hypervisor_id' => $server->hypervisor_id,
@@ -62,6 +70,21 @@ class RemoteBackups
         RunServerActionJob::dispatch($job->id);
 
         return $job;
+    }
+
+    /**
+     * Ostatnia gotowa kopia z aktualnym checkpointem na tym samym celu, jeśli
+     * łańcuch jest krótszy niż „pełna co N” — inaczej czas na kopię pełną.
+     */
+    private function chainParent(Server $server, BackupTarget $target, BackupPlan $plan): ?Backup
+    {
+        $last = $server->backups()->where('type', Backup::TYPE_REMOTE)->where('status', Backup::STATUS_READY)
+            ->where('backup_target_id', $target->id)->latest('created_at')->latest('id')->first();
+        if ($last === null || $last->checkpoint === null || ! $last->chainComplete()) {
+            return null;
+        }
+
+        return count($last->ancestors()) + 1 < max(1, $plan->full_every) ? $last : null;
     }
 
     public function restore(Server $server, Backup $backup, ?User $actor = null): ServerJob
@@ -89,6 +112,10 @@ class RemoteBackups
     /** Usunięcie kopii z celu (przez węzeł maszyny) i z panelu. */
     public function delete(Backup $backup): void
     {
+        // Przyrostowe zależne od tej kopii bez niej są bezużyteczne.
+        foreach ($backup->children()->get() as $child) {
+            $this->delete($child);
+        }
         $server = $backup->server()->withTrashed()->first();
         if ($backup->target && $backup->remote_key && $server?->hypervisor) {
             try {
@@ -107,14 +134,26 @@ class RemoteBackups
         if ($plan === null) {
             return 0;
         }
-        $old = $server->backups()->where('type', Backup::TYPE_REMOTE)->where('status', Backup::STATUS_READY)
+        $ready = $server->backups()->where('type', Backup::TYPE_REMOTE)->where('status', Backup::STATUS_READY)
             ->where('backup_target_id', $plan->backup_target_id)
-            ->orderByDesc('created_at')->orderByDesc('id')->skip($plan->retention)->take(1000)->get();
-        foreach ($old as $backup) {
-            $this->delete($backup);
+            ->orderByDesc('created_at')->orderByDesc('id')->take(2000)->get();
+        // Zostają najnowsze N oraz ogniwa, od których zależą (pełna i wcześniejsze przyrostowe).
+        $keep = [];
+        foreach ($ready->take($plan->retention) as $backup) {
+            $keep[$backup->id] = true;
+            foreach ($backup->ancestors() as $ancestor) {
+                $keep[$ancestor->id] = true;
+            }
+        }
+        $deleted = 0;
+        foreach ($ready as $backup) {
+            if (! isset($keep[$backup->id]) && Backup::query()->whereKey($backup->id)->exists()) {
+                $deleted += 1 + $backup->children()->count();
+                $this->delete($backup);
+            }
         }
 
-        return $old->count();
+        return $deleted;
     }
 
     /** Planowe kopie, których czas minął. */
@@ -144,7 +183,7 @@ class RemoteBackups
             }
             if ($due) {
                 try {
-                    $this->create($server, $plan->target, $plan->compress);
+                    $this->create($server, $plan->target, $plan->compress, plan: $plan);
                     $queued++;
                 } catch (\DomainException) {
                 }

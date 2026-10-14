@@ -29,7 +29,70 @@ class Backup extends Model
         'remote_key',
         'sha256',
         'size_bytes',
+        'parent_id',
+        'kind',
+        'checkpoint',
     ];
+
+    public const KIND_FULL = 'full';
+
+    public const KIND_INCREMENTAL = 'incremental';
+
+    public function isIncremental(): bool
+    {
+        return $this->kind === self::KIND_INCREMENTAL;
+    }
+
+    /** @return BelongsTo<Backup, $this> */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Relations\HasMany<Backup, $this> */
+    public function children(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(self::class, 'parent_id');
+    }
+
+    /**
+     * Wcześniejsze ogniwa łańcucha — od kopii pełnej do bezpośredniego rodzica.
+     *
+     * @return list<Backup>
+     */
+    public function ancestors(): array
+    {
+        $chain = [];
+        $node = $this;
+        $guard = 0;
+        while ($node->isIncremental() && $node->parent_id !== null && $guard++ < 500) {
+            $node = self::query()->find($node->parent_id);
+            if ($node === null) {
+                break;
+            }
+            array_unshift($chain, $node);
+        }
+
+        return $chain;
+    }
+
+    /** @return list<array{key: string, sha256: ?string}> */
+    public function chainPayload(): array
+    {
+        return array_map(fn (Backup $b) => array_filter(['key' => (string) $b->remote_key, 'sha256' => $b->sha256]), $this->ancestors());
+    }
+
+    /** Łańcuch kompletny (pełna na początku, wszystkie ogniwa gotowe) — da się przywrócić. */
+    public function chainComplete(): bool
+    {
+        if (! $this->isIncremental()) {
+            return true;
+        }
+        $chain = $this->ancestors();
+
+        return $chain !== [] && ! $chain[0]->isIncremental()
+            && collect($chain)->every(fn (Backup $b) => $b->status === self::STATUS_READY);
+    }
 
     public const TYPE_REMOTE = 'remote';
 
@@ -52,6 +115,6 @@ class Backup extends Model
 
     public function isRestorable(): bool
     {
-        return $this->status === self::STATUS_READY;
+        return $this->status === self::STATUS_READY && $this->chainComplete();
     }
 }

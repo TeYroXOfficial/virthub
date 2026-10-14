@@ -114,7 +114,7 @@ class HypervisorDriver(ABC):
             except TransferError as exc:
                 raise DriverError(str(exc)) from exc
         else:
-            self._fetch(restore, incoming)
+            self._fetch_chain(restore, incoming)
         if not self.settings.is_mock:
             import json as _json
 
@@ -252,6 +252,30 @@ class HypervisorDriver(ABC):
 
     def restore_backup(self, uuid: str, req: Any) -> dict[str, Any]:
         raise DriverError("Kopie zapasowe na zewnętrzne cele są dostępne tylko dla maszyn KVM.")
+
+    def _fetch_chain(self, req: Any, incoming: Path) -> None:
+        """Kopia pełna albo łańcuch pełna + przyrostowe spłaszczony do jednego pliku."""
+        chain = list(getattr(req, "chain", None) or [])
+        if not chain:
+            self._fetch(req, incoming)
+            return
+        links = [*chain, req]
+        parts = [incoming.with_name(f"{incoming.name}.part{i}") for i in range(len(links))]
+        try:
+            for i, (link, part) in enumerate(zip(links, parts)):
+                progress("download", 10 + int(60 * i / len(links)))
+                self._fetch(type("Link", (), {"key": link.key, "sha256": link.sha256, "target": req.target})(), part)
+            if self.settings.is_mock:
+                os.replace(parts[-1], incoming)
+                return
+            # Ogniwo przyrostowe ma tylko zmienione klastry — podpinamy je pod poprzednie i spłaszczamy.
+            for prev, cur in zip(parts, parts[1:]):
+                run(["qemu-img", "rebase", "-u", "-F", "qcow2", "-b", str(prev), str(cur)])
+            progress("restore", 80)
+            run(["qemu-img", "convert", "-O", "qcow2", str(parts[-1]), str(incoming)], timeout=6 * 3600)
+        finally:
+            for part in parts:
+                part.unlink(missing_ok=True)
 
     def delete_backups(self, req: Any) -> dict[str, Any]:
         from .backup_targets import BackupTargetError, build_target
@@ -820,6 +844,10 @@ class LibvirtDriver(HypervisorDriver):
         domain = self._domain(uuid)
         name = domain.name()
         self._assert_not_elevated(name)
+        if req.checkpoint and domain.isActive():
+            return self._backup_with_checkpoint(domain, req)
+        # Kopia bez checkpointu (maszyna zatrzymana): stare checkpointy tracą sens — następna będzie pełna.
+        self._drop_checkpoints(domain)
         base = self.storage.volume_path(name)
         overlay = base.with_name(f"{name}.backup-overlay.qcow2")
         image = base.with_name(f".{name}.backup-{secrets.token_hex(4)}.qcow2")
@@ -840,7 +868,79 @@ class LibvirtDriver(HypervisorDriver):
             if frozen:
                 self._block_commit(domain)
                 overlay.unlink(missing_ok=True)
-        return self._ship(image, req)
+        return self._ship(image, req) | {"kind": "full", "checkpoint": None}
+
+    def _drop_checkpoints(self, domain: Any, keep: str | None = None) -> None:
+        import libvirt
+
+        try:
+            for checkpoint in domain.listAllCheckpoints():
+                if checkpoint.getName() != keep:
+                    checkpoint.delete()
+        except (AttributeError, libvirt.libvirtError):
+            pass
+
+    def _backup_with_checkpoint(self, domain: Any, req: Any) -> dict[str, Any]:
+        """Kopia przez libvirt backupBegin: pełna albo tylko bloki zmienione od checkpointu poprzedniej kopii."""
+        import libvirt
+        from xml.etree import ElementTree as ET
+
+        name = domain.name()
+        base = self.storage.volume_path(name)
+        image = base.with_name(f".{name}.backup-{secrets.token_hex(4)}.qcow2")
+        parent = None
+        if req.incremental_from:
+            try:
+                domain.checkpointLookupByName(req.incremental_from)
+                parent = req.incremental_from
+            except libvirt.libvirtError:
+                parent = None  # checkpointu nie ma (np. po przywróceniu) — kopia pełna
+        if parent is None:
+            self._drop_checkpoints(domain)
+        others = "".join(
+            f"<disk name='{escape(t.get('dev'))}' {{attr}}='no'/>"
+            for d in ET.fromstring(domain.XMLDesc(0)).find("devices").findall("disk")
+            if (t := d.find("target")) is not None and t.get("dev") != "vda"
+        )
+        backup_xml = (
+            "<domainbackup>" + (f"<incremental>{escape(parent)}</incremental>" if parent else "")
+            + f"<disks><disk name='vda' backup='yes' type='file'><driver type='qcow2'/><target file='{escape(str(image))}'/></disk>"
+            + others.replace("{attr}", "backup") + "</disks></domainbackup>"
+        )
+        checkpoint_xml = (
+            f"<domaincheckpoint><name>{escape(req.checkpoint)}</name><disks><disk name='vda' checkpoint='bitmap'/>"
+            + others.replace("{attr}", "checkpoint") + "</disks></domaincheckpoint>"
+        )
+        progress("export", 5)
+        try:
+            domain.backupBegin(backup_xml, checkpoint_xml, 0)
+            deadline = time.monotonic() + 6 * 3600
+            while True:
+                info = domain.jobInfo()
+                if info[0] == libvirt.VIR_DOMAIN_JOB_NONE:
+                    break
+                if info[3]:
+                    progress("export", 5 + int(50 * info[4] / max(1, info[3])))
+                if time.monotonic() > deadline:
+                    domain.abortJob()
+                    raise DriverError("Kopia trwa zbyt długo — przerwano.")
+                time.sleep(1)
+            stats = domain.jobStats(libvirt.VIR_DOMAIN_JOB_STATS_COMPLETED)
+            if stats.get("type") != libvirt.VIR_DOMAIN_JOB_COMPLETED:
+                raise DriverError(f"Zadanie kopii libvirt nie zakończyło się poprawnie: {stats.get('errmsg', stats.get('type'))}")
+        except libvirt.libvirtError as exc:
+            image.unlink(missing_ok=True)
+            raise DriverError(f"Kopia przez libvirt nie powiodła się: {exc}") from exc
+        except Exception:
+            image.unlink(missing_ok=True)
+            raise
+        # Zostaje tylko najnowszy checkpoint — od niego liczy się następna kopia przyrostowa.
+        self._drop_checkpoints(domain, keep=req.checkpoint)
+        if parent is None and req.compress:
+            packed = image.with_name(image.name + ".c")
+            run(["qemu-img", "convert", "-c", "-O", "qcow2", str(image), str(packed)], timeout=6 * 3600)
+            os.replace(packed, image)
+        return self._ship(image, req) | {"kind": "incremental" if parent else "full", "checkpoint": req.checkpoint, "parent": parent}
 
     def restore_backup(self, uuid: str, req: Any) -> dict[str, Any]:
         domain = self._domain(uuid)
@@ -848,10 +948,12 @@ class LibvirtDriver(HypervisorDriver):
         self._assert_not_elevated(name)
         base = self.storage.volume_path(name)
         incoming = base.with_name(f".{name}.restore.qcow2")
-        self._fetch(req, incoming)
+        self._fetch_chain(req, incoming)
         was_running = bool(domain.isActive())
         if was_running:
             domain.destroy()
+        # Nowy dysk nie ma bitmap starych checkpointów — następna kopia będzie pełna.
+        self._drop_checkpoints(domain)
         os.replace(incoming, base)
         if was_running:
             domain.create()
@@ -1429,18 +1531,29 @@ class MockDriver(HypervisorDriver):
         return {"uuid": uuid, "state": record["state"]}
 
     def backup(self, uuid: str, req: Any) -> dict[str, Any]:
+        data = self._load()
         record = self._get(uuid)
         self._assert_not_elevated(record["name"])
+        running = record["state"] == "running"
+        checkpoints = record.get("checkpoints", [])
+        parent = req.incremental_from if running and req.checkpoint and req.incremental_from in checkpoints else None
+        kind = "incremental" if parent else "full"
+        record["checkpoints"] = [req.checkpoint] if running and req.checkpoint else []
+        data[uuid] = record
+        self._save(data)
         image = self.settings.image_dir / f".{record['name']}.backup-{secrets.token_hex(4)}.qcow2"
-        image.write_bytes(f"mock backup of {record['name']} compress={req.compress}\n".encode())
-        return self._ship(image, req)
+        image.write_bytes(f"mock {kind} backup of {record['name']} cp={req.checkpoint} parent={parent}\n".encode())
+        return self._ship(image, req) | {"kind": kind, "checkpoint": record["checkpoints"][0] if record["checkpoints"] else None, "parent": parent}
 
     def restore_backup(self, uuid: str, req: Any) -> dict[str, Any]:
         record = self._get(uuid)
         self._assert_not_elevated(record["name"])
         incoming = self.settings.image_dir / f".{record['name']}.restore.qcow2"
-        self._fetch(req, incoming)
+        self._fetch_chain(req, incoming)
         os.replace(incoming, self.storage.volume_path(record["name"]))
+        data = self._load()
+        data[uuid]["checkpoints"] = []
+        self._save(data)
         return {"uuid": uuid, "key": req.key, "state": record["state"]}
 
     def pci_devices(self) -> dict[str, Any]:

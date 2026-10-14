@@ -11,5 +11,8 @@
     <div class="field"><label>{{ __('Przechowywane kopie') }}</label><input name="retention" type="number" min="1" max="365" required value="{{ $p?->retention ?? 7 }}"></div>
     <div class="field"><label>{{ __('Opcje') }}</label>
         <label class="check-line"><input type="checkbox" name="compress" value="1" @checked($p?->compress ?? true)> {{ __('Kompresja') }}</label>
-        <label class="check-line"><input type="checkbox" name="is_active" value="1" @checked($p?->is_active ?? true)> {{ __('Aktywny') }}</label></div>
+        <label class="check-line"><input type="checkbox" name="is_active" value="1" @checked($p?->is_active ?? true)> {{ __('Aktywny') }}</label>
+        <label class="check-line"><input type="checkbox" name="incremental" value="1" @checked($p?->incremental ?? false)> {{ __('Kopie przyrostowe') }}</label></div>
+    <div class="field"><label>{{ __('Pełna kopia co') }}</label><input name="full_every" type="number" min="1" max="60" required value="{{ $p?->full_every ?? 7 }}">
+        <div class="hint">{{ __('Przy kopiach przyrostowych: co tyle kopii jedna pełna, pozostałe zapisują tylko zmienione bloki dysku (działająca maszyna KVM).') }}</div></div>
 </div>

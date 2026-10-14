@@ -46,7 +46,8 @@ class DisasterRecovery
     public function latestBackup(Server $server): ?Backup
     {
         return $server->backups()->with('target')->where('type', Backup::TYPE_REMOTE)->where('status', Backup::STATUS_READY)
-            ->whereNotNull('remote_key')->latest('created_at')->latest('id')->first();
+            ->whereNotNull('remote_key')->latest('created_at')->latest('id')->take(50)->get()
+            ->first(fn (Backup $b) => $b->chainComplete()); // przyrostowa tylko z pełnym łańcuchem
     }
 
     /**

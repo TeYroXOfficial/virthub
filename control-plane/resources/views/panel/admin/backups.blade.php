@@ -80,7 +80,7 @@
                 @forelse ($recent as $backup)
                     <tr>
                         <td>{{ $backup->server?->hostname ?? '—' }}</td>
-                        <td><code>{{ $backup->name }}</code> <span class="muted">{{ $backup->created_at->diffForHumans() }}</span></td>
+                        <td><code>{{ $backup->name }}</code> <span class="muted">{{ $backup->created_at->diffForHumans() }}</span>@if ($backup->isIncremental()) <span class="pill neutral plain">{{ __('przyrostowa') }}</span>@endif</td>
                         <td>{{ $backup->target?->name ?? '—' }}</td>
                         <td>{{ $backup->size_mb ? $backup->size_mb.' MB' : '—' }}</td>
                         <td><span class="pill {{ ['ready' => 'ok', 'creating' => 'warning', 'failed' => 'critical'][$backup->status] ?? 'neutral' }}">{{ $backup->status }}</span></td>

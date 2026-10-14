@@ -52,7 +52,7 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
 10. ✅ **Samoobsługa (resource packs).**
     - Klient sam tworzy i usuwa VM w ramach pakietu zasobów (CPU/RAM/dysk/IP), rozliczanie godzinowe.
     - Maszyny „tradycyjne” chronione przed usunięciem z samoobsługi.
-11. ✅ **Kopie zapasowe na zewnętrzne cele.** (bez przyrostowych — etap 17)
+11. ✅ **Kopie zapasowe na zewnętrzne cele.**
     - Cele: S3, SFTP/SSH.
     - Kompresja, retencja i przycinanie.
     - Kopie przyrostowe (dirty bitmaps QEMU), przywracanie.
@@ -63,6 +63,6 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
     - Kopia dysków, konfiguracji i stanu hypervisora na lokalny dysk albo S3.
     - Odtworzenie na zastępczym hoście.
 16. ✅ **Migracje VM między hypervisorami.** Na zimno (kopiowanie dysku) i na żywo (libvirt migrate z kopiowaniem dysku), z wyborem docelowego węzła i webhookiem `server.migrated`.
-17. **Kopie przyrostowe.** Dirty bitmaps QEMU (tylko zmienione bloki), łańcuch pełna + przyrostowe, przywracanie z łańcucha.
+17. ✅ **Kopie przyrostowe.** Checkpointy libvirt / dirty bitmaps QEMU (backupBegin, tylko zmienione bloki), łańcuch pełna + przyrostowe z „pełna co N”, retencja z zachowaniem zależnych ogniw, przywracanie i DR ze spłaszczeniem łańcucha (qemu-img rebase + convert). Maszyna zatrzymana albo brak checkpointu rodzica → automatycznie kopia pełna.
 18. ✅ **Dokumentacja API.** Strona `/api-docs`: OpenAPI 3 dla wszystkich endpointów, opisy w każdym języku panelu, przykłady (curl, PHP, Python, JavaScript, Go), wbudowana konsola do testowania zapytań (jak Postman, z historią) i eksport kolekcji Postman.
 19. **Sieci izolowane i wiele kart.** Prywatne sieci między maszynami klienta (osobny mostek bez łącza), druga i kolejne karty sieciowe maszyny.
