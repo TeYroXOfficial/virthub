@@ -127,6 +127,38 @@ class NetworkInterfaceSpec(BaseModel):
         return self
 
 
+class PrivateNicSpec(BaseModel):
+    """Dodatkowa karta maszyny w sieci prywatnej (izolowany mostek węzła)."""
+
+    slot: int = Field(ge=1, le=7, description="Numer karty (karta główna = 0)")
+    network_id: int = Field(ge=1, le=999_999_999)
+    mac: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
+    address: str | None = Field(default=None, description="Adres IPv4 w sieci prywatnej (cloud-init); brak = bez adresacji")
+    prefix: int = Field(default=24, ge=8, le=30)
+
+    @field_validator("address")
+    @classmethod
+    def _valid_address(cls, value: str | None) -> str | None:
+        return None if not value else str(ipaddress.IPv4Address(value))
+
+    @field_validator("mac")
+    @classmethod
+    def _unicast(cls, value: str | None) -> str | None:
+        return None if value is None else _unicast_mac(value)
+
+
+def _unique_slots(nics: list[PrivateNicSpec] | None) -> list[PrivateNicSpec] | None:
+    if nics is not None and len({n.slot for n in nics}) != len(nics):
+        raise ValueError("Numery kart sieciowych muszą być unikalne")
+    return nics
+
+
+class PrivateNicsRequest(BaseModel):
+    """Pełna lista kart dodatkowych maszyny — agent dołącza brakujące i odłącza zbędne."""
+
+    nics: Annotated[list[PrivateNicSpec], AfterValidator(_unique_slots)] = Field(default_factory=list, max_length=7)
+
+
 class FirewallRule(BaseModel):
     action: Literal["accept", "drop"] = "accept"
     direction: Literal["in", "out"] = "in"
@@ -294,6 +326,8 @@ class CreateVmRequest(BaseModel):
     filter: NetworkFilter | None = None
     # Magazyn dysku; brak = katalog domyślny węzła (VH_IMAGE_DIR).
     storage: DatastoreSpec | None = None
+    # Karty w sieciach prywatnych (sloty 1–7).
+    private_nics: Annotated[list[PrivateNicSpec], AfterValidator(_unique_slots)] = Field(default_factory=list, max_length=7)
 
 
 class RebuildVmRequest(BaseModel):
@@ -309,6 +343,8 @@ class RebuildVmRequest(BaseModel):
     # Brak = MAC zostaje taki, jaki karta ma teraz.
     mac: MacAddress | None = None
     scripts: list[ProvisionScript] = Field(default_factory=list, max_length=20)
+    # Brak = karty dodatkowe bez zmian (starszy panel); lista = stan docelowy.
+    private_nics: Annotated[list[PrivateNicSpec], AfterValidator(_unique_slots)] | None = Field(default=None, max_length=7)
 
 
 ISO_NAME = r"^[a-z0-9][a-z0-9._-]{0,80}\.iso$"

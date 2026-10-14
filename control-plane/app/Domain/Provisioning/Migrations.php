@@ -80,6 +80,9 @@ class Migrations
         if ($server->pciAssets()->exists()) {
             $fail(__('Maszyna ma przypisane urządzenia PCI — odepnij je przed migracją.'));
         }
+        if ($server->nics()->exists()) {
+            $fail(__('Maszyna jest w sieci prywatnej węzła — odłącz jej karty prywatne przed migracją.'));
+        }
         if ($server->datastore?->isCeph()) {
             $fail(__('Dysk maszyny jest w Cephie — migracja z kopiowaniem dysku obsługuje magazyny katalogowe.'));
         }

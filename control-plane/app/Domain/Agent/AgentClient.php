@@ -130,6 +130,12 @@ class AgentClient
         return $this->jobId($this->request('POST', '/backups/delete', ['keys' => $keys, 'target' => $target]));
     }
 
+    /** @param  list<array<string, mixed>>  $nics  pełna lista kart w sieciach prywatnych */
+    public function setPrivateNics(string $uuid, array $nics): string
+    {
+        return $this->jobId($this->request('PUT', "/vm/{$uuid}/nics", ['nics' => $nics]));
+    }
+
     /** @return array{iommu: bool, devices: list<array<string, mixed>>} */
     public function pciDevices(): array
     {

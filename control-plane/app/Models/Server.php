@@ -148,6 +148,12 @@ class Server extends Model
         return $this->resource_pack_id !== null;
     }
 
+    /** @return HasMany<ServerNic, $this> */
+    public function nics(): HasMany
+    {
+        return $this->hasMany(ServerNic::class)->orderBy('slot');
+    }
+
     public function pciAssets(): HasMany
     {
         return $this->hasMany(PciAsset::class)->orderBy('pci_address');

@@ -51,6 +51,7 @@ def build_domain_xml(
     windows: bool = False,
     allow_nested: bool = False,
     disk_xml: str | None = None,
+    extra_interfaces: list[str] | None = None,
 ) -> str:
     """Zwraca XML domeny gotowy do `virsh define`.
 
@@ -95,6 +96,8 @@ def build_domain_xml(
       <model type='virtio'/>
     </interface>"""
     )
+    # Karty w sieciach prywatnych — po karcie głównej, żeby ta pozostała pierwszą (eth0/ens3).
+    devices.extend(extra_interfaces or [])
 
     devices.append(
         f"""    <graphics type='vnc' port='-1' autoport='yes' listen='{escape(vnc_listen)}'

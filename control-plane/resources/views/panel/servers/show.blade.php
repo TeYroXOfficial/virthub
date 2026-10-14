@@ -304,6 +304,7 @@
         </div>
 
         @include('panel.servers._ports')
+        @include('panel.servers._private-networks')
         </div>
 
         <div data-tab-panel="stats" role="tabpanel" hidden>

@@ -12,6 +12,7 @@ use App\Models\Backup;
 use App\Models\Hypervisor;
 use App\Models\IpAddress;
 use App\Models\IpPool;
+use App\Models\PrivateNetwork;
 use App\Models\Server;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -80,6 +81,8 @@ class DisasterRecovery
             $poolIds = IpPool::query()->where('hypervisor_id', $failed->id)->pluck('id');
             $pools = $poolIds->count();
             IpPool::query()->whereIn('id', $poolIds)->update(['hypervisor_id' => $replacement->id]);
+            // Sieci prywatne jadą z maszynami (mostki powstaną na zastępczym węźle przy odtworzeniu).
+            PrivateNetwork::query()->where('hypervisor_id', $failed->id)->update(['hypervisor_id' => $replacement->id]);
             IpAddress::query()->whereIn('ip_pool_id', $poolIds)->update(['hypervisor_id' => $replacement->id]);
             $failed->forceFill(['accepts_new_servers' => false, 'status' => Hypervisor::STATUS_MAINTENANCE])->save();
 

@@ -139,6 +139,8 @@ def render_network_config(
     interfaces: list[NetworkInterfaceSpec],
     nameservers: list[str],
     mac: str,
+    private_nics: list | None = None,
+    server_id: int = 0,
 ) -> str:
     """Netplan-owy format v2, dopasowanie po MAC zamiast po nazwie interfejsu.
 
@@ -176,6 +178,20 @@ def render_network_config(
             # wymaga trasy on-link, inaczej gość nie zestawi domyślnej trasy.
             lines.append("        on-link: true")
 
+    # Karty w sieciach prywatnych: sam adres, bez bramy i DNS — trasa domyślna zostaje na karcie głównej.
+    from .private_net import nic_mac
+
+    for nic in sorted(private_nics or [], key=lambda n: n.slot):
+        lines += [
+            f"  private{nic.slot}:",
+            "    match:",
+            f"      macaddress: \"{(nic.mac or nic_mac(server_id, nic.slot)).lower()}\"",
+            "    dhcp4: false",
+            "    dhcp6: false",
+        ]
+        if nic.address:
+            lines.append(f"    addresses:{_yaml_list([f'{nic.address}/{nic.prefix}'], 6)}")
+
     return "\n".join(lines) + "\n"
 
 
@@ -196,7 +212,8 @@ def render_windows_meta_data(server_id: int, hostname: str, password: str | None
     return json.dumps(data, indent=2)
 
 
-def render_network_data(interfaces: list[NetworkInterfaceSpec], nameservers: list[str], mac: str) -> str:
+def render_network_data(interfaces: list[NetworkInterfaceSpec], nameservers: list[str], mac: str,
+                        private_nics: list | None = None, server_id: int = 0) -> str:
     """network_data.json (format OpenStack) — statyczna adresacja dla cloudbase-init."""
     networks = []
     for index, iface in enumerate(interfaces):
@@ -216,8 +233,18 @@ def render_network_data(interfaces: list[NetworkInterfaceSpec], nameservers: lis
                 "gateway": iface.gateway,
             })
         networks.append(entry)
+    from .private_net import nic_mac
+
+    links = [{"id": "interface0", "type": "phy", "ethernet_mac_address": mac, "mtu": 1500}]
+    for nic in sorted(private_nics or [], key=lambda n: n.slot):
+        link = f"interface{nic.slot}"
+        links.append({"id": link, "type": "phy", "ethernet_mac_address": (nic.mac or nic_mac(server_id, nic.slot)).lower(), "mtu": 1500})
+        if nic.address:
+            net = ipaddress.ip_interface(f"{nic.address}/{nic.prefix}").network
+            networks.append({"id": f"private{nic.slot}", "link": link, "type": "ipv4", "ip_address": nic.address,
+                             "netmask": str(net.netmask), "routes": []})
     return json.dumps({
-        "links": [{"id": "interface0", "type": "phy", "ethernet_mac_address": mac, "mtu": 1500}],
+        "links": links,
         "networks": networks,
         "services": [{"type": "dns", "address": ns} for ns in nameservers],
     }, indent=2)
@@ -243,6 +270,7 @@ class CloudInitBuilder:
         mac: str,
         os_type: str = "linux",
         scripts: list | None = None,
+        private_nics: list | None = None,
     ) -> Path:
         target = self.seed_path(name)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -251,14 +279,14 @@ class CloudInitBuilder:
             # cloudbase-init (obrazy Windows) czyta nośnik config-2 w formacie OpenStack.
             payload = {
                 "openstack/latest/meta_data.json": render_windows_meta_data(server_id, hostname, root_password),
-                "openstack/latest/network_data.json": render_network_data(interfaces, nameservers, mac),
+                "openstack/latest/network_data.json": render_network_data(interfaces, nameservers, mac, private_nics, server_id),
             }
             return self._write(target, payload, label="config-2")
 
         payload = {
             "meta-data": render_meta_data(server_id, hostname),
             "user-data": render_user_data(hostname, ssh_keys, root_password, packages=VM_PACKAGES, scripts=scripts),
-            "network-config": render_network_config(interfaces, nameservers, mac),
+            "network-config": render_network_config(interfaces, nameservers, mac, private_nics, server_id),
         }
 
         return self._write(target, payload, label="cidata")

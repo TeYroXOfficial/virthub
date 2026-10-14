@@ -56,7 +56,7 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
     - Cele: S3, SFTP/SSH.
     - Kompresja, retencja i przycinanie.
     - Kopie przyrostowe (dirty bitmaps QEMU), przywracanie.
-12. ✅ **Sieci zaawansowane.** VLAN (tagowane mosty) i routowane podsieci IPv4/IPv6. (sieci izolowane i wiele kart — etap 19)
+12. ✅ **Sieci zaawansowane.** VLAN (tagowane mosty), routowane podsieci IPv4/IPv6, sieci izolowane i wiele kart (etap 19).
 13. ✅ **Magazyny danych.** Datastore'y (katalog qcow2 cienki/gruby, Ceph RBD) przypięte do hypervisorów i pakietów, wybór węzła z magazynem przy zamówieniu, pojemność odczytywana z węzłów co 15 minut. Dyski w Cephie: migawki RBD; Elevate i kopie zewnętrzne tylko dla magazynów katalogowych.
 14. ✅ **Moduły billingowe.** Moduły WHMCS, Blesta i Paymenter (`integrations/`, do pobrania w panelu) na `/api/v1/billing`: zakładanie, zawieszanie, usuwanie, zmiana pakietu i sterowanie serwerem z panelu billingu (zasilanie, konsola, reinstalacja, reset hasła, transfer, SSO), PL/EN.
 15. ✅ **Disaster recovery hypervisora.** (Hypervisor → Disaster recovery: plan kopii dla maszyn węzła bez planu, zrzuty konfiguracji na cel kopii, odtworzenie na zastępczym hoście z przeniesieniem pul IP)
@@ -65,4 +65,4 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
 16. ✅ **Migracje VM między hypervisorami.** Na zimno (kopiowanie dysku) i na żywo (libvirt migrate z kopiowaniem dysku), z wyborem docelowego węzła i webhookiem `server.migrated`.
 17. ✅ **Kopie przyrostowe.** Checkpointy libvirt / dirty bitmaps QEMU (backupBegin, tylko zmienione bloki), łańcuch pełna + przyrostowe z „pełna co N”, retencja z zachowaniem zależnych ogniw, przywracanie i DR ze spłaszczeniem łańcucha (qemu-img rebase + convert). Maszyna zatrzymana albo brak checkpointu rodzica → automatycznie kopia pełna.
 18. ✅ **Dokumentacja API.** Strona `/api-docs`: OpenAPI 3 dla wszystkich endpointów, opisy w każdym języku panelu, przykłady (curl, PHP, Python, JavaScript, Go), wbudowana konsola do testowania zapytań (jak Postman, z historią) i eksport kolekcji Postman.
-19. **Sieci izolowane i wiele kart.** Prywatne sieci między maszynami klienta (osobny mostek bez łącza), druga i kolejne karty sieciowe maszyny.
+19. ✅ **Sieci izolowane i wiele kart.** Sieci prywatne klienta: osobny mostek `vhp<id>` na węźle bez łącza w górę i bez adresu hosta, adresacja z zakresów prywatnych z automatycznym przydziałem; do 7 kart dodatkowych na maszynę KVM (limit `VH_PRIVATE_NICS_PER_SERVER`, domyślnie 4), dołączanie/odłączanie na żywo, adres przez cloud-init/cloudbase-init przy tworzeniu i reinstalacji, API `/servers/{server}/private-networks`. Sieć działa w obrębie węzła — migracja wymaga odłączenia kart, DR przenosi sieci z maszynami.
