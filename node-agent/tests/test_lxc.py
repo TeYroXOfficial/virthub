@@ -194,7 +194,7 @@ class FakeNetwork:
         self.prepared.append(bridge)
         return bridge
 
-    def configure(self, server_id, interfaces, firewall):
+    def configure(self, server_id, interfaces, firewall, policy=None, net_filter=None):
         self.configured.append(server_id)
 
     def teardown(self, server_id):
