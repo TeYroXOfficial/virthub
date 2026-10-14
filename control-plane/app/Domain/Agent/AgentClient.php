@@ -103,6 +103,12 @@ class AgentClient
     }
 
     /** Płyta w maszynie i kolejność rozruchu; restart = zastosuj od razu. */
+    /** @param  'start'|'commit'|'discard'  $action */
+    public function elevate(string $uuid, string $action): string
+    {
+        return $this->jobId($this->request('POST', "/vm/{$uuid}/elevate", ['action' => $action]));
+    }
+
     public function mountIso(string $uuid, ?string $filename, bool $boot, bool $restart): string
     {
         return $this->jobId($this->request('POST', "/vm/{$uuid}/iso", [

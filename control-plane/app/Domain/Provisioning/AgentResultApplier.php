@@ -67,6 +67,7 @@ class AgentResultApplier
             'snapshot' => $this->finishSnapshot($job, $result),
             'restore' => $server->markState(ServerState::Running),
             'network' => null,
+            'elevate' => $server->forceFill(['elevated_at' => ($result['elevated'] ?? false) ? ($server->elevated_at ?? now()) : null])->save(),
             'mac' => null,
             'iso' => $this->finishIso($server->forceFill(['guest_os_checked_at' => null]), $job, $result),
             'password' => $this->finishPassword($server, $job),

@@ -45,6 +45,34 @@
         </div>
     @endcan
 
+    @if (! $server->isContainer() && $user->can('snapshots', $server))
+        <div class="card" id="elevate">
+            <h3 class="card-title"><x-icon name="archive" :size="16"/> {{ __('Elevate — próbne zmiany dysku') }}
+                @if ($server->isElevated()) <span class="pill warning">{{ __('aktywny od :time', ['time' => $server->elevated_at->diffForHumans()]) }}</span> @endif</h3>
+            @if ($server->isElevated())
+                <p class="muted">{{ __('Wszystkie zapisy na dysku trafiają do nakładki. Zatwierdź, żeby zachować zmiany, albo odrzuć, żeby wrócić do stanu sprzed włączenia (maszyna uruchomi się ponownie). Do tego czasu migawki, reinstalacja i zmiana pakietu są zablokowane.') }}</p>
+                <div class="btn-row">
+                    <form method="POST" action="{{ route('panel.servers.elevate', $server) }}" style="margin:0">
+                        @csrf <input type="hidden" name="action" value="commit">
+                        <button class="btn btn-primary" type="submit" @disabled(! $server->acceptsCommands())>{{ __('Zatwierdź zmiany') }}</button>
+                    </form>
+                    <form method="POST" action="{{ route('panel.servers.elevate', $server) }}" style="margin:0"
+                          data-confirm="{{ __('Odrzucić wszystkie zmiany na dysku od włączenia Elevate? Maszyna uruchomi się ponownie.') }}">
+                        @csrf <input type="hidden" name="action" value="discard">
+                        <button class="btn btn-danger" type="submit" @disabled(! $server->acceptsCommands())>{{ __('Odrzuć zmiany') }}</button>
+                    </form>
+                </div>
+            @else
+                <p class="muted">{{ __('Przed ryzykowną zmianą (aktualizacja systemu, nowy kernel, konfiguracja) włącz Elevate: dysk zostaje zamrożony, a zmiany idą do nakładki. Jeśli coś pójdzie nie tak — jednym kliknięciem wracasz do stanu sprzed zmian. Działa także na włączonej maszynie.') }}</p>
+                <form method="POST" action="{{ route('panel.servers.elevate', $server) }}" style="margin:0">
+                    @csrf <input type="hidden" name="action" value="start">
+                    <button class="btn" type="submit" @disabled(! $server->acceptsCommands())>{{ __('Włącz Elevate') }}</button>
+                </form>
+            @endif
+            @error('elevate') <div class="hint" style="color:var(--critical)">{{ $message }}</div> @enderror
+        </div>
+    @endif
+
     @if ($canIso)
         <div class="card" id="iso">
             <h3 class="card-title"><x-icon name="disc" :size="16"/> {{ __('Obraz ISO') }}</h3>

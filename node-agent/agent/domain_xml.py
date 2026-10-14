@@ -249,3 +249,24 @@ def with_iso(xml: str, iso_path: str | None, boot_from_iso: bool) -> str:
         ET.SubElement(main_disk, "boot", {"order": "1"})
 
     return ET.tostring(root, encoding="unicode")
+
+
+def with_disk_source(xml: str, path: str) -> str:
+    """Podmienia plik dysku vda (Elevate: nakładka ↔ dysk bazowy)."""
+    from xml.etree import ElementTree as ET
+
+    root = ET.fromstring(xml)
+    for disk in root.find("devices").findall("disk"):
+        target = disk.find("target")
+        if disk.get("device") == "disk" and target is not None and target.get("dev") == "vda":
+            source = disk.find("source")
+            if source is None:
+                source = ET.SubElement(disk, "source")
+            source.attrib.clear()
+            source.set("file", path)
+            # Nakładka ma łańcuch backing — libvirt odczyta go sam z pliku.
+            backing = disk.find("backingStore")
+            if backing is not None:
+                disk.remove(backing)
+            return ET.tostring(root, encoding="unicode")
+    raise ValueError("Domena nie ma dysku vda")

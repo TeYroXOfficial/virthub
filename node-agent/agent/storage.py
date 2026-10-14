@@ -49,6 +49,25 @@ class StorageDriver(ABC):
     def capacity(self) -> tuple[int, int]:
         """Zwraca (total_gb, free_gb) dla przestrzeni na dyski VPS-ów."""
 
+    # --- Elevate: nakładka na dysk (zmiany próbne do zatwierdzenia albo odrzucenia) ---
+
+    def overlay_path(self, name: str) -> Path:
+        return self.volume_path(name).with_name(f"{name}.elevate.qcow2")
+
+    def has_overlay(self, name: str) -> bool:
+        return self.overlay_path(name).exists()
+
+    def create_overlay(self, name: str) -> Path:
+        """Nakładka dla zatrzymanej maszyny (działającą obsługuje libvirt)."""
+        raise StorageError("Ten magazyn nie obsługuje nakładek Elevate.")
+
+    def commit_overlay(self, name: str) -> None:
+        """Zapis zmian z nakładki do dysku (maszyna zatrzymana)."""
+        raise StorageError("Ten magazyn nie obsługuje nakładek Elevate.")
+
+    def drop_overlay(self, name: str) -> None:
+        self.overlay_path(name).unlink(missing_ok=True)
+
 
 class Qcow2LocalDriver(StorageDriver):
     """Lokalne dyski qcow2 z backing file na obrazie szablonu.
@@ -109,9 +128,25 @@ class Qcow2LocalDriver(StorageDriver):
         run(["qemu-img", "resize", str(target), f"{disk_gb}G"])
         log.info("Powiększono dysk %s do %sGB", target, disk_gb)
 
+    def create_overlay(self, name: str) -> Path:
+        overlay = self.overlay_path(name)
+        if overlay.exists():
+            raise StorageError(f"Nakładka Elevate dla {name} już istnieje.")
+        base = self.volume_path(name)
+        run(["qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-b", str(base), str(overlay)])
+        return overlay
+
+    def commit_overlay(self, name: str) -> None:
+        overlay = self.overlay_path(name)
+        if not overlay.exists():
+            raise StorageError(f"Brak nakładki Elevate dla {name}.")
+        run(["qemu-img", "commit", "-q", str(overlay)], timeout=7200)
+        overlay.unlink(missing_ok=True)
+
     def delete_volume(self, name: str) -> None:
         target = self.volume_path(name)
         target.unlink(missing_ok=True)
+        self.drop_overlay(name)
         for snap in self.settings.image_dir.glob(f"{name}.snap-*.qcow2"):
             snap.unlink(missing_ok=True)
         seed = self.settings.seed_dir / f"{name}-seed.iso"
@@ -166,6 +201,20 @@ class MockStorageDriver(StorageDriver):
 
     def delete_volume(self, name: str) -> None:
         self.volume_path(name).unlink(missing_ok=True)
+        self.drop_overlay(name)
+
+    def create_overlay(self, name: str) -> Path:
+        overlay = self.overlay_path(name)
+        if overlay.exists():
+            raise StorageError(f"Nakładka Elevate dla {name} już istnieje.")
+        overlay.write_text(f"mock overlay of {name}\n", encoding="utf-8")
+        return overlay
+
+    def commit_overlay(self, name: str) -> None:
+        overlay = self.overlay_path(name)
+        if not overlay.exists():
+            raise StorageError(f"Brak nakładki Elevate dla {name}.")
+        overlay.unlink()
 
     def snapshot_volume(self, name: str, snapshot: str) -> Path:
         target = self.settings.image_dir / f"{name}.snap-{snapshot}.qcow2"

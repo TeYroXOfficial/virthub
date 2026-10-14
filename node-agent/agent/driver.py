@@ -22,6 +22,7 @@ import time
 import uuid as uuidlib
 from abc import ABC, abstractmethod
 from pathlib import Path
+from xml.sax.saxutils import escape
 from typing import Any
 
 from .cloudinit import CloudInitBuilder
@@ -44,7 +45,7 @@ from .schemas import (
     ResizeVmRequest,
     VmStats,
 )
-from .storage import build_storage_driver
+from .storage import StorageError, build_storage_driver
 
 log = logging.getLogger("virthub.driver")
 
@@ -136,6 +137,14 @@ class HypervisorDriver(ABC):
     def mount_iso(self, uuid: str, req: IsoMountRequest) -> dict[str, Any]:
         """Płyta ISO i rozruch z niej — tylko maszyny wirtualne."""
         raise DriverError("Obrazy ISO są dostępne tylko dla maszyn wirtualnych KVM.")
+
+    def elevate(self, uuid: str, action: str) -> dict[str, Any]:
+        """Elevate (nakładka na dysk) — tylko maszyny wirtualne KVM."""
+        raise DriverError("Elevate jest dostępny tylko dla maszyn wirtualnych KVM.")
+
+    def _assert_not_elevated(self, name: str) -> None:
+        if self.storage.has_overlay(name):
+            raise DriverError("Maszyna ma aktywny Elevate — najpierw zatwierdź albo odrzuć zmiany.")
 
     def prefetch_image(self, alias: str) -> dict[str, Any]:
         """Pobiera szablon na węzeł z wyprzedzeniem. Dotyczy kontenerów —
@@ -348,6 +357,7 @@ class LibvirtDriver(HypervisorDriver):
     def rebuild(self, uuid: str, req: RebuildVmRequest) -> dict[str, Any]:
         domain = self._domain(uuid)
         name = domain.name()
+        self._assert_not_elevated(name)
         server_id = server_id_from_name(name)
         was_running = bool(domain.isActive())
 
@@ -391,6 +401,7 @@ class LibvirtDriver(HypervisorDriver):
         import libvirt
 
         domain = self._domain(uuid)
+        self._assert_not_elevated(domain.name())
         if domain.isActive():
             raise DriverError(
                 "Zmiana pakietu wymaga zatrzymanej maszyny — zatrzymaj VPS i ponów operację."
@@ -551,10 +562,96 @@ class LibvirtDriver(HypervisorDriver):
         self.storage.delete_volume(name)
         return {"uuid": uuid, "deleted": True}
 
+    # --- Elevate (nakładka na dysk) -----------------------------------------
+
+    ELEVATE_COMMIT_TIMEOUT = 7200
+
+    def elevate(self, uuid: str, action: str) -> dict[str, Any]:
+        import libvirt
+
+        from .domain_xml import with_disk_source
+
+        domain = self._domain(uuid)
+        name = domain.name()
+        overlay = self.storage.overlay_path(name)
+        base = self.storage.volume_path(name)
+        active = bool(domain.isActive())
+
+        def define_with(path: Path) -> None:
+            xml = domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE)
+            self.conn.defineXML(with_disk_source(xml, str(path)))
+
+        try:
+            if action == "start":
+                if overlay.exists():
+                    raise DriverError("Elevate już trwa — zatwierdź albo odrzuć zmiany.")
+                if active:
+                    # Zewnętrzny snapshot dyskowy: od teraz zapisy idą do nakładki,
+                    # dysk bazowy zostaje nietknięty. libvirt podmienia też definicję.
+                    snap = (
+                        "<domainsnapshot><name>virthub-elevate</name><disks>"
+                        f"<disk name='vda' snapshot='external'><driver type='qcow2'/><source file='{escape(str(overlay))}'/></disk>"
+                        "</disks></domainsnapshot>"
+                    )
+                    domain.snapshotCreateXML(
+                        snap,
+                        libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_DISK_ONLY
+                        | libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_NO_METADATA
+                        | libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_ATOMIC,
+                    )
+                else:
+                    self.storage.create_overlay(name)
+                    define_with(overlay)
+            elif action == "commit":
+                if not overlay.exists():
+                    raise DriverError("Brak aktywnego Elevate.")
+                if active:
+                    self._block_commit(domain)
+                    define_with(base)
+                    overlay.unlink(missing_ok=True)
+                else:
+                    self.storage.commit_overlay(name)
+                    define_with(base)
+            elif action == "discard":
+                if not overlay.exists():
+                    raise DriverError("Brak aktywnego Elevate.")
+                # Działająca maszyna ma w pamięci stan z nakładki — po odrzuceniu
+                # musi wystartować od nowa z dysku bazowego.
+                if active:
+                    domain.destroy()
+                define_with(base)
+                overlay.unlink(missing_ok=True)
+                if active:
+                    domain.create()
+            else:
+                raise DriverError(f"Nieznana akcja Elevate: {action}")
+        except libvirt.libvirtError as exc:
+            raise DriverError(f"Elevate ({action}) nie powiódł się: {exc}") from exc
+
+        return {"uuid": uuid, "elevated": overlay.exists(), "state": self._state(domain)}
+
+    def _block_commit(self, domain: Any) -> None:
+        """Zapis nakładki do dysku bazowego na żywo i przełączenie z powrotem na bazę."""
+        import libvirt
+
+        domain.blockCommit("vda", None, None, 0, libvirt.VIR_DOMAIN_BLOCK_COMMIT_ACTIVE)
+        deadline = time.monotonic() + self.ELEVATE_COMMIT_TIMEOUT
+        while time.monotonic() < deadline:
+            info = domain.blockJobInfo("vda", 0)
+            if info and info.get("end", 0) > 0:
+                progress("commit", min(99, int(info["cur"] * 100 / info["end"])))
+                if info["cur"] == info["end"]:
+                    domain.blockJobAbort("vda", libvirt.VIR_DOMAIN_BLOCK_JOB_ABORT_PIVOT)
+                    return
+            time.sleep(1)
+        domain.blockJobAbort("vda", 0)
+        raise DriverError("Zapis zmian Elevate trwał zbyt długo — przerwano, maszyna działa dalej na nakładce.")
+
     # --- snapshoty ----------------------------------------------------------
 
     def snapshot(self, uuid: str, name: str) -> dict[str, Any]:
         domain = self._domain(uuid)
+        self._assert_not_elevated(domain.name())
         if domain.isActive():
             raise DriverError(
                 "Snapshot spójny dyskowo wymaga zatrzymanej maszyny. Zatrzymaj VPS "
@@ -565,6 +662,7 @@ class LibvirtDriver(HypervisorDriver):
 
     def restore(self, uuid: str, name: str) -> dict[str, Any]:
         domain = self._domain(uuid)
+        self._assert_not_elevated(domain.name())
         if domain.isActive():
             domain.destroy()
         self.storage.restore_volume(domain.name(), name)
@@ -885,11 +983,13 @@ class MockDriver(HypervisorDriver):
 
     def snapshot(self, uuid: str, name: str) -> dict[str, Any]:
         record = self._get(uuid)
+        self._assert_not_elevated(record["name"])
         path = self.storage.snapshot_volume(record["name"], name)
         return {"uuid": uuid, "snapshot": name, "path": str(path)}
 
     def restore(self, uuid: str, name: str) -> dict[str, Any]:
         record = self._get(uuid)
+        self._assert_not_elevated(record["name"])
         self.storage.restore_volume(record["name"], name)
         return {"uuid": uuid, "snapshot": name, "state": record["state"]}
 
@@ -954,6 +1054,27 @@ class MockDriver(HypervisorDriver):
         record["password_changes"] = record.get("password_changes", 0) + 1
         self._save(data)
         return {"uuid": uuid, "state": record["state"]}
+
+    def elevate(self, uuid: str, action: str) -> dict[str, Any]:
+        data = self._load()
+        record = data.get(uuid)
+        if record is None:
+            raise VmNotFound(uuid)
+        name = record["name"]
+        try:
+            if action == "start":
+                self.storage.create_overlay(name)
+            elif action == "commit":
+                self.storage.commit_overlay(name)
+            elif action == "discard":
+                if not self.storage.has_overlay(name):
+                    raise DriverError("Brak aktywnego Elevate.")
+                self.storage.drop_overlay(name)
+            else:
+                raise DriverError(f"Nieznana akcja Elevate: {action}")
+        except StorageError as exc:
+            raise DriverError(str(exc)) from exc
+        return {"uuid": uuid, "elevated": self.storage.has_overlay(name), "state": record["state"]}
 
     def mount_iso(self, uuid: str, req: IsoMountRequest) -> dict[str, Any]:
         data = self._load()
