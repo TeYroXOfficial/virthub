@@ -106,7 +106,15 @@ class HypervisorDriver(ABC):
             raise DriverError(f"Dysk {path} już istnieje — odmawiam nadpisania.")
         path.parent.mkdir(parents=True, exist_ok=True)
         incoming = path.with_name(f".{name}.recover.qcow2")
-        self._fetch(restore, incoming)
+        if getattr(restore, "url", None):  # migracja: dysk prosto z węzła źródłowego
+            from .migration import TransferError, download
+
+            try:
+                download(restore, incoming)
+            except TransferError as exc:
+                raise DriverError(str(exc)) from exc
+        else:
+            self._fetch(restore, incoming)
         if not self.settings.is_mock:
             import json as _json
 
@@ -119,6 +127,41 @@ class HypervisorDriver(ABC):
     def dr_state(self) -> list[dict[str, Any]]:
         """Domeny węzła z pełną konfiguracją (XML) — do zrzutu DR."""
         return []
+
+    # --- migracje między węzłami ---------------------------------------------
+
+    def import_vm(self, req: Any) -> dict[str, Any]:
+        """Migracja na zimno, strona docelowa: dysk z węzła źródłowego, reszta jak przy tworzeniu."""
+        base = CreateVmRequest(**req.model_dump(exclude={"source"}))
+        return self.create_vm(base, restore=req.source)
+
+    def _flatten_for_export(self, name: str) -> Path:
+        """Dysk jako samodzielny plik qcow2 (bez łańcucha backing) do wystawienia."""
+        if not self.storage.is_file_based(name):
+            raise DriverError("Migracja na zimno wymaga dysku w magazynie katalogowym (qcow2).")
+        source = self.storage.volume_path(name)
+        export = source.with_name(f".{name}.export-{secrets.token_hex(4)}.qcow2")
+        if self.settings.is_mock:
+            export.write_bytes(source.read_bytes())
+        else:
+            run(["qemu-img", "convert", "-O", "qcow2", str(source), str(export)], timeout=6 * 3600)
+        return export
+
+    def _publish_export(self, name: str, export: Path, was_running: bool) -> dict[str, Any]:
+        from .migration import TransferStore, sha256_file
+
+        progress("export", 90)
+        token = TransferStore(self.settings).register(export, name)
+        return {"token": token, "size_bytes": export.stat().st_size, "sha256": sha256_file(export), "was_running": was_running}
+
+    def export_vm(self, uuid: str) -> dict[str, Any]:
+        raise DriverError("Ten węzeł nie obsługuje migracji maszyn.")
+
+    def prepare_incoming(self, req: CreateVmRequest) -> dict[str, Any]:
+        raise DriverError("Ten węzeł nie obsługuje migracji na żywo.")
+
+    def migrate_live(self, uuid: str, req: Any) -> dict[str, Any]:
+        raise DriverError("Ten węzeł nie obsługuje migracji na żywo.")
 
     def dr_snapshot(self, req: Any) -> dict[str, Any]:
         """Konfiguracja i stan węzła w jednym pliku JSON na celu kopii.
@@ -421,7 +464,8 @@ class LibvirtDriver(HypervisorDriver):
             created.append("network")
 
             progress("boot", 85)
-            domain.create()  # start
+            if getattr(restore, "start", True):
+                domain.create()  # start
         except Exception as exc:
             # Rollback: nieudany provisioning nie może zostawić półmaszyny,
             # bo control plane zwolni zarezerwowane zasoby i IP.
@@ -438,6 +482,67 @@ class LibvirtDriver(HypervisorDriver):
             "vnc_password": vnc_password,
             "state": self._state(domain),
         }
+
+    def export_vm(self, uuid: str) -> dict[str, Any]:
+        domain = self._domain(uuid)
+        name = domain.name()
+        self._assert_not_elevated(name)
+        was_running = bool(domain.isActive())
+        if was_running:
+            progress("stop", 5)
+            domain.shutdown()
+            for _ in range(90):
+                if not domain.isActive():
+                    break
+                time.sleep(1)
+            if domain.isActive():
+                domain.destroy()
+        progress("export", 20)
+        return self._publish_export(name, self._flatten_for_export(name), was_running)
+
+    def prepare_incoming(self, req: CreateVmRequest) -> dict[str, Any]:
+        """Migracja na żywo, strona docelowa: sieć, nośnik cloud-init i pusty dysk o tym samym rozmiarze."""
+        name = domain_name(req.server_id)
+        self.storage.bind(name, req.storage)
+        if not self.storage.is_file_based(name):
+            raise DriverError("Migracja na żywo z kopiowaniem dysku wymaga magazynu katalogowego (qcow2).")
+        path = self.storage.volume_path(name)
+        if path.exists():
+            raise DriverError(f"Dysk {path} już istnieje na węźle docelowym.")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        run(["qemu-img", "create", "-f", "qcow2", str(path), f"{req.disk_gb}G"])
+        self.cloudinit.build(
+            name=name, server_id=req.server_id, hostname=req.hostname, interfaces=req.interfaces,
+            nameservers=req.nameservers, ssh_keys=[], root_password=None,
+            mac=req.mac or mac_address(req.server_id), os_type=req.os_type, scripts=[],
+        )
+        self.network.prepare(req.interfaces)
+        self.network.configure(req.server_id, req.interfaces, firewall=[], net_filter=req.filter)
+        return {"ready": True, "disk": str(path)}
+
+    def migrate_live(self, uuid: str, req: Any) -> dict[str, Any]:
+        import libvirt
+
+        domain = self._domain(uuid)
+        name = domain.name()
+        self._assert_not_elevated(name)
+        if not domain.isActive():
+            raise DriverError("Migracja na żywo dotyczy działającej maszyny — zatrzymaną przenieś na zimno.")
+        uri = self.settings.migration_uri.format(host=req.host)
+        flags = (libvirt.VIR_MIGRATE_LIVE | libvirt.VIR_MIGRATE_PEER2PEER | libvirt.VIR_MIGRATE_PERSIST_DEST
+                 | libvirt.VIR_MIGRATE_UNDEFINE_SOURCE | libvirt.VIR_MIGRATE_NON_SHARED_DISK
+                 | libvirt.VIR_MIGRATE_AUTO_CONVERGE)
+        params = {libvirt.VIR_MIGRATE_PARAM_BANDWIDTH: req.bandwidth_mbps // 8} if req.bandwidth_mbps else {}
+        progress("migrate", 10)
+        try:
+            domain.migrateToURI3(uri, params, flags)
+        except libvirt.libvirtError as exc:
+            raise DriverError(f"Migracja na żywo nie powiodła się: {exc}") from exc
+        # Domena działa już na węźle docelowym — tu zostają tylko pliki i reguły.
+        self.network.teardown(server_id_from_name(name))
+        self.storage.delete_volume(name)
+        self.storage.unbind(name)
+        return {"uuid": uuid, "migrated": True, "uri": uri}
 
     def dr_state(self) -> list[dict[str, Any]]:
         out = []
@@ -1072,6 +1177,37 @@ class MockDriver(HypervisorDriver):
     def dr_state(self) -> list[dict[str, Any]]:
         return [{"name": r["name"], "uuid": uuid, "state": r["state"], "xml": None} for uuid, r in self._load().items()]
 
+    def export_vm(self, uuid: str) -> dict[str, Any]:
+        data = self._load()
+        record = self._get(uuid)
+        was_running = record["state"] == "running"
+        record["state"] = "stopped"
+        data[uuid] = record
+        self._save(data)
+        return self._publish_export(record["name"], self._flatten_for_export(record["name"]), was_running)
+
+    def prepare_incoming(self, req: CreateVmRequest) -> dict[str, Any]:
+        name = domain_name(req.server_id)
+        self.storage.bind(name, req.storage)
+        path = self.storage.volume_path(name)
+        if path.exists():
+            raise DriverError(f"Dysk {path} już istnieje na węźle docelowym.")
+        self.storage.create_volume(name, req.template, req.disk_gb)
+        return {"ready": True, "disk": str(path)}
+
+    def migrate_live(self, uuid: str, req: Any) -> dict[str, Any]:
+        data = self._load()
+        record = data.get(uuid)
+        if record is None:
+            raise VmNotFound(uuid)
+        if record["state"] != "running":
+            raise DriverError("Migracja na żywo dotyczy działającej maszyny — zatrzymaną przenieś na zimno.")
+        del data[uuid]
+        self._save(data)
+        self.storage.delete_volume(record["name"])
+        self.storage.unbind(record["name"])
+        return {"uuid": uuid, "migrated": True, "uri": self.settings.migration_uri.format(host=req.host)}
+
     def _load(self) -> dict[str, dict]:
         if not self._state_file.exists():
             return {}
@@ -1134,6 +1270,8 @@ class MockDriver(HypervisorDriver):
             "disk_path": str(disk),
             "datastore_id": req.storage.id if req.storage else None,
         }
+        if not getattr(restore, "start", True):
+            record["state"] = "stopped"
         self._stage("boot", 85)
         data = self._load()
         data[vm_uuid] = record

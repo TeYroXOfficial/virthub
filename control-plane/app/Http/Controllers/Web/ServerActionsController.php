@@ -9,12 +9,14 @@ use App\Domain\Network\ReverseDns;
 use App\Domain\Provisioning\AgentResultApplier;
 use App\Domain\Provisioning\GuestOs;
 use App\Domain\Provisioning\IsoLibrary;
+use App\Domain\Provisioning\Migrations;
 use App\Domain\Provisioning\RemoteBackups;
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Enums\ServerState;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Backup;
+use App\Models\Hypervisor;
 use App\Models\IpAddress;
 use App\Models\IsoImage;
 use App\Models\OsTemplate;
@@ -171,6 +173,23 @@ class ServerActionsController extends Controller
 
         return redirect()->to(route('panel.servers.show', $server).'#cpu-limit')
             ->with('status', __('Limit procesora trafi na węzeł w ciągu kilku sekund — bez restartu maszyny.'));
+    }
+
+    /** Personel: migracja maszyny na inny hypervisor (na zimno albo na żywo). */
+    public function migrate(Request $request, Server $server, Migrations $migrations): RedirectResponse
+    {
+        $this->authorize('manageResources', $server);
+        $data = $request->validate([
+            'hypervisor_id' => ['required', 'integer', 'exists:hypervisors,id'],
+            'mode' => ['required', Rule::in(Migrations::MODES)],
+        ]);
+        try {
+            $migrations->start($server, Hypervisor::findOrFail($data['hypervisor_id']), $data['mode'], $request->user());
+        } catch (\DomainException $e) {
+            return redirect()->to(route('panel.servers.show', $server).'#migrate')->withErrors(['migrate' => $e->getMessage()]);
+        }
+
+        return redirect()->route('panel.servers.show', $server)->with('status', __('Migracja rozpoczęta — postęp widać na stronie maszyny.'));
     }
 
     /** rDNS adresu maszyny — klient ustawia nazwę, która wskazuje na ten adres. */

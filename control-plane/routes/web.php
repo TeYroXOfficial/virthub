@@ -168,6 +168,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/detect-os', [ServerActionsController::class, 'detectOs'])->name('servers.detect-os');
     Route::post('/servers/{server}/traffic', [ServerActionsController::class, 'traffic'])->name('servers.traffic');
     Route::post('/servers/{server}/cpu-limit', [ServerActionsController::class, 'cpuLimit'])->name('servers.cpu-limit');
+    Route::post('/servers/{server}/migrate', [ServerActionsController::class, 'migrate'])->middleware('throttle:10,1')->name('servers.migrate');
     Route::post('/servers/{server}/network-filter', [NetworkFilterController::class, 'assign'])->name('servers.network-filter');
     Route::put('/servers/{server}/ips/{address}/rdns', [ServerActionsController::class, 'rdns'])->middleware('throttle:10,1')->name('servers.rdns');
     Route::post('/servers/{server}/ports', [PortForwardController::class, 'store'])->name('servers.ports.store');

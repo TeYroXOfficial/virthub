@@ -271,6 +271,31 @@
     @endcan
 
     @can('manageResources', $server)
+        @if (! $server->isContainer())
+            @php $targets = \App\Models\Hypervisor::query()->available()->where('virtualization', 'kvm')->whereKeyNot($server->hypervisor_id)->orderBy('name')->get(); @endphp
+            <div class="card" id="migrate">
+                <h3 class="card-title"><x-icon name="node" :size="16"/> {{ __('Migracja na inny węzeł') }} <span class="pill neutral">{{ __('personel') }}</span></h3>
+                @error('migrate') <div class="alert alert-error"><div>{{ $message }}</div></div> @enderror
+                @if ($targets->isEmpty())
+                    <p class="muted">{{ __('Brak innego dostępnego węzła KVM.') }}</p>
+                @else
+                    <form method="POST" action="{{ route('panel.servers.migrate', $server) }}" data-confirm="{{ __('Przenieść maszynę na wybrany węzeł?') }}">
+                        @csrf
+                        <div class="grid grid-2">
+                            <div class="field"><label for="mig-node">{{ __('Węzeł docelowy') }}</label>
+                                <select id="mig-node" name="hypervisor_id">@foreach ($targets as $t) <option value="{{ $t->id }}">{{ $t->name }} — {{ __(':cpu vCPU, :ram GB RAM wolne', ['cpu' => $t->cpu_cores_total - $t->cpu_cores_used, 'ram' => intdiv($t->ram_mb_total - $t->ram_mb_used, 1024)]) }}</option> @endforeach</select></div>
+                            <div class="field"><label for="mig-mode">{{ __('Tryb') }}</label>
+                                <select id="mig-mode" name="mode">
+                                    <option value="cold">{{ __('Na zimno — zatrzymanie, kopia dysku, start na nowym węźle') }}</option>
+                                    <option value="live" @disabled(! $server->isRunning())>{{ __('Na żywo — bez przerwy (wymaga połączenia libvirt między węzłami)') }}</option>
+                                </select></div>
+                        </div>
+                        <p class="hint">{{ __('Adresy IP zostają, więc ich pula musi obejmować węzeł docelowy (np. pula grupy). Na zimno maszyna jest niedostępna przez czas kopiowania dysku.') }}</p>
+                        <button class="btn" type="submit" @disabled($server->state->isTransitioning())>{{ __('Migruj') }}</button>
+                    </form>
+                @endif
+            </div>
+        @endif
         <div class="card" id="cpu-limit">
             <h3 class="card-title"><x-icon name="node" :size="16"/> {{ __('Limit procesora') }} <span class="pill neutral">{{ __('personel') }}</span></h3>
             <form method="POST" action="{{ route('panel.servers.cpu-limit', $server) }}">

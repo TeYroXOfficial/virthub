@@ -680,3 +680,27 @@ class DrSnapshotRequest(BaseModel):
 
     key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,500}$")
     target: BackupTargetSpec
+
+
+class TransferSource(BaseModel):
+    """Dysk wystawiony przez węzeł źródłowy (migracja na zimno)."""
+
+    url: str = Field(pattern=r"^https?://[^\s]{3,2000}$")
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    size_bytes: int | None = Field(default=None, ge=0)
+    # Czy uruchomić maszynę po imporcie (była włączona przed migracją).
+    start: bool = True
+
+
+class ImportVmRequest(CreateVmRequest):
+    """Migracja na zimno: maszyna z dysku pobranego z węzła źródłowego."""
+
+    source: TransferSource
+
+
+class LiveMigrationRequest(BaseModel):
+    """Migracja na żywo do węzła o podanym adresie (libvirt z kopiowaniem dysku)."""
+
+    host: str = Field(pattern=r"^[A-Za-z0-9.:\[\]-]{1,253}$")
+    bandwidth_mbps: int | None = Field(default=None, ge=1, le=100000)
+

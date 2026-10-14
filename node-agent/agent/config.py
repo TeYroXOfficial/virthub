@@ -108,6 +108,9 @@ class Settings:
     # (puste = wykryj port fizyczny głównego mostka).
     routed_bridge: str = "vhroute0"
     vlan_parent: str = ""
+    # Migracja na żywo: adres libvirt węzła docelowego ({host} = jego adres z panelu).
+    # Wymaga skonfigurowanego połączenia libvirt między węzłami (TLS albo SSH).
+    migration_uri: str = "qemu+tls://{host}/system"
 
     @property
     def is_mock(self) -> bool:
@@ -157,6 +160,7 @@ def get_settings() -> Settings:
         nat_bridge=_env("VH_NAT_BRIDGE", "vhnat0"),
         routed_bridge=_env("VH_ROUTED_BRIDGE", "vhroute0"),
         vlan_parent=_env("VH_VLAN_PARENT", ""),
+        migration_uri=_env("VH_MIGRATION_URI", "qemu+tls://{host}/system"),
         guard_host=_env("VH_GUARD_HOST", "1") not in ("0", "false", "no"),
         ct_max_processes=int(_env("VH_CT_MAX_PROCESSES", "4096")),
         apps_dir=_env_path("VH_APPS_DIR", "/var/lib/virthub/apps"),

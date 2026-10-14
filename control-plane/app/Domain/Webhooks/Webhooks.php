@@ -66,6 +66,7 @@ class Webhooks
             'server.suspended' => __('Serwer zawieszony'),
             'server.unsuspended' => __('Serwer odwieszony'),
             'server.ip_changed' => __('Zmiana adresów IP serwera'),
+            'server.migrated' => __('Serwer przeniesiony na inny węzeł'),
             'backup.created' => __('Migawka / kopia utworzona'),
             'backup.restored' => __('Migawka / kopia przywrócona'),
             'backup.failed' => __('Migawka / kopia nieudana'),
