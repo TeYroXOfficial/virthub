@@ -87,3 +87,7 @@ Schedule::call(fn () => app(Mailouts::class)->process())
 // Alerty: progi metryk maszyn i węzłów (Infrastruktura → Alerty).
 Schedule::call(fn () => app(App\Domain\Metrics\Alerts::class)->evaluate())
     ->everyMinute()->name('alerts')->withoutOverlapping();
+
+// Samoobsługa: godzinowe opłaty pakietów zasobów z portfela.
+Schedule::call(fn () => app(App\Domain\Provisioning\SelfService::class)->bill())
+    ->everyFifteenMinutes()->name('self-service-billing')->withoutOverlapping();

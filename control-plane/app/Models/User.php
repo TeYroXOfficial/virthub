@@ -16,7 +16,9 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable;
 
     public const ROLE_ADMIN = 'admin';
+
     public const ROLE_SUPPORT = 'support';
+
     public const ROLE_CUSTOMER = 'customer';
 
     /** @var list<string> */
@@ -72,6 +74,12 @@ class User extends Authenticatable
     public function servers(): HasMany
     {
         return $this->hasMany(Server::class);
+    }
+
+    /** @return HasMany<ResourcePack, $this> */
+    public function resourcePacks(): HasMany
+    {
+        return $this->hasMany(ResourcePack::class);
     }
 
     /** @return HasMany<BillingService, $this> */

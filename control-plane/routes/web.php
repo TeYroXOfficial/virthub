@@ -118,6 +118,9 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
             Route::delete('/tokens/{token}', 'destroyToken')->whereNumber('token')->name('.tokens.destroy');
         });
 
+    Route::get('/self-service', [\App\Http\Controllers\Web\SelfServiceController::class, 'index'])->name('self-service');
+    Route::post('/self-service/{pack}', [\App\Http\Controllers\Web\SelfServiceController::class, 'store'])->middleware('throttle:10,1')->name('self-service.store');
+    Route::delete('/self-service/servers/{server}', [\App\Http\Controllers\Web\SelfServiceController::class, 'destroy'])->middleware('throttle:20,1')->name('self-service.destroy');
     Route::get('/servers/new', [PanelController::class, 'createServer'])->name('servers.create');
     Route::post('/servers', [PanelController::class, 'storeServer'])->name('servers.store');
     Route::get('/servers/{server}', [PanelController::class, 'showServer'])->name('servers.show');
@@ -401,6 +404,10 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
             Route::get('/{language}/export', 'export')->name('.export');
             Route::post('/{language}/import', 'import')->middleware('throttle:10,1')->name('.import');
         });
+        Route::get('/resource-packs', [\App\Http\Controllers\Web\ResourcePackController::class, 'index'])->name('resource-packs');
+        Route::post('/resource-packs', [\App\Http\Controllers\Web\ResourcePackController::class, 'store'])->name('resource-packs.store');
+        Route::put('/resource-packs/{pack}', [\App\Http\Controllers\Web\ResourcePackController::class, 'update'])->name('resource-packs.update');
+        Route::delete('/resource-packs/{pack}', [\App\Http\Controllers\Web\ResourcePackController::class, 'destroy'])->name('resource-packs.destroy');
         Route::get('/providers', [ProviderAccountController::class, 'index'])->name('providers');
         Route::post('/providers', [ProviderAccountController::class, 'store'])->middleware('throttle:10,1')->name('providers.store');
         Route::put('/providers/{account}', [ProviderAccountController::class, 'update'])->name('providers.update');
