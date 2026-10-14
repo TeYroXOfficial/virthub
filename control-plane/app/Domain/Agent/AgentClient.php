@@ -103,6 +103,27 @@ class AgentClient
     }
 
     /** Płyta w maszynie i kolejność rozruchu; restart = zastosuj od razu. */
+    /** @param  array{type:string, config:array<string, mixed>}  $target */
+    public function backup(string $uuid, string $key, array $target, bool $compress): string
+    {
+        return $this->jobId($this->request('POST', "/vm/{$uuid}/backups", ['key' => $key, 'target' => $target, 'compress' => $compress]));
+    }
+
+    /** @param  array{type:string, config:array<string, mixed>}  $target */
+    public function restoreBackup(string $uuid, string $key, array $target, ?string $sha256): string
+    {
+        return $this->jobId($this->request('POST', "/vm/{$uuid}/backups/restore", array_filter(['key' => $key, 'target' => $target, 'sha256' => $sha256])));
+    }
+
+    /**
+     * @param  list<string>  $keys
+     * @param  array{type:string, config:array<string, mixed>}  $target
+     */
+    public function deleteBackups(array $keys, array $target): string
+    {
+        return $this->jobId($this->request('POST', '/backups/delete', ['keys' => $keys, 'target' => $target]));
+    }
+
     /** @return array{iommu: bool, devices: list<array<string, mixed>>} */
     public function pciDevices(): array
     {

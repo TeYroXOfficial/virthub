@@ -63,6 +63,7 @@
                 ['panel.admin.monitoring', __('Monitorowanie'), 'monitor', 'panel.admin.monitoring*', 'admin.hypervisors'],
                 ['panel.admin.security', __('Bezpieczeństwo'), 'shield', 'panel.admin.security*', 'admin.hypervisors'],
                 ['panel.admin.alerts', __('Alerty'), 'clock', 'panel.admin.alerts*', 'admin.hypervisors'],
+                ['panel.admin.backups', __('Kopie zapasowe'), 'archive', 'panel.admin.backups*', 'admin.hypervisors'],
             ]],
             [__('Sieć'), 'network', [
                 ['panel.admin.ip-pools', __('Bloki IP'), 'network', 'panel.admin.ip-pools*', 'admin.ip_pools'],

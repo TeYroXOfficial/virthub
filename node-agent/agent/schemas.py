@@ -9,7 +9,7 @@ from __future__ import annotations
 import ipaddress
 import re
 from enum import Enum
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 
@@ -330,6 +330,30 @@ class HostdevRequest(BaseModel):
 
     devices: list[HostdevSpec] = Field(default_factory=list, max_length=16)
     restart: bool = False
+
+
+class BackupTargetSpec(BaseModel):
+    type: Literal["local", "s3", "sftp"]
+    config: dict[str, Any] = Field(default_factory=dict, repr=False)
+
+
+class BackupRequest(BaseModel):
+    """Kopia dysku maszyny na zewnętrzny cel (klucz nadaje panel)."""
+
+    key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,500}$")
+    target: BackupTargetSpec
+    compress: bool = True
+
+
+class BackupRestoreRequest(BaseModel):
+    key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,500}$")
+    target: BackupTargetSpec
+    sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+class BackupDeleteRequest(BaseModel):
+    keys: list[str] = Field(max_length=500)
+    target: BackupTargetSpec
 
 
 class ElevateRequest(BaseModel):

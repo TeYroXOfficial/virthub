@@ -139,6 +139,10 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/resize', [ServerActionsController::class, 'resize'])->middleware('throttle:10,1')->name('servers.resize');
     Route::post('/servers/{server}/iso', [ServerActionsController::class, 'iso'])->name('servers.iso');
     Route::post('/servers/{server}/elevate', [ServerActionsController::class, 'elevate'])->middleware('throttle:20,1')->name('servers.elevate');
+    Route::post('/servers/{server}/remote-backups', [ServerActionsController::class, 'createRemoteBackup'])->middleware('throttle:6,1')->name('servers.remote-backups');
+    Route::post('/servers/{server}/remote-backups/{backup}/restore', [ServerActionsController::class, 'restoreRemoteBackup'])->middleware('throttle:6,1')->name('servers.remote-backups.restore');
+    Route::delete('/servers/{server}/remote-backups/{backup}', [ServerActionsController::class, 'deleteRemoteBackup'])->name('servers.remote-backups.destroy');
+    Route::post('/servers/{server}/backup-plan', [\App\Http\Controllers\Web\BackupAdminController::class, 'assign'])->name('servers.backup-plan');
     Route::post('/servers/{server}/iso/custom', [ServerActionsController::class, 'storeCustomIso'])->middleware('throttle:10,1')->name('servers.iso.custom');
     Route::delete('/servers/{server}/iso/custom/{iso}', [ServerActionsController::class, 'destroyCustomIso'])->name('servers.iso.custom.destroy');
     Route::post('/servers/{server}/password', [ServerActionsController::class, 'resetPassword'])->name('servers.password');
@@ -273,6 +277,15 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/hypervisors/{hypervisor}/pci', [\App\Http\Controllers\Web\PciAssetController::class, 'store'])->name('pci.store');
         Route::put('/pci/{asset}', [\App\Http\Controllers\Web\PciAssetController::class, 'update'])->name('pci.update');
         Route::delete('/pci/{asset}', [\App\Http\Controllers\Web\PciAssetController::class, 'destroy'])->name('pci.destroy');
+        Route::controller(\App\Http\Controllers\Web\BackupAdminController::class)->group(function () {
+            Route::get('/backups', 'index')->name('backups');
+            Route::post('/backups/targets', 'storeTarget')->name('backups.targets.store');
+            Route::put('/backups/targets/{target}', 'updateTarget')->whereNumber('target')->name('backups.targets.update');
+            Route::delete('/backups/targets/{target}', 'destroyTarget')->whereNumber('target')->name('backups.targets.destroy');
+            Route::post('/backups/plans', 'storePlan')->name('backups.plans.store');
+            Route::put('/backups/plans/{plan}', 'updatePlan')->whereNumber('plan')->name('backups.plans.update');
+            Route::delete('/backups/plans/{plan}', 'destroyPlan')->whereNumber('plan')->name('backups.plans.destroy');
+        });
         Route::controller(\App\Http\Controllers\Web\AlertController::class)->group(function () {
             Route::get('/alerts', 'index')->name('alerts');
             Route::post('/alerts', 'store')->name('alerts.store');

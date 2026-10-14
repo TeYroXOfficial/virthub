@@ -91,3 +91,7 @@ Schedule::call(fn () => app(App\Domain\Metrics\Alerts::class)->evaluate())
 // Samoobsługa: godzinowe opłaty pakietów zasobów z portfela.
 Schedule::call(fn () => app(App\Domain\Provisioning\SelfService::class)->bill())
     ->everyFifteenMinutes()->name('self-service-billing')->withoutOverlapping();
+
+// Kopie na zewnętrzne cele według planów (Infrastruktura → Kopie zapasowe).
+Schedule::call(fn () => app(App\Domain\Provisioning\RemoteBackups::class)->runDue())
+    ->everyFifteenMinutes()->name('remote-backups')->withoutOverlapping();

@@ -51,6 +51,9 @@ from .schemas import (
     IsoMountRequest,
     ElevateRequest,
     HostdevRequest,
+    BackupRequest,
+    BackupRestoreRequest,
+    BackupDeleteRequest,
     PasswordResetRequest,
     JobAccepted,
     JobState,
@@ -117,6 +120,9 @@ def _handlers() -> dict[str, Any]:
         "mount_iso": lambda p: driver.mount_iso(p["uuid"], IsoMountRequest(**p["body"])),
         "elevate": lambda p: driver.elevate(p["uuid"], ElevateRequest(**p["body"]).action),
         "hostdevs": lambda p: driver.set_hostdevs(p["uuid"], HostdevRequest(**p["body"])),
+        "backup": lambda p: driver.backup(p["uuid"], BackupRequest(**p["body"])),
+        "backup_restore": lambda p: driver.restore_backup(p["uuid"], BackupRestoreRequest(**p["body"])),
+        "backup_delete": lambda p: driver.delete_backups(BackupDeleteRequest(**p)),
         "reset_password": lambda p: _reset_password(p["uuid"], PasswordResetRequest(**p["body"])),
     }
 
@@ -668,6 +674,44 @@ async def delete_iso(name: str) -> dict[str, Any]:
 )
 async def mount_iso(uuid: str, req: IsoMountRequest) -> JobAccepted:
     job_id = jobs.enqueue("mount_iso", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.post(
+    "/vm/{uuid}/backups",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def create_backup(uuid: str, req: BackupRequest) -> JobAccepted:
+    """Kopia dysku na cel zewnętrzny (lokalny katalog, S3, SFTP)."""
+    job_id = jobs.enqueue("backup", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.post(
+    "/vm/{uuid}/backups/restore",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def restore_backup(uuid: str, req: BackupRestoreRequest) -> JobAccepted:
+    job_id = jobs.enqueue("backup_restore", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.post(
+    "/backups/delete",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["system"],
+)
+async def delete_backups(req: BackupDeleteRequest) -> JobAccepted:
+    """Przycinanie starych kopii (retencja planu w panelu)."""
+    job_id = jobs.enqueue("backup_delete", req.model_dump())
     return JobAccepted(job_id=job_id)
 
 

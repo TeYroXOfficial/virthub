@@ -353,6 +353,7 @@ class AdminController extends Controller
             'price_hint' => ['nullable', 'numeric', 'min:0'],
             'pci_type' => ['nullable', Rule::in(PciAsset::TYPES)],
             'pci_count' => ['nullable', 'integer', 'min:0', 'max:8'],
+            'backup_plan_id' => ['nullable', 'integer', 'exists:backup_plans,id'],
         ];
         // Błędy edycji w osobnym worku — okno edycji danego pakietu otwiera się z nimi ponownie.
         $validated = $bag ? $request->validateWithBag($bag, $rules) : $request->validate($rules);
@@ -365,6 +366,7 @@ class AdminController extends Controller
             'network_type' => $validated['network_type'] ?? IpPool::TYPE_PUBLIC,
             'pci_type' => ($validated['pci_count'] ?? 0) > 0 ? ($validated['pci_type'] ?? 'gpu') : null,
             'pci_count' => (int) ($validated['pci_count'] ?? 0),
+            'backup_plan_id' => $validated['backup_plan_id'] ?? null,
             'price_hint_cents' => $request->filled('price_hint') ? (int) round((float) $request->input('price_hint') * 100) : null,
         ];
     }
