@@ -5,6 +5,8 @@ namespace App\Jobs;
 use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
 use App\Domain\Agent\ServerPayload;
+use App\Domain\Provisioning\AgentResultApplier;
+use App\Domain\Provisioning\ServerCleanup;
 use App\Models\ServerJob;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -44,7 +46,7 @@ class RunServerActionJob implements ShouldQueue
             // Usunięcie takiej pozycji ma się udać mimo to — klient nie może
             // zostać z rekordem, którego nie da się skasować.
             if ($job->action === 'delete') {
-                app(\App\Domain\Provisioning\ServerCleanup::class)->finalise($server);
+                app(ServerCleanup::class)->finalise($server);
                 $job->markDone(['note' => __('Maszyna nie istniała na hypervisorze.')]);
 
                 return;
@@ -73,7 +75,7 @@ class RunServerActionJob implements ShouldQueue
                     'nameservers' => ServerPayload::nameservers($server),
                     'os_type' => ServerPayload::osType($server->template),
                     'mac' => ServerPayload::mac($server),
-                ]),
+                ] + ServerPayload::scripts($server)),
                 'password' => $client->resetPassword(
                     $server->agent_uuid,
                     Crypt::decryptString($payload['password']),
@@ -116,7 +118,7 @@ class RunServerActionJob implements ShouldQueue
             ]);
 
             $job->markFailed($e->getMessage());
-            app(\App\Domain\Provisioning\AgentResultApplier::class)->rollbackState($job);
+            app(AgentResultApplier::class)->rollbackState($job);
 
             return;
         }

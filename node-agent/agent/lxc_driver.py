@@ -242,9 +242,10 @@ class IncusDriver(HypervisorDriver):
         ssh_keys: list[str],
         root_password: str | None,
         mac: str,
+        scripts: list | None = None,
     ) -> list[str]:
         user_data = render_user_data(
-            hostname, ssh_keys, root_password, packages=CONTAINER_PACKAGES
+            hostname, ssh_keys, root_password, packages=CONTAINER_PACKAGES, scripts=scripts
         )
         network_config = render_network_config(interfaces, nameservers, mac)
         return [
@@ -279,7 +280,7 @@ class IncusDriver(HypervisorDriver):
                 *self._isolation_args(),
                 *self._cloud_init_args(
                     req.hostname, req.interfaces, req.nameservers,
-                    req.ssh_keys, req.root_password, mac,
+                    req.ssh_keys, req.root_password, mac, req.scripts,
                 ),
                 "-d", f"root,size={req.disk_gb}GiB",
                 timeout=600,
@@ -460,7 +461,7 @@ class IncusDriver(HypervisorDriver):
         interfaces = self._current_interfaces(name)
         user_data = render_user_data(
             req.hostname or name, req.ssh_keys, req.root_password,
-            packages=CONTAINER_PACKAGES,
+            packages=CONTAINER_PACKAGES, scripts=req.scripts,
         )
         self._incus("config", "set", name, f"cloud-init.user-data={user_data}")
         if interfaces is not None:

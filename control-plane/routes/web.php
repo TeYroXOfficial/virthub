@@ -292,6 +292,14 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/templates/build/{key}', [AdminController::class, 'buildTemplate'])->name('templates.build');
         Route::put('/templates/{template}', [AdminController::class, 'updateTemplate'])->name('templates.update');
         Route::delete('/templates/{template}', [AdminController::class, 'destroyTemplate'])->name('templates.destroy');
+        Route::prefix('/provisioners')->name('provisioners')->controller(\App\Http\Controllers\Web\ProvisionerController::class)->group(function () {
+            Route::get('/', 'index');
+            Route::get('/new', 'create')->name('.create');
+            Route::post('/', 'store')->name('.store');
+            Route::get('/{provisioner}', 'edit')->whereNumber('provisioner')->name('.edit');
+            Route::put('/{provisioner}', 'update')->whereNumber('provisioner')->name('.update');
+            Route::delete('/{provisioner}', 'destroy')->whereNumber('provisioner')->name('.destroy');
+        });
         Route::post('/template-groups', [AdminController::class, 'storeTemplateGroup'])->name('template-groups.store');
         Route::put('/template-groups/{group}', [AdminController::class, 'updateTemplateGroup'])->name('template-groups.update');
         Route::post('/template-groups/{group}/toggle', [AdminController::class, 'toggleTemplateGroup'])->name('template-groups.toggle');

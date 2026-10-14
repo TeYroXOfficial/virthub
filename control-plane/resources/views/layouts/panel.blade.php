@@ -77,6 +77,7 @@
             [__('Media'), 'disc', [
                 ['panel.admin.templates', __('Szablony systemów'), 'disc', 'panel.admin.templates*', 'admin.templates'],
                 ['panel.admin.isos', __('Obrazy ISO'), 'disc', 'panel.admin.isos*', 'admin.templates'],
+                ['panel.admin.provisioners', __('Provisionery'), 'terminal', 'panel.admin.provisioners*', 'admin.templates'],
                 ['panel.admin.apps.eggs', __('Szablony aplikacji'), 'puzzle', 'panel.admin.apps.eggs*', 'admin.apps'],
             ]],
             [__('Migracje'), 'upload', [
