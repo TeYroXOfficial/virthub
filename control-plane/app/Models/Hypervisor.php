@@ -2,18 +2,21 @@
 
 namespace App\Models;
 
+use App\Enums\Virtualization;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Builder;
 
 class Hypervisor extends Model
 {
     use HasFactory;
 
     public const STATUS_ONLINE = 'online';
+
     public const STATUS_OFFLINE = 'offline';
+
     public const STATUS_MAINTENANCE = 'maintenance';
 
     /** Po tylu sekundach bez heartbeatu node uznajemy za niedostępny. */
@@ -59,7 +62,7 @@ class Hypervisor extends Model
             'app_port_start' => 'integer',
             'app_port_end' => 'integer',
             'app_memory_overcommit' => 'integer',
-            'virtualization' => \App\Enums\Virtualization::class,
+            'virtualization' => Virtualization::class,
             'enrollment_expires_at' => 'datetime',
             'enrolled_at' => 'datetime',
         ];
@@ -105,7 +108,7 @@ class Hypervisor extends Model
 
     public function runsContainers(): bool
     {
-        return $this->virtualization === \App\Enums\Virtualization::Lxc;
+        return $this->virtualization === Virtualization::Lxc;
     }
 
     /**
@@ -237,5 +240,11 @@ class Hypervisor extends Model
         $query->where('status', self::STATUS_ONLINE)
             ->where('accepts_new_servers', true)
             ->where('last_seen_at', '>=', now()->subSeconds(self::HEARTBEAT_TIMEOUT));
+    }
+
+    /** @return HasMany<PciAsset, $this> */
+    public function pciAssets(): HasMany
+    {
+        return $this->hasMany(PciAsset::class)->orderBy('pci_address');
     }
 }

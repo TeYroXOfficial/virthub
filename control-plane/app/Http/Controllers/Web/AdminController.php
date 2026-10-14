@@ -24,6 +24,7 @@ use App\Models\IpPool;
 use App\Models\IsoDownload;
 use App\Models\OsTemplate;
 use App\Models\OsTemplateGroup;
+use App\Models\PciAsset;
 use App\Models\Server;
 use App\Models\TemplateDownload;
 use App\Models\VpsPackage;
@@ -350,6 +351,8 @@ class AdminController extends Controller
             'ipv6_count' => ['nullable', 'integer', 'min:0', 'max:16'],
             'network_type' => ['nullable', Rule::in(IpPool::TYPES)],
             'price_hint' => ['nullable', 'numeric', 'min:0'],
+            'pci_type' => ['nullable', Rule::in(PciAsset::TYPES)],
+            'pci_count' => ['nullable', 'integer', 'min:0', 'max:8'],
         ];
         // Błędy edycji w osobnym worku — okno edycji danego pakietu otwiera się z nimi ponownie.
         $validated = $bag ? $request->validateWithBag($bag, $rules) : $request->validate($rules);
@@ -360,6 +363,8 @@ class AdminController extends Controller
             'cpu_limit_percent' => $validated['cpu_limit_percent'] ?? null,
             'ipv6_count' => $validated['ipv6_count'] ?? 0,
             'network_type' => $validated['network_type'] ?? IpPool::TYPE_PUBLIC,
+            'pci_type' => ($validated['pci_count'] ?? 0) > 0 ? ($validated['pci_type'] ?? 'gpu') : null,
+            'pci_count' => (int) ($validated['pci_count'] ?? 0),
             'price_hint_cents' => $request->filled('price_hint') ? (int) round((float) $request->input('price_hint') * 100) : null,
         ];
     }

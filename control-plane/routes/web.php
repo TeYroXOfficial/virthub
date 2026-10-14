@@ -266,6 +266,10 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::get('/hypervisors/{hypervisor}', [AdminController::class, 'showHypervisor'])->name('hypervisors.show');
         Route::get('/monitoring', [MonitoringController::class, 'index'])->name('monitoring');
         Route::get('/security', [NodeSecurityController::class, 'index'])->name('security');
+        Route::get('/hypervisors/{hypervisor}/pci', [\App\Http\Controllers\Web\PciAssetController::class, 'index'])->name('pci');
+        Route::post('/hypervisors/{hypervisor}/pci', [\App\Http\Controllers\Web\PciAssetController::class, 'store'])->name('pci.store');
+        Route::put('/pci/{asset}', [\App\Http\Controllers\Web\PciAssetController::class, 'update'])->name('pci.update');
+        Route::delete('/pci/{asset}', [\App\Http\Controllers\Web\PciAssetController::class, 'destroy'])->name('pci.destroy');
         Route::controller(\App\Http\Controllers\Web\AlertController::class)->group(function () {
             Route::get('/alerts', 'index')->name('alerts');
             Route::post('/alerts', 'store')->name('alerts.store');

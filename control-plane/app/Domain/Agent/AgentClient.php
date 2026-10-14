@@ -103,6 +103,18 @@ class AgentClient
     }
 
     /** Płyta w maszynie i kolejność rozruchu; restart = zastosuj od razu. */
+    /** @return array{iommu: bool, devices: list<array<string, mixed>>} */
+    public function pciDevices(): array
+    {
+        return $this->request('GET', '/system/pci');
+    }
+
+    /** @param  list<array{address:string, xml?:string}>  $devices */
+    public function setHostdevs(string $uuid, array $devices, bool $restart): string
+    {
+        return $this->jobId($this->request('PUT', "/vm/{$uuid}/hostdevs", ['devices' => $devices, 'restart' => $restart]));
+    }
+
     /** @param  'start'|'commit'|'discard'  $action */
     public function elevate(string $uuid, string $action): string
     {

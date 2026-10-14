@@ -23,6 +23,7 @@ class ServerCleanup
     {
         $this->ips->releaseAll($server);
         app(IsoLibrary::class)->deleteCustomFor($server);
+        app(PciAssets::class)->release($server);
         $this->selector->release($server);
 
         $server->forceFill([

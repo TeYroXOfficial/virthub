@@ -241,6 +241,20 @@
         </div>
     @endcan
 
+    @if (! $server->isContainer() && $server->pciAssets->isNotEmpty())
+        <div class="card" id="pci">
+            <h3 class="card-title"><x-icon name="monitor" :size="16"/> {{ __('Urządzenia PCI') }}</h3>
+            <ul class="list-plain">
+                @foreach ($server->pciAssets as $asset)
+                    <li><strong>{{ $asset->name }}</strong> <code class="muted">{{ $asset->pci_address }}</code> <span class="pill neutral plain">{{ $asset->type }}</span></li>
+                @endforeach
+            </ul>
+            @can('manageResources', $server)
+                <p class="hint" style="margin-top:8px"><a href="{{ route('panel.admin.pci', $server->hypervisor_id) }}">{{ __('Zarządzaj urządzeniami węzła') }}</a></p>
+            @endcan
+        </div>
+    @endif
+
     @can('manageResources', $server)
         @php $filterProfiles = \App\Models\NetworkFilterProfile::query()->orderBy('name')->get(); @endphp
         @if ($filterProfiles->isNotEmpty())
