@@ -2,9 +2,13 @@
 
 namespace App\Models;
 
+use App\Enums\Virtualization;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class OsTemplate extends Model
 {
@@ -42,25 +46,31 @@ class OsTemplate extends Model
         return [
             'cloud_init_support' => 'boolean',
             'is_active' => 'boolean',
-            'virtualization' => \App\Enums\Virtualization::class,
+            'virtualization' => Virtualization::class,
             'build_options' => 'array',
         ];
     }
 
-    /** @return \Illuminate\Database\Eloquent\Relations\HasMany<TemplateDownload, $this> */
-    public function downloads(): \Illuminate\Database\Eloquent\Relations\HasMany
+    /** @return HasMany<TemplateDownload, $this> */
+    public function downloads(): HasMany
     {
         return $this->hasMany(TemplateDownload::class);
     }
 
-    /** @return \Illuminate\Database\Eloquent\Relations\BelongsTo<OsTemplateGroup, $this> */
-    public function group(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    /** @return BelongsTo<OsTemplateGroup, $this> */
+    public function group(): BelongsTo
     {
         return $this->belongsTo(OsTemplateGroup::class, 'os_template_group_id');
     }
 
-    /** @return \Illuminate\Database\Eloquent\Relations\HasMany<Server, $this> */
-    public function servers(): \Illuminate\Database\Eloquent\Relations\HasMany
+    /** @return HasMany<Server, $this> */
+    /** Skrypty pierwszego uruchomienia, w kolejności wykonania. */
+    public function provisioners(): BelongsToMany
+    {
+        return $this->belongsToMany(Provisioner::class)->withPivot('sort_order')->orderByPivot('sort_order');
+    }
+
+    public function servers(): HasMany
     {
         return $this->hasMany(Server::class);
     }
@@ -81,7 +91,7 @@ class OsTemplate extends Model
 
     public function isContainer(): bool
     {
-        return $this->virtualization === \App\Enums\Virtualization::Lxc;
+        return $this->virtualization === Virtualization::Lxc;
     }
 
     /** Węzły pobierają szablon same: kontenery zawsze, KVM — gdy pochodzi z katalogu. */

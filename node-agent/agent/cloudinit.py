@@ -12,6 +12,7 @@ większa powierzchnia ataku za tę samą funkcjonalność.
 
 from __future__ import annotations
 
+import base64
 import ipaddress
 import json
 import logging
@@ -50,8 +51,13 @@ def render_user_data(
     ssh_keys: list[str],
     root_password: str | None,
     packages: list[str] | None = None,
+    scripts: list | None = None,
 ) -> str:
     """Konfiguracja pierwszego startu.
+
+    `scripts` — provisionery z panelu (ProvisionScript): zapisywane przez
+    write_files (base64) i uruchamiane po kolei na końcu runcmd, z logiem
+    w /var/log/virthub-provision/.
 
     `packages` — pakiety doinstalowywane przy pierwszym starcie. Obrazy
     kontenerów LXC w odróżnieniu od obrazów cloud dla maszyn wirtualnych
@@ -69,6 +75,22 @@ def render_user_data(
         "  - name: root",
         f"    ssh_authorized_keys:{_yaml_list(ssh_keys, 6)}",
     ]
+    files: list[str] = []
+    run_scripts: list[str] = []
+    for index, script in enumerate(scripts or [], start=1):
+        target = f"{script.path}/{index:02d}-{script.name}"
+        log = f"/var/log/virthub-provision/{index:02d}-{script.name}.log"
+        files += [
+            f"  - path: {target}",
+            "    permissions: '0700'",
+            "    encoding: b64",
+            f"    content: {base64.b64encode(script.content.encode()).decode()}",
+        ]
+        # Ścieżki pochodzą z walidowanego schematu (bez spacji i cudzysłowów).
+        run_scripts.append(
+            f"  - [ sh, -c, 'mkdir -p /var/log/virthub-provision && {target} > {log} 2>&1; "
+            f"echo \"exit=$?\" >> {log}' ]"
+        )
 
     if root_password:
         lines += [
@@ -77,10 +99,11 @@ def render_user_data(
             "  list: |",
             f"    root:{root_password}",
             "ssh_pwauth: true",
-            # Debian i Ubuntu mają domyślnie PermitRootLogin prohibit-password:
-            # samo ssh_pwauth włącza hasła dla wszystkich poza rootem, czyli
-            # dokładnie poza jedynym kontem, jakie klient ma.
-            "write_files:",
+        ]
+        # Debian i Ubuntu mają domyślnie PermitRootLogin prohibit-password:
+        # samo ssh_pwauth włącza hasła dla wszystkich poza rootem, czyli
+        # dokładnie poza jedynym kontem, jakie klient ma.
+        files += [
             "  - path: /etc/ssh/sshd_config.d/10-virthub.conf",
             "    permissions: '0644'",
             "    content: |",
@@ -91,6 +114,9 @@ def render_user_data(
         # Bez hasła zostawiamy wyłączone logowanie hasłem — inaczej obraz z
         # domyślnym hasłem szablonu byłby dostępny dla każdego skanera.
         lines.append("ssh_pwauth: false")
+
+    if files:
+        lines += ["write_files:", *files]
 
     if packages:
         lines += ["package_update: true", f"packages:{_yaml_list(packages, 2)}"]
@@ -105,6 +131,7 @@ def render_user_data(
     ]
     if packages and "qemu-guest-agent" in packages:
         lines.append("  - [ sh, -c, 'systemctl enable --now qemu-guest-agent || true' ]")
+    lines += run_scripts
     return "\n".join(lines) + "\n"
 
 
@@ -215,6 +242,7 @@ class CloudInitBuilder:
         root_password: str | None,
         mac: str,
         os_type: str = "linux",
+        scripts: list | None = None,
     ) -> Path:
         target = self.seed_path(name)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -229,7 +257,7 @@ class CloudInitBuilder:
 
         payload = {
             "meta-data": render_meta_data(server_id, hostname),
-            "user-data": render_user_data(hostname, ssh_keys, root_password, packages=VM_PACKAGES),
+            "user-data": render_user_data(hostname, ssh_keys, root_password, packages=VM_PACKAGES, scripts=scripts),
             "network-config": render_network_config(interfaces, nameservers, mac),
         }
 

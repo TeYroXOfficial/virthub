@@ -5,6 +5,8 @@ namespace App\Domain\Agent;
 use App\Domain\Network\Firewall;
 use App\Domain\Network\PortForwarding;
 use App\Models\IpAddress;
+use App\Models\OsTemplate;
+use App\Models\Provisioner;
 use App\Models\Server;
 
 /**
@@ -93,11 +95,60 @@ class ServerPayload
             'nameservers' => self::nameservers($server),
             'os_type' => self::osType($server->template),
             'mac' => self::mac($server),
+        ] + self::scripts($server);
+    }
+
+    /**
+     * Provisionery szablonu ze zmiennymi serwera. Pusty klucz nie jest wysyłany —
+     * starszy agent i tak by go zignorował, a ładunek bez skryptów się nie zmienia.
+     *
+     * @return array{scripts?: list<array{name:string, content:string, path:string}>}
+     */
+    public static function scripts(Server $server): array
+    {
+        $template = $server->template;
+        if ($template === null || self::osType($template) === 'windows') {
+            return [];
+        }
+        $vars = self::scriptVars($server);
+        $scripts = $template->provisioners()->where('is_active', true)->get()
+            ->map(fn (Provisioner $p) => [
+                'name' => $p->name,
+                'content' => strtr($p->content, $vars),
+                'path' => $p->path,
+            ])->values()->all();
+
+        return $scripts === [] ? [] : ['scripts' => $scripts];
+    }
+
+    /** @return array<string, string> {{ zmienna }} → wartość */
+    public static function scriptVars(Server $server): array
+    {
+        $ips = $server->ipAddresses()->orderByDesc('is_primary')->orderBy('id')->get();
+        $values = [
+            'server.id' => (string) $server->id,
+            'server.hostname' => (string) $server->hostname,
+            'server.label' => (string) $server->label,
+            'server.vcpu' => (string) $server->vcpu,
+            'server.ram_mb' => (string) $server->ram_mb,
+            'server.disk_gb' => (string) $server->disk_gb,
+            'server.ipv4' => (string) $ips->firstWhere('version', 4)?->address,
+            'server.ipv6' => (string) $ips->firstWhere('version', 6)?->address,
+            'server.template' => (string) $server->template?->name,
+            'user.id' => (string) $server->user_id,
+            'user.email' => (string) $server->user?->email,
         ];
+        $out = [];
+        foreach ($values as $key => $value) {
+            $out['{{'.$key.'}}'] = $value;
+            $out['{{ '.$key.' }}'] = $value;
+        }
+
+        return $out;
     }
 
     /** Windows dostaje nośnik config-2 (cloudbase-init) i ustawienia maszyny pod Windows. */
-    public static function osType(?\App\Models\OsTemplate $template): string
+    public static function osType(?OsTemplate $template): string
     {
         return $template?->family === 'windows' ? 'windows' : 'linux';
     }

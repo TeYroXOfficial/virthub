@@ -197,6 +197,30 @@ def _unicast_mac(value: str) -> str:
 MacAddress = Annotated[str, AfterValidator(_unicast_mac)]
 
 
+class ProvisionScript(BaseModel):
+    """Skrypt pierwszego uruchomienia (provisioner z panelu), wykonywany przez cloud-init.
+
+    Plik ląduje w `path`, a jego wynik w /var/log/virthub-provision/<nr>-<name>.log."""
+
+    name: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,40}$")
+    content: str = Field(min_length=3, max_length=65536)
+    path: str = Field(default="/var/lib/virthub/provision", pattern=r"^/[A-Za-z0-9._/-]{1,200}$")
+
+    @field_validator("content")
+    @classmethod
+    def _shebang(cls, value: str) -> str:
+        if not value.startswith("#!"):
+            raise ValueError("Skrypt musi zaczynać się od linii #! (np. #!/bin/bash)")
+        return value
+
+    @field_validator("path")
+    @classmethod
+    def _no_parent(cls, value: str) -> str:
+        if ".." in value.split("/"):
+            raise ValueError("Ścieżka nie może zawierać ..")
+        return value.rstrip("/") or "/"
+
+
 class CreateVmRequest(BaseModel):
     server_id: int = Field(description="Identyfikator VPS-a w control plane")
     hostname: str = Field(pattern=HOSTNAME, max_length=253)
@@ -213,6 +237,8 @@ class CreateVmRequest(BaseModel):
     os_type: Literal["linux", "windows"] = "linux"
     # MAC karty wymagany przez dostawcę dla adresu IP; brak = stały MAC z puli 52:54:00.
     mac: MacAddress | None = None
+    # Provisionery szablonu (tylko Linux — cloudbase-init ma własny mechanizm).
+    scripts: list[ProvisionScript] = Field(default_factory=list, max_length=20)
 
 
 class RebuildVmRequest(BaseModel):
@@ -227,6 +253,7 @@ class RebuildVmRequest(BaseModel):
     os_type: Literal["linux", "windows"] = "linux"
     # Brak = MAC zostaje taki, jaki karta ma teraz.
     mac: MacAddress | None = None
+    scripts: list[ProvisionScript] = Field(default_factory=list, max_length=20)
 
 
 ISO_NAME = r"^[a-z0-9][a-z0-9._-]{0,80}\.iso$"

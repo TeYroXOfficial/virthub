@@ -33,7 +33,7 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
    - Masowa wysyłka e-maili według szablonu ze zmiennymi.
    - Grupy odbiorców: wszyscy, z aktywnymi serwerami, na wybranym hypervisorze, z wybranym produktem.
    - Kolejka i postęp wysyłki.
-4. **Provisionery.**
+4. ✅ **Provisionery.**
    - Skrypty pierwszego uruchomienia (shebang, opis, miejsce zapisu) przypięte do szablonów.
    - Zmienne serwera (`{{hostname}}`, `{{ipv4}}`…) wstawiane przez cloud-init.
    - Ścieżki logów widoczne w panelu.

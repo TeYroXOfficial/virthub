@@ -248,6 +248,7 @@ class LibvirtDriver(HypervisorDriver):
                 root_password=req.root_password,
                 mac=mac,
                 os_type=req.os_type,
+                scripts=req.scripts,
             )
             created.append("seed")
 
@@ -379,6 +380,7 @@ class LibvirtDriver(HypervisorDriver):
             root_password=req.root_password,
             mac=mac,
             os_type=req.os_type,
+            scripts=req.scripts,
         )
 
         progress("boot", 85)
@@ -781,6 +783,7 @@ class MockDriver(HypervisorDriver):
             root_password=req.root_password,
             mac=req.mac or mac_address(req.server_id),
             os_type=req.os_type,
+            scripts=req.scripts,
         )
 
         record = {
