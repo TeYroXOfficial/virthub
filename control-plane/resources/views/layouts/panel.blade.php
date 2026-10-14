@@ -196,13 +196,25 @@
         </main>
     </div>
 @else
-    <main class="auth-wrap">
-        <div class="auth-card">
-            <div style="display:flex; justify-content:flex-end; margin-bottom:8px">@include('layouts._locale')</div>
+    @hasSection('wide')
+        {{-- Strony publiczne szerokie (np. dokumentacja API) — bez wąskiej karty logowania. --}}
+        <main class="docs-wrap">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
+                <a class="brand" href="{{ route('login') }}"><span class="brand-mark"><x-icon name="servers" :size="16"/></span> {{ config('virthub.brand') }}</a>
+                @include('layouts._locale')
+            </div>
             @include('layouts._flash')
             @yield('content')
-        </div>
-    </main>
+        </main>
+    @else
+        <main class="auth-wrap">
+            <div class="auth-card">
+                <div style="display:flex; justify-content:flex-end; margin-bottom:8px">@include('layouts._locale')</div>
+                @include('layouts._flash')
+                @yield('content')
+            </div>
+        </main>
+    @endif
 @endauth
 <script src="{{ asset('js/vh-dialog.js') }}?v={{ @filemtime(public_path('js/vh-dialog.js')) }}"></script>
 @stack('scripts')

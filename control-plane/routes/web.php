@@ -4,6 +4,8 @@ use App\Http\Controllers\EnrollmentController;
 use App\Http\Controllers\Web\AccountController;
 use App\Http\Controllers\Web\AccountSecurityController;
 use App\Http\Controllers\Web\AdminController;
+use App\Http\Controllers\Web\AlertController;
+use App\Http\Controllers\Web\ApiDocsController;
 use App\Http\Controllers\Web\AppAdminController;
 use App\Http\Controllers\Web\AppContentController;
 use App\Http\Controllers\Web\AppController;
@@ -11,6 +13,7 @@ use App\Http\Controllers\Web\AppDatabaseController;
 use App\Http\Controllers\Web\AppFilesController;
 use App\Http\Controllers\Web\AppNetworkController;
 use App\Http\Controllers\Web\AuthController;
+use App\Http\Controllers\Web\BackupAdminController;
 use App\Http\Controllers\Web\BillingAdminController;
 use App\Http\Controllers\Web\BillingController;
 use App\Http\Controllers\Web\CloudServerController;
@@ -27,14 +30,19 @@ use App\Http\Controllers\Web\MailoutController;
 use App\Http\Controllers\Web\MailSettingsController;
 use App\Http\Controllers\Web\MonitoringController;
 use App\Http\Controllers\Web\NetworkController;
+use App\Http\Controllers\Web\NetworkFilterController;
 use App\Http\Controllers\Web\NodeSecurityController;
 use App\Http\Controllers\Web\PanelController;
 use App\Http\Controllers\Web\PasswordResetController;
 use App\Http\Controllers\Web\PaymentController;
+use App\Http\Controllers\Web\PciAssetController;
 use App\Http\Controllers\Web\PortForwardController;
 use App\Http\Controllers\Web\ProviderAccountController;
+use App\Http\Controllers\Web\ProvisionerController;
 use App\Http\Controllers\Web\PterodactylMigrationController;
+use App\Http\Controllers\Web\ResourcePackController;
 use App\Http\Controllers\Web\ReverseDnsSettingsController;
+use App\Http\Controllers\Web\SelfServiceController;
 use App\Http\Controllers\Web\ServerActionsController;
 use App\Http\Controllers\Web\SsoController;
 use App\Http\Controllers\Web\StoreController;
@@ -84,6 +92,11 @@ Route::get('/mailouts/unsubscribe/{user}', [MailoutController::class, 'unsubscri
 Route::post('/mailouts/unsubscribe/{user}', [MailoutController::class, 'unsubscribe'])
     ->middleware(['signed', 'throttle:20,1'])->whereNumber('user');
 
+// Dokumentacja API (publiczna): strona z konsolą, OpenAPI i kolekcja Postman.
+Route::get('/api-docs', [ApiDocsController::class, 'show'])->name('api-docs');
+Route::get('/api-docs/openapi.json', [ApiDocsController::class, 'openApi'])->name('api-docs.openapi');
+Route::get('/api-docs/postman.json', [ApiDocsController::class, 'postman'])->name('api-docs.postman');
+
 // Powrót z „Zaloguj jako” na konto administratora.
 Route::post('/impersonate/stop', [ImpersonationController::class, 'stop'])
     ->middleware('auth')->name('impersonate.stop');
@@ -118,9 +131,9 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
             Route::delete('/tokens/{token}', 'destroyToken')->whereNumber('token')->name('.tokens.destroy');
         });
 
-    Route::get('/self-service', [\App\Http\Controllers\Web\SelfServiceController::class, 'index'])->name('self-service');
-    Route::post('/self-service/{pack}', [\App\Http\Controllers\Web\SelfServiceController::class, 'store'])->middleware('throttle:10,1')->name('self-service.store');
-    Route::delete('/self-service/servers/{server}', [\App\Http\Controllers\Web\SelfServiceController::class, 'destroy'])->middleware('throttle:20,1')->name('self-service.destroy');
+    Route::get('/self-service', [SelfServiceController::class, 'index'])->name('self-service');
+    Route::post('/self-service/{pack}', [SelfServiceController::class, 'store'])->middleware('throttle:10,1')->name('self-service.store');
+    Route::delete('/self-service/servers/{server}', [SelfServiceController::class, 'destroy'])->middleware('throttle:20,1')->name('self-service.destroy');
     Route::get('/servers/new', [PanelController::class, 'createServer'])->name('servers.create');
     Route::post('/servers', [PanelController::class, 'storeServer'])->name('servers.store');
     Route::get('/servers/{server}', [PanelController::class, 'showServer'])->name('servers.show');
@@ -142,7 +155,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/remote-backups', [ServerActionsController::class, 'createRemoteBackup'])->middleware('throttle:6,1')->name('servers.remote-backups');
     Route::post('/servers/{server}/remote-backups/{backup}/restore', [ServerActionsController::class, 'restoreRemoteBackup'])->middleware('throttle:6,1')->name('servers.remote-backups.restore');
     Route::delete('/servers/{server}/remote-backups/{backup}', [ServerActionsController::class, 'deleteRemoteBackup'])->name('servers.remote-backups.destroy');
-    Route::post('/servers/{server}/backup-plan', [\App\Http\Controllers\Web\BackupAdminController::class, 'assign'])->name('servers.backup-plan');
+    Route::post('/servers/{server}/backup-plan', [BackupAdminController::class, 'assign'])->name('servers.backup-plan');
     Route::post('/servers/{server}/iso/custom', [ServerActionsController::class, 'storeCustomIso'])->middleware('throttle:10,1')->name('servers.iso.custom');
     Route::delete('/servers/{server}/iso/custom/{iso}', [ServerActionsController::class, 'destroyCustomIso'])->name('servers.iso.custom.destroy');
     Route::post('/servers/{server}/password', [ServerActionsController::class, 'resetPassword'])->name('servers.password');
@@ -152,7 +165,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/detect-os', [ServerActionsController::class, 'detectOs'])->name('servers.detect-os');
     Route::post('/servers/{server}/traffic', [ServerActionsController::class, 'traffic'])->name('servers.traffic');
     Route::post('/servers/{server}/cpu-limit', [ServerActionsController::class, 'cpuLimit'])->name('servers.cpu-limit');
-    Route::post('/servers/{server}/network-filter', [\App\Http\Controllers\Web\NetworkFilterController::class, 'assign'])->name('servers.network-filter');
+    Route::post('/servers/{server}/network-filter', [NetworkFilterController::class, 'assign'])->name('servers.network-filter');
     Route::put('/servers/{server}/ips/{address}/rdns', [ServerActionsController::class, 'rdns'])->middleware('throttle:10,1')->name('servers.rdns');
     Route::post('/servers/{server}/ports', [PortForwardController::class, 'store'])->name('servers.ports.store');
     Route::delete('/servers/{server}/ports/{forward}', [PortForwardController::class, 'destroy'])->name('servers.ports.destroy');
@@ -273,11 +286,11 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::get('/hypervisors/{hypervisor}', [AdminController::class, 'showHypervisor'])->name('hypervisors.show');
         Route::get('/monitoring', [MonitoringController::class, 'index'])->name('monitoring');
         Route::get('/security', [NodeSecurityController::class, 'index'])->name('security');
-        Route::get('/hypervisors/{hypervisor}/pci', [\App\Http\Controllers\Web\PciAssetController::class, 'index'])->name('pci');
-        Route::post('/hypervisors/{hypervisor}/pci', [\App\Http\Controllers\Web\PciAssetController::class, 'store'])->name('pci.store');
-        Route::put('/pci/{asset}', [\App\Http\Controllers\Web\PciAssetController::class, 'update'])->name('pci.update');
-        Route::delete('/pci/{asset}', [\App\Http\Controllers\Web\PciAssetController::class, 'destroy'])->name('pci.destroy');
-        Route::controller(\App\Http\Controllers\Web\BackupAdminController::class)->group(function () {
+        Route::get('/hypervisors/{hypervisor}/pci', [PciAssetController::class, 'index'])->name('pci');
+        Route::post('/hypervisors/{hypervisor}/pci', [PciAssetController::class, 'store'])->name('pci.store');
+        Route::put('/pci/{asset}', [PciAssetController::class, 'update'])->name('pci.update');
+        Route::delete('/pci/{asset}', [PciAssetController::class, 'destroy'])->name('pci.destroy');
+        Route::controller(BackupAdminController::class)->group(function () {
             Route::get('/backups', 'index')->name('backups');
             Route::post('/backups/targets', 'storeTarget')->name('backups.targets.store');
             Route::put('/backups/targets/{target}', 'updateTarget')->whereNumber('target')->name('backups.targets.update');
@@ -286,7 +299,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
             Route::put('/backups/plans/{plan}', 'updatePlan')->whereNumber('plan')->name('backups.plans.update');
             Route::delete('/backups/plans/{plan}', 'destroyPlan')->whereNumber('plan')->name('backups.plans.destroy');
         });
-        Route::controller(\App\Http\Controllers\Web\AlertController::class)->group(function () {
+        Route::controller(AlertController::class)->group(function () {
             Route::get('/alerts', 'index')->name('alerts');
             Route::post('/alerts', 'store')->name('alerts.store');
             Route::put('/alerts/{rule}', 'update')->whereNumber('rule')->name('alerts.update');
@@ -322,7 +335,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/templates/build/{key}', [AdminController::class, 'buildTemplate'])->name('templates.build');
         Route::put('/templates/{template}', [AdminController::class, 'updateTemplate'])->name('templates.update');
         Route::delete('/templates/{template}', [AdminController::class, 'destroyTemplate'])->name('templates.destroy');
-        Route::prefix('/provisioners')->name('provisioners')->controller(\App\Http\Controllers\Web\ProvisionerController::class)->group(function () {
+        Route::prefix('/provisioners')->name('provisioners')->controller(ProvisionerController::class)->group(function () {
             Route::get('/', 'index');
             Route::get('/new', 'create')->name('.create');
             Route::post('/', 'store')->name('.store');
@@ -358,7 +371,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
             Route::get('/network/nat', 'nat')->name('network.nat');
             Route::get('/network/ipv6', 'ipv6')->name('network.ipv6');
         });
-        Route::controller(\App\Http\Controllers\Web\NetworkFilterController::class)->group(function () {
+        Route::controller(NetworkFilterController::class)->group(function () {
             Route::get('/network/filters', 'index')->name('network.filters');
             Route::post('/network/filters', 'store')->name('network.filters.store');
             Route::put('/network/filters/{profile}', 'update')->whereNumber('profile')->name('network.filters.update');
@@ -417,10 +430,10 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
             Route::get('/{language}/export', 'export')->name('.export');
             Route::post('/{language}/import', 'import')->middleware('throttle:10,1')->name('.import');
         });
-        Route::get('/resource-packs', [\App\Http\Controllers\Web\ResourcePackController::class, 'index'])->name('resource-packs');
-        Route::post('/resource-packs', [\App\Http\Controllers\Web\ResourcePackController::class, 'store'])->name('resource-packs.store');
-        Route::put('/resource-packs/{pack}', [\App\Http\Controllers\Web\ResourcePackController::class, 'update'])->name('resource-packs.update');
-        Route::delete('/resource-packs/{pack}', [\App\Http\Controllers\Web\ResourcePackController::class, 'destroy'])->name('resource-packs.destroy');
+        Route::get('/resource-packs', [ResourcePackController::class, 'index'])->name('resource-packs');
+        Route::post('/resource-packs', [ResourcePackController::class, 'store'])->name('resource-packs.store');
+        Route::put('/resource-packs/{pack}', [ResourcePackController::class, 'update'])->name('resource-packs.update');
+        Route::delete('/resource-packs/{pack}', [ResourcePackController::class, 'destroy'])->name('resource-packs.destroy');
         Route::get('/providers', [ProviderAccountController::class, 'index'])->name('providers');
         Route::post('/providers', [ProviderAccountController::class, 'store'])->middleware('throttle:10,1')->name('providers.store');
         Route::put('/providers/{account}', [ProviderAccountController::class, 'update'])->name('providers.update');

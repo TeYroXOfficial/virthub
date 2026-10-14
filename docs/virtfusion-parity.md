@@ -64,5 +64,5 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
     - Odtworzenie na zastępczym hoście.
 16. **Migracje VM między hypervisorami.** Na zimno (kopiowanie dysku) i na żywo (libvirt migrate z kopiowaniem dysku), z wyborem docelowego węzła i webhookiem `server.migrated`.
 17. **Kopie przyrostowe.** Dirty bitmaps QEMU (tylko zmienione bloki), łańcuch pełna + przyrostowe, przywracanie z łańcucha.
-18. **Dokumentacja API.** OpenAPI 3 dla wszystkich endpointów, opisy w każdym języku panelu, przykłady (curl, PHP, Python, JavaScript), wbudowana konsola do testowania zapytań (jak Postman) i eksport kolekcji Postman.
+18. ✅ **Dokumentacja API.** Strona `/api-docs`: OpenAPI 3 dla wszystkich endpointów, opisy w każdym języku panelu, przykłady (curl, PHP, Python, JavaScript, Go), wbudowana konsola do testowania zapytań (jak Postman, z historią) i eksport kolekcji Postman.
 19. **Sieci izolowane i wiele kart.** Prywatne sieci między maszynami klienta (osobny mostek bez łącza), druga i kolejne karty sieciowe maszyny.
