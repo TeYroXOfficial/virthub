@@ -52,6 +52,7 @@
                 ['panel.admin.billing.customers', __('Portfele'), 'wallet', 'panel.admin.billing.customer*', 'admin.billing'],
                 ['panel.admin.billing.gateways', __('Bramki płatności'), 'key', 'panel.admin.billing.gateways*', 'admin'],
                 ['panel.admin.billing.settings', __('Ustawienia'), 'sliders', 'panel.admin.billing.settings*', 'admin.billing'],
+                ['panel.admin.billing-modules', __('WHMCS, Blesta, Paymenter'), 'puzzle', 'panel.admin.billing-modules*', 'admin'],
             ]],
             [__('Wsparcie'), 'ticket', [
                 ['panel.admin.tickets', __('Zgłoszenia'), 'ticket', 'panel.admin.tickets|panel.admin.tickets.show', 'admin.tickets'],

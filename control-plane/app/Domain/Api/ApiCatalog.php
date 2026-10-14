@@ -35,6 +35,7 @@ class ApiCatalog
         $server = self::path('server', __('Identyfikator maszyny'), 42);
         $serverExample = self::serverExample();
         $job = ['message' => __('Polecenie zostało przekazane do hypervisora.'), 'job_id' => 1234];
+        $ref = self::path('reference', 'billing_reference', 'whmcs-service-1001', 'string');
 
         return [
             // --- konto --------------------------------------------------------
@@ -187,6 +188,27 @@ class ApiCatalog
             self::e('billing.sso', 'billing', 'POST', '/billing/sso-token', __('Logowanie jednym kliknięciem'), __('Jednorazowy link logowania klienta do panelu (np. przycisk „Zarządzaj serwerem” w WHMCS). Opcjonalnie od razu na stronę maszyny.'), 'billing',
                 body: [self::param('customer_email', 'string', true, __('E-mail klienta'), 'klient@example.com'), self::param('server_id', 'integer', false, __('Id maszyny'), 42)],
                 response: ['url' => url('/sso/abc…'), 'expires_in' => 30]),
+            self::e('billing.catalog', 'billing', 'GET', '/billing/catalog', __('Katalog dla modułu'), __('Pakiety, systemy i lokalizacje — do list wyboru w konfiguracji produktu (WHMCS, Blesta, Paymenter).'), 'billing',
+                response: ['packages' => [['slug' => 'vps-s', 'name' => 'VPS S', 'vcpu' => 1, 'ram_mb' => 1024, 'disk_gb' => 20, 'bandwidth_gb' => 2000, 'ip_count' => 1, 'ipv6_count' => 0]],
+                    'templates' => [['id' => 3, 'name' => 'Debian 13', 'family' => 'debian', 'virtualization' => 'kvm', 'min_disk_gb' => 10]], 'locations' => [['id' => 1, 'name' => 'Warszawa']]]),
+            self::e('billing.show', 'billing', 'GET', '/billing/services/{reference}', __('Stan usługi'), __('Stan, zasoby, adresy IP, system i transfer maszyny — do panelu klienta w systemie rozliczeniowym. busy = trwa operacja.'), 'billing',
+                path: [$ref], response: ['data' => self::serverExample() + ['billing_reference' => 'whmcs-service-1001', 'busy' => false]]),
+            self::e('billing.power', 'billing', 'POST', '/billing/services/{reference}/power', __('Zasilanie usługi'), __('start, stop, reboot albo force-off — przyciski w panelu klienta systemu rozliczeniowego.'), 'billing',
+                path: [$ref], body: [self::param('action', 'string', true, __('Akcja'), 'reboot', ['start', 'stop', 'reboot', 'force-off'])], status: 202, response: $job),
+            self::e('billing.rebuild', 'billing', 'POST', '/billing/services/{reference}/rebuild', __('Reinstalacja usługi'), __('Instaluje system od nowa — kasuje dane na dysku. Nowe hasło roota przez /credentials.'), 'billing',
+                path: [$ref], body: [self::param('template', 'integer', true, __('Id systemu'), 3), self::param('ssh_keys', 'array', false, __('Publiczne klucze SSH'), []), self::param('confirm', 'boolean', true, __('Musi być true'), true)], status: 202, response: $job),
+            self::e('billing.resize', 'billing', 'POST', '/billing/services/{reference}/resize', __('Zmiana pakietu usługi'), __('Upgrade albo downgrade z systemu rozliczeniowego. Maszyna musi być zatrzymana (inaczej 409); dysku nie da się zmniejszyć.'), 'billing',
+                path: [$ref], body: [self::param('package', 'string', true, __('Slug nowego pakietu'), 'vps-m')], status: 202, response: $job),
+            self::e('billing.password', 'billing', 'POST', '/billing/services/{reference}/password', __('Reset hasła usługi'), __('Generuje nowe hasło roota w działającym systemie; odbierasz je przez /credentials.'), 'billing',
+                path: [$ref], status: 202, response: $job),
+            self::e('billing.credentials', 'billing', 'POST', '/billing/services/{reference}/credentials', __('Hasło usługi'), __('Hasło początkowe, po reinstalacji albo resecie — zwracane jeden raz (moduł zapisuje je w danych usługi).'), 'billing',
+                path: [$ref], response: ['username' => 'root', 'password' => 'Xy7…', 'available' => true]),
+            self::e('billing.console', 'billing', 'POST', '/billing/services/{reference}/console', __('Konsola usługi'), __('Jednorazowy adres konsoli w przeglądarce (60 s). Maszyna musi działać.'), 'billing',
+                path: [$ref], response: ['url' => url('/console/abc…'), 'expires_in' => 60]),
+            self::e('billing.service_sso', 'billing', 'POST', '/billing/services/{reference}/sso', __('Logowanie na stronę usługi'), __('Jednorazowy link logowania właściciela prosto na stronę maszyny w panelu.'), 'billing',
+                path: [$ref], response: ['url' => url('/sso/abc…'), 'expires_in' => 30]),
+            self::e('billing.metrics', 'billing', 'GET', '/billing/services/{reference}/metrics', __('Zużycie usługi'), __('Uśrednione próbki CPU, RAM, dysku i sieci za godzinę, dobę albo tydzień.'), 'billing',
+                path: [$ref], query: [self::param('range', 'string', false, __('Zakres'), 'day', ['hour', 'day', 'week'])], response: ['range' => 'day', 'points' => []]),
         ];
     }
 

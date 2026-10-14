@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ServerState;
 use App\Models\Hypervisor;
 use App\Models\IpAddress;
 use App\Models\IpPool;
 use App\Models\OsTemplate;
 use App\Models\Server;
+use App\Models\ServerJob;
 use App\Models\User;
 use App\Models\VpsPackage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -181,5 +183,72 @@ class BillingIntegrationTest extends TestCase
         $this->postJson('/api/v1/billing/sso-token', [
             'customer_email' => 'nieznany@example.com',
         ])->assertNotFound();
+    }
+
+    private function runningService(): Server
+    {
+        $this->actingAsBilling();
+        $this->postJson('/api/v1/billing/provision', $this->payload(['billing_reference' => 'WHMCS-77']))->assertCreated();
+        $server = Server::where('billing_reference', 'WHMCS-77')->firstOrFail();
+        ServerJob::query()->update(['status' => ServerJob::STATUS_DONE]);
+        $server->forceFill(['state' => ServerState::Running, 'agent_uuid' => '11111111-2222-3333-4444-555555555555'])->save();
+
+        return $server;
+    }
+
+    public function test_katalog_dla_konfiguracji_modulu(): void
+    {
+        $this->actingAsBilling();
+        $this->getJson('/api/v1/billing/catalog')->assertOk()
+            ->assertJsonPath('packages.0.slug', 'standard')
+            ->assertJsonPath('templates.0.id', $this->template->id)
+            ->assertJsonStructure(['packages' => [['slug', 'name', 'vcpu', 'ram_mb', 'disk_gb']], 'templates' => [['id', 'name', 'family']], 'locations']);
+    }
+
+    public function test_sterowanie_usluga_z_billingu(): void
+    {
+        $server = $this->runningService();
+        $password = $server->fresh()->root_password;
+
+        $this->getJson('/api/v1/billing/services/WHMCS-77')->assertOk()
+            ->assertJsonPath('data.state', 'running')
+            ->assertJsonPath('data.billing_reference', 'WHMCS-77')
+            ->assertJsonPath('data.busy', false)
+            ->assertJsonStructure(['data' => ['hostname', 'resources', 'ip_addresses', 'os', 'traffic']]);
+
+        $this->postJson('/api/v1/billing/services/WHMCS-77/credentials')->assertOk()
+            ->assertJsonPath('password', $password)->assertJsonPath('username', 'root');
+        $this->postJson('/api/v1/billing/services/WHMCS-77/credentials')->assertOk()->assertJsonPath('available', false);
+
+        $this->postJson('/api/v1/billing/services/WHMCS-77/power', ['action' => 'reboot'])->assertStatus(202)->assertJsonStructure(['job_id']);
+        $this->postJson('/api/v1/billing/services/WHMCS-77/power', ['action' => 'explode'])->assertUnprocessable();
+        $this->assertSame('reboot', $server->jobs()->where('action', 'power')->latest('id')->first()->payload['action']);
+
+        $this->postJson('/api/v1/billing/services/WHMCS-77/password')->assertStatus(202);
+        $this->assertTrue($server->jobs()->where('action', 'password')->exists());
+
+        $this->postJson('/api/v1/billing/services/WHMCS-77/console')->assertOk()->assertJsonStructure(['url', 'expires_in']);
+        $sso = $this->postJson('/api/v1/billing/services/WHMCS-77/sso')->assertOk()->json('url');
+        $this->assertStringContainsString('/sso/', $sso);
+
+        $this->getJson('/api/v1/billing/services/WHMCS-77/metrics?range=day')->assertOk();
+        $this->getJson('/api/v1/billing/services/WHMCS-77/metrics?range=year')->assertStatus(422);
+
+        // Zmiana pakietu na działającej maszynie: czytelny błąd, nie 500.
+        VpsPackage::factory()->create(['slug' => 'large', 'disk_gb' => 200]);
+        $this->postJson('/api/v1/billing/services/WHMCS-77/resize', ['package' => 'large'])->assertStatus(409);
+        $this->postJson('/api/v1/billing/services/WHMCS-77/resize', ['package' => 'standard'])->assertOk()->assertJsonPath('idempotent', true);
+
+        $this->postJson('/api/v1/billing/services/WHMCS-77/rebuild', ['template' => $this->template->id])->assertUnprocessable();
+        $this->postJson('/api/v1/billing/services/WHMCS-77/rebuild', ['template' => $this->template->id, 'confirm' => true])->assertStatus(202);
+
+        $this->getJson('/api/v1/billing/services/NIE-MA')->assertNotFound();
+    }
+
+    public function test_sterowanie_wymaga_tokenu_billing(): void
+    {
+        $this->runningService();
+        Sanctum::actingAs(User::factory()->create(['role' => User::ROLE_ADMIN]), ['admin']);
+        $this->postJson('/api/v1/billing/services/WHMCS-77/power', ['action' => 'stop'])->assertForbidden();
     }
 }

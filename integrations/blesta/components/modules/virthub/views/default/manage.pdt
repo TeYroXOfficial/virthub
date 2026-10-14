@@ -1,0 +1,41 @@
+<?php
+$this->Widget->clear();
+$this->Widget->setLinkButtons([
+    ['name' => $this->_('Virthub.add_server', true), 'attributes' => ['href' => $this->base_uri . 'settings/company/modules/addrow/' . $module->id]],
+    ['name' => $this->_('Virthub.add_group', true), 'attributes' => ['href' => $this->base_uri . 'settings/company/modules/addgroup/' . $module->id]],
+]);
+$this->Widget->create($this->_('Virthub.module_row_plural', true), ['id' => 'manage_virthub']);
+$rows = isset($module->rows) ? $module->rows : [];
+?>
+<?php if (count($rows) > 0) { ?>
+<table class="table">
+    <thead>
+        <tr>
+            <th><?php $this->_('Virthub.server_name'); ?></th>
+            <th><?php $this->_('Virthub.panel_url'); ?></th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    <?php foreach ($rows as $row) { ?>
+        <tr>
+            <td><?php echo $this->Html->safe($row->meta->server_name); ?></td>
+            <td><?php echo $this->Html->safe($row->meta->panel_url); ?></td>
+            <td>
+                <a class="btn btn-sm btn-outline-secondary" href="<?php echo $this->Html->safe($this->base_uri . 'settings/company/modules/editrow/' . $module->id . '/' . $row->id . '/'); ?>"><?php $this->_('Virthub.edit'); ?></a>
+                <?php
+                $this->Form->create($this->base_uri . 'settings/company/modules/deleterow/', ['class' => 'd-inline']);
+                $this->Form->fieldHidden('id', $module->id);
+                $this->Form->fieldHidden('row_id', $row->id);
+                ?>
+                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('<?php echo $this->Html->safe($this->_('Virthub.confirm_delete_server', true)); ?>')"><?php $this->_('Virthub.delete'); ?></button>
+                <?php $this->Form->end(); ?>
+            </td>
+        </tr>
+    <?php } ?>
+    </tbody>
+</table>
+<?php } else { ?>
+<div class="empty_section"><div class="empty_box"><?php $this->_('Virthub.no_servers'); ?></div></div>
+<?php } ?>
+<?php $this->Widget->end(); ?>

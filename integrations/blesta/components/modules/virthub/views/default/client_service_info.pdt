@@ -1,0 +1,6 @@
+<table class="table table-sm table-condensed">
+    <tr><th><?php $this->_('Virthub.hostname'); ?></th><td><?php echo $this->Html->safe(isset($service_fields->virthub_hostname) ? $service_fields->virthub_hostname : ''); ?></td></tr>
+    <tr><th><?php $this->_('Virthub.ip_addresses'); ?></th><td><?php echo $this->Html->safe(isset($service_fields->virthub_ip) ? $service_fields->virthub_ip : ''); ?></td></tr>
+    <tr><th><?php $this->_('Virthub.username'); ?></th><td><?php echo $this->Html->safe(isset($service_fields->virthub_username) ? $service_fields->virthub_username : 'root'); ?></td></tr>
+    <tr><th><?php $this->_('Virthub.password'); ?></th><td><code><?php echo $this->Html->safe(isset($service_fields->virthub_password) ? $service_fields->virthub_password : ''); ?></code></td></tr>
+</table>

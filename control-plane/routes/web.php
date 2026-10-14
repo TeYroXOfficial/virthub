@@ -16,6 +16,7 @@ use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\BackupAdminController;
 use App\Http\Controllers\Web\BillingAdminController;
 use App\Http\Controllers\Web\BillingController;
+use App\Http\Controllers\Web\BillingModulesController;
 use App\Http\Controllers\Web\CloudServerController;
 use App\Http\Controllers\Web\ConsoleController;
 use App\Http\Controllers\Web\DatabaseHostController;
@@ -281,6 +282,8 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
 Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel.admin.')->group(function () {
     Route::get('/', [AdminController::class, 'index'])->middleware('admin:panel')->name('index');
     Route::get('/logs', [AdminController::class, 'logs'])->middleware('admin')->name('logs');
+    Route::get('/billing-modules', [BillingModulesController::class, 'index'])->middleware('admin')->name('billing-modules');
+    Route::get('/billing-modules/{system}.zip', [BillingModulesController::class, 'download'])->middleware('admin')->name('billing-modules.download');
 
     Route::middleware('admin:admin.hypervisors')->group(function () {
         Route::get('/hypervisors', [AdminController::class, 'hypervisors'])->name('hypervisors');
