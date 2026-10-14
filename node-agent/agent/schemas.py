@@ -283,6 +283,9 @@ class IsoDownloadRequest(BaseModel):
     name: str = Field(pattern=ISO_NAME, description="Nazwa pliku na węźle, np. debian-13-netinst.iso")
     url: str = Field(pattern=r"^https?://[^\s]{3,2000}$")
     sha256: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{64}$")
+    # Adres podany przez klienta: tylko hosty publiczne (bez sieci węzła), mniejszy limit.
+    untrusted: bool = False
+    max_gb: int | None = Field(default=None, ge=1, le=100)
 
 
 class TemplateDownloadRequest(BaseModel):

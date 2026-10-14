@@ -3207,5 +3207,21 @@
     "Profil filtrowania sieci": "Network filtering profile",
     "Profil": "Profile",
     "— domyślny —": "— default —",
-    "Anty-spoofing, blokada RA IPv6 i serwera DHCP oraz reguły administratora — przed zaporą klienta.": "Anti-spoofing, blocking IPv6 RA and DHCP servers, and administrator rules — before the customer's firewall."
+    "Anty-spoofing, blokada RA IPv6 i serwera DHCP oraz reguły administratora — przed zaporą klienta.": "Anti-spoofing, blocking IPv6 RA and DHCP servers, and administrator rules — before the customer's firewall.",
+    "Własne obrazy ISO są dostępne tylko dla maszyn KVM.": "Custom ISO images are only available for KVM machines.",
+    "Własne obrazy ISO są wyłączone przez administratora.": "Custom ISO images are disabled by the administrator.",
+    "Limit: :count własny obraz na maszynę — usuń poprzedni.|Limit: :count własne obrazy na maszynę — usuń poprzedni.|Limit: :count własnych obrazów na maszynę — usuń poprzedni.": "Limit: :count custom image per machine — delete the previous one.|Limit: :count custom images per machine — delete the previous one.",
+    "Węzeł pobiera obraz — po zakończeniu pojawi się na liście płyt.": "The node is downloading the image — it will appear in the disc list when finished.",
+    "Obraz usunięty.": "Image deleted.",
+    "Zapisano ustawienia własnych obrazów klientów.": "Customer image settings saved.",
+    "Własne obrazy klientów": "Customer images",
+    "Klient może podać adres własnego ISO; węzeł jego maszyny pobiera go tylko z adresów publicznych (bez dostępu do sieci węzła), a obraz znika razem z maszyną. Obecnie: :count.": "Customers can provide the URL of their own ISO; their machine's node downloads it only from public addresses (no access to the node's network), and the image is removed together with the machine. Currently: :count.",
+    "Obrazy na maszynę (0 = wyłączone)": "Images per machine (0 = disabled)",
+    "Maksymalny rozmiar (GB)": "Maximum size (GB)",
+    "Własny obraz ISO": "Custom ISO image",
+    "Usunąć obraz :name?": "Delete image :name?",
+    "np. Alpine 3.20": "e.g. Alpine 3.20",
+    "Adres URL obrazu": "Image URL",
+    "Pobierz obraz": "Download image",
+    "Do :gb GB. Obraz widzi tylko ta maszyna i znika razem z nią.": "Up to :gb GB. Only this machine sees the image and it is removed together with it."
 }

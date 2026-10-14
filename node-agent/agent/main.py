@@ -137,7 +137,7 @@ def _reset_password(uuid: str, req: PasswordResetRequest) -> dict[str, Any]:
 
 def _download_iso(req: IsoDownloadRequest) -> dict[str, Any]:
     try:
-        return driver.isos.download(req.name, req.url, req.sha256)
+        return driver.isos.download(req.name, req.url, req.sha256, untrusted=req.untrusted, max_gb=req.max_gb)
     except IsoError as exc:
         raise DriverError(str(exc)) from exc
 

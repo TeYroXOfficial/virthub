@@ -10,6 +10,8 @@ use App\Models\AuditLog;
 use App\Models\Hypervisor;
 use App\Models\IsoDownload;
 use App\Models\IsoImage;
+use App\Models\Server;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -45,12 +47,61 @@ class IsoLibrary
         return $iso;
     }
 
+    /** Domyślne limity własnych obrazów klienta (Administracja → Obrazy ISO). */
+    public const CUSTOM_LIMIT = 1;
+
+    public const CUSTOM_MAX_GB = 10;
+
+    public static function customLimit(): int
+    {
+        return (int) Setting::get('iso.custom_limit', (string) self::CUSTOM_LIMIT);
+    }
+
+    public static function customMaxGb(): int
+    {
+        return max(1, (int) Setting::get('iso.custom_max_gb', (string) self::CUSTOM_MAX_GB));
+    }
+
+    /**
+     * Własny obraz klienta z adresu URL — pobierany tylko na węzeł maszyny, z
+     * ochroną sieci węzła (agent odrzuca adresy prywatne) i limitem rozmiaru.
+     */
+    public function addCustom(Server $server, string $name, string $url, ?User $actor = null): IsoImage
+    {
+        if ($server->isContainer() || $server->hypervisor_id === null) {
+            throw ValidationException::withMessages(['custom_url' => __('Własne obrazy ISO są dostępne tylko dla maszyn KVM.')]);
+        }
+        $limit = self::customLimit();
+        if ($limit <= 0) {
+            throw ValidationException::withMessages(['custom_url' => __('Własne obrazy ISO są wyłączone przez administratora.')]);
+        }
+        if (IsoImage::query()->where('server_id', $server->id)->count() >= $limit) {
+            throw ValidationException::withMessages(['custom_url' => trans_choice('Limit: :count własny obraz na maszynę — usuń poprzedni.|Limit: :count własne obrazy na maszynę — usuń poprzedni.|Limit: :count własnych obrazów na maszynę — usuń poprzedni.', $limit)]);
+        }
+
+        $iso = IsoImage::create([
+            'name' => $name,
+            'filename' => 'vm'.$server->id.'-'.Str::lower(Str::random(8)).'.iso',
+            'url' => $url,
+            'is_public' => false,
+            'server_id' => $server->id,
+        ]);
+        $download = IsoDownload::create(['iso_image_id' => $iso->id, 'hypervisor_id' => $server->hypervisor_id, 'status' => IsoDownload::STATUS_QUEUED]);
+        AuditLog::record('iso.custom_added', $server, ['name' => $name, 'url' => $url], $actor);
+        DownloadIsoJob::dispatch($download->id);
+
+        return $iso;
+    }
+
     /** Zleca pobranie na węzły, które jeszcze go nie mają. */
     public function distribute(IsoImage $iso, bool $retryFailed = false): int
     {
         $queued = 0;
+        $nodes = $iso->isCustom()
+            ? Hypervisor::query()->whereKey($iso->owner?->hypervisor_id)->get()
+            : $this->kvmNodes();
 
-        foreach ($this->kvmNodes() as $node) {
+        foreach ($nodes as $node) {
             $download = IsoDownload::firstOrNew(['iso_image_id' => $iso->id, 'hypervisor_id' => $node->id]);
 
             if ($download->exists && ($download->status === IsoDownload::STATUS_READY
@@ -95,11 +146,28 @@ class IsoLibrary
         $iso->delete();
     }
 
+    /** Sprzątanie po usuniętej maszynie: jej własne obrazy znikają z węzła. */
+    public function deleteCustomFor(Server $server): void
+    {
+        foreach (IsoImage::query()->where('server_id', $server->id)->with('downloads.hypervisor')->get() as $iso) {
+            foreach ($iso->downloads as $download) {
+                try {
+                    (new AgentClient($download->hypervisor))->deleteIso($iso->filename);
+                } catch (AgentException) {
+                    // Węzeł niedostępny — plik zostanie jako sierota.
+                }
+            }
+            $iso->delete();
+        }
+    }
+
     /** @return Collection<int, IsoImage> obrazy, które można zamontować w maszynie na danym węźle */
-    public function availableFor(?int $hypervisorId, bool $includeHidden): Collection
+    public function availableFor(?int $hypervisorId, bool $includeHidden, ?Server $server = null): Collection
     {
         return IsoImage::query()
-            ->when(! $includeHidden, fn ($q) => $q->where('is_public', true))
+            // Własne obrazy klientów: tylko w maszynie, która je dodała.
+            ->where(fn ($q) => $q->whereNull('server_id')->when($server, fn ($w) => $w->orWhere('server_id', $server->id)))
+            ->when(! $includeHidden, fn ($q) => $q->where(fn ($w) => $w->where('is_public', true)->when($server, fn ($v) => $v->orWhere('server_id', $server->id))))
             ->whereHas('downloads', fn ($q) => $q
                 ->where('hypervisor_id', $hypervisorId)
                 ->where('status', IsoDownload::STATUS_READY))

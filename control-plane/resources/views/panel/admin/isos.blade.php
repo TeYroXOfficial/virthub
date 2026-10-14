@@ -18,6 +18,19 @@
         </div>
     </div>
 
+    <form method="POST" action="{{ route('panel.admin.isos.custom-settings') }}" class="card">
+        @csrf @method('PUT')
+        <h3 class="card-title"><x-icon name="upload" :size="16"/> {{ __('Własne obrazy klientów') }}</h3>
+        <p class="muted">{{ __('Klient może podać adres własnego ISO; węzeł jego maszyny pobiera go tylko z adresów publicznych (bez dostępu do sieci węzła), a obraz znika razem z maszyną. Obecnie: :count.', ['count' => $customCount]) }}</p>
+        <div class="grid grid-2">
+            <div class="field"><label for="ci-limit">{{ __('Obrazy na maszynę (0 = wyłączone)') }}</label>
+                <input id="ci-limit" name="custom_limit" type="number" min="0" max="10" value="{{ $customLimit }}"></div>
+            <div class="field"><label for="ci-gb">{{ __('Maksymalny rozmiar (GB)') }}</label>
+                <input id="ci-gb" name="custom_max_gb" type="number" min="1" max="100" value="{{ $customMaxGb }}"></div>
+        </div>
+        <button class="btn" type="submit">{{ __('Zapisz') }}</button>
+    </form>
+
     <details class="form-block card" @if($isos->isEmpty() || $errors->any()) open @endif>
         <summary>{{ __('Dodaj obraz') }}</summary>
         <form method="POST" action="{{ route('panel.admin.isos.store') }}">

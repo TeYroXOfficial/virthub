@@ -9,11 +9,15 @@ zamontować.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import logging
 import os
 import re
+import socket
+import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import urljoin, urlsplit
 
 from .config import Settings
 from .jobs import progress
@@ -27,8 +31,47 @@ CHUNK = 1024 * 1024
 MAX_BYTES = int(os.environ.get("VH_ISO_MAX_GB", "20")) * 1024**3
 
 
+MAX_REDIRECTS = 5
+
+
 class IsoError(RuntimeError):
     pass
+
+
+def check_public_url(url: str) -> None:
+    """Adres od klienta nie może prowadzić do sieci węzła (SSRF): wszystkie
+    adresy hosta muszą być publiczne. Sprawdzane przy każdym przekierowaniu."""
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise IsoError("Dozwolone są tylko adresy http(s).")
+    try:
+        infos = socket.getaddrinfo(parts.hostname, parts.port or (443 if parts.scheme == "https" else 80),
+                                   proto=socket.IPPROTO_TCP)
+    except socket.gaierror as exc:
+        raise IsoError(f"Nie można rozwiązać {parts.hostname}: {exc}") from None
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if not ip.is_global:
+            raise IsoError(f"Adres {parts.hostname} wskazuje na sieć prywatną ({ip}) — odrzucono.")
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):  # noqa: D401 — przekierowania obsługujemy sami
+        return None
+
+
+def _open_untrusted(url: str):
+    opener = urllib.request.build_opener(_NoRedirect)
+    for _ in range(MAX_REDIRECTS + 1):
+        check_public_url(url)
+        try:
+            return opener.open(urllib.request.Request(url, headers={"User-Agent": "VirtHub-Agent"}), timeout=60)
+        except urllib.error.HTTPError as exc:
+            if exc.code in (301, 302, 303, 307, 308) and exc.headers.get("Location"):
+                url = urljoin(url, exc.headers["Location"])
+                continue
+            raise
+    raise IsoError("Za dużo przekierowań.")
 
 
 class IsoLibrary:
@@ -52,25 +95,28 @@ class IsoLibrary:
             for p in sorted(self.dir.glob("*.iso")) if p.is_file()
         ]
 
-    def download(self, name: str, url: str, sha256: str | None = None) -> dict:
+    def download(self, name: str, url: str, sha256: str | None = None, *, untrusted: bool = False,
+                 max_gb: int | None = None) -> dict:
         target = self.path(name)
         self.dir.mkdir(parents=True, exist_ok=True)
         partial = target.with_suffix(".iso.part")
         digest = hashlib.sha256()
         size = 0
 
+        limit = min(MAX_BYTES, max_gb * 1024**3) if max_gb else MAX_BYTES
         log.info("Pobieram ISO %s z %s", name, url)
         request = urllib.request.Request(url, headers={"User-Agent": "VirtHub-Agent"})
         try:
-            with urllib.request.urlopen(request, timeout=60) as response, partial.open("wb") as out:
+            opened = _open_untrusted(url) if untrusted else urllib.request.urlopen(request, timeout=60)
+            with opened as response, partial.open("wb") as out:
                 length = response.headers.get("Content-Length")
                 tracker = TransferProgress(total=int(length) if length and length.isdigit() else None)
                 tracker.update(0, force=True)
                 while chunk := response.read(CHUNK):
                     size += len(chunk)
                     tracker.update(size)
-                    if size > MAX_BYTES:
-                        raise IsoError(f"Obraz przekracza limit {MAX_BYTES // 1024**3} GB (VH_ISO_MAX_GB).")
+                    if size > limit:
+                        raise IsoError(f"Obraz przekracza limit {limit // 1024**3} GB.")
                     digest.update(chunk)
                     out.write(chunk)
         except IsoError:

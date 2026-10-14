@@ -91,6 +91,44 @@
                     {{ __('Instalację z płyty prowadzisz w konsoli. Po instalacji wysuń płytę albo wyłącz rozruch z niej. Adresy IP maszyny widzisz w zakładce Przegląd — ustaw je w instalatorze.') }}
                 </p>
             </form>
+
+            @php
+                $customIsos = \App\Models\IsoImage::query()->where('server_id', $server->id)->with('downloads')->orderBy('id')->get();
+                $customLimit = \App\Domain\Provisioning\IsoLibrary::customLimit();
+            @endphp
+            @if ($customLimit > 0 || $customIsos->isNotEmpty())
+                <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border)">
+                    <h4 style="margin:0 0 8px">{{ __('Własny obraz ISO') }}</h4>
+                    @foreach ($customIsos as $custom)
+                        @php $dl = $custom->downloads->first(); @endphp
+                        <div class="setting-row" style="display:flex; gap:10px; align-items:center; margin-bottom:6px">
+                            <span style="flex:1">{{ $custom->name }}
+                                @if ($dl?->status === 'ready') <span class="pill ok">{{ __('gotowy') }}</span>
+                                @elseif ($dl?->status === 'failed') <span class="pill critical" title="{{ $dl->error }}">{{ __('błąd') }}</span>
+                                @else <span class="pill warning">{{ __('pobieranie') }}@if ($dl?->progress) {{ $dl->progress }}%@endif</span> @endif
+                                @if ($dl?->status === 'failed') <div class="hint" style="color:var(--critical)">{{ \Illuminate\Support\Str::limit($dl->error, 160) }}</div> @endif
+                            </span>
+                            <form method="POST" action="{{ route('panel.servers.iso.custom.destroy', [$server, $custom]) }}" style="margin:0" data-confirm="{{ __('Usunąć obraz :name?', ['name' => $custom->name]) }}">
+                                @csrf @method('DELETE') <button class="btn btn-sm" type="submit" @disabled($server->iso_image_id === $custom->id)>{{ __('Usuń') }}</button>
+                            </form>
+                        </div>
+                    @endforeach
+                    @if ($customIsos->count() < $customLimit)
+                        <form method="POST" action="{{ route('panel.servers.iso.custom', $server) }}">
+                            @csrf
+                            <div class="grid grid-2">
+                                <div class="field"><label for="ci-name">{{ __('Nazwa') }}</label>
+                                    <input id="ci-name" name="custom_name" maxlength="100" required value="{{ old('custom_name') }}" placeholder="{{ __('np. Alpine 3.20') }}"></div>
+                                <div class="field"><label for="ci-url">{{ __('Adres URL obrazu') }}</label>
+                                    <input id="ci-url" name="custom_url" type="url" maxlength="2000" required value="{{ old('custom_url') }}" placeholder="https://…/install.iso"></div>
+                            </div>
+                            @error('custom_url') <div class="hint" style="color:var(--critical)">{{ $message }}</div> @enderror
+                            <button class="btn" type="submit">{{ __('Pobierz obraz') }}</button>
+                            <span class="hint">{{ __('Do :gb GB. Obraz widzi tylko ta maszyna i znika razem z nią.', ['gb' => \App\Domain\Provisioning\IsoLibrary::customMaxGb()]) }}</span>
+                        </form>
+                    @endif
+                </div>
+            @endif
         </div>
     @endif
 

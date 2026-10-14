@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
+use App\Domain\Provisioning\IsoLibrary;
 use App\Models\IsoDownload;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -39,7 +40,8 @@ class DownloadIsoJob implements ShouldQueue
 
         try {
             if ($download->agent_job_id === null) {
-                $jobId = $client->downloadIso($download->iso->filename, $download->iso->url, $download->iso->sha256);
+                $jobId = $client->downloadIso($download->iso->filename, $download->iso->url, $download->iso->sha256,
+                    $download->iso->isCustom() ? IsoLibrary::customMaxGb() : null);
                 $download->forceFill(['agent_job_id' => $jobId, 'status' => IsoDownload::STATUS_DOWNLOADING])->save();
                 $this->release(self::POLL_SECONDS);
 
