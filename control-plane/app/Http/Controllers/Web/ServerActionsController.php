@@ -274,6 +274,23 @@ class ServerActionsController extends Controller
         });
     }
 
+    public function elevate(Request $request, Server $server): RedirectResponse
+    {
+        $this->authorize('snapshots', $server);
+        $action = $request->validate(['action' => ['required', Rule::in(['start', 'commit', 'discard'])]])['action'];
+        try {
+            $this->provisioner->elevate($server, $action, $request->user());
+        } catch (\DomainException $e) {
+            return redirect()->to(route('panel.servers.show', $server).'#elevate')->withErrors(['elevate' => $e->getMessage()]);
+        }
+
+        return redirect()->to(route('panel.servers.show', $server).'#elevate')->with('status', match ($action) {
+            'start' => __('Włączam Elevate — od teraz zmiany dysku trafiają do nakładki.'),
+            'commit' => __('Zapisuję zmiany z nakładki na dysk — może to chwilę potrwać.'),
+            default => __('Odrzucam zmiany — maszyna wróci do stanu sprzed Elevate.'),
+        });
+    }
+
     public function storeCustomIso(Request $request, Server $server): RedirectResponse
     {
         $this->authorize('iso', $server);

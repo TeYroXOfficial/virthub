@@ -319,6 +319,12 @@ class TemplateBuildRequest(BaseModel):
     kms_key: str | None = Field(default=None, pattern=r"^[A-Z0-9]{5}(-[A-Z0-9]{5}){4}$")
 
 
+class ElevateRequest(BaseModel):
+    """Elevate: start = nakładka na dysk, commit = zapis zmian, discard = powrót do stanu sprzed startu."""
+
+    action: Literal["start", "commit", "discard"]
+
+
 class IsoMountRequest(BaseModel):
     """Płyta w wirtualnym napędzie maszyny KVM i kolejność rozruchu."""
 

@@ -158,6 +158,7 @@ class ServerProvisioner
     public function rebuild(Server $server, OsTemplate $template, array $sshKeys = [], ?User $actor = null): ServerJob
     {
         $this->assertAcceptsCommands($server);
+        $this->assertNotElevated($server);
 
         if ($template->virtualization !== $server->virtualization) {
             throw new \DomainException(
@@ -188,6 +189,7 @@ class ServerProvisioner
     public function resize(Server $server, VpsPackage $package, ?User $actor = null): ServerJob
     {
         $this->assertAcceptsCommands($server);
+        $this->assertNotElevated($server);
 
         if ($server->isRunning()) {
             throw new \DomainException(
@@ -260,6 +262,7 @@ class ServerProvisioner
     public function snapshot(Server $server, string $name, ?User $actor = null): ServerJob
     {
         $this->assertAcceptsCommands($server);
+        $this->assertNotElevated($server);
 
         $backup = Backup::create([
             'server_id' => $server->id,
@@ -282,6 +285,7 @@ class ServerProvisioner
     public function restore(Server $server, Backup $backup, ?User $actor = null): ServerJob
     {
         $this->assertAcceptsCommands($server);
+        $this->assertNotElevated($server);
 
         if (! $backup->isRestorable()) {
             throw new \DomainException(
@@ -434,6 +438,37 @@ class ServerProvisioner
     }
 
     // --- pomocnicze ---------------------------------------------------------
+
+    /**
+     * Elevate: start = zapisy dysku idą do nakładki, commit = zapis zmian do
+     * dysku, discard = powrót do stanu sprzed startu (z restartem działającej maszyny).
+     */
+    public function elevate(Server $server, string $action, ?User $actor = null): ServerJob
+    {
+        $this->assertAcceptsCommands($server);
+        if ($server->isContainer()) {
+            throw new \DomainException(__('Elevate jest dostępny tylko dla maszyn KVM.'));
+        }
+        if ($action === 'start' && $server->isElevated()) {
+            throw new \DomainException(__('Elevate już trwa — zatwierdź albo odrzuć zmiany.'));
+        }
+        if ($action !== 'start' && ! $server->isElevated()) {
+            throw new \DomainException(__('Maszyna nie ma aktywnego Elevate.'));
+        }
+
+        $job = $this->createJobRecord($server, 'elevate', $actor, ['action' => $action]);
+        AuditLog::record('server.elevate_'.$action, $server, [], $actor);
+        RunServerActionJob::dispatch($job->id);
+
+        return $job;
+    }
+
+    private function assertNotElevated(Server $server): void
+    {
+        if ($server->isElevated()) {
+            throw new \DomainException(__('Maszyna ma aktywny Elevate — najpierw zatwierdź albo odrzuć zmiany dysku.'));
+        }
+    }
 
     private function assertAcceptsCommands(Server $server): void
     {

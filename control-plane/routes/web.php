@@ -135,6 +135,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/rebuild', [ServerActionsController::class, 'rebuild'])->name('servers.rebuild');
     Route::post('/servers/{server}/resize', [ServerActionsController::class, 'resize'])->middleware('throttle:10,1')->name('servers.resize');
     Route::post('/servers/{server}/iso', [ServerActionsController::class, 'iso'])->name('servers.iso');
+    Route::post('/servers/{server}/elevate', [ServerActionsController::class, 'elevate'])->middleware('throttle:20,1')->name('servers.elevate');
     Route::post('/servers/{server}/iso/custom', [ServerActionsController::class, 'storeCustomIso'])->middleware('throttle:10,1')->name('servers.iso.custom');
     Route::delete('/servers/{server}/iso/custom/{iso}', [ServerActionsController::class, 'destroyCustomIso'])->name('servers.iso.custom.destroy');
     Route::post('/servers/{server}/password', [ServerActionsController::class, 'resetPassword'])->name('servers.password');

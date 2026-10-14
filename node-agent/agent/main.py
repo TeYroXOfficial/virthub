@@ -49,6 +49,7 @@ from .schemas import (
     TemplateDownloadRequest,
     TemplateBuildRequest,
     IsoMountRequest,
+    ElevateRequest,
     PasswordResetRequest,
     JobAccepted,
     JobState,
@@ -113,6 +114,7 @@ def _handlers() -> dict[str, Any]:
         ),
         "download_iso": lambda p: _download_iso(IsoDownloadRequest(**p)),
         "mount_iso": lambda p: driver.mount_iso(p["uuid"], IsoMountRequest(**p["body"])),
+        "elevate": lambda p: driver.elevate(p["uuid"], ElevateRequest(**p["body"]).action),
         "reset_password": lambda p: _reset_password(p["uuid"], PasswordResetRequest(**p["body"])),
     }
 
@@ -658,6 +660,19 @@ async def delete_iso(name: str) -> dict[str, Any]:
 )
 async def mount_iso(uuid: str, req: IsoMountRequest) -> JobAccepted:
     job_id = jobs.enqueue("mount_iso", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.post(
+    "/vm/{uuid}/elevate",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def elevate(uuid: str, req: ElevateRequest) -> JobAccepted:
+    """Elevate: nakładka na dysk (start), zapis zmian (commit) albo powrót do stanu sprzed startu (discard)."""
+    job_id = jobs.enqueue("elevate", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
     return JobAccepted(job_id=job_id)
 
 

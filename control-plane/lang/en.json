@@ -3265,5 +3265,21 @@
     "Historia (ostatnie 50)": "History (last 50)",
     "Początek": "Start",
     "Czas trwania": "Duration",
-    "Brak zamkniętych alertów.": "No resolved alerts."
+    "Brak zamkniętych alertów.": "No resolved alerts.",
+    "Elevate jest dostępny tylko dla maszyn KVM.": "Elevate is only available for KVM machines.",
+    "Elevate już trwa — zatwierdź albo odrzuć zmiany.": "Elevate is already active — commit or discard the changes.",
+    "Maszyna nie ma aktywnego Elevate.": "The machine has no active Elevate.",
+    "Maszyna ma aktywny Elevate — najpierw zatwierdź albo odrzuć zmiany dysku.": "The machine has an active Elevate — commit or discard the disk changes first.",
+    "Włączam Elevate — od teraz zmiany dysku trafiają do nakładki.": "Enabling Elevate — from now on disk changes go to the overlay.",
+    "Zapisuję zmiany z nakładki na dysk — może to chwilę potrwać.": "Writing the overlay changes to the disk — this may take a while.",
+    "Odrzucam zmiany — maszyna wróci do stanu sprzed Elevate.": "Discarding the changes — the machine will return to its state from before Elevate.",
+    "Elevate — próbne zmiany dysku": "Elevate — trial disk changes",
+    "aktywny od :time": "active since :time",
+    "Wszystkie zapisy na dysku trafiają do nakładki. Zatwierdź, żeby zachować zmiany, albo odrzuć, żeby wrócić do stanu sprzed włączenia (maszyna uruchomi się ponownie). Do tego czasu migawki, reinstalacja i zmiana pakietu są zablokowane.": "All disk writes go to the overlay. Commit to keep the changes, or discard to return to the state from before enabling it (the machine will restart). Until then snapshots, reinstalls and package changes are blocked.",
+    "Zatwierdź zmiany": "Commit changes",
+    "Odrzucić wszystkie zmiany na dysku od włączenia Elevate? Maszyna uruchomi się ponownie.": "Discard all disk changes since Elevate was enabled? The machine will restart.",
+    "Odrzuć zmiany": "Discard changes",
+    "Przed ryzykowną zmianą (aktualizacja systemu, nowy kernel, konfiguracja) włącz Elevate: dysk zostaje zamrożony, a zmiany idą do nakładki. Jeśli coś pójdzie nie tak — jednym kliknięciem wracasz do stanu sprzed zmian. Działa także na włączonej maszynie.": "Before a risky change (system upgrade, new kernel, configuration) enable Elevate: the disk is frozen and changes go to an overlay. If something goes wrong, one click takes you back to the state from before the changes. Works on a running machine too.",
+    "Włącz Elevate": "Enable Elevate",
+    "Elevate": "Elevate"
 }

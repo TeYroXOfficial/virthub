@@ -69,7 +69,7 @@
             'password' => __('zmiana hasła roota'), 'iso' => __('zmiana płyty ISO'), 'power' => __('operacja zasilania'),
             'network' => __('konfiguracja sieci'), 'snapshot' => __('tworzenie kopii'), 'restore' => __('przywracanie kopii'),
             'create' => __('utworzenie'), 'rebuild' => __('reinstalacja'), 'resize' => __('zmiana pakietu'), 'delete' => __('usunięcie'),
-            'firewall' => __('zapora'),
+            'firewall' => __('zapora'), 'elevate' => __('Elevate'),
         ];
     @endphp
 

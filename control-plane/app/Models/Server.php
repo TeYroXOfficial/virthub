@@ -44,6 +44,7 @@ class Server extends Model
             'root_password' => 'encrypted',
             'vnc_password' => 'encrypted',
             'suspended_at' => 'datetime',
+            'elevated_at' => 'datetime',
             'last_synced_at' => 'datetime',
             'firewall_enabled' => 'boolean',
             'firewall_locked' => 'boolean',
@@ -159,6 +160,11 @@ class Server extends Model
     public function isRunning(): bool
     {
         return $this->state === ServerState::Running;
+    }
+
+    public function isElevated(): bool
+    {
+        return $this->elevated_at !== null;
     }
 
     public function isSuspended(): bool
