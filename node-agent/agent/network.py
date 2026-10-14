@@ -78,17 +78,33 @@ class NetworkManager:
     def bridge_for(self, interfaces: list[NetworkInterfaceSpec]) -> str:
         """Mostek, do którego trzeba podpiąć maszynę.
 
-        Wszystkie adresy maszyny są jednego rodzaju (panel tego pilnuje), bo
-        maszyna ma jedną kartę sieciową: albo na mostku z kartą fizyczną,
-        albo na mostku NAT.
+        Wszystkie adresy maszyny są jednego rodzaju, bo maszyna ma jedną kartę
+        sieciową: mostek z kartą fizyczną (opcjonalnie VLAN), mostek NAT albo
+        mostek podsieci routowanych.
         """
-        if any(i.mode == "nat" for i in interfaces):
+        from . import l2
+
+        mode, vlan = l2.layout(interfaces)
+        if mode == "nat":
             return self.settings.nat_bridge
-        return self.settings.bridge
+        if mode == "routed":
+            return self.settings.routed_bridge
+        return l2.vlan_bridge(vlan) if vlan else self.settings.bridge
 
     def prepare(self, interfaces: list[NetworkInterfaceSpec]) -> str:
         """Przygotowuje mostek pod maszynę i zwraca jego nazwę."""
+        from . import l2
+
         self.nat.prepare(interfaces)
+        mode, vlan = l2.layout(interfaces)
+        if not self.settings.is_mock:
+            if mode == "routed":
+                l2.run_idempotent(l2.routed_bridge_commands(self.settings.routed_bridge))
+                self.nat._require_sysctl("/proc/sys/net/ipv4/ip_forward", "net.ipv4.ip_forward")
+                if any(i.version == 6 for i in interfaces):
+                    self.nat._require_sysctl("/proc/sys/net/ipv6/conf/all/forwarding", "net.ipv6.conf.all.forwarding")
+            elif vlan:
+                l2.run_idempotent(l2.vlan_commands(l2.vlan_parent(self.settings), vlan))
         return self.bridge_for(interfaces)
 
     # --- publiczne API ------------------------------------------------------
@@ -217,6 +233,7 @@ class NetworkManager:
             server_id, interfaces, firewall, policy, stateful=self.stateful(), net_filter=net_filter,
         ))
         self.nat.configure(server_id, interfaces)
+        self._sync_routes(server_id, interfaces)
         self._save_state(server_id, interfaces, firewall, policy, net_filter)
         log.info("Zastosowano %s reguł firewalla dla maszyny %s", len(firewall), server_id)
 
@@ -251,14 +268,34 @@ class NetworkManager:
                     pass
         return self._stateful
 
+    def _saved_interfaces(self, server_id: int) -> list[NetworkInterfaceSpec]:
+        try:
+            data = json.loads(self._state_file(server_id).read_text(encoding="utf-8"))
+            return [NetworkInterfaceSpec(**i) for i in data.get("interfaces", [])]
+        except (OSError, ValueError):
+            return []
+
+    def _sync_routes(self, server_id: int, interfaces: list[NetworkInterfaceSpec]) -> None:
+        """Trasy do adresów routowanych maszyny: nowe dodane, zwolnione usunięte."""
+        from . import l2
+
+        bridge = self.settings.routed_bridge
+        current = {i.address for i in interfaces if i.mode == "routed"}
+        stale = [i for i in self._saved_interfaces(server_id) if i.mode == "routed" and i.address not in current]
+        l2.run_idempotent(l2.route_commands(bridge, stale, "del") + l2.route_commands(bridge, interfaces))
+
     def teardown(self, server_id: int) -> None:
         """Sprząta reguły po usuniętej maszynie — inaczej adres wróciłby do puli
         z cudzymi regułami wciąż aktywnymi."""
+        from . import l2
+
+        saved = self._saved_interfaces(server_id)
         self.nat.teardown(server_id)
         self._state_file(server_id).unlink(missing_ok=True)
 
         if self.settings.is_mock:
             return
+        l2.run_idempotent(l2.route_commands(self.settings.routed_bridge, saved, "del"))
 
         chain = f"vm_{server_id}"
         iface = interface_name(server_id)

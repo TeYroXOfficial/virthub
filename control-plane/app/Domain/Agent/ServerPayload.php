@@ -38,8 +38,16 @@ class ServerPayload
             'prefix' => $pool->prefix,
             'gateway' => $pool->gateway,
             'version' => $ip->version,
-            'mode' => $pool->isNat() ? 'nat' : 'bridged',
+            'mode' => $pool->isNat() ? 'nat' : ($pool->isRouted() ? 'routed' : 'bridged'),
         ];
+        if ($pool->isRouted()) {
+            // Adres pojedynczy, brama on-link na mostku routowanym węzła.
+            $interface['prefix'] = $ip->version === 6 ? 128 : 32;
+            $interface['gateway'] = $ip->version === 6 ? 'fe80::1' : '169.254.0.1';
+        }
+        if ($pool->vlan_id && ! $pool->isNat()) {
+            $interface['vlan'] = (int) $pool->vlan_id;
+        }
 
         if ($pool->isNat()) {
             $ports = $pool->natPortsFor($ip->address);

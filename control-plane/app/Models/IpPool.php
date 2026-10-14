@@ -36,6 +36,8 @@ class IpPool extends Model
         'nat_public_address',
         'nat_port_start',
         'nat_ports_per_server',
+        'vlan_id',
+        'routed',
     ];
 
     protected $attributes = [
@@ -88,6 +90,11 @@ class IpPool extends Model
                 $scope->orWhere('hypervisor_group_id', $hypervisor->hypervisor_group_id);
             }
         });
+    }
+
+    public function isRouted(): bool
+    {
+        return (bool) $this->routed && ! $this->isNat();
     }
 
     public function isNat(): bool

@@ -56,7 +56,7 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
     - Cele: S3, SFTP/SSH.
     - Kompresja, retencja i przycinanie.
     - Kopie przyrostowe (dirty bitmaps QEMU), przywracanie.
-12. **Sieci zaawansowane.** VLAN (tagowane mosty), sieci izolowane i routowane podsieci IPv4/IPv6, karty sieciowe per VM.
+12. ✅ **Sieci zaawansowane.** VLAN (tagowane mosty) i routowane podsieci IPv4/IPv6. (sieci izolowane i wiele kart — etap 19)
 13. **Magazyny danych.** Datastore'y przypięte do hypervisorów i pakietów, sterownik Ceph RBD, cienkie przydzielanie, metryki.
 14. **Moduły billingowe.** Moduł WHMCS i Blesta korzystający z `/api/billing`.
 15. **Disaster recovery hypervisora.**
@@ -64,3 +64,5 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
     - Odtworzenie na zastępczym hoście.
 16. **Migracje VM między hypervisorami.** Na zimno (kopiowanie dysku) i na żywo (libvirt migrate z kopiowaniem dysku), z wyborem docelowego węzła i webhookiem `server.migrated`.
 17. **Kopie przyrostowe.** Dirty bitmaps QEMU (tylko zmienione bloki), łańcuch pełna + przyrostowe, przywracanie z łańcucha.
+18. **Dokumentacja API.** OpenAPI 3 dla wszystkich endpointów, opisy w każdym języku panelu, przykłady (curl, PHP, Python, JavaScript), wbudowana konsola do testowania zapytań (jak Postman) i eksport kolekcji Postman.
+19. **Sieci izolowane i wiele kart.** Prywatne sieci między maszynami klienta (osobny mostek bez łącza), druga i kolejne karty sieciowe maszyny.

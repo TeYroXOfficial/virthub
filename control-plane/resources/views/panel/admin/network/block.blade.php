@@ -75,6 +75,12 @@
                         <p class="hint">{{ __('Porty :from–:to, :per na adres od portu :start.', ['from' => $span['from'], 'to' => $span['to'], 'per' => $pool->nat_ports_per_server, 'start' => $pool->nat_port_start]) }}</p>
                     @endif
                 @endif
+                @if ($pool->vlan_id || $pool->isRouted())
+                    <p class="hint">
+                        @if ($pool->vlan_id) <span class="pill neutral">VLAN {{ $pool->vlan_id }}</span> @endif
+                        @if ($pool->isRouted()) <span class="pill neutral">{{ __('routowana') }}</span> @endif
+                    </p>
+                @endif
                 <p class="hint">{{ __('Podsieci i rodzaju bloku nie zmienisz — utwórz nowy blok. Wolne adresy przechodzą razem z blokiem na nowy węzeł; przydzielone zostają przy maszynach do czasu zwolnienia. Nowe resolwery maszyny dostaną przy reinstalacji.') }}</p>
                 <button class="btn btn-primary" type="submit">{{ __('Zapisz') }}</button>
             </form>
