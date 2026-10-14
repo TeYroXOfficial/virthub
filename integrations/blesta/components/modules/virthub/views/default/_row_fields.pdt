@@ -1,0 +1,13 @@
+<div class="mb-3 form-group">
+    <label for="server_name" class="form-label"><?php $this->_('Virthub.server_name'); ?></label>
+    <?php $this->Form->fieldText('server_name', isset($vars->server_name) ? $vars->server_name : null, ['id' => 'server_name', 'class' => 'form-control']); ?>
+</div>
+<div class="mb-3 form-group">
+    <label for="panel_url" class="form-label"><?php $this->_('Virthub.panel_url'); ?></label>
+    <?php $this->Form->fieldText('panel_url', isset($vars->panel_url) ? $vars->panel_url : null, ['id' => 'panel_url', 'class' => 'form-control', 'placeholder' => 'https://panel.example.com']); ?>
+</div>
+<div class="mb-3 form-group">
+    <label for="api_token" class="form-label"><?php $this->_('Virthub.api_token'); ?></label>
+    <?php $this->Form->fieldPassword('api_token', ['id' => 'api_token', 'class' => 'form-control', 'autocomplete' => 'new-password']); ?>
+    <small class="form-text text-muted"><?php $this->_('Virthub.api_token_hint'); ?><?php if (!empty($edit)) { ?> <?php $this->_('Virthub.api_token_keep'); ?><?php } ?></small>
+</div>

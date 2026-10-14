@@ -33,3 +33,4 @@ Thumbs.db
 # Archiwa tworzone przy wgrywaniu na serwer — nie naleza do repozytorium
 *.zip
 *.tar.gz
+integrations/dist/

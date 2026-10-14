@@ -1,0 +1,65 @@
+<?php
+$t = function ($key) { return $this->Html->safe($this->_('Virthub.' . $key, true)); };
+?>
+<?php if (!empty($message)) { ?><div class="alert alert-success"><?php echo $this->Html->safe($message); ?></div><?php } ?>
+<?php if (!empty($error)) { ?><div class="alert alert-warning"><?php echo $this->Html->safe($error); ?></div><?php } ?>
+<?php if (!empty($server)) {
+    $state = $server['state'];
+    $badge = $state === 'running' ? 'success' : ($state === 'error' ? 'danger' : 'secondary');
+?>
+<h4><?php echo $this->Html->safe($server['hostname']); ?>
+    <span class="badge bg-<?php echo $badge; ?> badge-<?php echo $badge; ?>"><?php echo $t('state.' . $state); ?></span></h4>
+<?php if ($state === 'building') { ?>
+    <div class="progress mb-3"><div class="progress-bar" style="width: <?php echo (int) $server['build_progress']; ?>%"><?php echo (int) $server['build_progress']; ?>%</div></div>
+<?php } ?>
+<?php if (!empty($server['busy'])) { ?><div class="alert alert-info"><?php echo $t('busy'); ?></div><?php } ?>
+
+<div class="row">
+    <div class="col-md-6">
+        <table class="table table-sm table-condensed">
+            <tr><th><?php echo $t('ip_addresses'); ?></th><td><?php foreach ($ips as $ip) { ?><code><?php echo $this->Html->safe($ip); ?></code><br><?php } ?></td></tr>
+            <tr><th><?php echo $t('os'); ?></th><td><?php echo $this->Html->safe(!empty($server['guest_os']['name']) ? $server['guest_os']['name'] : (isset($server['os']['name']) ? $server['os']['name'] : '')); ?></td></tr>
+            <tr><th><?php echo $t('resources'); ?></th><td><?php echo (int) $server['resources']['vcpu']; ?> vCPU · <?php echo (int) $server['resources']['ram_mb']; ?> MB RAM · <?php echo (int) $server['resources']['disk_gb']; ?> GB</td></tr>
+            <tr><th><?php echo $t('traffic'); ?></th><td><?php echo $this->Html->safe($traffic); ?>
+                <?php if ($traffic_percent !== null) { ?><div class="progress" style="height:6px"><div class="progress-bar" style="width: <?php echo (float) $traffic_percent; ?>%"></div></div><?php } ?></td></tr>
+            <?php if (!empty($service_fields->virthub_username)) { ?>
+            <tr><th><?php echo $t('username'); ?></th><td><code><?php echo $this->Html->safe($service_fields->virthub_username); ?></code></td></tr>
+            <?php } ?>
+        </table>
+    </div>
+    <div class="col-md-6">
+        <h5><?php echo $t('actions'); ?></h5>
+        <div style="display:flex; flex-wrap:wrap; gap:6px">
+            <?php
+            $buttons = $state === 'running'
+                ? ['reboot' => 'secondary', 'stop' => 'warning', 'force-off' => 'danger', 'console' => 'secondary']
+                : ['start' => 'success'];
+            $buttons += ['reset_password' => 'secondary', 'fetch_password' => 'secondary', 'open_panel' => 'primary'];
+            $labels = ['force-off' => 'force_off', 'fetch_password' => 'show_password'];
+            $confirms = ['force-off' => 'confirm_force_off', 'reset_password' => 'confirm_reset_password'];
+            foreach ($buttons as $action => $style) {
+                $this->Form->create(null, in_array($action, ['console', 'open_panel'], true) ? ['class' => 'd-inline', 'target' => '_blank'] : ['class' => 'd-inline']);
+                $this->Form->fieldHidden('virthub_action', $action);
+                ?>
+                <button type="submit" class="btn btn-sm btn-<?php echo $style; ?>"<?php if (isset($confirms[$action])) { ?> onclick="return confirm('<?php echo $t($confirms[$action]); ?>')"<?php } ?>><?php echo $t(isset($labels[$action]) ? $labels[$action] : $action); ?></button>
+                <?php
+                $this->Form->end();
+            }
+            ?>
+        </div>
+
+        <?php if (!empty($templates)) { ?>
+            <h5 class="mt-4"><?php echo $t('reinstall'); ?></h5>
+            <p class="text-muted small"><?php echo $t('reinstall_warning'); ?></p>
+            <?php
+            $this->Form->create();
+            $this->Form->fieldHidden('virthub_action', 'reinstall');
+            $this->Form->fieldSelect('template', $templates, isset($server['os']['id']) ? $server['os']['id'] : null, ['class' => 'form-control form-select', 'aria-label' => $this->_('Virthub.reinstall_select', true)]);
+            ?>
+            <div class="form-check my-2"><label class="form-check-label"><input class="form-check-input" type="checkbox" name="confirm" value="1" required> <?php echo $t('reinstall_confirm'); ?></label></div>
+            <button type="submit" class="btn btn-sm btn-danger"><?php echo $t('reinstall'); ?></button>
+            <?php $this->Form->end(); ?>
+        <?php } ?>
+    </div>
+</div>
+<?php } ?>

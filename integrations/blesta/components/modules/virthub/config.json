@@ -1,0 +1,28 @@
+{
+    "version": "1.0.0",
+    "name": "Virthub.name",
+    "description": "Virthub.description",
+    "authors": [
+        {
+            "name": "VirtHub",
+            "url": "https://github.com/TeYroXOfficial/virthub"
+        }
+    ],
+    "package": {
+        "name_key": "package"
+    },
+    "service": {
+        "name_key": "virthub_hostname"
+    },
+    "module": {
+        "row": "Virthub.module_row",
+        "rows": "Virthub.module_row_plural",
+        "row_key": "server_name",
+        "group": "Virthub.module_group"
+    },
+    "email_tags": {
+        "module": ["panel_url"],
+        "package": ["package", "template"],
+        "service": ["virthub_hostname", "virthub_ip", "virthub_username", "virthub_password"]
+    }
+}

@@ -2,13 +2,20 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Console\ConsoleSessions;
+use App\Domain\Metrics\ServerMetrics;
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ServerResource;
 use App\Models\AuditLog;
+use App\Models\HypervisorGroup;
 use App\Models\OsTemplate;
 use App\Models\Server;
+use App\Models\ServerJob;
 use App\Models\User;
 use App\Models\VpsPackage;
+use App\Rules\Hostname;
+use App\Rules\SshPublicKey;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -39,9 +46,10 @@ class BillingIntegrationController extends Controller
             'customer_reference' => ['nullable', 'string', 'max:100'],
             'package' => ['required', Rule::exists(VpsPackage::class, 'slug')],
             'template' => ['required', Rule::exists(OsTemplate::class, 'id')],
-            'hostname' => ['required', 'string', 'max:253', new \App\Rules\Hostname],
+            'hostname' => ['required', 'string', 'max:253', new Hostname],
             'ssh_keys' => ['array', 'max:10'],
-            'ssh_keys.*' => ['string', 'max:1000', new \App\Rules\SshPublicKey],
+            'ssh_keys.*' => ['string', 'max:1000', new SshPublicKey],
+            'location' => ['nullable', 'integer', Rule::exists(HypervisorGroup::class, 'id')],
         ]);
 
         $existing = Server::withTrashed()
@@ -66,6 +74,7 @@ class BillingIntegrationController extends Controller
             hostname: Str::lower($validated['hostname']),
             sshKeys: $validated['ssh_keys'] ?? [],
             billingReference: $validated['billing_reference'],
+            location: isset($validated['location']) ? HypervisorGroup::find($validated['location']) : null,
         );
 
         return response()->json([
@@ -152,6 +161,125 @@ class BillingIntegrationController extends Controller
             'url' => route('sso.consume', ['token' => $token]),
             'expires_in' => 30,
         ]);
+    }
+
+    // --- sterowanie usługą z systemu rozliczeniowego ----------------------------
+
+    /** Pakiety, systemy i lokalizacje — do konfiguracji produktu w module billingu. */
+    public function catalog(): JsonResponse
+    {
+        return response()->json([
+            'packages' => VpsPackage::query()->where('is_active', true)->orderBy('vcpu')->orderBy('ram_mb')->get()
+                ->map(fn (VpsPackage $p) => $p->only(['slug', 'name', 'vcpu', 'ram_mb', 'disk_gb', 'bandwidth_gb', 'ip_count', 'ipv6_count']))->values(),
+            'templates' => OsTemplate::query()->where('is_active', true)->orderBy('name')->get()
+                ->filter(fn (OsTemplate $t) => $t->isSelfService())
+                ->map(fn (OsTemplate $t) => ['id' => $t->id, 'name' => $t->name, 'family' => $t->family,
+                    'virtualization' => $t->virtualization->value, 'min_disk_gb' => $t->min_disk_gb])->values(),
+            'locations' => HypervisorGroup::query()->where('is_public', true)->orderBy('sort_order')->orderBy('name')->get()
+                ->map(fn (HypervisorGroup $g) => ['id' => $g->id, 'name' => $g->publicName()])->values(),
+        ]);
+    }
+
+    /** Stan usługi do panelu klienta w billingu: zasoby, adresy, system, transfer. */
+    public function show(Request $request, string $reference): JsonResponse
+    {
+        $server = $this->findByReference($reference)->load(['package', 'template', 'ipAddresses.pool', 'hypervisor']);
+
+        return response()->json([
+            'data' => ServerResource::make($server)->resolve($request) + [
+                'billing_reference' => $server->billing_reference,
+                'busy' => $server->jobs()->whereIn('status', [ServerJob::STATUS_QUEUED, ServerJob::STATUS_RUNNING])->exists(),
+            ],
+        ]);
+    }
+
+    public function power(Request $request, string $reference): JsonResponse
+    {
+        $server = $this->findByReference($reference);
+        $validated = $request->validate(['action' => ['required', Rule::in(['start', 'stop', 'reboot', 'force-off'])]]);
+        $job = $this->provisioner->power($server, $validated['action'], $request->user());
+
+        return response()->json(['message' => __('Polecenie zostało przekazane do hypervisora.'), 'job_id' => $job->id], 202);
+    }
+
+    public function rebuild(Request $request, string $reference): JsonResponse
+    {
+        $server = $this->findByReference($reference);
+        $validated = $request->validate([
+            'template' => ['required', Rule::exists(OsTemplate::class, 'id')->where('is_active', true)],
+            'ssh_keys' => ['array', 'max:10'],
+            'ssh_keys.*' => ['string', 'max:1000', new SshPublicKey],
+            'confirm' => ['accepted'],
+        ]);
+        $job = $this->provisioner->rebuild($server, OsTemplate::findOrFail($validated['template']), $validated['ssh_keys'] ?? [], $request->user());
+
+        return response()->json(['message' => __('Rozpoczęto ponowną instalację systemu. Wszystkie dane na dysku zostaną utracone.'), 'job_id' => $job->id], 202);
+    }
+
+    /** Zmiana pakietu (upgrade/downgrade w billingu). Maszyna musi być zatrzymana. */
+    public function resize(Request $request, string $reference): JsonResponse
+    {
+        $server = $this->findByReference($reference);
+        $validated = $request->validate(['package' => ['required', Rule::exists(VpsPackage::class, 'slug')]]);
+        $package = VpsPackage::where('slug', $validated['package'])->firstOrFail();
+        if ($server->vps_package_id === $package->id) {
+            return response()->json(['message' => __('Usługa ma już ten pakiet.'), 'idempotent' => true]);
+        }
+        $job = $this->provisioner->resize($server, $package, $request->user());
+
+        return response()->json(['message' => __('Zmiana pakietu została zlecona.'), 'job_id' => $job->id], 202);
+    }
+
+    /** Nowe hasło roota — po wykonaniu zlecenia odbierasz je przez /credentials. */
+    public function resetPassword(Request $request, string $reference): JsonResponse
+    {
+        $job = $this->provisioner->resetPassword($this->findByReference($reference), $request->user());
+
+        return response()->json(['message' => __('Hasło zostanie zmienione w ciągu kilku sekund — odbierz je przez /credentials.'), 'job_id' => $job->id], 202);
+    }
+
+    /** Hasło roota (początkowe, po reinstalacji albo resecie) — zwracane jeden raz. */
+    public function credentials(string $reference): JsonResponse
+    {
+        $server = $this->findByReference($reference);
+        $password = $server->consumeRootPassword();
+        if ($password !== null) {
+            AuditLog::record('billing.credentials', $server);
+        }
+
+        return response()->json(['username' => $server->osFamily() === 'windows' ? 'Administrator' : 'root', 'password' => $password, 'available' => $password !== null]);
+    }
+
+    /** Konsola w przeglądarce (bilet jednorazowy na koncie właściciela maszyny). */
+    public function console(string $reference): JsonResponse
+    {
+        $server = $this->findByReference($reference);
+        if (! $server->isRunning()) {
+            return response()->json(['message' => __('Konsola jest dostępna tylko dla działającej maszyny.')], 409);
+        }
+        $token = app(ConsoleSessions::class)->issueTicket($server, $server->user);
+
+        return response()->json(['url' => route('console.show', ['token' => $token]), 'expires_in' => 60]);
+    }
+
+    /** Logowanie klienta prosto na stronę maszyny w panelu. */
+    public function serviceSso(string $reference): JsonResponse
+    {
+        $server = $this->findByReference($reference);
+        $token = Str::random(64);
+        Cache::put("sso:{$token}", ['user_id' => $server->user_id, 'server_id' => $server->id], now()->addSeconds(30));
+        AuditLog::record('billing.sso_issued', $server->user, ['server_id' => $server->id], null);
+
+        return response()->json(['url' => route('sso.consume', ['token' => $token]), 'expires_in' => 30]);
+    }
+
+    /** Historia zużycia: ?range=hour|day|week. */
+    public function metrics(Request $request, string $reference, ServerMetrics $metrics): JsonResponse
+    {
+        $range = $request->string('range', 'day')->value();
+        abort_unless(array_key_exists($range, ServerMetrics::RANGES), 422, __('Zakres musi być jednym z: hour, day, week.'));
+
+        return response()->json($metrics->history($this->findByReference($reference), $range));
     }
 
     // --- pomocnicze ---------------------------------------------------------

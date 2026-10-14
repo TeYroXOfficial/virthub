@@ -119,6 +119,16 @@ Route::prefix('v1')->group(function () {
         Route::post('/services/{reference}/suspend', [BillingIntegrationController::class, 'suspend']);
         Route::post('/services/{reference}/unsuspend', [BillingIntegrationController::class, 'unsuspend']);
         Route::post('/services/{reference}/terminate', [BillingIntegrationController::class, 'terminate']);
+        Route::get('/catalog', [BillingIntegrationController::class, 'catalog']);
+        Route::get('/services/{reference}', [BillingIntegrationController::class, 'show']);
+        Route::post('/services/{reference}/power', [BillingIntegrationController::class, 'power']);
+        Route::post('/services/{reference}/rebuild', [BillingIntegrationController::class, 'rebuild']);
+        Route::post('/services/{reference}/resize', [BillingIntegrationController::class, 'resize']);
+        Route::post('/services/{reference}/password', [BillingIntegrationController::class, 'resetPassword']);
+        Route::post('/services/{reference}/credentials', [BillingIntegrationController::class, 'credentials']);
+        Route::post('/services/{reference}/console', [BillingIntegrationController::class, 'console']);
+        Route::post('/services/{reference}/sso', [BillingIntegrationController::class, 'serviceSso']);
+        Route::get('/services/{reference}/metrics', [BillingIntegrationController::class, 'metrics']);
     });
 });
 
