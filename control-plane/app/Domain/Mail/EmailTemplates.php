@@ -361,6 +361,34 @@ final class EmailTemplates
                     'body' => "Hi {{ user.name }},\n\nthe service **{{ service.name }}** has been terminated for non-payment.",
                 ],
             ],
+
+            // --- alerty (personel) ---------------------------------------------------
+            'alert.triggered' => [
+                'group' => 'alert',
+                'name' => ['pl' => 'Alert: przekroczony próg', 'en' => 'Alert: threshold exceeded'],
+                'vars' => ['alert.rule', 'alert.subject', 'alert.metric', 'alert.value', 'alert.threshold', 'alert.url'],
+                'pl' => [
+                    'subject' => '[ALERT] {{ alert.rule }}: {{ alert.subject }}',
+                    'body' => "Alert **{{ alert.rule }}** dla **{{ alert.subject }}**.\n\n- Metryka: {{ alert.metric }}\n- Wartość: **{{ alert.value }}** (próg {{ alert.threshold }})\n\n[Otwórz alerty]({{ alert.url }})",
+                ],
+                'en' => [
+                    'subject' => '[ALERT] {{ alert.rule }}: {{ alert.subject }}',
+                    'body' => "Alert **{{ alert.rule }}** for **{{ alert.subject }}**.\n\n- Metric: {{ alert.metric }}\n- Value: **{{ alert.value }}** (threshold {{ alert.threshold }})\n\n[Open alerts]({{ alert.url }})",
+                ],
+            ],
+            'alert.resolved' => [
+                'group' => 'alert',
+                'name' => ['pl' => 'Alert: wrócił do normy', 'en' => 'Alert: back to normal'],
+                'vars' => ['alert.rule', 'alert.subject', 'alert.metric', 'alert.value', 'alert.threshold', 'alert.url'],
+                'pl' => [
+                    'subject' => '[OK] {{ alert.rule }}: {{ alert.subject }}',
+                    'body' => "Alert **{{ alert.rule }}** dla **{{ alert.subject }}** wrócił do normy (ostatnia wartość: {{ alert.value }}).\n\n[Otwórz alerty]({{ alert.url }})",
+                ],
+                'en' => [
+                    'subject' => '[OK] {{ alert.rule }}: {{ alert.subject }}',
+                    'body' => "Alert **{{ alert.rule }}** for **{{ alert.subject }}** is back to normal (last value: {{ alert.value }}).\n\n[Open alerts]({{ alert.url }})",
+                ],
+            ],
         ];
     }
 
@@ -425,6 +453,7 @@ final class EmailTemplates
             'payment' => ['method' => 'Stripe'], 'wallet' => ['balance' => '120,50 PLN', 'url' => url('/panel')],
             'service' => ['name' => 'VPS S — vps1.example.com', 'url' => url('/panel')], 'billing' => ['url' => url('/panel')],
             'keepalive' => ['until' => now()->addDay()->format('d.m.Y H:i')],
+            'alert' => ['rule' => 'CPU > 90%', 'subject' => 'vps1.example.com', 'metric' => 'CPU', 'value' => '97%', 'threshold' => '90%', 'url' => url('/panel')],
         ];
     }
 }

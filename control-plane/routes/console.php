@@ -83,3 +83,7 @@ Schedule::call(fn () => app(Webhooks::class)->retryDue())
 // Mailouty: kolejna partia wiadomości.
 Schedule::call(fn () => app(Mailouts::class)->process())
     ->everyMinute()->name('mailouts')->withoutOverlapping();
+
+// Alerty: progi metryk maszyn i węzłów (Infrastruktura → Alerty).
+Schedule::call(fn () => app(App\Domain\Metrics\Alerts::class)->evaluate())
+    ->everyMinute()->name('alerts')->withoutOverlapping();

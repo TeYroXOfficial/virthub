@@ -80,6 +80,8 @@ class Webhooks
             'hypervisor.deleted' => __('Hypervisor usunięty'),
             'hypervisor.offline' => __('Hypervisor niedostępny'),
             'mailout.sent' => __('Mailout wysłany'),
+            'alert.triggered' => __('Alert otwarty (przekroczony próg)'),
+            'alert.resolved' => __('Alert zamknięty (wartość w normie)'),
         ];
     }
 

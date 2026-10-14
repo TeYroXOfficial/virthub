@@ -265,6 +265,12 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::get('/hypervisors/{hypervisor}', [AdminController::class, 'showHypervisor'])->name('hypervisors.show');
         Route::get('/monitoring', [MonitoringController::class, 'index'])->name('monitoring');
         Route::get('/security', [NodeSecurityController::class, 'index'])->name('security');
+        Route::controller(\App\Http\Controllers\Web\AlertController::class)->group(function () {
+            Route::get('/alerts', 'index')->name('alerts');
+            Route::post('/alerts', 'store')->name('alerts.store');
+            Route::put('/alerts/{rule}', 'update')->whereNumber('rule')->name('alerts.update');
+            Route::delete('/alerts/{rule}', 'destroy')->whereNumber('rule')->name('alerts.destroy');
+        });
         Route::post('/security/{hypervisor}/check', [NodeSecurityController::class, 'check'])
             ->middleware('throttle:20,1')->name('security.check');
         Route::put('/security/{hypervisor}/nested', [NodeSecurityController::class, 'nested'])
