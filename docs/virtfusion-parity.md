@@ -37,7 +37,7 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
    - Skrypty pierwszego uruchomienia (shebang, opis, miejsce zapisu) przypięte do szablonów.
    - Zmienne serwera (`{{hostname}}`, `{{ipv4}}`…) wstawiane przez cloud-init.
    - Ścieżki logów widoczne w panelu.
-5. **Profile filtrowania sieci.**
+5. ✅ **Profile filtrowania sieci.**
    - Profile brak / libvirt (nwfilter) / natywny.
    - Blokada IPv6 RA i DHCPv6.
    - Ustawiane globalnie albo per VM.

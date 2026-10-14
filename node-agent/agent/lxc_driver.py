@@ -303,7 +303,7 @@ class IncusDriver(HypervisorDriver):
                 f"hwaddr={mac}",
             )
 
-            self.network.configure(req.server_id, req.interfaces, firewall=[])
+            self.network.configure(req.server_id, req.interfaces, firewall=[], net_filter=req.filter)
             created.append("network")
 
             progress("boot", 85)
@@ -589,7 +589,7 @@ class IncusDriver(HypervisorDriver):
 
     def configure_network(self, uuid: str, req: NetworkConfigRequest) -> dict[str, Any]:
         name = self._name_for(uuid)
-        self.network.configure(server_id_from_name(name), req.interfaces, req.firewall, req.policy)
+        self.network.configure(server_id_from_name(name), req.interfaces, req.firewall, req.policy, req.filter)
         return {
             "uuid": uuid,
             "interfaces": len(req.interfaces),

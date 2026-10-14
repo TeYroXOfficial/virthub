@@ -175,6 +175,29 @@
         </div>
     @endcan
 
+    @can('manageResources', $server)
+        @php $filterProfiles = \App\Models\NetworkFilterProfile::query()->orderBy('name')->get(); @endphp
+        @if ($filterProfiles->isNotEmpty())
+            <div class="card" id="network-filter">
+                <h3 class="card-title"><x-icon name="shield" :size="16"/> {{ __('Profil filtrowania sieci') }} <span class="pill neutral">{{ __('personel') }}</span></h3>
+                <form method="POST" action="{{ route('panel.servers.network-filter', $server) }}">
+                    @csrf
+                    <div class="field" style="max-width:420px">
+                        <label for="nf-profile">{{ __('Profil') }}</label>
+                        <select id="nf-profile" name="network_filter_profile_id">
+                            <option value="">{{ __('— domyślny —') }}</option>
+                            @foreach ($filterProfiles as $profile)
+                                <option value="{{ $profile->id }}" @selected($server->network_filter_profile_id === $profile->id)>{{ $profile->name }}@if ($profile->is_default) ({{ __('domyślny') }})@endif</option>
+                            @endforeach
+                        </select>
+                        <div class="hint">{{ __('Anty-spoofing, blokada RA IPv6 i serwera DHCP oraz reguły administratora — przed zaporą klienta.') }}</div>
+                    </div>
+                    <button class="btn" type="submit" @disabled($server->state->isTransitioning())>{{ __('Zapisz') }}</button>
+                </form>
+            </div>
+        @endif
+    @endcan
+
     @if ($user->can('destroy', $server) || $user->can('purge', $server))
         <div class="card danger-zone" id="delete">
             <h3 class="card-title" style="color:var(--critical)">{{ __('Usuwanie maszyny') }}</h3>

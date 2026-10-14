@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Domain\Provisioning\GuestOs;
 use App\Enums\ServerState;
+use App\Enums\Virtualization;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -36,7 +38,7 @@ class Server extends Model
     {
         return [
             'state' => ServerState::class,
-            'virtualization' => \App\Enums\Virtualization::class,
+            'virtualization' => Virtualization::class,
             // Hasło root jest jednorazowe: pokazujemy je klientowi raz po
             // provisioningu i kasujemy przy pierwszym odczycie.
             'root_password' => 'encrypted',
@@ -108,10 +110,21 @@ class Server extends Model
     }
 
     /** @return HasMany<FirewallRule, $this> */
-    /** @return \Illuminate\Database\Eloquent\Relations\BelongsTo<IsoImage, $this> */
-    public function iso(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    /** @return BelongsTo<IsoImage, $this> */
+    public function iso(): BelongsTo
     {
         return $this->belongsTo(IsoImage::class, 'iso_image_id');
+    }
+
+    public function networkFilterProfile(): BelongsTo
+    {
+        return $this->belongsTo(NetworkFilterProfile::class);
+    }
+
+    /** Profil maszyny albo domyślny; null = agent stosuje swoje domyślne zasady. */
+    public function effectiveNetworkFilter(): ?NetworkFilterProfile
+    {
+        return $this->networkFilterProfile ?? NetworkFilterProfile::defaultProfile();
     }
 
     public function firewallRules(): HasMany
@@ -140,7 +153,7 @@ class Server extends Model
 
     public function isContainer(): bool
     {
-        return $this->virtualization === \App\Enums\Virtualization::Lxc;
+        return $this->virtualization === Virtualization::Lxc;
     }
 
     public function isRunning(): bool
@@ -182,7 +195,7 @@ class Server extends Model
     /** Rodzina systemu do ikony: odczytana z maszyny, a bez odczytu — z szablonu. */
     public function osFamily(): ?string
     {
-        return \App\Domain\Provisioning\GuestOs::familyFor($this->guest_os_id) ?? $this->template?->family;
+        return GuestOs::familyFor($this->guest_os_id) ?? $this->template?->family;
     }
 
     /** Nazwa systemu dla ludzi: „Ubuntu 24.04.1 LTS" z maszyny albo nazwa szablonu. */
