@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Domain\Mail\TemplateMailer;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -40,6 +41,14 @@ class AccountController extends Controller
         return back()->with('status', __('Zapisano dane konta.'));
     }
 
+    public function updateMailouts(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $user->forceFill(['mailout_opt_out' => ! $request->boolean('mailouts')])->save();
+
+        return back()->with('status', $user->mailout_opt_out ? __('Nie będziesz dostawać ogłoszeń i newslettera.') : __('Będziesz dostawać ogłoszenia i newsletter.'));
+    }
+
     public function updatePassword(Request $request): RedirectResponse
     {
         $data = $request->validateWithBag('password', [
@@ -52,7 +61,7 @@ class AccountController extends Controller
         // Inne zalogowane urządzenia tracą sesję — nowe hasło ma działać od razu wszędzie.
         $this->endOtherSessions($request);
         AuditLog::record('account.password', $user);
-        app(\App\Domain\Mail\TemplateMailer::class)->send($user, 'account.password_changed', ['ip' => $request->ip()]);
+        app(TemplateMailer::class)->send($user, 'account.password_changed', ['ip' => $request->ip()]);
 
         return back()->with('status', __('Hasło zmienione. Pozostałe urządzenia zostały wylogowane.'));
     }
@@ -72,7 +81,7 @@ class AccountController extends Controller
         $user = $request->user();
         $user->forceFill(['remember_token' => Str::random(60)])->save();
         if (config('session.driver') === 'database') {
-            \Illuminate\Support\Facades\DB::table(config('session.table', 'sessions'))
+            DB::table(config('session.table', 'sessions'))
                 ->where('user_id', $user->id)
                 ->where('id', '!=', $request->session()->getId())
                 ->delete();

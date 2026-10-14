@@ -64,6 +64,7 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
             'wallet_balance' => 'integer',
             'wallet_notified_at' => 'datetime',
+            'mailout_opt_out' => 'boolean',
         ];
     }
 

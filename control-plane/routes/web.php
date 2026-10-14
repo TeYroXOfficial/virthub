@@ -23,6 +23,7 @@ use App\Http\Controllers\Web\ImpersonationController;
 use App\Http\Controllers\Web\IsoController;
 use App\Http\Controllers\Web\LanguageController;
 use App\Http\Controllers\Web\LicenseController;
+use App\Http\Controllers\Web\MailoutController;
 use App\Http\Controllers\Web\MailSettingsController;
 use App\Http\Controllers\Web\MonitoringController;
 use App\Http\Controllers\Web\NetworkController;
@@ -41,6 +42,7 @@ use App\Http\Controllers\Web\TicketAdminController;
 use App\Http\Controllers\Web\TicketController;
 use App\Http\Controllers\Web\UpdatesController;
 use App\Http\Controllers\Web\UsersController;
+use App\Http\Controllers\Web\WebhookController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\Rule;
@@ -76,6 +78,12 @@ Route::post('/logout', [AuthController::class, 'logout'])
 // mieć już aktywną sesję na inne konto (np. wsparcie testujące zgłoszenie).
 Route::get('/sso/{token}', SsoController::class)->name('sso.consume');
 
+// Wypisanie z mailoutów — link z wiadomości (podpisany), bez logowania.
+Route::get('/mailouts/unsubscribe/{user}', [MailoutController::class, 'unsubscribeForm'])
+    ->middleware('signed')->whereNumber('user')->name('mailouts.unsubscribe');
+Route::post('/mailouts/unsubscribe/{user}', [MailoutController::class, 'unsubscribe'])
+    ->middleware(['signed', 'throttle:20,1'])->whereNumber('user');
+
 // Powrót z „Zaloguj jako” na konto administratora.
 Route::post('/impersonate/stop', [ImpersonationController::class, 'stop'])
     ->middleware('auth')->name('impersonate.stop');
@@ -90,6 +98,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::prefix('/account')->name('account')->controller(AccountController::class)->group(function () {
         Route::get('/', 'show');
         Route::put('/profile', 'updateProfile')->middleware('not-impersonating')->name('.profile');
+        Route::put('/mailouts', 'updateMailouts')->middleware('not-impersonating')->name('.mailouts');
         Route::put('/password', 'updatePassword')->middleware(['not-impersonating', 'throttle:10,1'])->name('.password');
         Route::post('/logout-others', 'logoutOthers')->middleware(['not-impersonating', 'throttle:10,1'])->name('.logout-others');
         Route::post('/avatar', 'uploadAvatar')->name('.avatar');
@@ -329,7 +338,19 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/addons/{addon}/toggle', [LicenseController::class, 'toggle'])->where('addon', '[a-z][a-z0-9-]{1,39}')->name('addons.toggle');
         Route::delete('/addons/{addon}', [LicenseController::class, 'uninstall'])->where('addon', '[a-z][a-z0-9-]{1,39}')->name('addons.uninstall');
 
-        Route::prefix('/webhooks')->name('webhooks')->controller(\App\Http\Controllers\Web\WebhookController::class)->group(function () {
+        Route::prefix('/mailouts')->name('mailouts')->controller(MailoutController::class)->group(function () {
+            Route::get('/', 'index');
+            Route::get('/new', 'create')->name('.create');
+            Route::post('/', 'store')->name('.store');
+            Route::get('/{mailout}', 'show')->whereNumber('mailout')->name('.show');
+            Route::put('/{mailout}', 'update')->whereNumber('mailout')->name('.update');
+            Route::delete('/{mailout}', 'destroy')->whereNumber('mailout')->name('.destroy');
+            Route::post('/{mailout}/test', 'test')->whereNumber('mailout')->middleware('throttle:10,1')->name('.test');
+            Route::post('/{mailout}/start', 'start')->whereNumber('mailout')->name('.start');
+            Route::post('/{mailout}/cancel', 'cancel')->whereNumber('mailout')->name('.cancel');
+        });
+
+        Route::prefix('/webhooks')->name('webhooks')->controller(WebhookController::class)->group(function () {
             Route::get('/', 'index');
             Route::post('/', 'store')->name('.store');
             Route::get('/{webhook}', 'show')->whereNumber('webhook')->name('.show');
