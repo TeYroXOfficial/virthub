@@ -19,7 +19,7 @@ import subprocess
 
 from .config import Settings
 from .nat import NatManager
-from .schemas import FirewallPolicy, FirewallRule, NetworkInterfaceSpec
+from .schemas import FirewallPolicy, FirewallRule, NetworkFilter, NetworkInterfaceSpec
 from .shell import CommandError, run
 
 log = logging.getLogger("virthub.network")
@@ -121,7 +121,7 @@ class NetworkManager:
     def _state_file(self, server_id: int) -> Path:
         return self.settings.network_state_dir / f"{server_id}.json"
 
-    def _save_state(self, server_id, interfaces, firewall, policy) -> None:
+    def _save_state(self, server_id, interfaces, firewall, policy, net_filter=None) -> None:
         self.settings.network_state_dir.mkdir(parents=True, exist_ok=True)
         path = self._state_file(server_id)
         tmp = path.with_suffix(".tmp")
@@ -129,6 +129,7 @@ class NetworkManager:
             "interfaces": [i.model_dump() for i in interfaces],
             "firewall": [r.model_dump() for r in firewall],
             "policy": policy.model_dump() if policy is not None else None,
+            "filter": net_filter.model_dump() if net_filter is not None else None,
         }), encoding="utf-8")
         tmp.replace(path)
 
@@ -149,6 +150,7 @@ class NetworkManager:
                     [NetworkInterfaceSpec(**i) for i in data.get("interfaces", [])],
                     [FirewallRule(**r) for r in data.get("firewall", [])],
                     FirewallPolicy(**data["policy"]) if data.get("policy") else None,
+                    NetworkFilter(**data["filter"]) if data.get("filter") else None,
                 )
                 restored += 1
             except Exception:
@@ -201,20 +203,21 @@ class NetworkManager:
         interfaces: list[NetworkInterfaceSpec],
         firewall: list[FirewallRule],
         policy: FirewallPolicy | None = None,
+        net_filter: NetworkFilter | None = None,
     ) -> None:
         """Podmienia komplet reguł jednej maszyny w jednej transakcji."""
         if self.settings.is_mock:
             log.info("[mock] pominięto konfigurację nftables dla maszyny %s", server_id)
             self.nat.configure(server_id, interfaces)
-            self._save_state(server_id, interfaces, firewall, policy)
+            self._save_state(server_id, interfaces, firewall, policy, net_filter)
             return
 
         self.ensure_base_table()
         self._apply(self.render_machine(
-            server_id, interfaces, firewall, policy, stateful=self.stateful(),
+            server_id, interfaces, firewall, policy, stateful=self.stateful(), net_filter=net_filter,
         ))
         self.nat.configure(server_id, interfaces)
-        self._save_state(server_id, interfaces, firewall, policy)
+        self._save_state(server_id, interfaces, firewall, policy, net_filter)
         log.info("Zastosowano %s reguł firewalla dla maszyny %s", len(firewall), server_id)
 
     def stateful(self) -> bool:
@@ -293,6 +296,7 @@ class NetworkManager:
         firewall: list[FirewallRule],
         policy: FirewallPolicy | None = None,
         stateful: bool = True,
+        net_filter: NetworkFilter | None = None,
     ) -> str:
         t = f"{self.FAMILY} {self.table}"
         chain = f"vm_{server_id}"
@@ -303,30 +307,45 @@ class NetworkManager:
         v4 = [i.address for i in interfaces if i.version == 4]
         v6 = [i.address for i in interfaces if i.version == 6]
 
-        rules = [
-            # Z maszyny wychodzi wyłącznie IPv4, IPv6 i ARP. Reszta (znaczniki
-            # VLAN, protokoły warstwy 2) to albo pomyłka, albo próba ataku na
-            # sieć dostawcy.
-            f"{out} ether type != {{ ip, ip6, arp }} drop",
-        ]
+        profile = net_filter or NetworkFilter()
+        rules: list[str] = []
 
-        # Anty-spoofing: ruch i ARP wyłącznie z adresów przypisanych maszynie.
-        # Zapisane jako „odrzuć, jeśli nie z puli" zamiast „przyjmij, jeśli z
-        # puli" — dzięki temu reguły klienta dla ruchu wychodzącego niżej w
-        # łańcuchu nadal są sprawdzane, a nie przeskakiwane.
-        if v4:
-            pool4 = ", ".join(v4)
+        if profile.anti_spoofing:
             rules += [
-                f"{out} arp saddr ip != {{ {pool4} }} drop",
-                f"{out} ip saddr != {{ {pool4} }} drop",
+                # Z maszyny wychodzi wyłącznie IPv4, IPv6 i ARP. Reszta (znaczniki
+                # VLAN, protokoły warstwy 2) to albo pomyłka, albo próba ataku na
+                # sieć dostawcy.
+                f"{out} ether type != {{ ip, ip6, arp }} drop",
             ]
-        else:
-            rules.append(f"{out} ether type {{ ip, arp }} drop")
 
-        # IPv6: adresy link-local i nieokreślony (::) są konieczne dla Neighbor
-        # Discovery i DAD — bez nich IPv6 w maszynie w ogóle nie wstanie.
-        pool6 = ", ".join(["fe80::/10", "::", *v6])
-        rules.append(f"{out} ip6 saddr != {{ {pool6} }} drop")
+            # Anty-spoofing: ruch i ARP wyłącznie z adresów przypisanych maszynie.
+            # Zapisane jako „odrzuć, jeśli nie z puli" zamiast „przyjmij, jeśli z
+            # puli" — dzięki temu reguły klienta dla ruchu wychodzącego niżej w
+            # łańcuchu nadal są sprawdzane, a nie przeskakiwane.
+            if v4:
+                pool4 = ", ".join(v4)
+                rules += [
+                    f"{out} arp saddr ip != {{ {pool4} }} drop",
+                    f"{out} ip saddr != {{ {pool4} }} drop",
+                ]
+            else:
+                rules.append(f"{out} ether type {{ ip, arp }} drop")
+
+            # IPv6: adresy link-local i nieokreślony (::) są konieczne dla Neighbor
+            # Discovery i DAD — bez nich IPv6 w maszynie w ogóle nie wstanie.
+            pool6 = ", ".join(["fe80::/10", "::", *v6])
+            rules.append(f"{out} ip6 saddr != {{ {pool6} }} drop")
+
+        # Profil administratora: maszyna nie udaje routera IPv6 ani serwera DHCP.
+        if profile.block_router_advertisements:
+            rules.append(f"{out} icmpv6 type {{ nd-router-advert, nd-redirect }} drop")
+        if profile.block_dhcp_server:
+            rules += [
+                f"{out} udp sport 67 drop",
+                f"{out} udp sport 547 drop",
+            ]
+        # Reguły administratora przed zaporą klienta.
+        rules += [self._render_rule(rule, iface) for rule in profile.rules]
 
         # Zapora klienta. Bez polityki (starszy panel) reguły działają jak
         # dawniej — bez domyślnej blokady.

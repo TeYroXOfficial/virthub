@@ -275,7 +275,7 @@ class LibvirtDriver(HypervisorDriver):
             domain = self.conn.defineXML(xml)
             created.append("domain")
 
-            self.network.configure(req.server_id, req.interfaces, firewall=[])
+            self.network.configure(req.server_id, req.interfaces, firewall=[], net_filter=req.filter)
             created.append("network")
 
             progress("boot", 85)
@@ -576,7 +576,7 @@ class LibvirtDriver(HypervisorDriver):
     def configure_network(self, uuid: str, req: NetworkConfigRequest) -> dict[str, Any]:
         domain = self._domain(uuid)
         server_id = server_id_from_name(domain.name())
-        self.network.configure(server_id, req.interfaces, req.firewall, req.policy)
+        self.network.configure(server_id, req.interfaces, req.firewall, req.policy, req.filter)
         return {
             "uuid": uuid,
             "interfaces": len(req.interfaces),

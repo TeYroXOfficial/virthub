@@ -95,7 +95,7 @@ class ServerPayload
             'nameservers' => self::nameservers($server),
             'os_type' => self::osType($server->template),
             'mac' => self::mac($server),
-        ] + self::scripts($server);
+        ] + self::scripts($server) + self::filter($server);
     }
 
     /**
@@ -165,6 +165,14 @@ class ServerPayload
                 ->values()
                 ->all(),
             'policy' => Firewall::policyPayload($server),
-        ];
+        ] + self::filter($server);
+    }
+
+    /** @return array{filter?: array<string, mixed>} */
+    public static function filter(Server $server): array
+    {
+        $profile = $server->effectiveNetworkFilter();
+
+        return $profile === null ? [] : ['filter' => $profile->toAgentPayload()];
     }
 }

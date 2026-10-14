@@ -142,6 +142,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/detect-os', [ServerActionsController::class, 'detectOs'])->name('servers.detect-os');
     Route::post('/servers/{server}/traffic', [ServerActionsController::class, 'traffic'])->name('servers.traffic');
     Route::post('/servers/{server}/cpu-limit', [ServerActionsController::class, 'cpuLimit'])->name('servers.cpu-limit');
+    Route::post('/servers/{server}/network-filter', [\App\Http\Controllers\Web\NetworkFilterController::class, 'assign'])->name('servers.network-filter');
     Route::put('/servers/{server}/ips/{address}/rdns', [ServerActionsController::class, 'rdns'])->middleware('throttle:10,1')->name('servers.rdns');
     Route::post('/servers/{server}/ports', [PortForwardController::class, 'store'])->name('servers.ports.store');
     Route::delete('/servers/{server}/ports/{forward}', [PortForwardController::class, 'destroy'])->name('servers.ports.destroy');
@@ -326,6 +327,12 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
             Route::get('/network/ipv4', 'ipv4')->name('network.ipv4');
             Route::get('/network/nat', 'nat')->name('network.nat');
             Route::get('/network/ipv6', 'ipv6')->name('network.ipv6');
+        });
+        Route::controller(\App\Http\Controllers\Web\NetworkFilterController::class)->group(function () {
+            Route::get('/network/filters', 'index')->name('network.filters');
+            Route::post('/network/filters', 'store')->name('network.filters.store');
+            Route::put('/network/filters/{profile}', 'update')->whereNumber('profile')->name('network.filters.update');
+            Route::delete('/network/filters/{profile}', 'destroy')->whereNumber('profile')->name('network.filters.destroy');
         });
     });
 

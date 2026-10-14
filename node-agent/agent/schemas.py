@@ -163,6 +163,22 @@ class FirewallPolicy(BaseModel):
     outbound: Literal["accept", "drop"] = "accept"
 
 
+class NetworkFilter(BaseModel):
+    """Profil filtrowania sieci maszyny (ustawia administrator, nie klient).
+
+    Domyślne wartości = zachowanie sprzed profili: anty-spoofing włączony,
+    bez blokad RA/DHCP i bez dodatkowych reguł."""
+
+    # Ruch tylko z adresów maszyny, tylko IPv4/IPv6/ARP (bez VLAN i innych L2).
+    anti_spoofing: bool = True
+    # Maszyna nie ogłasza się jako router IPv6 (RA, przekierowania ICMPv6).
+    block_router_advertisements: bool = False
+    # Maszyna nie odpowiada jako serwer DHCP (v4) ani DHCPv6.
+    block_dhcp_server: bool = False
+    # Reguły administratora — przed zaporą klienta, klient ich nie zmieni.
+    rules: list[FirewallRule] = Field(default_factory=list, max_length=100)
+
+
 # Druga linia obrony (panel sprawdza to samo): wartości trafiają do YAML
 # cloud-init, więc znak nowej linii dopisałby do niego dowolne polecenia.
 HOSTNAME = r"^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
@@ -239,6 +255,8 @@ class CreateVmRequest(BaseModel):
     mac: MacAddress | None = None
     # Provisionery szablonu (tylko Linux — cloudbase-init ma własny mechanizm).
     scripts: list[ProvisionScript] = Field(default_factory=list, max_length=20)
+    # Profil filtrowania od pierwszego startu (potem aktualizuje go /network).
+    filter: NetworkFilter | None = None
 
 
 class RebuildVmRequest(BaseModel):
@@ -348,6 +366,8 @@ class NetworkConfigRequest(BaseModel):
     firewall: list[FirewallRule] = Field(default_factory=list)
     # Brak polityki (starszy panel) = dawne zachowanie: reguły bez domyślnej blokady.
     policy: FirewallPolicy | None = None
+    # Brak profilu (starszy panel) = domyślny NetworkFilter.
+    filter: NetworkFilter | None = None
 
 
 class SnapshotRequest(BaseModel):
