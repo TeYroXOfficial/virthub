@@ -68,6 +68,7 @@ class RunServerActionJob implements ShouldQueue
                 'power' => $client->power($server->agent_uuid, $payload['action']),
                 'elevate' => $client->elevate($server->agent_uuid, $payload['action']),
                 'backup', 'backup_restore' => $this->backupCall($client, $server, $job->action, $payload),
+                'recover' => $this->recoverCall($client, $server, $payload),
                 'hostdevs' => $client->setHostdevs($server->agent_uuid,
                     $server->pciAssets()->get()->map->toAgentPayload()->values()->all(), (bool) ($payload['restart'] ?? false)),
                 'rebuild' => $client->rebuild($server->agent_uuid, [
@@ -130,6 +131,18 @@ class RunServerActionJob implements ShouldQueue
         }
 
         $job->forceFill(['agent_job_id' => $agentJobId])->save();
+    }
+
+    private function recoverCall(AgentClient $client, Server $server, array $payload): string
+    {
+        $backup = Backup::with('target')->findOrFail($payload['backup_id']);
+        if ($backup->target === null) {
+            throw new AgentException(__('Cel kopii został usunięty.'));
+        }
+
+        return $client->recoverVm(ServerPayload::forCreate($server) + ['backup' => array_filter([
+            'key' => (string) $backup->remote_key, 'target' => $backup->target->toAgentPayload(), 'sha256' => $backup->sha256,
+        ])]);
     }
 
     private function backupCall(AgentClient $client, Server $server, string $action, array $payload): string

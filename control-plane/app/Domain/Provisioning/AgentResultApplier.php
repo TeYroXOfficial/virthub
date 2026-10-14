@@ -58,7 +58,7 @@ class AgentResultApplier
         }
 
         match ($job->action) {
-            'create' => $this->finishCreate($server, $result),
+            'create', 'recover' => $this->finishCreate($server, $result),
             'power' => $this->applyPowerState($server, $result),
             'rebuild' => $this->finishRebuild($server->forceFill(['guest_os_id' => null, 'guest_os_name' => null, 'guest_os_version' => null, 'guest_os_checked_at' => null])),
             'resize' => $this->finishResize($server, $job),
@@ -100,6 +100,7 @@ class AgentResultApplier
 
         match ($job->action) {
             'create' => $this->failCreate($server, $error),
+            'recover' => $server->markState(ServerState::Error, __('Odtwarzanie z kopii nie powiodło się: :error', ['error' => $error])),
             'snapshot', 'backup' => $this->failSnapshot($job),
             // Hasło, którego agent nie ustawił, nie może zostać w bazie
             // — pokazane klientowi wyglądałoby na działające.

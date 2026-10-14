@@ -503,6 +503,27 @@ class ServerProvisioner
      * Elevate: start = zapisy dysku idą do nakładki, commit = zapis zmian do
      * dysku, discard = powrót do stanu sprzed startu (z restartem działającej maszyny).
      */
+    /**
+     * Disaster recovery: odtworzenie maszyny z kopii na jej (już zastępczym)
+     * węźle. Dysk z kopii, sieć i konfiguracja z panelu.
+     */
+    public function recover(Server $server, Backup $backup, ?User $actor = null): ServerJob
+    {
+        if ($server->isContainer()) {
+            throw new \DomainException(__('Odtwarzanie z kopii działa tylko dla maszyn KVM.'));
+        }
+        if (! $backup->isRemote() || $backup->status !== Backup::STATUS_READY || $backup->server_id !== $server->id) {
+            throw new \DomainException(__('Kopia :name nie nadaje się do odtworzenia tej maszyny.', ['name' => $backup->name]));
+        }
+        $server->forceFill(['elevated_at' => null])->save();
+        $server->markState(ServerState::Rebuilding, __('Odtwarzanie z kopii z :date po awarii węzła.', ['date' => $backup->created_at?->format('Y-m-d H:i')]));
+        $job = $this->createJobRecord($server, 'recover', $actor, ['backup_id' => $backup->id]);
+        AuditLog::record('server.recover', $server, ['backup_id' => $backup->id, 'hypervisor_id' => $server->hypervisor_id], $actor);
+        RunServerActionJob::dispatch($job->id);
+
+        return $job;
+    }
+
     public function elevate(Server $server, string $action, ?User $actor = null): ServerJob
     {
         $this->assertAcceptsCommands($server);

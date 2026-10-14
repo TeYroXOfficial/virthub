@@ -667,3 +667,16 @@ class AppDeleteRequest(BaseModel):
 class AppRenameRequest(BaseModel):
     source: str = Field(pattern=APP_PATH, min_length=1)
     target: str = Field(pattern=APP_PATH, min_length=1)
+
+
+class RecoverVmRequest(CreateVmRequest):
+    """Odtworzenie maszyny na zastępczym hoście z kopii na celu zewnętrznym (DR)."""
+
+    backup: BackupRestoreRequest
+
+
+class DrSnapshotRequest(BaseModel):
+    """Zrzut konfiguracji węzła (domeny, sieć, magazyny) na cel kopii."""
+
+    key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,500}$")
+    target: BackupTargetSpec

@@ -21,6 +21,7 @@ use App\Http\Controllers\Web\CloudServerController;
 use App\Http\Controllers\Web\ConsoleController;
 use App\Http\Controllers\Web\DatabaseHostController;
 use App\Http\Controllers\Web\DatastoreController;
+use App\Http\Controllers\Web\DisasterRecoveryController;
 use App\Http\Controllers\Web\EmailTemplateController;
 use App\Http\Controllers\Web\FirewallController;
 use App\Http\Controllers\Web\GatewaySettingsController;
@@ -291,6 +292,12 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::get('/monitoring', [MonitoringController::class, 'index'])->name('monitoring');
         Route::get('/security', [NodeSecurityController::class, 'index'])->name('security');
         Route::get('/hypervisors/{hypervisor}/pci', [PciAssetController::class, 'index'])->name('pci');
+        Route::controller(DisasterRecoveryController::class)->prefix('/hypervisors/{hypervisor}/dr')->name('dr')->group(function () {
+            Route::get('/', 'show');
+            Route::put('/', 'update')->name('.update');
+            Route::post('/snapshot', 'snapshot')->middleware('throttle:10,1')->name('.snapshot');
+            Route::post('/recover', 'recover')->middleware('throttle:5,1')->name('.recover');
+        });
         Route::post('/hypervisors/{hypervisor}/pci', [PciAssetController::class, 'store'])->name('pci.store');
         Route::put('/pci/{asset}', [PciAssetController::class, 'update'])->name('pci.update');
         Route::delete('/pci/{asset}', [PciAssetController::class, 'destroy'])->name('pci.destroy');

@@ -122,6 +122,16 @@ class Server extends Model
         return $this->belongsTo(BackupPlan::class);
     }
 
+    /** Plan kopii maszyny albo — gdy go nie ma — plan DR jej węzła (tylko KVM). */
+    public function effectiveBackupPlan(): ?BackupPlan
+    {
+        if ($this->backupPlan) {
+            return $this->backupPlan;
+        }
+
+        return $this->isContainer() ? null : $this->hypervisor?->drBackupPlan;
+    }
+
     /** @return BelongsTo<Datastore, $this> */
     public function datastore(): BelongsTo
     {

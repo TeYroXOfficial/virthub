@@ -43,6 +43,8 @@ from .sftp import SftpService
 from .schemas import (
     GuestOs,
     DatastoreStatusRequest,
+    DrSnapshotRequest,
+    RecoverVmRequest,
     CreateVmRequest,
     HostHealth,
     ImagePrefetchRequest,
@@ -125,6 +127,8 @@ def _handlers() -> dict[str, Any]:
         "backup_restore": lambda p: driver.restore_backup(p["uuid"], BackupRestoreRequest(**p["body"])),
         "backup_delete": lambda p: driver.delete_backups(BackupDeleteRequest(**p)),
         "reset_password": lambda p: _reset_password(p["uuid"], PasswordResetRequest(**p["body"])),
+        "recover_vm": lambda p: driver.recover_vm(RecoverVmRequest(**p)),
+        "dr_snapshot": lambda p: driver.dr_snapshot(DrSnapshotRequest(**p)),
     }
 
 
@@ -709,6 +713,32 @@ async def create_backup(uuid: str, req: BackupRequest) -> JobAccepted:
 )
 async def restore_backup(uuid: str, req: BackupRestoreRequest) -> JobAccepted:
     job_id = jobs.enqueue("backup_restore", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.post(
+    "/vm/recover",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def recover_vm(req: RecoverVmRequest) -> JobAccepted:
+    """Disaster recovery: maszyna z kopii na celu zewnętrznym na tym (zastępczym) węźle."""
+    job_id = jobs.enqueue("recover_vm", req.model_dump(), server_id=req.server_id)
+    return JobAccepted(job_id=job_id)
+
+
+@app.post(
+    "/system/dr-snapshot",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["system"],
+)
+async def dr_snapshot(req: DrSnapshotRequest) -> JobAccepted:
+    """Zrzut konfiguracji węzła (domeny, sieć, magazyny bez kluczy) na cel kopii."""
+    job_id = jobs.enqueue("dr_snapshot", req.model_dump())
     return JobAccepted(job_id=job_id)
 
 

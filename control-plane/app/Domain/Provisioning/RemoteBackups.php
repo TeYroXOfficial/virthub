@@ -8,6 +8,7 @@ use App\Jobs\RunServerActionJob;
 use App\Models\AuditLog;
 use App\Models\Backup;
 use App\Models\BackupTarget;
+use App\Models\Hypervisor;
 use App\Models\Server;
 use App\Models\ServerJob;
 use App\Models\User;
@@ -102,7 +103,7 @@ class RemoteBackups
     /** Kopie ponad retencję planu (najstarsze). */
     public function prune(Server $server): int
     {
-        $plan = $server->backupPlan;
+        $plan = $server->effectiveBackupPlan();
         if ($plan === null) {
             return 0;
         }
@@ -121,10 +122,13 @@ class RemoteBackups
     {
         $now ??= now();
         $queued = 0;
-        $servers = Server::query()->whereNotNull('backup_plan_id')->whereNotNull('agent_uuid')
-            ->whereNull('suspended_at')->with(['backupPlan.target'])->get();
+        // Własny plan maszyny albo plan DR jej węzła.
+        $drNodes = Hypervisor::query()->whereNotNull('dr_backup_plan_id')->pluck('id');
+        $servers = Server::query()->whereNotNull('agent_uuid')->whereNull('suspended_at')
+            ->where(fn ($q) => $q->whereNotNull('backup_plan_id')->orWhereIn('hypervisor_id', $drNodes))
+            ->with(['backupPlan.target', 'hypervisor.drBackupPlan.target'])->get();
         foreach ($servers as $server) {
-            $plan = $server->backupPlan;
+            $plan = $server->effectiveBackupPlan();
             if (! $plan?->is_active || ! $plan->target?->is_active || $server->isContainer() || $server->isElevated()) {
                 continue;
             }

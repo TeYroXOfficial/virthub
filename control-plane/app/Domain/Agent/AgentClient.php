@@ -228,6 +228,18 @@ class AgentClient
         return $this->jobId($this->request('POST', '/vm', $payload));
     }
 
+    /** DR: maszyna z kopii na celu zewnętrznym (ładunek jak createVm + backup). */
+    public function recoverVm(array $payload): string
+    {
+        return $this->jobId($this->request('POST', '/vm/recover', $payload, 60));
+    }
+
+    /** DR: zrzut konfiguracji węzła na cel kopii. @param  array{type:string, config:array<string, mixed>}  $target */
+    public function drSnapshot(string $key, array $target): string
+    {
+        return $this->jobId($this->request('POST', '/system/dr-snapshot', ['key' => $key, 'target' => $target]));
+    }
+
     public function power(string $uuid, string $action): string
     {
         return $this->jobId($this->request('POST', "/vm/{$uuid}/power", ['action' => $action]));
