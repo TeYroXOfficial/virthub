@@ -23,6 +23,7 @@ class ApiCatalog
             'power' => ['name' => __('Zasilanie i system'), 'description' => __('Uruchamianie, zatrzymanie, reinstalacja, zmiana pakietu, dostęp.'), 'auth' => 'token'],
             'metrics' => ['name' => __('Metryki'), 'description' => __('Zużycie CPU, RAM, dysku i sieci.'), 'auth' => 'token'],
             'firewall' => ['name' => __('Zapora'), 'description' => __('Reguły i polityka zapory maszyny.'), 'auth' => 'token'],
+            'networks' => ['name' => __('Sieci prywatne'), 'description' => __('Izolowane sieci między maszynami klienta na węźle i dodatkowe karty sieciowe.'), 'auth' => 'token'],
             'snapshots' => ['name' => __('Migawki i kopie'), 'description' => __('Migawki dysku i kopie zapasowe maszyny.'), 'auth' => 'token'],
             'admin' => ['name' => __('Administracja'), 'description' => __('Hypervisory, pule IP, pakiety, szablony i maszyny wszystkich klientów. Token personelu z zakresem admin.'), 'auth' => 'admin'],
             'billing' => ['name' => __('Integracja rozliczeniowa'), 'description' => __('Dla systemów WHMCS, Blesta i własnych — token z zakresem billing.'), 'auth' => 'billing'],
@@ -115,6 +116,20 @@ class ApiCatalog
                 ], response: ['policy' => ['enabled' => true, 'inbound' => 'drop', 'outbound' => 'accept'], 'message' => __('Ustawienia zapory są wdrażane na hypervisorze.')]),
             self::e('firewall.destroy', 'firewall', 'DELETE', '/servers/{server}/firewall/{rule}', __('Usunięcie reguły'), __('Usuwa regułę zapory.'), 'servers:write',
                 path: [$server, self::path('rule', __('Identyfikator reguły'), 10)], response: ['message' => __('Reguła usunięta.')]),
+
+            // --- sieci prywatne ----------------------------------------------
+            self::e('networks.index', 'networks', 'GET', '/servers/{server}/private-networks', __('Karty w sieciach prywatnych'), __('Karty dodatkowe maszyny oraz sieci prywatne właściciela na tym samym węźle.'), 'servers:read',
+                path: [$server], response: ['data' => [['id' => 3, 'slot' => 1, 'mac' => '52:54:01:00:00:2a', 'address' => '10.20.0.1', 'prefix' => 24, 'network' => ['id' => 7, 'name' => 'backend', 'cidr' => '10.20.0.0/24']]],
+                    'networks' => [['id' => 7, 'name' => 'backend', 'cidr' => '10.20.0.0/24', 'servers' => 2]], 'limit' => 4]),
+            self::e('networks.attach', 'networks', 'POST', '/servers/{server}/private-networks', __('Podłączenie do sieci'), __('Dodaje maszynie kartę w istniejącej sieci (network_id) albo tworzy nową sieć (name, cidr). Na działającej maszynie karta jest dołączana na żywo.'), 'servers:write',
+                path: [$server], body: [
+                    self::param('network_id', 'integer', false, __('Istniejąca sieć; brak = nowa sieć'), 7),
+                    self::param('name', 'string', false, __('Nazwa nowej sieci'), 'backend'),
+                    self::param('cidr', 'string', false, __('Adresacja nowej sieci (prywatna IPv4, /16–/29); brak = propozycja panelu'), '10.20.0.0/24'),
+                    self::param('address', 'string', false, __('Adres maszyny w sieci; brak = pierwszy wolny'), '10.20.0.5'),
+                ], status: 202, response: ['nic' => ['id' => 3, 'slot' => 1, 'mac' => '52:54:01:00:00:2a', 'address' => '10.20.0.5', 'prefix' => 24, 'network' => ['id' => 7, 'name' => 'backend', 'cidr' => '10.20.0.0/24']], 'job_id' => 812, 'status' => 'queued']),
+            self::e('networks.detach', 'networks', 'DELETE', '/servers/{server}/nics/{nic}', __('Odłączenie karty'), __('Odłącza maszynę od sieci prywatnej.'), 'servers:write',
+                path: [$server, self::path('nic', __('Identyfikator karty'), 3)], status: 202, response: ['job_id' => 813, 'status' => 'queued']),
 
             // --- migawki ------------------------------------------------------
             self::e('snapshots.index', 'snapshots', 'GET', '/servers/{server}/snapshots', __('Lista migawek'), __('Migawki dysku maszyny z limitem na maszynę.'), 'servers:read',

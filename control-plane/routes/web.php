@@ -40,6 +40,7 @@ use App\Http\Controllers\Web\PasswordResetController;
 use App\Http\Controllers\Web\PaymentController;
 use App\Http\Controllers\Web\PciAssetController;
 use App\Http\Controllers\Web\PortForwardController;
+use App\Http\Controllers\Web\PrivateNetworkController;
 use App\Http\Controllers\Web\ProviderAccountController;
 use App\Http\Controllers\Web\ProvisionerController;
 use App\Http\Controllers\Web\PterodactylMigrationController;
@@ -171,6 +172,9 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/migrate', [ServerActionsController::class, 'migrate'])->middleware('throttle:10,1')->name('servers.migrate');
     Route::post('/servers/{server}/network-filter', [NetworkFilterController::class, 'assign'])->name('servers.network-filter');
     Route::put('/servers/{server}/ips/{address}/rdns', [ServerActionsController::class, 'rdns'])->middleware('throttle:10,1')->name('servers.rdns');
+    Route::post('/servers/{server}/private-networks', [PrivateNetworkController::class, 'attach'])->middleware('throttle:20,1')->name('servers.private-networks.attach');
+    Route::delete('/servers/{server}/nics/{nic}', [PrivateNetworkController::class, 'detach'])->name('servers.nics.detach');
+    Route::delete('/servers/{server}/private-networks/{network}', [PrivateNetworkController::class, 'destroy'])->name('servers.private-networks.destroy');
     Route::post('/servers/{server}/ports', [PortForwardController::class, 'store'])->name('servers.ports.store');
     Route::delete('/servers/{server}/ports/{forward}', [PortForwardController::class, 'destroy'])->name('servers.ports.destroy');
 

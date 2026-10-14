@@ -16,6 +16,7 @@ import logging
 import math
 import os
 import platform
+import re
 import secrets
 import socket
 import time
@@ -33,6 +34,7 @@ from .jobs import progress
 from .config import Settings
 from .domain_xml import CPU_PERIOD_US, build_domain_xml, cpu_quota_us, domain_name
 from .nat import host_networks
+from . import private_net
 from .network import NetworkManager, interface_name, mac_address
 from .schemas import (
     GuestOs,
@@ -327,6 +329,10 @@ class HypervisorDriver(ABC):
             target.unlink(missing_ok=True)
             raise DriverError("Suma kontrolna kopii się nie zgadza — plik uszkodzony.")
 
+    def set_private_nics(self, uuid: str, req: Any) -> dict[str, Any]:
+        """Karty w sieciach prywatnych — tylko maszyny wirtualne KVM."""
+        raise DriverError("Sieci prywatne są dostępne tylko dla maszyn KVM.")
+
     def set_hostdevs(self, uuid: str, req: Any) -> dict[str, Any]:
         """Urządzenia PCI (GPU, karty) — tylko maszyny wirtualne KVM."""
         raise DriverError("Przekazywanie urządzeń PCI jest dostępne tylko dla maszyn KVM.")
@@ -456,11 +462,13 @@ class LibvirtDriver(HypervisorDriver):
                 mac=mac,
                 os_type=req.os_type,
                 scripts=req.scripts,
+                private_nics=req.private_nics,
             )
             created.append("seed")
 
             # Adres prywatny → mostek NAT, publiczny → mostek z kartą fizyczną.
             bridge = self.network.prepare(req.interfaces)
+            private_net.ensure_bridges(self.settings, req.private_nics)
 
             xml = build_domain_xml(
                 name=name,
@@ -478,6 +486,7 @@ class LibvirtDriver(HypervisorDriver):
                 vnc_password=vnc_password,
                 windows=req.os_type == "windows",
                 allow_nested=self.nested_enabled(),
+                extra_interfaces=[private_net.interface_xml(req.server_id, n) for n in req.private_nics],
             )
 
             self.storage.libvirt_prepare(self.conn, name)
@@ -538,9 +547,10 @@ class LibvirtDriver(HypervisorDriver):
         self.cloudinit.build(
             name=name, server_id=req.server_id, hostname=req.hostname, interfaces=req.interfaces,
             nameservers=req.nameservers, ssh_keys=[], root_password=None,
-            mac=req.mac or mac_address(req.server_id), os_type=req.os_type, scripts=[],
+            mac=req.mac or mac_address(req.server_id), os_type=req.os_type, scripts=[], private_nics=req.private_nics,
         )
         self.network.prepare(req.interfaces)
+        private_net.ensure_bridges(self.settings, req.private_nics)
         self.network.configure(req.server_id, req.interfaces, firewall=[], net_filter=req.filter)
         return {"ready": True, "disk": str(path)}
 
@@ -604,6 +614,8 @@ class LibvirtDriver(HypervisorDriver):
 
         domain = self._domain(uuid)
         active = domain.isActive()
+        if not active and action in (PowerAction.START, PowerAction.REBOOT):
+            self._ensure_domain_bridges(domain)
 
         try:
             if action is PowerAction.START:
@@ -646,6 +658,8 @@ class LibvirtDriver(HypervisorDriver):
             self._define_mac(domain, mac)
         # vmx/svm zgodnie z hostem (starsze maszyny dostają przy reinstalacji tę samą ochronę).
         self._apply_cpu_policy(domain, self.nested_enabled())
+        if req.private_nics is not None:
+            self._sync_private_nics(domain, server_id, req.private_nics, live=False)
 
         progress("image", 20)
         self.storage.delete_volume(name)
@@ -662,6 +676,7 @@ class LibvirtDriver(HypervisorDriver):
             mac=mac,
             os_type=req.os_type,
             scripts=req.scripts,
+            private_nics=req.private_nics,
         )
 
         progress("boot", 85)
@@ -830,6 +845,7 @@ class LibvirtDriver(HypervisorDriver):
             raise DriverError(f"Nie udało się usunąć definicji domeny: {exc}") from exc
 
         self.network.teardown(server_id)
+        private_net.prune_bridges(self.settings)
         self.storage.delete_volume(name)
         self.storage.unbind(name)
         return {"uuid": uuid, "deleted": True}
@@ -980,6 +996,65 @@ class LibvirtDriver(HypervisorDriver):
         from . import pci
 
         return {"iommu": pci.iommu_enabled(), "devices": pci.list_devices()}
+
+    def _ensure_domain_bridges(self, domain: Any) -> int:
+        """Mostki sieci prywatnych z definicji domeny (`ip link` nie przetrwa restartu hosta)."""
+        import libvirt
+
+        ids = {int(m) for m in re.findall(r"<source bridge=['\"]vhp(\d+)['\"]", domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE))}
+        private_net.ensure_bridges(self.settings, [type("Nic", (), {"network_id": i})() for i in ids])
+        return len(ids)
+
+    def restore_private_bridges(self) -> int:
+        restored = 0
+        for domain in self.conn.listAllDomains():
+            try:
+                restored += self._ensure_domain_bridges(domain)
+            except Exception:
+                log.exception("Nie udało się odtworzyć mostków sieci prywatnych domeny %s", domain.name())
+        return restored
+
+    def set_private_nics(self, uuid: str, req: Any) -> dict[str, Any]:
+        domain = self._domain(uuid)
+        server_id = server_id_from_name(domain.name())
+        nics = self._sync_private_nics(domain, server_id, req.nics, live=bool(domain.isActive()))
+        return {"uuid": uuid, "nics": nics, "state": self._state(domain)}
+
+    def _sync_private_nics(self, domain: Any, server_id: int, wanted: list, live: bool) -> list[dict[str, Any]]:
+        """Dołącza brakujące karty, odłącza zbędne i zmienione (na żywo i w definicji)."""
+        import xml.etree.ElementTree as ET
+
+        import libvirt
+
+        private_net.ensure_bridges(self.settings, wanted)
+        root = ET.fromstring(domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE))
+        current: dict[int, ET.Element] = {}
+        for iface in root.findall("./devices/interface"):
+            target = iface.find("target")
+            parsed = private_net.parse_target(target.get("dev") if target is not None else None)
+            if parsed and parsed[0] == server_id:
+                current[parsed[1]] = iface
+        desired = {n.slot: n for n in wanted}
+        flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG | (libvirt.VIR_DOMAIN_AFFECT_LIVE if live else 0)
+
+        def same(element: ET.Element, nic: Any) -> bool:
+            source = element.find("source")
+            mac = element.find("mac")
+            return (source is not None and source.get("bridge") == private_net.bridge_name(nic.network_id)
+                    and mac is not None and (mac.get("address") or "").lower() == (nic.mac or private_net.nic_mac(server_id, nic.slot)).lower())
+
+        try:
+            for slot, element in current.items():
+                if slot not in desired or not same(element, desired[slot]):
+                    domain.detachDeviceFlags(ET.tostring(element, encoding="unicode"), flags)
+            for slot, nic in sorted(desired.items()):
+                if slot not in current or not same(current[slot], nic):
+                    domain.attachDeviceFlags(private_net.interface_xml(server_id, nic), flags)
+        except libvirt.libvirtError as exc:
+            raise DriverError(f"Nie udało się zmienić kart sieciowych: {exc}") from exc
+        private_net.prune_bridges(self.settings)
+        return [{"slot": n.slot, "network_id": n.network_id, "interface": private_net.nic_target(server_id, n.slot),
+                 "mac": (n.mac or private_net.nic_mac(server_id, n.slot)).lower()} for n in sorted(wanted, key=lambda n: n.slot)]
 
     def set_hostdevs(self, uuid: str, req: Any) -> dict[str, Any]:
         import libvirt
@@ -1353,6 +1428,7 @@ class MockDriver(HypervisorDriver):
             mac=req.mac or mac_address(req.server_id),
             os_type=req.os_type,
             scripts=req.scripts,
+            private_nics=req.private_nics,
         )
 
         record = {
@@ -1371,6 +1447,7 @@ class MockDriver(HypervisorDriver):
             "vnc_password": secrets.token_urlsafe(12),
             "disk_path": str(disk),
             "datastore_id": req.storage.id if req.storage else None,
+            "private_nics": self._nic_records(req.server_id, req.private_nics),
         }
         if not getattr(restore, "start", True):
             record["state"] = "stopped"
@@ -1407,6 +1484,8 @@ class MockDriver(HypervisorDriver):
         record["state"] = "running"
         if req.mac:
             record["mac"] = req.mac
+        if req.private_nics is not None:
+            record["private_nics"] = self._nic_records(record["server_id"], req.private_nics)
         self._save(data)
         return {"uuid": uuid, "state": "running", "template": req.template}
 
@@ -1563,6 +1642,21 @@ class MockDriver(HypervisorDriver):
             {"address": "0000:41:00.1", "vendor_id": "10de", "device_id": "1aef", "class": "0403", "type": "audio",
              "driver": "vfio-pci", "iommu_group": 31, "name": "NVIDIA Corporation GA102 High Definition Audio"},
         ]}
+
+    @staticmethod
+    def _nic_records(server_id: int, nics: list) -> list[dict[str, Any]]:
+        return [{"slot": n.slot, "network_id": n.network_id, "interface": private_net.nic_target(server_id, n.slot),
+                 "mac": (n.mac or private_net.nic_mac(server_id, n.slot)).lower(), "address": n.address}
+                for n in sorted(nics, key=lambda n: n.slot)]
+
+    def set_private_nics(self, uuid: str, req: Any) -> dict[str, Any]:
+        data = self._load()
+        record = data.get(uuid)
+        if record is None:
+            raise VmNotFound(uuid)
+        record["private_nics"] = self._nic_records(record["server_id"], req.nics)
+        self._save(data)
+        return {"uuid": uuid, "nics": record["private_nics"], "state": record["state"]}
 
     def set_hostdevs(self, uuid: str, req: Any) -> dict[str, Any]:
         from . import pci

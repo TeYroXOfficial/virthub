@@ -453,6 +453,15 @@ class ServerProvisioner
         return $job;
     }
 
+    /** Karty w sieciach prywatnych na węzeł (komplet z bazy). */
+    public function syncPrivateNics(Server $server, ?User $actor = null): ServerJob
+    {
+        $job = $this->createJobRecord($server, 'private_nics', $actor);
+        RunServerActionJob::dispatch($job->id);
+
+        return $job;
+    }
+
     public function syncNetwork(Server $server, ?User $actor = null): ServerJob
     {
         $job = $this->createJobRecord($server, 'network', $actor);

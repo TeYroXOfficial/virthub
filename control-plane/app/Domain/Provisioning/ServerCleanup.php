@@ -24,6 +24,7 @@ class ServerCleanup
         $this->ips->releaseAll($server);
         app(IsoLibrary::class)->deleteCustomFor($server);
         app(PciAssets::class)->release($server);
+        $server->nics()->delete();
         $this->selector->release($server);
 
         $server->forceFill([

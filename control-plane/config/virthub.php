@@ -22,6 +22,12 @@ return [
     | licencji. Bez ustawionego klucza panel działa normalnie, tylko bez addonów.
     */
 
+    // Sieci prywatne klienta (izolowany mostek na węźle) i karty dodatkowe maszyn.
+    'private_networks' => [
+        'per_user' => (int) env('VH_PRIVATE_NETWORKS_PER_USER', 10),
+        'nics_per_server' => min(7, (int) env('VH_PRIVATE_NICS_PER_SERVER', 4)),
+    ],
+
     'license' => [
         'server' => rtrim((string) env('VIRTHUB_LICENSE_SERVER', ''), '/'),
         'public_key' => env('VIRTHUB_LICENSE_PUBLIC_KEY', ''),

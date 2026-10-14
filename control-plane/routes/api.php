@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\ServerAdminController;
 use App\Http\Controllers\Api\BillingIntegrationController;
 use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\FirewallController;
+use App\Http\Controllers\Api\PrivateNetworkController;
 use App\Http\Controllers\Api\ServerController;
 use App\Http\Controllers\Api\SnapshotController;
 use App\Http\Controllers\Internal\AgentCallbackController;
@@ -50,6 +51,7 @@ Route::prefix('v1')->group(function () {
                 Route::get('/metrics', [ServerController::class, 'metrics']);
                 Route::get('/metrics/live', [ServerController::class, 'liveMetrics'])->middleware('throttle:90,1');
                 Route::get('/firewall', [FirewallController::class, 'index']);
+                Route::get('/private-networks', [PrivateNetworkController::class, 'index']);
                 Route::get('/snapshots', [SnapshotController::class, 'index']);
             });
         });
@@ -68,6 +70,9 @@ Route::prefix('v1')->group(function () {
                 Route::post('/firewall', [FirewallController::class, 'store']);
                 Route::put('/firewall/policy', [FirewallController::class, 'policy']);
                 Route::delete('/firewall/{rule}', [FirewallController::class, 'destroy']);
+
+                Route::post('/private-networks', [PrivateNetworkController::class, 'attach']);
+                Route::delete('/nics/{nic}', [PrivateNetworkController::class, 'detach']);
 
                 Route::post('/snapshots', [SnapshotController::class, 'store']);
                 Route::post('/snapshots/{backup}/restore', [SnapshotController::class, 'restore']);

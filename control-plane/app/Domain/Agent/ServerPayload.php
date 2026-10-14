@@ -4,6 +4,7 @@ namespace App\Domain\Agent;
 
 use App\Domain\Network\Firewall;
 use App\Domain\Network\PortForwarding;
+use App\Domain\Network\PrivateNetworks;
 use App\Models\IpAddress;
 use App\Models\OsTemplate;
 use App\Models\Provisioner;
@@ -103,7 +104,19 @@ class ServerPayload
             'nameservers' => self::nameservers($server),
             'os_type' => self::osType($server->template),
             'mac' => self::mac($server),
-        ] + self::scripts($server) + self::filter($server) + self::storage($server);
+        ] + self::scripts($server) + self::filter($server) + self::storage($server) + self::privateNics($server);
+    }
+
+    /**
+     * Karty w sieciach prywatnych. Brak klucza dla maszyn bez kart — starszy agent go nie zna.
+     *
+     * @return array{private_nics?: list<array<string, mixed>>}
+     */
+    public static function privateNics(Server $server): array
+    {
+        $nics = PrivateNetworks::payload($server);
+
+        return $nics === [] ? [] : ['private_nics' => $nics];
     }
 
     /**

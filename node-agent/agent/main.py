@@ -56,6 +56,7 @@ from .schemas import (
     IsoMountRequest,
     ElevateRequest,
     HostdevRequest,
+    PrivateNicsRequest,
     BackupRequest,
     BackupRestoreRequest,
     BackupDeleteRequest,
@@ -125,6 +126,7 @@ def _handlers() -> dict[str, Any]:
         "mount_iso": lambda p: driver.mount_iso(p["uuid"], IsoMountRequest(**p["body"])),
         "elevate": lambda p: driver.elevate(p["uuid"], ElevateRequest(**p["body"]).action),
         "hostdevs": lambda p: driver.set_hostdevs(p["uuid"], HostdevRequest(**p["body"])),
+        "private_nics": lambda p: driver.set_private_nics(p["uuid"], PrivateNicsRequest(**p["body"])),
         "backup": lambda p: driver.backup(p["uuid"], BackupRequest(**p["body"])),
         "backup_restore": lambda p: driver.restore_backup(p["uuid"], BackupRestoreRequest(**p["body"])),
         "backup_delete": lambda p: driver.delete_backups(BackupDeleteRequest(**p)),
@@ -226,6 +228,13 @@ async def lifespan(app: FastAPI):
             log.info("Odtworzono reguły sieci dla %s maszyn", restored)
     except Exception:
         log.exception("Nie udało się odtworzyć reguł sieci maszyn")
+    if hasattr(driver, "restore_private_bridges") and not settings.is_mock:
+        try:
+            bridges = driver.restore_private_bridges()
+            if bridges:
+                log.info("Odtworzono %s mostków sieci prywatnych", bridges)
+        except Exception:
+            log.exception("Nie udało się odtworzyć mostków sieci prywatnych")
     if hasattr(driver, "harden_existing"):
         try:
             hardened = driver.harden_existing()
@@ -822,6 +831,19 @@ async def delete_backups(req: BackupDeleteRequest) -> JobAccepted:
 )
 async def set_hostdevs(uuid: str, req: HostdevRequest) -> JobAccepted:
     job_id = jobs.enqueue("hostdevs", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.put(
+    "/vm/{uuid}/nics",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def set_private_nics(uuid: str, req: PrivateNicsRequest) -> JobAccepted:
+    """Karty w sieciach prywatnych: pełna lista docelowa (dołączanie/odłączanie na żywo)."""
+    job_id = jobs.enqueue("private_nics", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
     return JobAccepted(job_id=job_id)
 
 

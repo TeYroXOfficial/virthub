@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
 use App\Domain\Agent\ServerPayload;
+use App\Domain\Network\PrivateNetworks;
 use App\Domain\Provisioning\AgentResultApplier;
 use App\Domain\Provisioning\ServerCleanup;
 use App\Models\Backup;
@@ -71,6 +72,7 @@ class RunServerActionJob implements ShouldQueue
                 'recover' => $this->recoverCall($client, $server, $payload),
                 'hostdevs' => $client->setHostdevs($server->agent_uuid,
                     $server->pciAssets()->get()->map->toAgentPayload()->values()->all(), (bool) ($payload['restart'] ?? false)),
+                'private_nics' => $client->setPrivateNics($server->agent_uuid, PrivateNetworks::payload($server)),
                 'rebuild' => $client->rebuild($server->agent_uuid, [
                     'template' => $payload['template'],
                     'hostname' => $payload['hostname'] ?? $server->hostname,
@@ -82,7 +84,7 @@ class RunServerActionJob implements ShouldQueue
                     'nameservers' => ServerPayload::nameservers($server),
                     'os_type' => ServerPayload::osType($server->template),
                     'mac' => ServerPayload::mac($server),
-                ] + ServerPayload::scripts($server)),
+                ] + ServerPayload::scripts($server) + ServerPayload::privateNics($server)),
                 'password' => $client->resetPassword(
                     $server->agent_uuid,
                     Crypt::decryptString($payload['password']),

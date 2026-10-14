@@ -68,6 +68,7 @@ class AgentResultApplier
             'restore' => $server->markState(ServerState::Running),
             'network' => null,
             'hostdevs' => null,
+            'private_nics' => null,
             'backup' => $this->finishRemoteBackup($job, $result),
             'backup_restore' => $server->markState(ServerState::fromAgentState($result['state'] ?? 'running')),
             'elevate' => $server->forceFill(['elevated_at' => ($result['elevated'] ?? false) ? ($server->elevated_at ?? now()) : null])->save(),
