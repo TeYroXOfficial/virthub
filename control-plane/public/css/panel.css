@@ -256,7 +256,7 @@ td.num, .num { font-variant-numeric: tabular-nums; }
 
 label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-2); }
 .hint { font-size: 12.5px; color: var(--muted); font-weight: 400; margin-top: 5px; line-height: 1.5; }
-input:not([type]), input[type=text], input[type=datetime-local], input[type=date], input[type=search], input[type=email], input[type=password], input[type=number], select, textarea {
+input:not([type]), input[type=text], input[type=datetime-local], input[type=date], input[type=search], input[type=email], input[type=password], input[type=number], input[type=url], select, textarea {
     width: 100%; padding: 9px 12px;
     border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
     background: var(--surface-2); color: var(--text);
@@ -913,3 +913,33 @@ dialog.edit-modal .grid-3 { gap: 0 14px; }
 .db-tables a:hover, .db-tables a[aria-current] { background: var(--surface-3); }
 .db-tables .hint { font-size: 11px; }
 @media (max-width: 800px) { .db-layout { grid-template-columns: 1fr; } .db-tables { max-height: 240px; } }
+
+/* --- dokumentacja API ------------------------------------------------------- */
+
+.docs-wrap { max-width: 1280px; margin: 0 auto; padding: 24px 16px; }
+.api-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 20px; align-items: start; }
+.api-layout > * { min-width: 0; }
+.api-nav { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; font-size: 13px; }
+.api-nav h4 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); }
+.api-nav a { display: flex; gap: 6px; align-items: center; padding: 3px 6px; border-radius: 6px; color: var(--text); text-decoration: none; }
+.api-nav a:hover { background: var(--surface-2); }
+.api-nav input { width: 100%; margin-bottom: 6px; }
+.method { display: inline-block; min-width: 52px; text-align: center; font: 600 11px var(--mono); padding: 2px 6px; border-radius: 4px; color: #fff; }
+.method.get { background: #0e8f80; } .method.post { background: #2563eb; } .method.put { background: #b7791f; }
+.method.patch { background: #9333ea; } .method.delete { background: #c53030; }
+.api-endpoint { scroll-margin-top: 16px; }
+.api-endpoint .path { font: 600 14px var(--mono); word-break: break-all; }
+.api-params { width: 100%; font-size: 13px; }
+.api-params td, .api-params th { padding: 6px 8px; vertical-align: top; }
+.api-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin: 10px 0 6px; }
+.api-tabs button { font-size: 12px; padding: 4px 10px; border: 1px solid var(--border); background: var(--surface); border-radius: 6px; cursor: pointer; color: var(--text); }
+.api-tabs button[aria-selected="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+.api-code { position: relative; }
+.api-code pre { margin: 0; background: #0f1a26; color: #e6edf3; padding: 12px 14px; border-radius: 8px; font: 12.5px/1.5 var(--mono); overflow: auto; max-height: 420px; white-space: pre; }
+.api-code .copy { position: absolute; top: 6px; right: 6px; font-size: 11px; }
+.api-console { scroll-margin-top: 16px; }
+.api-console textarea, .api-console input, .api-console select { font-family: var(--mono); font-size: 12.5px; }
+.api-response-meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; margin: 8px 0; }
+.api-history-item { cursor: pointer; border-radius: 4px; }
+.api-history-item:hover { background: var(--surface-2); }
+@media (max-width: 900px) { .api-layout { grid-template-columns: 1fr; } .api-nav { position: static; max-height: none; } }

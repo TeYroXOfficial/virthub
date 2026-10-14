@@ -146,7 +146,8 @@
     </div>
 
     <div class="card flush dash-section">
-        <div class="dash-head"><h3 class="card-title" style="margin:0"><x-icon name="key" :size="16"/> {{ __('Tokeny API') }}</h3></div>
+        <div class="dash-head"><h3 class="card-title" style="margin:0"><x-icon name="key" :size="16"/> {{ __('Tokeny API') }}</h3>
+            <a class="btn btn-sm" href="{{ route('api-docs') }}">{{ __('Dokumentacja API') }}</a></div>
         <div class="table-wrap">
             <table>
                 <thead><tr><th>{{ __('Nazwa') }}</th><th>{{ __('Zakres') }}</th><th>{{ __('Ostatnie użycie') }}</th><th>{{ __('Wygasa') }}</th><th></th></tr></thead>
