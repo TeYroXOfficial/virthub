@@ -69,6 +69,13 @@
                     <div class="hint">{{ __('Tyle wolnych urządzeń z węzła trafi do nowej maszyny KVM.') }}</div>
                 </div>
                 <div class="field">
+                    <label for="backup_plan_id">{{ __('Plan kopii zapasowych') }}</label>
+                    <select id="backup_plan_id" name="backup_plan_id">
+                        <option value="">{{ __('— bez kopii —') }}</option>
+                        @foreach (\App\Models\BackupPlan::query()->orderBy('name')->get() as $plan) <option value="{{ $plan->id }}" @selected((int) old('backup_plan_id') === $plan->id)>{{ $plan->name }}</option> @endforeach
+                    </select>
+                </div>
+                <div class="field">
                     <label for="price_hint">{{ __('Cena (PLN)') }}</label>
                     <input id="price_hint" name="price_hint" type="text" value="{{ old('price_hint') }}"
                            placeholder="49.00">
@@ -150,6 +157,11 @@
                                                     @foreach (\App\Models\PciAsset::TYPES as $t) <option value="{{ $t }}" @selected($v('pci_type', $package->pci_type) === $t)>{{ $t }}</option> @endforeach
                                                 </select>
                                             </div></div>
+                                        <div class="field"><label>{{ __('Plan kopii zapasowych') }}</label>
+                                            <select name="backup_plan_id">
+                                                <option value="">{{ __('— bez kopii —') }}</option>
+                                                @foreach (\App\Models\BackupPlan::query()->orderBy('name')->get() as $plan) <option value="{{ $plan->id }}" @selected((int) $v('backup_plan_id', $package->backup_plan_id) === $plan->id)>{{ $plan->name }}</option> @endforeach
+                                            </select></div>
                                         <div class="field"><label>{{ __('Cena (PLN)') }}</label><input name="price_hint" type="text" inputmode="decimal" value="{{ $v('price_hint', $package->price_hint_cents !== null ? number_format($package->price_hint_cents / 100, 2, '.', '') : '') }}"></div>
                                     </div>
                                     @if ($package->servers_count > 0)

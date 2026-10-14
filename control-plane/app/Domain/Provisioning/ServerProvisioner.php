@@ -101,6 +101,8 @@ class ServerProvisioner
             // Szablon decyduje o rodzaju maszyny: z obrazu kontenera powstaje
             // kontener, z obrazu dysku — maszyna wirtualna.
             $server->virtualization = $template->virtualization;
+            // Plan kopii z pakietu (kopie na zewnętrzne cele — tylko KVM).
+            $server->backup_plan_id = $template->isContainer() ? null : $package->backup_plan_id;
             $server->save();
 
             $networkType = $package->network_type ?: IpPool::TYPE_PUBLIC;
@@ -285,6 +287,9 @@ class ServerProvisioner
     public function restore(Server $server, Backup $backup, ?User $actor = null): ServerJob
     {
         $this->assertAcceptsCommands($server);
+        if ($backup->isRemote()) {
+            return app(RemoteBackups::class)->restore($server, $backup, $actor);
+        }
         $this->assertNotElevated($server);
 
         if (! $backup->isRestorable()) {

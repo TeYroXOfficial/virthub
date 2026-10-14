@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Provisioning\RemoteBackups;
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Http\Controllers\Controller;
 use App\Models\Backup;
@@ -21,7 +22,7 @@ class SnapshotController extends Controller
         $this->authorize('view', $server);
 
         return response()->json([
-            'data' => $server->backups()->latest()->get()->map(fn (Backup $backup) => [
+            'data' => $server->backups()->where('type', '!=', Backup::TYPE_REMOTE)->latest()->get()->map(fn (Backup $backup) => [
                 'id' => $backup->id,
                 'name' => $backup->name,
                 'status' => $backup->status,
@@ -30,7 +31,7 @@ class SnapshotController extends Controller
                 'restorable' => $backup->isRestorable(),
             ]),
             'limit' => self::MAX_PER_SERVER,
-            'used' => $server->backups()->count(),
+            'used' => $server->backups()->where('type', '!=', Backup::TYPE_REMOTE)->count(),
         ]);
     }
 
@@ -42,7 +43,7 @@ class SnapshotController extends Controller
             'name' => ['required', 'string', 'max:64', 'regex:/^[a-zA-Z0-9_.-]+$/'],
         ]);
 
-        if ($server->backups()->count() >= self::MAX_PER_SERVER) {
+        if ($server->backups()->where('type', '!=', Backup::TYPE_REMOTE)->count() >= self::MAX_PER_SERVER) {
             return response()->json([
                 'message' => __('Osiągnięto limit ').self::MAX_PER_SERVER
                     .__(' kopii dla tej maszyny. Usuń starą kopię, aby zrobić nową.'),
@@ -89,7 +90,11 @@ class SnapshotController extends Controller
             abort(404);
         }
 
-        $backup->delete();
+        if ($backup->isRemote()) {
+            app(RemoteBackups::class)->delete($backup);
+        } else {
+            $backup->delete();
+        }
 
         return response()->json(['message' => __('Kopia została usunięta z listy.')]);
     }

@@ -73,6 +73,54 @@
         </div>
     @endif
 
+    @php $remoteBackups = $server->isContainer() ? collect() : $server->backups()->where('type', 'remote')->with('target:id,name')->latest('id')->limit(20)->get(); @endphp
+    @if (! $server->isContainer() && ($server->backup_plan_id || $remoteBackups->isNotEmpty() || $user->can('manageResources', $server)))
+        <div class="card" id="remote-backups">
+            <h3 class="card-title"><x-icon name="archive" :size="16"/> {{ __('Kopie zapasowe') }}
+                @if ($server->backupPlan) <span class="pill neutral plain">{{ $server->backupPlan->name }}</span> @endif</h3>
+            @error('backup') <div class="hint" style="color:var(--critical)">{{ $message }}</div> @enderror
+            @if ($remoteBackups->isNotEmpty())
+                <ul class="list-plain">
+                    @foreach ($remoteBackups as $backup)
+                        <li>
+                            <span style="flex:1"><code>{{ $backup->name }}</code> <span class="muted">{{ $backup->created_at->diffForHumans() }}@if ($backup->size_mb) · {{ $backup->size_mb }} MB @endif</span>
+                                <span class="pill {{ ['ready' => 'ok', 'creating' => 'warning', 'failed' => 'critical'][$backup->status] ?? 'neutral' }}">{{ ['ready' => __('gotowa'), 'creating' => __('tworzenie'), 'failed' => __('błąd'), 'restoring' => __('przywracanie')][$backup->status] ?? $backup->status }}</span></span>
+                            @if ($backup->isRestorable() && $user->can('restoreSnapshot', $server))
+                                <form method="POST" action="{{ route('panel.servers.remote-backups.restore', [$server, $backup]) }}" style="margin:0"
+                                      data-confirm="{{ __('Przywrócić kopię :name? Obecna zawartość dysku zostanie nadpisana, a maszyna uruchomi się ponownie.', ['name' => $backup->name]) }}">
+                                    @csrf <button class="btn btn-sm" type="submit" @disabled(! $server->acceptsCommands())>{{ __('Przywróć') }}</button>
+                                </form>
+                            @endif
+                            @can('snapshots', $server)
+                                <form method="POST" action="{{ route('panel.servers.remote-backups.destroy', [$server, $backup]) }}" style="margin:0" data-confirm="{{ __('Usunąć kopię :name?', ['name' => $backup->name]) }}">
+                                    @csrf @method('DELETE') <button class="btn btn-sm btn-danger" type="submit">{{ __('Usuń') }}</button>
+                                </form>
+                            @endcan
+                        </li>
+                    @endforeach
+                </ul>
+            @else
+                <p class="muted">{{ $server->backup_plan_id ? __('Pierwsza kopia powstanie według planu.') : __('Maszyna nie ma planu kopii.') }}</p>
+            @endif
+            @if ($server->backup_plan_id && $user->can('snapshots', $server))
+                <form method="POST" action="{{ route('panel.servers.remote-backups', $server) }}" style="margin-top:10px">
+                    @csrf <button class="btn" type="submit" @disabled(! $server->acceptsCommands())>{{ __('Utwórz kopię teraz') }}</button>
+                </form>
+            @endif
+            @can('manageResources', $server)
+                <form method="POST" action="{{ route('panel.servers.backup-plan', $server) }}" style="margin-top:12px; display:flex; gap:8px; align-items:flex-end">
+                    @csrf
+                    <div class="field" style="margin:0"><label for="bp-select">{{ __('Plan kopii') }} <span class="pill neutral">{{ __('personel') }}</span></label>
+                        <select id="bp-select" name="backup_plan_id">
+                            <option value="">{{ __('— bez kopii —') }}</option>
+                            @foreach (\App\Models\BackupPlan::query()->orderBy('name')->get() as $plan) <option value="{{ $plan->id }}" @selected($server->backup_plan_id === $plan->id)>{{ $plan->name }}</option> @endforeach
+                        </select></div>
+                    <button class="btn" type="submit">{{ __('Zapisz') }}</button>
+                </form>
+            @endcan
+        </div>
+    @endif
+
     @if ($canIso)
         <div class="card" id="iso">
             <h3 class="card-title"><x-icon name="disc" :size="16"/> {{ __('Obraz ISO') }}</h3>

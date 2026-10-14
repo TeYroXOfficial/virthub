@@ -117,6 +117,11 @@ class Server extends Model
         return $this->belongsTo(IsoImage::class, 'iso_image_id');
     }
 
+    public function backupPlan(): BelongsTo
+    {
+        return $this->belongsTo(BackupPlan::class);
+    }
+
     public function resourcePack(): BelongsTo
     {
         return $this->belongsTo(ResourcePack::class);

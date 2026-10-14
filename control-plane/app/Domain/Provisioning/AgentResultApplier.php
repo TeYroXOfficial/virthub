@@ -68,6 +68,8 @@ class AgentResultApplier
             'restore' => $server->markState(ServerState::Running),
             'network' => null,
             'hostdevs' => null,
+            'backup' => $this->finishRemoteBackup($job, $result),
+            'backup_restore' => $server->markState(ServerState::fromAgentState($result['state'] ?? 'running')),
             'elevate' => $server->forceFill(['elevated_at' => ($result['elevated'] ?? false) ? ($server->elevated_at ?? now()) : null])->save(),
             'mac' => null,
             'iso' => $this->finishIso($server->forceFill(['guest_os_checked_at' => null]), $job, $result),
@@ -81,11 +83,11 @@ class AgentResultApplier
         }
 
         $event = ['create' => 'server.built', 'power' => 'server.power', 'rebuild' => 'server.rebuilt', 'resize' => 'server.resized',
-            'snapshot' => 'backup.created', 'restore' => 'backup.restored'][$job->action] ?? null;
+            'snapshot' => 'backup.created', 'restore' => 'backup.restored', 'backup' => 'backup.created', 'backup_restore' => 'backup.restored'][$job->action] ?? null;
         if ($event !== null) {
             $webhooks->dispatch($event, $webhooks->describe($server->fresh() ?? $server) + array_filter([
                 'power_action' => $job->action === 'power' ? ($job->payload['action'] ?? null) : null,
-                'backup_id' => in_array($job->action, ['snapshot', 'restore'], true) ? ($job->payload['backup_id'] ?? null) : null,
+                'backup_id' => in_array($job->action, ['snapshot', 'restore', 'backup', 'backup_restore'], true) ? ($job->payload['backup_id'] ?? null) : null,
             ]));
         }
 
@@ -98,7 +100,7 @@ class AgentResultApplier
 
         match ($job->action) {
             'create' => $this->failCreate($server, $error),
-            'snapshot' => $this->failSnapshot($job),
+            'snapshot', 'backup' => $this->failSnapshot($job),
             // Hasło, którego agent nie ustawił, nie może zostać w bazie
             // — pokazane klientowi wyglądałoby na działające.
             'rebuild' => $server->forceFill(['root_password' => null])->save(),
@@ -109,7 +111,7 @@ class AgentResultApplier
         $this->rollbackState($job, $error);
         $job->markFailed($error);
 
-        $event = ['create' => 'server.build_failed', 'snapshot' => 'backup.failed'][$job->action] ?? null;
+        $event = ['create' => 'server.build_failed', 'snapshot' => 'backup.failed', 'backup' => 'backup.failed'][$job->action] ?? null;
         if ($event !== null) {
             $webhooks = app(Webhooks::class);
             $webhooks->dispatch($event, $webhooks->describe($server) + ['error' => $error]);
@@ -247,6 +249,22 @@ class AgentResultApplier
             'status' => Backup::STATUS_READY,
             'storage_path' => $result['path'] ?? null,
         ])->save();
+    }
+
+    private function finishRemoteBackup(ServerJob $job, array $result): void
+    {
+        $backup = Backup::find($job->payload['backup_id'] ?? null);
+        if ($backup === null) {
+            return;
+        }
+        $bytes = isset($result['size_bytes']) ? (int) $result['size_bytes'] : null;
+        $backup->forceFill([
+            'status' => Backup::STATUS_READY,
+            'sha256' => $result['sha256'] ?? null,
+            'size_bytes' => $bytes,
+            'size_mb' => $bytes !== null ? (int) ceil($bytes / 1048576) : null,
+        ])->save();
+        app(RemoteBackups::class)->prune($job->server);
     }
 
     private function failSnapshot(ServerJob $job): void

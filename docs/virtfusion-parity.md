@@ -52,7 +52,7 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
 10. ✅ **Samoobsługa (resource packs).**
     - Klient sam tworzy i usuwa VM w ramach pakietu zasobów (CPU/RAM/dysk/IP), rozliczanie godzinowe.
     - Maszyny „tradycyjne” chronione przed usunięciem z samoobsługi.
-11. **Kopie zapasowe na zewnętrzne cele.**
+11. ✅ **Kopie zapasowe na zewnętrzne cele.** (bez przyrostowych — etap 17)
     - Cele: S3, SFTP/SSH.
     - Kompresja, retencja i przycinanie.
     - Kopie przyrostowe (dirty bitmaps QEMU), przywracanie.
@@ -63,3 +63,4 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
     - Kopia dysków, konfiguracji i stanu hypervisora na lokalny dysk albo S3.
     - Odtworzenie na zastępczym hoście.
 16. **Migracje VM między hypervisorami.** Na zimno (kopiowanie dysku) i na żywo (libvirt migrate z kopiowaniem dysku), z wyborem docelowego węzła i webhookiem `server.migrated`.
+17. **Kopie przyrostowe.** Dirty bitmaps QEMU (tylko zmienione bloki), łańcuch pełna + przyrostowe, przywracanie z łańcucha.

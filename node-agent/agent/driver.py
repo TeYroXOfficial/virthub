@@ -45,6 +45,7 @@ from .schemas import (
     ResizeVmRequest,
     VmStats,
 )
+from .shell import run
 from .storage import StorageError, build_storage_driver
 
 log = logging.getLogger("virthub.driver")
@@ -137,6 +138,63 @@ class HypervisorDriver(ABC):
     def mount_iso(self, uuid: str, req: IsoMountRequest) -> dict[str, Any]:
         """Płyta ISO i rozruch z niej — tylko maszyny wirtualne."""
         raise DriverError("Obrazy ISO są dostępne tylko dla maszyn wirtualnych KVM.")
+
+    def backup(self, uuid: str, req: Any) -> dict[str, Any]:
+        """Kopia dysku na zewnętrzny cel — tylko maszyny KVM."""
+        raise DriverError("Kopie zapasowe na zewnętrzne cele są dostępne tylko dla maszyn KVM.")
+
+    def restore_backup(self, uuid: str, req: Any) -> dict[str, Any]:
+        raise DriverError("Kopie zapasowe na zewnętrzne cele są dostępne tylko dla maszyn KVM.")
+
+    def delete_backups(self, req: Any) -> dict[str, Any]:
+        from .backup_targets import BackupTargetError, build_target
+
+        try:
+            target = build_target(req.target.model_dump())
+            for key in req.keys:
+                target.delete(key)
+        except BackupTargetError as exc:
+            raise DriverError(str(exc)) from exc
+        return {"deleted": len(req.keys)}
+
+    @staticmethod
+    def _sha256(path: Path) -> str:
+        import hashlib
+
+        digest = hashlib.sha256()
+        with path.open("rb") as fh:
+            while chunk := fh.read(1024 * 1024):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def _ship(self, image: Path, req: Any) -> dict[str, Any]:
+        """Wysyłka gotowego obrazu na cel i sprzątanie pliku tymczasowego."""
+        from .backup_targets import BackupTargetError, build_target
+
+        try:
+            sha = self._sha256(image)
+            size = image.stat().st_size
+            progress("upload", 60)
+            build_target(req.target.model_dump()).upload(image, req.key)
+        except BackupTargetError as exc:
+            raise DriverError(f"Wysyłka kopii nie powiodła się: {exc}") from exc
+        finally:
+            image.unlink(missing_ok=True)
+        progress("upload", 100)
+        return {"key": req.key, "size_bytes": size, "sha256": sha}
+
+    def _fetch(self, req: Any, target: Path) -> None:
+        from .backup_targets import BackupTargetError, build_target
+
+        try:
+            progress("download", 10)
+            build_target(req.target.model_dump()).download(req.key, target)
+        except BackupTargetError as exc:
+            target.unlink(missing_ok=True)
+            raise DriverError(f"Pobranie kopii nie powiodło się: {exc}") from exc
+        if req.sha256 and self._sha256(target) != req.sha256:
+            target.unlink(missing_ok=True)
+            raise DriverError("Suma kontrolna kopii się nie zgadza — plik uszkodzony.")
 
     def set_hostdevs(self, uuid: str, req: Any) -> dict[str, Any]:
         """Urządzenia PCI (GPU, karty) — tylko maszyny wirtualne KVM."""
@@ -568,6 +626,68 @@ class LibvirtDriver(HypervisorDriver):
         self.network.teardown(server_id)
         self.storage.delete_volume(name)
         return {"uuid": uuid, "deleted": True}
+
+    # --- kopie na zewnętrzne cele ------------------------------------------
+
+    def backup(self, uuid: str, req: Any) -> dict[str, Any]:
+        """Spójny obraz dysku: działająca maszyna pisze chwilowo do nakładki,
+        a my kopiujemy (i kompresujemy) zamrożony dysk bazowy."""
+        import libvirt
+
+        domain = self._domain(uuid)
+        name = domain.name()
+        self._assert_not_elevated(name)
+        base = self.storage.volume_path(name)
+        overlay = base.with_name(f"{name}.backup-overlay.qcow2")
+        image = base.with_name(f".{name}.backup-{secrets.token_hex(4)}.qcow2")
+        frozen = False
+        try:
+            if domain.isActive():
+                self._external_overlay(domain, overlay, "virthub-backup")
+                frozen = True
+            progress("export", 5)
+            run(["qemu-img", "convert", "-O", "qcow2", *(["-c"] if req.compress else []), str(base), str(image)], timeout=6 * 3600)
+        except libvirt.libvirtError as exc:
+            image.unlink(missing_ok=True)
+            raise DriverError(f"Nie udało się zamrozić dysku do kopii: {exc}") from exc
+        except Exception:
+            image.unlink(missing_ok=True)
+            raise
+        finally:
+            if frozen:
+                self._block_commit(domain)
+                overlay.unlink(missing_ok=True)
+        return self._ship(image, req)
+
+    def restore_backup(self, uuid: str, req: Any) -> dict[str, Any]:
+        domain = self._domain(uuid)
+        name = domain.name()
+        self._assert_not_elevated(name)
+        base = self.storage.volume_path(name)
+        incoming = base.with_name(f".{name}.restore.qcow2")
+        self._fetch(req, incoming)
+        was_running = bool(domain.isActive())
+        if was_running:
+            domain.destroy()
+        os.replace(incoming, base)
+        if was_running:
+            domain.create()
+        return {"uuid": uuid, "key": req.key, "state": self._state(domain)}
+
+    def _external_overlay(self, domain: Any, overlay: Path, snap_name: str) -> None:
+        import libvirt
+
+        snap = (
+            f"<domainsnapshot><name>{snap_name}</name><disks>"
+            f"<disk name='vda' snapshot='external'><driver type='qcow2'/><source file='{escape(str(overlay))}'/></disk>"
+            "</disks></domainsnapshot>"
+        )
+        domain.snapshotCreateXML(
+            snap,
+            libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_DISK_ONLY
+            | libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_NO_METADATA
+            | libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_ATOMIC,
+        )
 
     # --- urządzenia PCI ------------------------------------------------------
 
@@ -1092,6 +1212,21 @@ class MockDriver(HypervisorDriver):
         record["password_changes"] = record.get("password_changes", 0) + 1
         self._save(data)
         return {"uuid": uuid, "state": record["state"]}
+
+    def backup(self, uuid: str, req: Any) -> dict[str, Any]:
+        record = self._get(uuid)
+        self._assert_not_elevated(record["name"])
+        image = self.settings.image_dir / f".{record['name']}.backup-{secrets.token_hex(4)}.qcow2"
+        image.write_bytes(f"mock backup of {record['name']} compress={req.compress}\n".encode())
+        return self._ship(image, req)
+
+    def restore_backup(self, uuid: str, req: Any) -> dict[str, Any]:
+        record = self._get(uuid)
+        self._assert_not_elevated(record["name"])
+        incoming = self.settings.image_dir / f".{record['name']}.restore.qcow2"
+        self._fetch(req, incoming)
+        os.replace(incoming, self.storage.volume_path(record["name"]))
+        return {"uuid": uuid, "key": req.key, "state": record["state"]}
 
     def pci_devices(self) -> dict[str, Any]:
         return {"iommu": True, "devices": [

@@ -9,10 +9,12 @@ use App\Domain\Network\ReverseDns;
 use App\Domain\Provisioning\AgentResultApplier;
 use App\Domain\Provisioning\GuestOs;
 use App\Domain\Provisioning\IsoLibrary;
+use App\Domain\Provisioning\RemoteBackups;
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Enums\ServerState;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\Backup;
 use App\Models\IpAddress;
 use App\Models\IsoImage;
 use App\Models\OsTemplate;
@@ -272,6 +274,42 @@ class ServerActionsController extends Controller
                 return null; // węzeł chwilowo nie odpowiada — pokażemy postęp szacowany
             }
         });
+    }
+
+    public function createRemoteBackup(Request $request, Server $server): RedirectResponse
+    {
+        $this->authorize('snapshots', $server);
+        $plan = $server->backupPlan()->with('target')->first();
+        abort_if($plan === null || $plan->target === null, 404);
+        try {
+            app(RemoteBackups::class)->create($server, $plan->target, $plan->compress, $request->user());
+        } catch (\DomainException $e) {
+            return redirect()->to(route('panel.servers.show', $server).'#remote-backups')->withErrors(['backup' => $e->getMessage()]);
+        }
+
+        return redirect()->to(route('panel.servers.show', $server).'#remote-backups')->with('status', __('Kopia jest tworzona — maszyna działa dalej.'));
+    }
+
+    public function restoreRemoteBackup(Request $request, Server $server, Backup $backup): RedirectResponse
+    {
+        $this->authorize('restoreSnapshot', $server);
+        abort_unless($backup->server_id === $server->id && $backup->isRemote(), 404);
+        try {
+            app(RemoteBackups::class)->restore($server, $backup, $request->user());
+        } catch (\DomainException $e) {
+            return redirect()->to(route('panel.servers.show', $server).'#remote-backups')->withErrors(['backup' => $e->getMessage()]);
+        }
+
+        return redirect()->to(route('panel.servers.show', $server).'#remote-backups')->with('status', __('Przywracam kopię :name — maszyna uruchomi się ponownie.', ['name' => $backup->name]));
+    }
+
+    public function deleteRemoteBackup(Request $request, Server $server, Backup $backup): RedirectResponse
+    {
+        $this->authorize('snapshots', $server);
+        abort_unless($backup->server_id === $server->id && $backup->isRemote(), 404);
+        app(RemoteBackups::class)->delete($backup);
+
+        return redirect()->to(route('panel.servers.show', $server).'#remote-backups')->with('status', __('Kopia usunięta.'));
     }
 
     public function elevate(Request $request, Server $server): RedirectResponse

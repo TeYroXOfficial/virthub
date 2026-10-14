@@ -25,6 +25,7 @@ class VpsPackage extends Model
         'ipv6_count',
         'pci_type',
         'pci_count',
+        'backup_plan_id',
         'price_hint_cents',
         'currency',
         'is_active',
