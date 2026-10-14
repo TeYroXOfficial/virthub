@@ -62,7 +62,7 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
 15. ✅ **Disaster recovery hypervisora.** (Hypervisor → Disaster recovery: plan kopii dla maszyn węzła bez planu, zrzuty konfiguracji na cel kopii, odtworzenie na zastępczym hoście z przeniesieniem pul IP)
     - Kopia dysków, konfiguracji i stanu hypervisora na lokalny dysk albo S3.
     - Odtworzenie na zastępczym hoście.
-16. **Migracje VM między hypervisorami.** Na zimno (kopiowanie dysku) i na żywo (libvirt migrate z kopiowaniem dysku), z wyborem docelowego węzła i webhookiem `server.migrated`.
+16. ✅ **Migracje VM między hypervisorami.** Na zimno (kopiowanie dysku) i na żywo (libvirt migrate z kopiowaniem dysku), z wyborem docelowego węzła i webhookiem `server.migrated`.
 17. **Kopie przyrostowe.** Dirty bitmaps QEMU (tylko zmienione bloki), łańcuch pełna + przyrostowe, przywracanie z łańcucha.
 18. ✅ **Dokumentacja API.** Strona `/api-docs`: OpenAPI 3 dla wszystkich endpointów, opisy w każdym języku panelu, przykłady (curl, PHP, Python, JavaScript, Go), wbudowana konsola do testowania zapytań (jak Postman, z historią) i eksport kolekcji Postman.
 19. **Sieci izolowane i wiele kart.** Prywatne sieci między maszynami klienta (osobny mostek bez łącza), druga i kolejne karty sieciowe maszyny.

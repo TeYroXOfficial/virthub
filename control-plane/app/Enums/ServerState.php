@@ -19,6 +19,7 @@ enum ServerState: string
     case Rebuilding = 'rebuilding';
     case Resizing = 'resizing';
     case Deleting = 'deleting';
+    case Migrating = 'migrating';
     case Error = 'error';
 
     public function isTransitioning(): bool
@@ -28,6 +29,7 @@ enum ServerState: string
             self::Rebuilding,
             self::Resizing,
             self::Deleting,
+            self::Migrating,
         ], true);
     }
 
@@ -47,6 +49,7 @@ enum ServerState: string
             self::Rebuilding => __('Przebudowa'),
             self::Resizing => __('Zmiana pakietu'),
             self::Deleting => __('Usuwanie'),
+            self::Migrating => __('Migracja'),
             self::Error => __('Błąd'),
         };
     }
@@ -56,7 +59,7 @@ enum ServerState: string
     {
         return match ($this) {
             self::Running => 'ok',
-            self::Building, self::Rebuilding, self::Resizing, self::Deleting => 'warning',
+            self::Building, self::Rebuilding, self::Resizing, self::Deleting, self::Migrating => 'warning',
             self::Error, self::Suspended => 'critical',
             self::Stopped => 'neutral',
         };

@@ -44,6 +44,8 @@ from .schemas import (
     GuestOs,
     DatastoreStatusRequest,
     DrSnapshotRequest,
+    ImportVmRequest,
+    LiveMigrationRequest,
     RecoverVmRequest,
     CreateVmRequest,
     HostHealth,
@@ -128,6 +130,10 @@ def _handlers() -> dict[str, Any]:
         "backup_delete": lambda p: driver.delete_backups(BackupDeleteRequest(**p)),
         "reset_password": lambda p: _reset_password(p["uuid"], PasswordResetRequest(**p["body"])),
         "recover_vm": lambda p: driver.recover_vm(RecoverVmRequest(**p)),
+        "export_vm": lambda p: driver.export_vm(p["uuid"]),
+        "import_vm": lambda p: driver.import_vm(ImportVmRequest(**p)),
+        "prepare_incoming": lambda p: driver.prepare_incoming(CreateVmRequest(**p)),
+        "migrate_live": lambda p: driver.migrate_live(p["uuid"], LiveMigrationRequest(**p["body"])),
         "dr_snapshot": lambda p: driver.dr_snapshot(DrSnapshotRequest(**p)),
     }
 
@@ -727,6 +733,58 @@ async def recover_vm(req: RecoverVmRequest) -> JobAccepted:
     """Disaster recovery: maszyna z kopii na celu zewnętrznym na tym (zastępczym) węźle."""
     job_id = jobs.enqueue("recover_vm", req.model_dump(), server_id=req.server_id)
     return JobAccepted(job_id=job_id)
+
+
+# --- migracje między węzłami ---------------------------------------------------
+
+
+@app.post("/vm/{uuid}/export", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED,
+          dependencies=[Depends(require_control_plane)], tags=["migration"])
+async def export_vm(uuid: str) -> JobAccepted:
+    """Migracja na zimno, źródło: zatrzymanie, spłaszczenie dysku i wystawienie pod tokenem."""
+    return JobAccepted(job_id=jobs.enqueue("export_vm", {"uuid": uuid}, uuid=uuid))
+
+
+@app.get("/transfer/{token}", tags=["migration"])
+async def transfer_file(token: str):
+    """Dysk dla węzła docelowego. Bez podpisu panelu — dostęp daje sam token
+    (32 losowe bajty, ważny kilka godzin, unieważniany po migracji)."""
+    from fastapi.responses import FileResponse
+
+    from .migration import TransferStore
+
+    path = TransferStore(settings).resolve(token) if len(token) <= 64 else None
+    if path is None:
+        raise HTTPException(status_code=404, detail="Nieznany albo wygasły transfer.")
+    return FileResponse(path, media_type="application/octet-stream")
+
+
+@app.delete("/transfer/{token}", dependencies=[Depends(require_control_plane)], tags=["migration"])
+async def revoke_transfer(token: str) -> dict[str, Any]:
+    from .migration import TransferStore
+
+    return {"revoked": TransferStore(settings).revoke(token)}
+
+
+@app.post("/vm/import", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED,
+          dependencies=[Depends(require_control_plane)], tags=["migration"])
+async def import_vm(req: ImportVmRequest) -> JobAccepted:
+    """Migracja na zimno, cel: pobranie dysku ze źródła i założenie maszyny."""
+    return JobAccepted(job_id=jobs.enqueue("import_vm", req.model_dump(), server_id=req.server_id))
+
+
+@app.post("/vm/prepare-migration", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED,
+          dependencies=[Depends(require_control_plane)], tags=["migration"])
+async def prepare_migration(req: CreateVmRequest) -> JobAccepted:
+    """Migracja na żywo, cel: sieć, nośnik cloud-init i pusty dysk przed przyjęciem domeny."""
+    return JobAccepted(job_id=jobs.enqueue("prepare_incoming", req.model_dump(), server_id=req.server_id))
+
+
+@app.post("/vm/{uuid}/migrate", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED,
+          dependencies=[Depends(require_control_plane)], tags=["migration"])
+async def migrate_live(uuid: str, req: LiveMigrationRequest) -> JobAccepted:
+    """Migracja na żywo, źródło: libvirt z kopiowaniem dysku do węzła docelowego."""
+    return JobAccepted(job_id=jobs.enqueue("migrate_live", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid))
 
 
 @app.post(

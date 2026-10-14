@@ -228,6 +228,40 @@ class AgentClient
         return $this->jobId($this->request('POST', '/vm', $payload));
     }
 
+    // --- migracje między węzłami ---------------------------------------------
+
+    public function exportVm(string $uuid): string
+    {
+        return $this->jobId($this->request('POST', "/vm/{$uuid}/export"));
+    }
+
+    /** Ładunek jak createVm + source {url, sha256, size_bytes, start}. */
+    public function importVm(array $payload): string
+    {
+        return $this->jobId($this->request('POST', '/vm/import', $payload, 60));
+    }
+
+    public function prepareMigration(array $payload): string
+    {
+        return $this->jobId($this->request('POST', '/vm/prepare-migration', $payload, 60));
+    }
+
+    public function migrateLive(string $uuid, string $host, ?int $bandwidthMbps = null): string
+    {
+        return $this->jobId($this->request('POST', "/vm/{$uuid}/migrate", array_filter(['host' => $host, 'bandwidth_mbps' => $bandwidthMbps])));
+    }
+
+    public function revokeTransfer(string $token): void
+    {
+        $this->request('DELETE', '/transfer/'.rawurlencode($token));
+    }
+
+    /** Adres, pod którym inne węzły pobierają wystawiony dysk. */
+    public function transferUrl(string $token): string
+    {
+        return rtrim((string) $this->hypervisor->agent_url, '/').'/transfer/'.rawurlencode($token);
+    }
+
     /** DR: maszyna z kopii na celu zewnętrznym (ładunek jak createVm + backup). */
     public function recoverVm(array $payload): string
     {

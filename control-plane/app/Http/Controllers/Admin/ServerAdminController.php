@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Provisioning\Migrations;
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ServerResource;
 use App\Models\AuditLog;
+use App\Models\Hypervisor;
 use App\Models\Server;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\Rule;
 
 class ServerAdminController extends Controller
 {
@@ -45,6 +48,18 @@ class ServerAdminController extends Controller
             'message' => __('Maszyna została zawieszona i jest zatrzymywana.'),
             'job_id' => $job->id,
         ], 202);
+    }
+
+    /** Migracja na inny hypervisor: mode = cold (zatrzymanie, kopia dysku) albo live. */
+    public function migrate(Request $request, Server $server, Migrations $migrations): JsonResponse
+    {
+        $validated = $request->validate([
+            'hypervisor_id' => ['required', 'integer', 'exists:hypervisors,id'],
+            'mode' => ['nullable', Rule::in(Migrations::MODES)],
+        ]);
+        $job = $migrations->start($server, Hypervisor::findOrFail($validated['hypervisor_id']), $validated['mode'] ?? 'cold', $request->user());
+
+        return response()->json(['message' => __('Migracja rozpoczęta.'), 'job_id' => $job->id], 202);
     }
 
     public function unsuspend(Request $request, Server $server): JsonResponse

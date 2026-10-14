@@ -15,6 +15,9 @@
         ServerState::Resizing => [__('Zmiana pakietu'), [
             ['prepare', __('Rezerwacja zasobów'), 3], ['disk', __('Powiększanie dysku'), 8], ['resources', __('Zmiana procesora i pamięci'), 6],
         ]],
+        ServerState::Migrating => [__('Migracja na inny węzeł'), [
+            ['export', __('Przygotowanie dysku na węźle źródłowym'), 20], ['download', __('Przenoszenie dysku'), 60], ['boot', __('Uruchamianie na nowym węźle'), 10],
+        ]],
         default => [__('Usuwanie serwera'), [['stop', 'Zatrzymywanie', 4], ['disk', __('Usuwanie dysku'), 8]]],
     };
     $job = $recentJobs->first();

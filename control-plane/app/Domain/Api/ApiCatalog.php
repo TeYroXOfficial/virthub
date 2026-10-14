@@ -152,6 +152,9 @@ class ApiCatalog
                 path: [$server], body: [self::param('reason', 'string', true, __('Powód widoczny dla klienta'), __('Nadużycie'))], status: 202, response: $job),
             self::e('admin.servers.unsuspend', 'admin', 'POST', '/admin/servers/{server}/unsuspend', __('Odwieszenie maszyny'), __('Zdejmuje blokadę i uruchamia maszynę.'), 'admin',
                 path: [$server], status: 202, response: $job),
+            self::e('admin.servers.migrate', 'admin', 'POST', '/admin/servers/{server}/migrate', __('Migracja maszyny'), __('Przenosi maszynę KVM na inny hypervisor: cold — zatrzymanie, kopia dysku między węzłami i start na celu; live — bez przerwy (libvirt z kopiowaniem dysku). Adresy IP zostają, więc ich pula musi obejmować węzeł docelowy. Webhook server.migrated po zakończeniu.'), 'admin',
+                path: [$server], body: [self::param('hypervisor_id', 'integer', true, __('Węzeł docelowy'), 3), self::param('mode', 'string', false, __('Tryb'), 'cold', ['cold', 'live'])],
+                status: 202, response: ['message' => __('Migracja rozpoczęta.'), 'job_id' => 1234]),
             self::e('admin.packages.store', 'admin', 'POST', '/admin/packages', __('Nowy pakiet'), __('Dodaje pakiet VPS do oferty.'), 'admin',
                 body: [
                     self::param('name', 'string', true, __('Nazwa'), 'VPS M'),

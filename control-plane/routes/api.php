@@ -110,6 +110,7 @@ Route::prefix('v1')->group(function () {
         Route::get('servers/{server}/jobs', [ServerAdminController::class, 'jobs']);
         Route::post('servers/{server}/suspend', [ServerAdminController::class, 'suspend']);
         Route::post('servers/{server}/unsuspend', [ServerAdminController::class, 'unsuspend']);
+        Route::post('servers/{server}/migrate', [ServerAdminController::class, 'migrate']);
     });
 
     // --- system rozliczeniowy ----------------------------------------------
