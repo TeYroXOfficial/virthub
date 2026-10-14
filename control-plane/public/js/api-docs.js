@@ -146,6 +146,45 @@
         });
     }
 
+    // --- widok: po prawej tylko wybrany element (jak w Postmanie) ------------
+
+    var main = document.querySelector('[data-api-main]');
+    var layout = document.querySelector('.api-layout');
+
+    function showView(id) {
+        if (!main) return;
+        var target = id && id !== 'all' ? document.getElementById(id) : null;
+        if (id && id !== 'all' && !target) { id = 'intro'; target = document.getElementById('intro'); }
+        if (!id) { id = 'intro'; target = document.getElementById('intro'); }
+        var all = id === 'all';
+        var endpoint = target && target.hasAttribute('data-api-endpoint');
+        main.classList.toggle('api-single', !all);
+        main.querySelectorAll('[data-api-section]').forEach(function (s) {
+            s.hidden = !(all || s === target || (s.id === 'console' && (endpoint || id === 'intro')));
+        });
+        main.querySelectorAll('[data-api-endpoint]').forEach(function (c) { c.hidden = !(all || c === target); });
+        main.querySelectorAll('[data-api-group-head]').forEach(function (h) { h.hidden = !all; });
+        document.querySelectorAll('[data-api-nav]').forEach(function (a) {
+            a.setAttribute('aria-current', a.getAttribute('href') === '#' + id ? 'true' : 'false');
+        });
+        var top = layout ? layout.getBoundingClientRect().top + window.scrollY - 16 : 0;
+        if (window.scrollY > top) window.scrollTo(0, top);
+    }
+
+    function currentView() { try { return decodeURIComponent(location.hash.slice(1)); } catch (e) { return ''; } }
+
+    document.querySelectorAll('[data-api-nav]').forEach(function (a) {
+        a.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            var id = a.getAttribute('href').slice(1);
+            if (history.pushState) history.pushState(null, '', '#' + id); else location.hash = id;
+            showView(id);
+        });
+    });
+    window.addEventListener('popstate', function () { showView(currentView()); });
+    window.addEventListener('hashchange', function () { showView(currentView()); });
+    showView(currentView());
+
     // --- konsola ------------------------------------------------------------
 
     var el = {

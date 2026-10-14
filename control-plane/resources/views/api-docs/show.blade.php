@@ -23,20 +23,21 @@
     <div class="api-layout">
         <nav class="api-nav card" aria-label="{{ __('Endpointy') }}">
             <input type="search" placeholder="{{ __('Szukaj endpointu…') }}" data-api-filter aria-label="{{ __('Szukaj endpointu') }}">
-            <a href="#intro"><strong>{{ __('Wprowadzenie') }}</strong></a>
-            <a href="#console"><strong>{{ __('Konsola') }}</strong></a>
+            <a href="#intro" data-api-nav><strong>{{ __('Wprowadzenie') }}</strong></a>
+            <a href="#console" data-api-nav><strong>{{ __('Konsola') }}</strong></a>
+            <a href="#all" data-api-nav><strong>{{ __('Wszystko na jednej stronie') }}</strong></a>
             @foreach ($endpoints as $group => $items)
                 <h4>{{ $groups[$group]['name'] }}</h4>
                 @foreach ($items as $e)
-                    <a href="#{{ $e['id'] }}" data-api-link="{{ strtolower($e['method'].' '.$e['path'].' '.$e['summary']) }}">
+                    <a href="#ep-{{ $e['id'] }}" data-api-nav data-api-link="{{ strtolower($e['method'].' '.$e['path'].' '.$e['summary']) }}">
                         <span class="method {{ strtolower($e['method']) }}">{{ $e['method'] }}</span> <span>{{ $e['summary'] }}</span>
                     </a>
                 @endforeach
             @endforeach
         </nav>
 
-        <div>
-            <section class="card" id="intro">
+        <div class="api-main" data-api-main>
+            <section class="card" id="intro" data-api-section>
                 <h2 class="card-title"><x-icon name="key" :size="16"/> {{ __('Wprowadzenie') }}</h2>
                 <p>{{ $introduction }}</p>
                 <dl class="kv">
@@ -64,7 +65,7 @@
 {{ route('api-docs.openapi', ['lang' => $lang]) }}</pre>
             </section>
 
-            <section class="card api-console" id="console">
+            <section class="card api-console" id="console" data-api-section>
                 <h2 class="card-title"><x-icon name="terminal" :size="16"/> {{ __('Konsola') }}</h2>
                 <div class="grid grid-2">
                     <div class="field"><label for="api-token">{{ __('Token API') }}</label>
@@ -94,10 +95,12 @@
             </section>
 
             @foreach ($endpoints as $group => $items)
-                <h2 style="margin-top:28px">{{ $groups[$group]['name'] }}</h2>
-                <p class="muted">{{ $groups[$group]['description'] }}</p>
+                <div class="api-group-head" data-api-group-head>
+                    <h2>{{ $groups[$group]['name'] }}</h2>
+                    <p class="muted">{{ $groups[$group]['description'] }}</p>
+                </div>
                 @foreach ($items as $e)
-                    <section class="card api-endpoint" id="{{ $e['id'] }}" data-api-endpoint="{{ $e['id'] }}">
+                    <section class="card api-endpoint" id="ep-{{ $e['id'] }}" data-api-endpoint="{{ $e['id'] }}">
                         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
                             <span class="method {{ strtolower($e['method']) }}">{{ $e['method'] }}</span>
                             <span class="path">{{ $e['path'] }}</span>
