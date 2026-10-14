@@ -117,6 +117,11 @@ class Server extends Model
         return $this->belongsTo(IsoImage::class, 'iso_image_id');
     }
 
+    public function pciAssets(): HasMany
+    {
+        return $this->hasMany(PciAsset::class)->orderBy('pci_address');
+    }
+
     public function networkFilterProfile(): BelongsTo
     {
         return $this->belongsTo(NetworkFilterProfile::class);

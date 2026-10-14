@@ -138,6 +138,13 @@ class HypervisorDriver(ABC):
         """Płyta ISO i rozruch z niej — tylko maszyny wirtualne."""
         raise DriverError("Obrazy ISO są dostępne tylko dla maszyn wirtualnych KVM.")
 
+    def set_hostdevs(self, uuid: str, req: Any) -> dict[str, Any]:
+        """Urządzenia PCI (GPU, karty) — tylko maszyny wirtualne KVM."""
+        raise DriverError("Przekazywanie urządzeń PCI jest dostępne tylko dla maszyn KVM.")
+
+    def pci_devices(self) -> dict[str, Any]:
+        return {"iommu": False, "devices": []}
+
     def elevate(self, uuid: str, action: str) -> dict[str, Any]:
         """Elevate (nakładka na dysk) — tylko maszyny wirtualne KVM."""
         raise DriverError("Elevate jest dostępny tylko dla maszyn wirtualnych KVM.")
@@ -561,6 +568,37 @@ class LibvirtDriver(HypervisorDriver):
         self.network.teardown(server_id)
         self.storage.delete_volume(name)
         return {"uuid": uuid, "deleted": True}
+
+    # --- urządzenia PCI ------------------------------------------------------
+
+    def pci_devices(self) -> dict[str, Any]:
+        from . import pci
+
+        return {"iommu": pci.iommu_enabled(), "devices": pci.list_devices()}
+
+    def set_hostdevs(self, uuid: str, req: Any) -> dict[str, Any]:
+        import libvirt
+
+        from . import pci
+
+        domain = self._domain(uuid)
+        xml = domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE)
+        try:
+            new_xml = pci.with_hostdevs(xml, [(d.address, d.xml) for d in req.devices])
+        except pci.PciError as exc:
+            raise DriverError(str(exc)) from exc
+        if req.devices and not pci.iommu_enabled():
+            raise DriverError("IOMMU jest wyłączone na hoście — włącz intel_iommu=on / amd_iommu=on w jądrze i zrestartuj węzeł.")
+        try:
+            self.conn.defineXML(new_xml)
+            restarted = False
+            if req.restart and domain.isActive():
+                domain.destroy()
+                domain.create()
+                restarted = True
+        except libvirt.libvirtError as exc:
+            raise DriverError(f"Nie udało się ustawić urządzeń PCI: {exc}") from exc
+        return {"uuid": uuid, "devices": pci.hostdev_addresses(new_xml), "restarted": restarted, "state": self._state(domain)}
 
     # --- Elevate (nakładka na dysk) -----------------------------------------
 
@@ -1054,6 +1092,30 @@ class MockDriver(HypervisorDriver):
         record["password_changes"] = record.get("password_changes", 0) + 1
         self._save(data)
         return {"uuid": uuid, "state": record["state"]}
+
+    def pci_devices(self) -> dict[str, Any]:
+        return {"iommu": True, "devices": [
+            {"address": "0000:41:00.0", "vendor_id": "10de", "device_id": "2204", "class": "0300", "type": "vga",
+             "driver": "vfio-pci", "iommu_group": 31, "name": "NVIDIA Corporation GA102 [GeForce RTX 3090]"},
+            {"address": "0000:41:00.1", "vendor_id": "10de", "device_id": "1aef", "class": "0403", "type": "audio",
+             "driver": "vfio-pci", "iommu_group": 31, "name": "NVIDIA Corporation GA102 High Definition Audio"},
+        ]}
+
+    def set_hostdevs(self, uuid: str, req: Any) -> dict[str, Any]:
+        from . import pci
+
+        data = self._load()
+        record = data.get(uuid)
+        if record is None:
+            raise VmNotFound(uuid)
+        try:
+            for device in req.devices:
+                pci.hostdev_element(device.address, device.xml)
+        except pci.PciError as exc:
+            raise DriverError(str(exc)) from exc
+        record["hostdevs"] = [d.address for d in req.devices]
+        self._save(data)
+        return {"uuid": uuid, "devices": record["hostdevs"], "restarted": bool(req.restart), "state": record["state"]}
 
     def elevate(self, uuid: str, action: str) -> dict[str, Any]:
         data = self._load()

@@ -23,6 +23,8 @@ class VpsPackage extends Model
         'ip_count',
         'network_type',
         'ipv6_count',
+        'pci_type',
+        'pci_count',
         'price_hint_cents',
         'currency',
         'is_active',

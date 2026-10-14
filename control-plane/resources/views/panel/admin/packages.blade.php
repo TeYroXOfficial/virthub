@@ -59,6 +59,16 @@
                     <div class="hint">{{ __('0 — maszyna bez IPv6.') }}</div>
                 </div>
                 <div class="field">
+                    <label for="pci_count">{{ __('Urządzenia PCI (np. GPU)') }}</label>
+                    <div style="display:flex; gap:6px">
+                        <input id="pci_count" name="pci_count" type="number" min="0" max="8" value="{{ old('pci_count', 0) }}" style="max-width:80px" aria-label="{{ __('Liczba urządzeń PCI') }}">
+                        <select name="pci_type" aria-label="{{ __('Rodzaj urządzenia PCI') }}">
+                            @foreach (\App\Models\PciAsset::TYPES as $t) <option value="{{ $t }}" @selected(old('pci_type') === $t)>{{ $t }}</option> @endforeach
+                        </select>
+                    </div>
+                    <div class="hint">{{ __('Tyle wolnych urządzeń z węzła trafi do nowej maszyny KVM.') }}</div>
+                </div>
+                <div class="field">
                     <label for="price_hint">{{ __('Cena (PLN)') }}</label>
                     <input id="price_hint" name="price_hint" type="text" value="{{ old('price_hint') }}"
                            placeholder="49.00">
@@ -133,6 +143,13 @@
                                             </select></div>
                                         <div class="field"><label>{{ __('Adresy IPv4') }}</label><input name="ip_count" type="number" min="1" max="16" required value="{{ $v('ip_count', $package->ip_count) }}"></div>
                                         <div class="field"><label>{{ __('Adresy IPv6') }}</label><input name="ipv6_count" type="number" min="0" max="16" value="{{ $v('ipv6_count', $package->ipv6_count) }}"></div>
+                                        <div class="field"><label>{{ __('Urządzenia PCI (np. GPU)') }}</label>
+                                            <div style="display:flex; gap:6px">
+                                                <input name="pci_count" type="number" min="0" max="8" value="{{ $v('pci_count', $package->pci_count) }}" style="max-width:80px" aria-label="{{ __('Liczba urządzeń PCI') }}">
+                                                <select name="pci_type" aria-label="{{ __('Rodzaj urządzenia PCI') }}">
+                                                    @foreach (\App\Models\PciAsset::TYPES as $t) <option value="{{ $t }}" @selected($v('pci_type', $package->pci_type) === $t)>{{ $t }}</option> @endforeach
+                                                </select>
+                                            </div></div>
                                         <div class="field"><label>{{ __('Cena (PLN)') }}</label><input name="price_hint" type="text" inputmode="decimal" value="{{ $v('price_hint', $package->price_hint_cents !== null ? number_format($package->price_hint_cents / 100, 2, '.', '') : '') }}"></div>
                                     </div>
                                     @if ($package->servers_count > 0)

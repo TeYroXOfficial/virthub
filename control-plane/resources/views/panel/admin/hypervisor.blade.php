@@ -79,6 +79,9 @@
         <button type="button" role="tab" data-tab="apps">{{ __('Aplikacje (:count)', ['count' => $apps->count()]) }}</button>
         <button type="button" role="tab" data-tab="settings">{{ __('Ustawienia') }}</button>
         <button type="button" role="tab" data-tab="info">{{ __('Informacje') }}</button>
+        @if ($node->virtualization?->value === 'kvm')
+            <a class="btn btn-sm" href="{{ route('panel.admin.pci', $node) }}" style="margin-left:auto">{{ __('Urządzenia PCI') }}</a>
+        @endif
     </nav>
 
     <div data-tab-panel="servers" role="tabpanel">

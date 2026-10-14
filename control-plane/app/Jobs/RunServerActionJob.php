@@ -65,6 +65,8 @@ class RunServerActionJob implements ShouldQueue
             $agentJobId = match ($job->action) {
                 'power' => $client->power($server->agent_uuid, $payload['action']),
                 'elevate' => $client->elevate($server->agent_uuid, $payload['action']),
+                'hostdevs' => $client->setHostdevs($server->agent_uuid,
+                    $server->pciAssets()->get()->map->toAgentPayload()->values()->all(), (bool) ($payload['restart'] ?? false)),
                 'rebuild' => $client->rebuild($server->agent_uuid, [
                     'template' => $payload['template'],
                     'hostname' => $payload['hostname'] ?? $server->hostname,

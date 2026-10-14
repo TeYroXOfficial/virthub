@@ -319,6 +319,19 @@ class TemplateBuildRequest(BaseModel):
     kms_key: str | None = Field(default=None, pattern=r"^[A-Z0-9]{5}(-[A-Z0-9]{5}){4}$")
 
 
+class HostdevSpec(BaseModel):
+    address: str = Field(pattern=r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$")
+    # Własny XML libvirt (administrator) — zamiast domyślnego <hostdev managed='yes'>.
+    xml: str | None = Field(default=None, max_length=4000)
+
+
+class HostdevRequest(BaseModel):
+    """Komplet urządzeń PCI maszyny (zastępuje poprzednie). Działa od następnego uruchomienia."""
+
+    devices: list[HostdevSpec] = Field(default_factory=list, max_length=16)
+    restart: bool = False
+
+
 class ElevateRequest(BaseModel):
     """Elevate: start = nakładka na dysk, commit = zapis zmian, discard = powrót do stanu sprzed startu."""
 

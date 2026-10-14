@@ -50,6 +50,7 @@ from .schemas import (
     TemplateBuildRequest,
     IsoMountRequest,
     ElevateRequest,
+    HostdevRequest,
     PasswordResetRequest,
     JobAccepted,
     JobState,
@@ -115,6 +116,7 @@ def _handlers() -> dict[str, Any]:
         "download_iso": lambda p: _download_iso(IsoDownloadRequest(**p)),
         "mount_iso": lambda p: driver.mount_iso(p["uuid"], IsoMountRequest(**p["body"])),
         "elevate": lambda p: driver.elevate(p["uuid"], ElevateRequest(**p["body"]).action),
+        "hostdevs": lambda p: driver.set_hostdevs(p["uuid"], HostdevRequest(**p["body"])),
         "reset_password": lambda p: _reset_password(p["uuid"], PasswordResetRequest(**p["body"])),
     }
 
@@ -321,6 +323,12 @@ async def health() -> HostHealth:
 async def host_security_report() -> dict[str, Any]:
     """Świeży audyt ochrony hosta (panel: Infrastruktura → Bezpieczeństwo → „Sprawdź teraz”)."""
     return await run_in_threadpool(host_security.report, True)
+
+
+@app.get("/system/pci", dependencies=[Depends(require_control_plane)], tags=["system"])
+async def pci_devices() -> dict[str, Any]:
+    """Urządzenia PCI hosta do przekazania maszynom (Infrastruktura → hypervisor → Urządzenia PCI)."""
+    return await run_in_threadpool(driver.pci_devices)
 
 
 @app.put("/system/nested", dependencies=[Depends(require_control_plane)], tags=["system"])
@@ -660,6 +668,18 @@ async def delete_iso(name: str) -> dict[str, Any]:
 )
 async def mount_iso(uuid: str, req: IsoMountRequest) -> JobAccepted:
     job_id = jobs.enqueue("mount_iso", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.put(
+    "/vm/{uuid}/hostdevs",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def set_hostdevs(uuid: str, req: HostdevRequest) -> JobAccepted:
+    job_id = jobs.enqueue("hostdevs", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
     return JobAccepted(job_id=job_id)
 
 

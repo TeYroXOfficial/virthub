@@ -393,6 +393,15 @@ class ServerProvisioner
         return $job;
     }
 
+    /** Urządzenia PCI maszyny na węzeł (komplet z bazy). */
+    public function syncHostdevs(Server $server, bool $restart = false, ?User $actor = null): ServerJob
+    {
+        $job = $this->createJobRecord($server, 'hostdevs', $actor, ['restart' => $restart]);
+        RunServerActionJob::dispatch($job->id);
+
+        return $job;
+    }
+
     public function syncNetwork(Server $server, ?User $actor = null): ServerJob
     {
         $job = $this->createJobRecord($server, 'network', $actor);
