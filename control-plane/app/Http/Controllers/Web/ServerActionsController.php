@@ -301,7 +301,7 @@ class ServerActionsController extends Controller
         $plan = $server->backupPlan()->with('target')->first();
         abort_if($plan === null || $plan->target === null, 404);
         try {
-            app(RemoteBackups::class)->create($server, $plan->target, $plan->compress, $request->user());
+            app(RemoteBackups::class)->create($server, $plan->target, $plan->compress, $request->user(), $plan);
         } catch (\DomainException $e) {
             return redirect()->to(route('panel.servers.show', $server).'#remote-backups')->withErrors(['backup' => $e->getMessage()]);
         }

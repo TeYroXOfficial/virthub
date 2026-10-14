@@ -84,6 +84,7 @@
                     @foreach ($remoteBackups as $backup)
                         <li>
                             <span style="flex:1"><code>{{ $backup->name }}</code> <span class="muted">{{ $backup->created_at->diffForHumans() }}@if ($backup->size_mb) · {{ $backup->size_mb }} MB @endif</span>
+                                @if ($backup->isIncremental()) <span class="pill neutral plain" title="{{ __('Zawiera tylko bloki zmienione od poprzedniej kopii; przywracana razem z łańcuchem.') }}">{{ __('przyrostowa') }}</span> @endif
                                 <span class="pill {{ ['ready' => 'ok', 'creating' => 'warning', 'failed' => 'critical'][$backup->status] ?? 'neutral' }}">{{ ['ready' => __('gotowa'), 'creating' => __('tworzenie'), 'failed' => __('błąd'), 'restoring' => __('przywracanie')][$backup->status] ?? $backup->status }}</span></span>
                             @if ($backup->isRestorable() && $user->can('restoreSnapshot', $server))
                                 <form method="POST" action="{{ route('panel.servers.remote-backups.restore', [$server, $backup]) }}" style="margin:0"

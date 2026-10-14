@@ -380,12 +380,24 @@ class BackupRequest(BaseModel):
     key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,500}$")
     target: BackupTargetSpec
     compress: bool = True
+    # Kopie przyrostowe (libvirt checkpoints / dirty bitmaps QEMU): nazwa nowego
+    # checkpointu i checkpoint poprzedniej kopii. Brak poprzedniego (albo maszyna
+    # zatrzymana) = kopia pełna; agent zwraca kind w wyniku.
+    checkpoint: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+    incremental_from: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+class BackupLink(BaseModel):
+    key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,500}$")
+    sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class BackupRestoreRequest(BaseModel):
     key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,500}$")
     target: BackupTargetSpec
     sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    # Kopia przyrostowa: wcześniejsze ogniwa łańcucha, od pełnej do poprzedniej.
+    chain: list[BackupLink] = Field(default_factory=list, max_length=400)
 
 
 class BackupDeleteRequest(BaseModel):

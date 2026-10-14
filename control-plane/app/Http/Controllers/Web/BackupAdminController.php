@@ -126,8 +126,10 @@ class BackupAdminController extends Controller
             'interval_hours' => ['required', 'integer', 'min:1', 'max:720'],
             'hour' => ['required', 'integer', 'min:0', 'max:23'],
             'retention' => ['required', 'integer', 'min:1', 'max:365'],
+            'full_every' => ['nullable', 'integer', 'min:1', 'max:60'],
         ]);
+        $data['full_every'] = (int) ($data['full_every'] ?? 7);
 
-        return $data + ['compress' => $request->boolean('compress'), 'is_active' => $request->boolean('is_active')];
+        return $data + ['compress' => $request->boolean('compress'), 'is_active' => $request->boolean('is_active'), 'incremental' => $request->boolean('incremental')];
     }
 }

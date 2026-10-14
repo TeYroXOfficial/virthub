@@ -142,6 +142,7 @@ class RunServerActionJob implements ShouldQueue
 
         return $client->recoverVm(ServerPayload::forCreate($server) + ['backup' => array_filter([
             'key' => (string) $backup->remote_key, 'target' => $backup->target->toAgentPayload(), 'sha256' => $backup->sha256,
+            'chain' => $backup->chainPayload(),
         ])]);
     }
 
@@ -153,7 +154,8 @@ class RunServerActionJob implements ShouldQueue
         }
 
         return $action === 'backup'
-            ? $client->backup($server->agent_uuid, (string) $backup->remote_key, $backup->target->toAgentPayload(), (bool) ($payload['compress'] ?? true))
-            : $client->restoreBackup($server->agent_uuid, (string) $backup->remote_key, $backup->target->toAgentPayload(), $backup->sha256);
+            ? $client->backup($server->agent_uuid, (string) $backup->remote_key, $backup->target->toAgentPayload(), (bool) ($payload['compress'] ?? true),
+                $backup->checkpoint, $backup->parent?->checkpoint)
+            : $client->restoreBackup($server->agent_uuid, (string) $backup->remote_key, $backup->target->toAgentPayload(), $backup->sha256, $backup->chainPayload());
     }
 }

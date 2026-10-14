@@ -3770,5 +3770,10 @@
     "Na zimno — zatrzymanie, kopia dysku, start na nowym węźle": "Cold — stop, copy the disk, start on the new node",
     "Na żywo — bez przerwy (wymaga połączenia libvirt między węzłami)": "Live — no downtime (requires a libvirt connection between nodes)",
     "Adresy IP zostają, więc ich pula musi obejmować węzeł docelowy (np. pula grupy). Na zimno maszyna jest niedostępna przez czas kopiowania dysku.": "IP addresses stay, so their pool must cover the destination node (e.g. a group pool). With cold migration the server is unavailable while the disk is copied.",
-    "Migruj": "Migrate"
+    "Migruj": "Migrate",
+    "przyrostowa": "incremental",
+    "Kopie przyrostowe": "Incremental backups",
+    "Pełna kopia co": "Full backup every",
+    "Przy kopiach przyrostowych: co tyle kopii jedna pełna, pozostałe zapisują tylko zmienione bloki dysku (działająca maszyna KVM).": "With incremental backups: one full backup every this many backups, the rest store only changed disk blocks (running KVM machine).",
+    "Zawiera tylko bloki zmienione od poprzedniej kopii; przywracana razem z łańcuchem.": "Contains only blocks changed since the previous backup; restored together with its chain."
 }
