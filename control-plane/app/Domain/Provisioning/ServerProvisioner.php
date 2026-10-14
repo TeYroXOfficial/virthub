@@ -9,6 +9,7 @@ use App\Jobs\ProvisionServerJob;
 use App\Jobs\RunServerActionJob;
 use App\Models\AuditLog;
 use App\Models\Backup;
+use App\Models\Datastore;
 use App\Models\Hypervisor;
 use App\Models\HypervisorGroup;
 use App\Models\IpPool;
@@ -69,6 +70,14 @@ class ServerProvisioner
             );
         }
 
+        $datastore = $this->datastoreFor($package, $template, $preferred);
+        if ($datastore !== null && $preferred === null && $this->selector->select(
+            $package->vcpu, $package->ram_mb, $package->disk_gb, $template->virtualization,
+            fn (Hypervisor $h) => self::nodeHasDatastore($h, $datastore),
+        ) === null) {
+            throw new NoCapacityException(__('Żaden węzeł z magazynem :name nie ma wolnych zasobów albo magazyn na nim nie odpowiada — sprawdź Infrastruktura → Magazyny danych.', ['name' => $datastore->name]));
+        }
+
         if ($location !== null && ! $this->locationHasCapacity($location, $package, $template)) {
             throw new NoCapacityException(
                 __('W lokalizacji :publicname nie ma teraz wolnych zasobów dla tego pakietu. ', ['publicname' => $location->publicName()])
@@ -79,7 +88,7 @@ class ServerProvisioner
         $rootPassword = $this->generatePassword();
 
         $server = DB::transaction(function () use (
-            $user, $package, $template, $hostname, $label, $preferred, $billingReference, $rootPassword, $location
+            $user, $package, $template, $hostname, $label, $preferred, $billingReference, $rootPassword, $location, $datastore
         ) {
             $server = new Server([
                 'user_id' => $user->id,
@@ -103,6 +112,7 @@ class ServerProvisioner
             $server->virtualization = $template->virtualization;
             // Plan kopii z pakietu (kopie na zewnętrzne cele — tylko KVM).
             $server->backup_plan_id = $template->isContainer() ? null : $package->backup_plan_id;
+            $server->datastore_id = $datastore?->id;
             $server->save();
 
             $networkType = $package->network_type ?: IpPool::TYPE_PUBLIC;
@@ -112,6 +122,7 @@ class ServerProvisioner
                 $server,
                 $preferred,
                 fn (Hypervisor $h) => ($location === null || $h->hypervisor_group_id === $location->id)
+                    && self::nodeHasDatastore($h, $datastore)
                     && $this->ips->hasCapacity($h, $networkType, $package->ip_count, $ipv6Count),
             );
             $this->ips->allocate($server, $hypervisor, $package->ip_count, $ipv6Count, $networkType);
@@ -140,8 +151,43 @@ class ServerProvisioner
     {
         return $this->selector->select(
             $package->vcpu, $package->ram_mb, $package->disk_gb, $template->virtualization,
-            fn (Hypervisor $h) => $h->hypervisor_group_id === $location->id,
+            fn (Hypervisor $h) => $h->hypervisor_group_id === $location->id
+                && self::nodeHasDatastore($h, $package->datastore_id ? $package->datastore : null),
         ) !== null;
+    }
+
+    /**
+     * Magazyn z pakietu (tylko KVM — kontenery mają pulę Incusa). Wyłączony
+     * magazyn albo wskazany węzeł bez niego to błąd zamówienia, nie cicha zmiana miejsca.
+     *
+     * @throws NoCapacityException
+     */
+    private function datastoreFor(VpsPackage $package, OsTemplate $template, ?Hypervisor $preferred): ?Datastore
+    {
+        if ($package->datastore_id === null || $template->isContainer()) {
+            return null;
+        }
+        $datastore = $package->datastore;
+        if ($datastore === null || ! $datastore->is_active) {
+            throw new NoCapacityException(__('Magazyn danych pakietu :name jest wyłączony.', ['name' => $package->name]));
+        }
+        if ($preferred !== null && ! self::nodeHasDatastore($preferred, $datastore)) {
+            throw new NoCapacityException(__('Węzeł :node nie ma magazynu :datastore wymaganego przez pakiet.', ['node' => $preferred->name, 'datastore' => $datastore->name]));
+        }
+
+        return $datastore;
+    }
+
+    /**
+     * Węzeł przypięty do magazynu, którego ostatni odczyt nie był błędem. Agent
+     * sprzed obsługi magazynów nie zna /system/datastores (odczyt = błąd) i po
+     * cichu założyłby dysk w katalogu domyślnym — takiego węzła nie wybieramy.
+     */
+    private static function nodeHasDatastore(Hypervisor $node, ?Datastore $datastore): bool
+    {
+        return $datastore === null || $datastore->hypervisors()->whereKey($node->id)
+            ->where(fn ($q) => $q->whereNull('datastore_hypervisor.ok')->orWhere('datastore_hypervisor.ok', true))
+            ->exists();
     }
 
     // --- operacje na istniejącej maszynie -----------------------------------
@@ -462,6 +508,9 @@ class ServerProvisioner
         $this->assertAcceptsCommands($server);
         if ($server->isContainer()) {
             throw new \DomainException(__('Elevate jest dostępny tylko dla maszyn KVM.'));
+        }
+        if ($server->datastore?->isCeph()) {
+            throw new \DomainException(__('Elevate działa tylko dla dysków w magazynie katalogowym (qcow2), a ten jest w Cephie.'));
         }
         if ($action === 'start' && $server->isElevated()) {
             throw new \DomainException(__('Elevate już trwa — zatwierdź albo odrzuć zmiany.'));

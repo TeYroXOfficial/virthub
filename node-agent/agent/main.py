@@ -42,6 +42,7 @@ from .monitor import HostMonitor
 from .sftp import SftpService
 from .schemas import (
     GuestOs,
+    DatastoreStatusRequest,
     CreateVmRequest,
     HostHealth,
     ImagePrefetchRequest,
@@ -329,6 +330,15 @@ async def health() -> HostHealth:
 async def host_security_report() -> dict[str, Any]:
     """Świeży audyt ochrony hosta (panel: Infrastruktura → Bezpieczeństwo → „Sprawdź teraz”)."""
     return await run_in_threadpool(host_security.report, True)
+
+
+@app.post("/system/datastores", dependencies=[Depends(require_control_plane)], tags=["system"])
+async def datastores_status(req: DatastoreStatusRequest) -> dict[str, Any]:
+    """Pojemność i dostępność magazynów danych przypiętych do węzła."""
+    storage = getattr(driver, "storage", None)
+    if storage is None or not hasattr(storage, "status"):
+        raise HTTPException(status_code=409, detail="Ten węzeł nie obsługuje magazynów danych.")
+    return {"datastores": await run_in_threadpool(storage.status, req.datastores)}
 
 
 @app.get("/system/pci", dependencies=[Depends(require_control_plane)], tags=["system"])

@@ -57,7 +57,7 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
     - Kompresja, retencja i przycinanie.
     - Kopie przyrostowe (dirty bitmaps QEMU), przywracanie.
 12. ✅ **Sieci zaawansowane.** VLAN (tagowane mosty) i routowane podsieci IPv4/IPv6. (sieci izolowane i wiele kart — etap 19)
-13. **Magazyny danych.** Datastore'y przypięte do hypervisorów i pakietów, sterownik Ceph RBD, cienkie przydzielanie, metryki.
+13. ✅ **Magazyny danych.** Datastore'y (katalog qcow2 cienki/gruby, Ceph RBD) przypięte do hypervisorów i pakietów, wybór węzła z magazynem przy zamówieniu, pojemność odczytywana z węzłów co 15 minut. Dyski w Cephie: migawki RBD; Elevate i kopie zewnętrzne tylko dla magazynów katalogowych.
 14. **Moduły billingowe.** Moduł WHMCS i Blesta korzystający z `/api/billing`.
 15. **Disaster recovery hypervisora.**
     - Kopia dysków, konfiguracji i stanu hypervisora na lokalny dysk albo S3.

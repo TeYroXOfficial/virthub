@@ -240,6 +240,38 @@ class ProvisionScript(BaseModel):
         return value.rstrip("/") or "/"
 
 
+CEPH_NAME = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+CEPH_MON = r"^\[?[A-Za-z0-9.:-]{1,253}\]?(:\d{1,5})?$"
+
+
+class DatastoreSpec(BaseModel):
+    """Magazyn dysków maszyny: katalog z plikami qcow2 albo pula Ceph RBD."""
+
+    id: int = Field(ge=1)
+    type: Literal["directory", "ceph"]
+    # Cienkie przydzielanie: dysk zajmuje tyle, ile zapisano (qcow2 z backing
+    # file, klon RBD). Grube: pełna kopia z rezerwacją miejsca (tylko katalog).
+    thin: bool = True
+    path: str | None = Field(default=None, pattern=r"^/[A-Za-z0-9._/-]{1,250}$")
+    pool: str | None = Field(default=None, pattern=CEPH_NAME)
+    monitors: list[Annotated[str, Field(pattern=CEPH_MON)]] = Field(default_factory=list, max_length=9)
+    user: str = Field(default="admin", pattern=CEPH_NAME)
+    key: str | None = Field(default=None, pattern=r"^[A-Za-z0-9+/=]{16,128}$", repr=False)
+
+    @model_validator(mode="after")
+    def _complete(self) -> "DatastoreSpec":
+        if self.type == "directory":
+            if not self.path or ".." in self.path.split("/"):
+                raise ValueError("Magazyn katalogowy wymaga ścieżki bezwzględnej.")
+        elif not (self.pool and self.monitors and self.key):
+            raise ValueError("Magazyn Ceph wymaga puli, monitorów i klucza.")
+        return self
+
+
+class DatastoreStatusRequest(BaseModel):
+    datastores: list[DatastoreSpec] = Field(max_length=50)
+
+
 class CreateVmRequest(BaseModel):
     server_id: int = Field(description="Identyfikator VPS-a w control plane")
     hostname: str = Field(pattern=HOSTNAME, max_length=253)
@@ -260,6 +292,8 @@ class CreateVmRequest(BaseModel):
     scripts: list[ProvisionScript] = Field(default_factory=list, max_length=20)
     # Profil filtrowania od pierwszego startu (potem aktualizuje go /network).
     filter: NetworkFilter | None = None
+    # Magazyn dysku; brak = katalog domyślny węzła (VH_IMAGE_DIR).
+    storage: DatastoreSpec | None = None
 
 
 class RebuildVmRequest(BaseModel):

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Hypervisor extends Model
@@ -246,5 +247,11 @@ class Hypervisor extends Model
     public function pciAssets(): HasMany
     {
         return $this->hasMany(PciAsset::class)->orderBy('pci_address');
+    }
+
+    /** @return BelongsToMany<Datastore, $this> */
+    public function datastores(): BelongsToMany
+    {
+        return $this->belongsToMany(Datastore::class)->withPivot(['total_gb', 'free_gb', 'ok', 'error', 'checked_at']);
     }
 }

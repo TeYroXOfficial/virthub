@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class VpsPackage extends Model
@@ -26,6 +27,7 @@ class VpsPackage extends Model
         'pci_type',
         'pci_count',
         'backup_plan_id',
+        'datastore_id',
         'price_hint_cents',
         'currency',
         'is_active',
@@ -50,6 +52,12 @@ class VpsPackage extends Model
     public function servers(): HasMany
     {
         return $this->hasMany(Server::class);
+    }
+
+    /** Magazyn dysków nowych maszyn (brak = katalog domyślny węzła). @return BelongsTo<Datastore, $this> */
+    public function datastore(): BelongsTo
+    {
+        return $this->belongsTo(Datastore::class);
     }
 
     /** @param Builder<VpsPackage> $query */

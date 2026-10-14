@@ -130,6 +130,17 @@ class AgentClient
         return $this->request('GET', '/system/pci');
     }
 
+    /**
+     * Pojemność magazynów danych widziana z węzła.
+     *
+     * @param  list<array<string, mixed>>  $datastores
+     * @return list<array{id:int, ok:bool, total_gb?:int, free_gb?:int, error?:string}>
+     */
+    public function datastoresStatus(array $datastores): array
+    {
+        return (array) ($this->request('POST', '/system/datastores', ['datastores' => $datastores], 30)['datastores'] ?? []);
+    }
+
     /** @param  list<array{address:string, xml?:string}>  $devices */
     public function setHostdevs(string $uuid, array $devices, bool $restart): string
     {

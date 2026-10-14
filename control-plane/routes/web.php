@@ -19,6 +19,7 @@ use App\Http\Controllers\Web\BillingController;
 use App\Http\Controllers\Web\CloudServerController;
 use App\Http\Controllers\Web\ConsoleController;
 use App\Http\Controllers\Web\DatabaseHostController;
+use App\Http\Controllers\Web\DatastoreController;
 use App\Http\Controllers\Web\EmailTemplateController;
 use App\Http\Controllers\Web\FirewallController;
 use App\Http\Controllers\Web\GatewaySettingsController;
@@ -290,6 +291,13 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/hypervisors/{hypervisor}/pci', [PciAssetController::class, 'store'])->name('pci.store');
         Route::put('/pci/{asset}', [PciAssetController::class, 'update'])->name('pci.update');
         Route::delete('/pci/{asset}', [PciAssetController::class, 'destroy'])->name('pci.destroy');
+        Route::controller(DatastoreController::class)->group(function () {
+            Route::get('/datastores', 'index')->name('datastores');
+            Route::post('/datastores', 'store')->name('datastores.store');
+            Route::put('/datastores/{datastore}', 'update')->whereNumber('datastore')->name('datastores.update');
+            Route::post('/datastores/{datastore}/refresh', 'refresh')->whereNumber('datastore')->middleware('throttle:30,1')->name('datastores.refresh');
+            Route::delete('/datastores/{datastore}', 'destroy')->whereNumber('datastore')->name('datastores.destroy');
+        });
         Route::controller(BackupAdminController::class)->group(function () {
             Route::get('/backups', 'index')->name('backups');
             Route::post('/backups/targets', 'storeTarget')->name('backups.targets.store');

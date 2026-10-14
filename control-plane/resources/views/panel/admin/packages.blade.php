@@ -76,6 +76,14 @@
                     </select>
                 </div>
                 <div class="field">
+                    <label for="datastore_id">{{ __('Magazyn danych') }}</label>
+                    <select id="datastore_id" name="datastore_id">
+                        <option value="">{{ __('— katalog domyślny węzła —') }}</option>
+                        @foreach (\App\Models\Datastore::query()->orderBy('name')->get() as $ds) <option value="{{ $ds->id }}" @selected((int) old('datastore_id') === $ds->id)>{{ $ds->name }} ({{ $ds->typeLabel() }})</option> @endforeach
+                    </select>
+                    <div class="hint">{{ __('Nowe maszyny KVM z pakietu powstają tylko na węzłach z tym magazynem.') }}</div>
+                </div>
+                <div class="field">
                     <label for="price_hint">{{ __('Cena (PLN)') }}</label>
                     <input id="price_hint" name="price_hint" type="text" value="{{ old('price_hint') }}"
                            placeholder="49.00">
@@ -161,6 +169,11 @@
                                             <select name="backup_plan_id">
                                                 <option value="">{{ __('— bez kopii —') }}</option>
                                                 @foreach (\App\Models\BackupPlan::query()->orderBy('name')->get() as $plan) <option value="{{ $plan->id }}" @selected((int) $v('backup_plan_id', $package->backup_plan_id) === $plan->id)>{{ $plan->name }}</option> @endforeach
+                                            </select></div>
+                                        <div class="field"><label>{{ __('Magazyn danych') }}</label>
+                                            <select name="datastore_id">
+                                                <option value="">{{ __('— katalog domyślny węzła —') }}</option>
+                                                @foreach (\App\Models\Datastore::query()->orderBy('name')->get() as $ds) <option value="{{ $ds->id }}" @selected((int) $v('datastore_id', $package->datastore_id) === $ds->id)>{{ $ds->name }} ({{ $ds->typeLabel() }})</option> @endforeach
                                             </select></div>
                                         <div class="field"><label>{{ __('Cena (PLN)') }}</label><input name="price_hint" type="text" inputmode="decimal" value="{{ $v('price_hint', $package->price_hint_cents !== null ? number_format($package->price_hint_cents / 100, 2, '.', '') : '') }}"></div>
                                     </div>

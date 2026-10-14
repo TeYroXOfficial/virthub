@@ -185,6 +185,13 @@ if [ "$VIRT" = "kvm" ]; then
         "$LIBVIRT_PY" >/dev/null
     systemctl enable --now libvirtd >/dev/null 2>&1 || true
     ok "KVM i libvirtd zainstalowane"
+    # Magazyny Ceph RBD (Infrastruktura → Magazyny danych): narzędzia rbd/ceph
+    # i obsługa RBD w QEMU. Bez nich węzeł działa, tylko bez magazynów Ceph.
+    if apt-get install -y -qq ceph-common qemu-block-extra >/dev/null 2>&1; then
+        ok "Narzędzia Ceph zainstalowane"
+    else
+        warn "Nie udało się zainstalować ceph-common — magazyny Ceph nie będą dostępne na tym węźle."
+    fi
 else
     # Incus jest w Debianie 13 i Ubuntu 24.04. Starsze wydania go nie mają —
     # wtedy bierzemy oficjalne pakiety od opiekunów projektu (Zabbly).

@@ -4,6 +4,10 @@ use App\Domain\Apps\Databases\NodeDatabaseInstaller;
 use App\Domain\External\ExternalServerManager;
 use App\Domain\Licensing\LicenseManager;
 use App\Domain\Mail\Mailouts;
+use App\Domain\Metrics\Alerts;
+use App\Domain\Provisioning\RemoteBackups;
+use App\Domain\Provisioning\SelfService;
+use App\Domain\Storage\Datastores;
 use App\Domain\Tickets\TicketService;
 use App\Domain\Webhooks\Webhooks;
 use App\Models\ServerMetric;
@@ -85,13 +89,17 @@ Schedule::call(fn () => app(Mailouts::class)->process())
     ->everyMinute()->name('mailouts')->withoutOverlapping();
 
 // Alerty: progi metryk maszyn i węzłów (Infrastruktura → Alerty).
-Schedule::call(fn () => app(App\Domain\Metrics\Alerts::class)->evaluate())
+Schedule::call(fn () => app(Alerts::class)->evaluate())
     ->everyMinute()->name('alerts')->withoutOverlapping();
 
 // Samoobsługa: godzinowe opłaty pakietów zasobów z portfela.
-Schedule::call(fn () => app(App\Domain\Provisioning\SelfService::class)->bill())
+Schedule::call(fn () => app(SelfService::class)->bill())
     ->everyFifteenMinutes()->name('self-service-billing')->withoutOverlapping();
 
+// Pojemność magazynów danych (Infrastruktura → Magazyny danych).
+Schedule::call(fn () => app(Datastores::class)->refreshAll())
+    ->everyFifteenMinutes()->name('datastores-refresh')->withoutOverlapping();
+
 // Kopie na zewnętrzne cele według planów (Infrastruktura → Kopie zapasowe).
-Schedule::call(fn () => app(App\Domain\Provisioning\RemoteBackups::class)->runDue())
+Schedule::call(fn () => app(RemoteBackups::class)->runDue())
     ->everyFifteenMinutes()->name('remote-backups')->withoutOverlapping();
