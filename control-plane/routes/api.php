@@ -11,7 +11,10 @@ use App\Http\Controllers\Api\FirewallController;
 use App\Http\Controllers\Api\ServerController;
 use App\Http\Controllers\Api\SnapshotController;
 use App\Http\Controllers\Internal\AgentCallbackController;
+use App\Http\Controllers\Internal\AppAbuseController;
 use App\Http\Controllers\Internal\ConsoleRedeemController;
+use App\Http\Controllers\Internal\SftpAuthController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -29,43 +32,52 @@ Route::prefix('v1')->group(function () {
 
     // --- klient ------------------------------------------------------------
     Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/me', fn (Illuminate\Http\Request $request) => response()->json([
+        Route::get('/me', fn (Request $request) => response()->json([
             'id' => $request->user()->id,
             'name' => $request->user()->name,
             'email' => $request->user()->email,
             'role' => $request->user()->role,
         ]));
 
-        Route::get('/packages', [CatalogController::class, 'packages']);
-        Route::get('/os-templates', [CatalogController::class, 'templates']);
+        // Odczyt: token z zakresem servers:read albo servers:write (sesja panelu ma wszystkie).
+        Route::middleware('ability:servers:read,servers:write')->group(function () {
+            Route::get('/packages', [CatalogController::class, 'packages']);
+            Route::get('/os-templates', [CatalogController::class, 'templates']);
+            Route::get('/servers', [ServerController::class, 'index']);
+            Route::get('/servers/{server}', [ServerController::class, 'show']);
+            Route::prefix('servers/{server}')->group(function () {
+                Route::get('/stats', [ServerController::class, 'stats']);
+                Route::get('/metrics', [ServerController::class, 'metrics']);
+                Route::get('/metrics/live', [ServerController::class, 'liveMetrics'])->middleware('throttle:90,1');
+                Route::get('/firewall', [FirewallController::class, 'index']);
+                Route::get('/snapshots', [SnapshotController::class, 'index']);
+            });
+        });
 
-        Route::apiResource('servers', ServerController::class)
-            ->only(['index', 'store', 'show', 'destroy']);
+        // Zmiany i dane dostępowe: tylko servers:write.
+        Route::middleware('ability:servers:write')->group(function () {
+            Route::post('/servers', [ServerController::class, 'store']);
+            Route::delete('/servers/{server}', [ServerController::class, 'destroy']);
+            Route::prefix('servers/{server}')->group(function () {
+                Route::post('/power', [ServerController::class, 'power']);
+                Route::post('/rebuild', [ServerController::class, 'rebuild']);
+                Route::post('/resize', [ServerController::class, 'resize']);
+                Route::get('/credentials', [ServerController::class, 'credentials']);
+                Route::post('/console-token', [ServerController::class, 'consoleToken']);
 
-        Route::prefix('servers/{server}')->group(function () {
-            Route::post('/power', [ServerController::class, 'power']);
-            Route::post('/rebuild', [ServerController::class, 'rebuild']);
-            Route::post('/resize', [ServerController::class, 'resize']);
-            Route::get('/stats', [ServerController::class, 'stats']);
-            Route::get('/metrics', [ServerController::class, 'metrics']);
-            Route::get('/metrics/live', [ServerController::class, 'liveMetrics'])->middleware('throttle:90,1');
-            Route::get('/credentials', [ServerController::class, 'credentials']);
-            Route::post('/console-token', [ServerController::class, 'consoleToken']);
+                Route::post('/firewall', [FirewallController::class, 'store']);
+                Route::put('/firewall/policy', [FirewallController::class, 'policy']);
+                Route::delete('/firewall/{rule}', [FirewallController::class, 'destroy']);
 
-            Route::get('/firewall', [FirewallController::class, 'index']);
-            Route::post('/firewall', [FirewallController::class, 'store']);
-            Route::put('/firewall/policy', [FirewallController::class, 'policy']);
-            Route::delete('/firewall/{rule}', [FirewallController::class, 'destroy']);
-
-            Route::get('/snapshots', [SnapshotController::class, 'index']);
-            Route::post('/snapshots', [SnapshotController::class, 'store']);
-            Route::post('/snapshots/{backup}/restore', [SnapshotController::class, 'restore']);
-            Route::delete('/snapshots/{backup}', [SnapshotController::class, 'destroy']);
+                Route::post('/snapshots', [SnapshotController::class, 'store']);
+                Route::post('/snapshots/{backup}/restore', [SnapshotController::class, 'restore']);
+                Route::delete('/snapshots/{backup}', [SnapshotController::class, 'destroy']);
+            });
         });
     });
 
     // --- administracja -----------------------------------------------------
-    Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
+    Route::middleware(['auth:sanctum', 'ability:admin', 'admin'])->prefix('admin')->group(function () {
         Route::apiResource('hypervisors', HypervisorController::class);
         Route::get('hypervisors/{hypervisor}/health', [HypervisorController::class, 'health']);
         Route::post('hypervisors/{hypervisor}/recalculate', [HypervisorController::class, 'recalculate']);
@@ -93,7 +105,7 @@ Route::prefix('v1')->group(function () {
     });
 
     // Wsparcie widzi wszystkie maszyny i historię operacji, ale nie zmienia oferty.
-    Route::middleware(['auth:sanctum', 'admin:staff'])->prefix('admin')->group(function () {
+    Route::middleware(['auth:sanctum', 'ability:admin', 'admin:staff'])->prefix('admin')->group(function () {
         Route::get('servers', [ServerAdminController::class, 'index']);
         Route::get('servers/{server}/jobs', [ServerAdminController::class, 'jobs']);
         Route::post('servers/{server}/suspend', [ServerAdminController::class, 'suspend']);
@@ -117,12 +129,12 @@ Route::post('/internal/agent/job-result', AgentCallbackController::class)
     ->name('internal.agent.job-result');
 
 // SFTP aplikacji: agent sprawdza hasło użytkownika panelu (podpis sekretem węzła).
-Route::post('/internal/agent/sftp-auth', \App\Http\Controllers\Internal\SftpAuthController::class)
+Route::post('/internal/agent/sftp-auth', SftpAuthController::class)
     ->middleware('throttle:120,1')
     ->name('internal.agent.sftp-auth');
 
 // Ochrona aplikacji: węzeł zgłasza PteroVM, koparki, zdalne powłoki (podpis sekretem węzła).
-Route::post('/internal/agent/app-abuse', \App\Http\Controllers\Internal\AppAbuseController::class)
+Route::post('/internal/agent/app-abuse', AppAbuseController::class)
     ->middleware('throttle:120,1')
     ->name('internal.agent.app-abuse');
 

@@ -161,6 +161,13 @@
                     @csrf
                     <button class="btn" type="submit"><x-icon name="key" :size="16"/> {{ __('Nowe hasło') }}</button>
                 </form>
+                @if ($user->two_factor_confirmed_at || $user->allowed_ips)
+                    <form method="POST" action="{{ route('panel.admin.users.security', $user) }}" style="margin:0"
+                          data-confirm="{{ __('Wyłączyć weryfikację dwuetapową i listę dozwolonych IP tego konta? Zrób to tylko po potwierdzeniu tożsamości właściciela.') }}">
+                        @csrf
+                        <button class="btn" type="submit"><x-icon name="shield" :size="16"/> {{ __('Zresetuj 2FA i IP') }}</button>
+                    </form>
+                @endif
                 @if ($user->isSuspended())
                     <form method="POST" action="{{ route('panel.admin.users.unsuspend', $user) }}" style="margin:0">
                         @csrf

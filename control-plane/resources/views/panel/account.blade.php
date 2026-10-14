@@ -6,7 +6,7 @@
     <div class="page-header">
         <div>
             <h1>{{ __('Moje konto') }}</h1>
-            <p class="lede">{{ __('Dane konta, avatar, hasło i zalogowane urządzenia.') }}</p>
+            <p class="lede">{{ __('Dane konta, avatar, hasło i bezpieczeństwo.') }}</p>
         </div>
     </div>
 
@@ -86,20 +86,13 @@
         </div>
 
         <div class="card">
-            <h3 class="card-title"><x-icon name="logout" :size="16"/> {{ __('Zalogowane urządzenia') }}</h3>
-            <p class="muted">{{ __('Wyloguj panel na wszystkich innych komputerach i telefonach — np. gdy logowałeś się na cudzym sprzęcie.') }}</p>
+            <h3 class="card-title"><x-icon name="shield" :size="16"/> {{ __('Bezpieczeństwo') }}</h3>
+            <p class="muted">{{ __('Weryfikacja dwuetapowa, zalogowane urządzenia, tokeny API i dozwolone adresy IP.') }}</p>
             @if ($user->last_login_at)
                 <p class="hint">{{ __('Ostatnie logowanie: :date', ['date' => $user->last_login_at->format('d.m.Y H:i')]) }}</p>
             @endif
-            <form method="POST" action="{{ route('panel.account.logout-others') }}">
-                @csrf
-                <div class="field">
-                    <label for="o-current">{{ __('Obecne hasło') }}</label>
-                    <input id="o-current" name="current_password" type="password" required autocomplete="current-password">
-                    @error('current_password', 'devices') <div class="hint" style="color:var(--critical)">{{ $message }}</div> @enderror
-                </div>
-                <button class="btn" type="submit">{{ __('Wyloguj inne urządzenia') }}</button>
-            </form>
+            @error('two_factor') <div class="hint" style="color:var(--critical)">{{ $message }}</div> @enderror
+            <a class="btn btn-primary" href="{{ route('panel.account.security') }}">{{ __('Ustawienia bezpieczeństwa') }}</a>
         </div>
     </div>
 @endsection

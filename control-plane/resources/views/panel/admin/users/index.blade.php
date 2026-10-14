@@ -58,6 +58,7 @@
                         <td>
                             <span class="pill {{ $roleTone[$u->role] ?? 'neutral' }}">{{ $roleLabel[$u->role] ?? $u->role }}</span>
                             @if ($u->isSuspended()) <span class="pill critical plain">{{ __('zablokowane') }}</span> @endif
+                            @if ($u->two_factor_confirmed_at) <span class="pill ok plain" title="{{ __('Weryfikacja dwuetapowa włączona') }}">2FA</span> @endif
                         </td>
                         <td class="num">{{ $u->servers_count }} / {{ $u->isStaff() && $u->max_servers === null ? '∞' : $u->serverLimit() }}</td>
                         <td class="muted">
@@ -88,4 +89,17 @@
     </div>
 
     {{ $users->links() }}
+
+    @if (auth()->user()->isAdmin())
+        <form method="POST" action="{{ route('panel.admin.users.policy') }}" class="card" style="margin-top:16px">
+            @csrf @method('PUT')
+            <h3 class="card-title"><x-icon name="shield" :size="16"/> {{ __('Zasady bezpieczeństwa') }}</h3>
+            <label style="font-weight:400; display:flex; gap:8px; align-items:center">
+                <input type="checkbox" name="staff_2fa" value="1" style="width:auto" @checked($staff2fa)>
+                {{ __('Wymagaj weryfikacji dwuetapowej od administratorów i wsparcia') }}
+            </label>
+            <p class="hint">{{ __('Konto personelu bez 2FA nie otworzy administracji (panel ani API), dopóki jej nie włączy w Moje konto → Bezpieczeństwo.') }}</p>
+            <button class="btn btn-primary" type="submit">{{ __('Zapisz') }}</button>
+        </form>
+    @endif
 @endsection

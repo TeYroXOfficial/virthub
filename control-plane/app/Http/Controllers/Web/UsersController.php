@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Web;
 
 use App\Domain\Access\Permissions;
 use App\Domain\Access\UserManager;
+use App\Domain\Security\AccountSecurity;
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
+use App\Models\Setting;
 use App\Models\User;
 use App\Models\VpsPackage;
 use Illuminate\Http\RedirectResponse;
@@ -34,7 +37,18 @@ class UsersController extends Controller
         return view('panel.admin.users.index', [
             'users' => $users,
             'manager' => $this->users,
+            'staff2fa' => AccountSecurity::staffMustUseTwoFactor(),
         ]);
+    }
+
+    public function policy(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->isAdmin(), 403);
+        $enabled = $request->boolean('staff_2fa');
+        Setting::put(['security.staff_2fa' => $enabled ? '1' : '0']);
+        AuditLog::record('security.policy', null, ['staff_2fa' => $enabled], $request->user());
+
+        return back()->with('status', __('Zapisano zasady bezpieczeństwa.'));
     }
 
     public function create(Request $request): View
@@ -89,6 +103,13 @@ class UsersController extends Controller
         return back()
             ->with('status', __('Ustawiono nowe hasło. Przekaż je użytkownikowi — nie zobaczysz go ponownie.'))
             ->with('generated_password', $password);
+    }
+
+    public function resetSecurity(Request $request, User $user): RedirectResponse
+    {
+        $this->users->resetSecurity($request->user(), $user);
+
+        return back()->with('status', __('Wyłączono weryfikację dwuetapową i listę dozwolonych IP konta :email.', ['email' => $user->email]));
     }
 
     public function destroy(Request $request, User $user): RedirectResponse

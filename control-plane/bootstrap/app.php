@@ -3,7 +3,11 @@
 use App\Domain\Agent\AgentException;
 use App\Domain\Provisioning\NoAddressesException;
 use App\Domain\Provisioning\NoCapacityException;
+use App\Http\Middleware\BlockWhileImpersonating;
+use App\Http\Middleware\EnforceAccountSecurity;
 use App\Http\Middleware\EnsureIsAdmin;
+use App\Http\Middleware\EnsureNotSuspended;
+use App\Http\Middleware\SetLocale;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -25,8 +29,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->convertEmptyStringsToNull(except: [fn ($request) => $request->routeIs('panel.apps.files.save')]);
         $middleware->alias([
             'admin' => EnsureIsAdmin::class,
-            'not-suspended' => \App\Http\Middleware\EnsureNotSuspended::class,
-            'not-impersonating' => \App\Http\Middleware\BlockWhileImpersonating::class,
+            'not-suspended' => EnsureNotSuspended::class,
+            'not-impersonating' => BlockWhileImpersonating::class,
             // Zakresy tokenów Sanctum: token integracji rozliczeniowej ma
             // dostęp wyłącznie do endpointów billingowych.
             'abilities' => CheckAbilities::class,
@@ -39,8 +43,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->statefulApi();
 
         // Język: konto → sesja → przeglądarka → domyślny (VIRTHUB_LOCALE).
-        $middleware->web(append: [\App\Http\Middleware\SetLocale::class]);
-        $middleware->api(append: [\App\Http\Middleware\SetLocale::class]);
+        $middleware->web(append: [SetLocale::class, EnforceAccountSecurity::class]);
+        $middleware->api(append: [SetLocale::class, EnforceAccountSecurity::class]);
 
         // Callback agenta jest podpisany HMAC i przychodzi spoza przeglądarki —
         // token CSRF nie ma tam zastosowania ani sensu.

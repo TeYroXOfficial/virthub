@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\EnrollmentController;
 use App\Http\Controllers\Web\AccountController;
+use App\Http\Controllers\Web\AccountSecurityController;
 use App\Http\Controllers\Web\AdminController;
 use App\Http\Controllers\Web\AppAdminController;
 use App\Http\Controllers\Web\AppContentController;
@@ -50,6 +51,8 @@ Route::get('/', fn () => redirect()->route('panel.dashboard'));
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login']);
+    Route::get('/login/two-factor', [AuthController::class, 'showTwoFactor'])->name('login.two-factor');
+    Route::post('/login/two-factor', [AuthController::class, 'twoFactor'])->middleware('throttle:20,1');
     Route::get('/forgot-password', [PasswordResetController::class, 'request'])->name('password.request');
     Route::post('/forgot-password', [PasswordResetController::class, 'send'])->middleware('throttle:5,1')->name('password.email');
     Route::get('/reset-password/{token}', [PasswordResetController::class, 'edit'])->name('password.reset');
@@ -92,6 +95,19 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
         Route::post('/avatar', 'uploadAvatar')->name('.avatar');
         Route::delete('/avatar', 'deleteAvatar')->name('.avatar.delete');
     });
+    Route::prefix('/account/security')->name('account.security')->controller(AccountSecurityController::class)
+        ->middleware('not-impersonating')->group(function () {
+            Route::get('/', 'show');
+            Route::post('/two-factor', 'enableTwoFactor')->middleware('throttle:10,1')->name('.2fa.enable');
+            Route::post('/two-factor/confirm', 'confirmTwoFactor')->middleware('throttle:10,1')->name('.2fa.confirm');
+            Route::post('/two-factor/cancel', 'cancelTwoFactor')->name('.2fa.cancel');
+            Route::delete('/two-factor', 'disableTwoFactor')->middleware('throttle:10,1')->name('.2fa.disable');
+            Route::post('/two-factor/recovery-codes', 'recoveryCodes')->middleware('throttle:10,1')->name('.2fa.recovery');
+            Route::delete('/sessions/{key}', 'destroySession')->where('key', '[a-f0-9]{64}')->name('.sessions.destroy');
+            Route::put('/allowed-ips', 'allowedIps')->middleware('throttle:10,1')->name('.ips');
+            Route::post('/tokens', 'storeToken')->middleware('throttle:20,1')->name('.tokens.store');
+            Route::delete('/tokens/{token}', 'destroyToken')->whereNumber('token')->name('.tokens.destroy');
+        });
 
     Route::get('/servers/new', [PanelController::class, 'createServer'])->name('servers.create');
     Route::post('/servers', [PanelController::class, 'storeServer'])->name('servers.store');
@@ -447,12 +463,14 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
     Route::middleware('admin:admin.users')->group(function () {
         Route::get('/users', [UsersController::class, 'index'])->name('users');
         Route::get('/users/new', [UsersController::class, 'create'])->name('users.create');
+        Route::put('/users/policy', [UsersController::class, 'policy'])->name('users.policy');
         Route::post('/users', [UsersController::class, 'store'])->name('users.store');
         Route::get('/users/{user}', [UsersController::class, 'edit'])->name('users.edit');
         Route::put('/users/{user}', [UsersController::class, 'update'])->name('users.update');
         Route::post('/users/{user}/suspend', [UsersController::class, 'suspend'])->name('users.suspend');
         Route::post('/users/{user}/unsuspend', [UsersController::class, 'unsuspend'])->name('users.unsuspend');
         Route::post('/users/{user}/password', [UsersController::class, 'resetPassword'])->name('users.password');
+        Route::post('/users/{user}/security', [UsersController::class, 'resetSecurity'])->name('users.security');
         Route::delete('/users/{user}', [UsersController::class, 'destroy'])->name('users.destroy');
         Route::post('/users/{user}/impersonate', [ImpersonationController::class, 'start'])
             ->middleware(['admin', 'throttle:20,1'])->name('users.impersonate');
