@@ -20,6 +20,9 @@
                 @endif
                 @if ($server->hypervisor && auth()->user()->isStaff())
                     <span class="sep">·</span> <span>{{ __('węzeł :name', ['name' => $server->hypervisor->name]) }}</span>
+                    @if ($server->datastore)
+                        <span class="sep">·</span> <span>{{ __('magazyn :name', ['name' => $server->datastore->name]) }}</span>
+                    @endif
                 @endif
             </div>
         </div>

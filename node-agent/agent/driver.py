@@ -308,6 +308,8 @@ class LibvirtDriver(HypervisorDriver):
         created: list[str] = []
         try:
             progress("image", 20)
+            self.storage.bind(name, req.storage)
+            created.append("binding")
             disk = self.storage.create_volume(name, req.template, req.disk_gb)
             created.append("volume")
 
@@ -336,6 +338,7 @@ class LibvirtDriver(HypervisorDriver):
                 ram_mb=req.ram_mb,
                 cpu_limit_percent=req.cpu_limit_percent,
                 disk_path=str(disk),
+                disk_xml=self.storage.disk_xml(name),
                 seed_path=str(seed),
                 bridge=bridge,
                 mac=mac,
@@ -346,6 +349,7 @@ class LibvirtDriver(HypervisorDriver):
                 allow_nested=self.nested_enabled(),
             )
 
+            self.storage.libvirt_prepare(self.conn, name)
             domain = self.conn.defineXML(xml)
             created.append("domain")
 
@@ -392,6 +396,8 @@ class LibvirtDriver(HypervisorDriver):
                 self.storage.delete_volume(name)
             except Exception:
                 log.exception("Rollback: nie udało się usunąć dysku %s", name)
+        if "binding" in created:
+            self.storage.unbind(name)
 
     def power(self, uuid: str, action: PowerAction) -> dict[str, Any]:
         import libvirt
@@ -625,6 +631,7 @@ class LibvirtDriver(HypervisorDriver):
 
         self.network.teardown(server_id)
         self.storage.delete_volume(name)
+        self.storage.unbind(name)
         return {"uuid": uuid, "deleted": True}
 
     # --- kopie na zewnętrzne cele ------------------------------------------
@@ -981,14 +988,7 @@ class LibvirtDriver(HypervisorDriver):
         return []
 
     def _disk_size_gb(self, name: str) -> int:
-        import json as _json
-
-        from .shell import run
-
-        info = _json.loads(
-            run(["qemu-img", "info", "--output=json", str(self.storage.volume_path(name))])
-        )
-        return int(info["virtual-size"]) // (1024**3)
+        return self.storage.size_gb(name)
 
 
 class MockDriver(HypervisorDriver):
@@ -1027,6 +1027,7 @@ class MockDriver(HypervisorDriver):
         vm_uuid = str(uuidlib.uuid4())
         self._stage("prepare", 5)
         self._stage("image", 20)
+        self.storage.bind(name, req.storage)
         disk = self.storage.create_volume(name, req.template, req.disk_gb)
         self._stage("network", 55)
         self.cloudinit.build(
@@ -1057,6 +1058,7 @@ class MockDriver(HypervisorDriver):
             "vnc_port": 5900 + (req.server_id % 100),
             "vnc_password": secrets.token_urlsafe(12),
             "disk_path": str(disk),
+            "datastore_id": req.storage.id if req.storage else None,
         }
         self._stage("boot", 85)
         data = self._load()
@@ -1136,6 +1138,7 @@ class MockDriver(HypervisorDriver):
         if record is None:
             raise VmNotFound(uuid)
         self.storage.delete_volume(record["name"])
+        self.storage.unbind(record["name"])
         self._save(data)
         return {"uuid": uuid, "deleted": True}
 

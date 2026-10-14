@@ -31,6 +31,9 @@ class RemoteBackups
         if ($server->isContainer()) {
             throw new \DomainException(__('Kopie na zewnętrzne cele są dostępne tylko dla maszyn KVM.'));
         }
+        if ($server->datastore?->isCeph()) {
+            throw new \DomainException(__('Dysk maszyny jest w Cephie — kopie na zewnętrzne cele obsługują dyski w magazynach katalogowych. Użyj migawek RBD.'));
+        }
         if ($server->isElevated()) {
             throw new \DomainException(__('Maszyna ma aktywny Elevate — najpierw zatwierdź albo odrzuć zmiany dysku.'));
         }

@@ -103,7 +103,19 @@ class ServerPayload
             'nameservers' => self::nameservers($server),
             'os_type' => self::osType($server->template),
             'mac' => self::mac($server),
-        ] + self::scripts($server) + self::filter($server);
+        ] + self::scripts($server) + self::filter($server) + self::storage($server);
+    }
+
+    /**
+     * Magazyn dysku. Brak klucza = katalog domyślny węzła (jak w starszych wersjach).
+     *
+     * @return array{storage?: array<string, mixed>}
+     */
+    public static function storage(Server $server): array
+    {
+        $datastore = $server->datastore;
+
+        return $datastore && ! $server->isContainer() ? ['storage' => $datastore->toAgentPayload()] : [];
     }
 
     /**

@@ -13,6 +13,8 @@ import logging
 import shutil
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Any
+from xml.sax.saxutils import quoteattr
 
 from .config import Settings
 from .shell import run
@@ -49,6 +51,32 @@ class StorageDriver(ABC):
     def capacity(self) -> tuple[int, int]:
         """Zwraca (total_gb, free_gb) dla przestrzeni na dyski VPS-ów."""
 
+    # Dysk jako plik na węźle — kopie zapasowe, Elevate i przenosiny między
+    # węzłami operują na pliku. Magazyny sieciowe (Ceph) tego nie mają.
+    file_based = True
+
+    def disk_xml(self, name: str) -> str:
+        """Element <disk> dysku vda do XML domeny libvirt."""
+        return (
+            "    <disk type='file' device='disk'>\n"
+            "      <driver name='qemu' type='qcow2' cache='none' io='native' discard='unmap'/>\n"
+            f"      <source file={quoteattr(str(self.volume_path(name)))}/>\n"
+            "      <target dev='vda' bus='virtio'/>\n"
+            "    </disk>"
+        )
+
+    def size_gb(self, name: str) -> int:
+        """Rozmiar wirtualny dysku w GB."""
+        info = json.loads(run(["qemu-img", "info", "--output=json", str(self.volume_path(name))]))
+        return int(info["virtual-size"]) // (1024**3)
+
+    def libvirt_prepare(self, conn: Any) -> None:
+        """Przygotowanie libvirt przed zdefiniowaniem domeny (np. sekret Ceph)."""
+
+    def report(self) -> dict[str, Any]:
+        total, free = self.capacity()
+        return {"total_gb": total, "free_gb": free, "used_gb": max(0, total - free)}
+
     # --- Elevate: nakładka na dysk (zmiany próbne do zatwierdzenia albo odrzucenia) ---
 
     def overlay_path(self, name: str) -> Path:
@@ -78,14 +106,17 @@ class Qcow2LocalDriver(StorageDriver):
     obrazu plus faktycznie zapisane dane.
     """
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, root: Path | None = None, thin: bool = True):
         self.settings = settings
+        # Własny katalog magazynu (datastore) albo domyślny katalog węzła.
+        self.root = root or settings.image_dir
+        self.thin = thin
 
     def volume_path(self, name: str) -> Path:
-        return self.settings.image_dir / f"{name}.qcow2"
+        return self.root / f"{name}.qcow2"
 
     def _snapshot_path(self, name: str, snapshot: str) -> Path:
-        return self.settings.image_dir / f"{name}.snap-{snapshot}.qcow2"
+        return self.root / f"{name}.snap-{snapshot}.qcow2"
 
     def _template_path(self, template: str) -> Path:
         # Odcinamy wszelkie separatory ścieżek — nazwa szablonu przychodzi z API.
@@ -104,6 +135,15 @@ class Qcow2LocalDriver(StorageDriver):
             raise StorageError(f"Dysk {target} już istnieje — odmawiam nadpisania.")
 
         backing = self._template_path(template)
+        self.root.mkdir(parents=True, exist_ok=True)
+        if not self.thin:
+            # Gruby dysk: pełna kopia szablonu z zarezerwowanym miejscem — bez
+            # łańcucha backing i bez ryzyka, że magazyn zabraknie w trakcie pracy.
+            run(["qemu-img", "convert", "-f", "qcow2", "-O", "qcow2", "-o", "preallocation=falloc",
+                 str(backing), str(target)], timeout=7200)
+            run(["qemu-img", "resize", "--preallocation=falloc", str(target), f"{disk_gb}G"], timeout=7200)
+            log.info("Utworzono gruby dysk %s (%sGB z %s)", target, disk_gb, backing.name)
+            return target
         run([
             "qemu-img", "create",
             "-f", "qcow2",
@@ -125,7 +165,7 @@ class Qcow2LocalDriver(StorageDriver):
             )
         if disk_gb == current_gb:
             return
-        run(["qemu-img", "resize", str(target), f"{disk_gb}G"])
+        run(["qemu-img", "resize", *([] if self.thin else ["--preallocation=falloc"]), str(target), f"{disk_gb}G"])
         log.info("Powiększono dysk %s do %sGB", target, disk_gb)
 
     def create_overlay(self, name: str) -> Path:
@@ -147,7 +187,7 @@ class Qcow2LocalDriver(StorageDriver):
         target = self.volume_path(name)
         target.unlink(missing_ok=True)
         self.drop_overlay(name)
-        for snap in self.settings.image_dir.glob(f"{name}.snap-*.qcow2"):
+        for snap in self.root.glob(f"{name}.snap-*.qcow2"):
             snap.unlink(missing_ok=True)
         seed = self.settings.seed_dir / f"{name}-seed.iso"
         seed.unlink(missing_ok=True)
@@ -173,7 +213,7 @@ class Qcow2LocalDriver(StorageDriver):
         log.info("Przywrócono %s ze snapshotu %s", target, snapshot)
 
     def capacity(self) -> tuple[int, int]:
-        usage = shutil.disk_usage(self.settings.image_dir)
+        usage = shutil.disk_usage(self.root if self.root.exists() else self.settings.image_dir)
         return usage.total // (1024**3), usage.free // (1024**3)
 
     def _virtual_size_gb(self, path: Path) -> int:
@@ -185,14 +225,23 @@ class Qcow2LocalDriver(StorageDriver):
 class MockStorageDriver(StorageDriver):
     """Backend na stację developerską bez KVM — tworzy puste pliki zamiast dysków."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, root: Path | None = None, thin: bool = True):
         self.settings = settings
+        self.root = root or settings.image_dir
+        self.thin = thin
 
     def volume_path(self, name: str) -> Path:
-        return self.settings.image_dir / f"{name}.qcow2"
+        return self.root / f"{name}.qcow2"
+
+    def size_gb(self, name: str) -> int:
+        import re
+
+        match = re.search(r"size=(\d+)G", self.volume_path(name).read_text(encoding="utf-8"))
+        return int(match.group(1)) if match else 0
 
     def create_volume(self, name: str, template: str, disk_gb: int) -> Path:
         target = self.volume_path(name)
+        self.root.mkdir(parents=True, exist_ok=True)
         target.write_text(f"mock volume template={template} size={disk_gb}G\n", encoding="utf-8")
         return target
 
@@ -217,12 +266,12 @@ class MockStorageDriver(StorageDriver):
         overlay.unlink()
 
     def snapshot_volume(self, name: str, snapshot: str) -> Path:
-        target = self.settings.image_dir / f"{name}.snap-{snapshot}.qcow2"
+        target = self.root / f"{name}.snap-{snapshot}.qcow2"
         target.write_text("mock snapshot\n", encoding="utf-8")
         return target
 
     def restore_volume(self, name: str, snapshot: str) -> None:
-        source = self.settings.image_dir / f"{name}.snap-{snapshot}.qcow2"
+        source = self.root / f"{name}.snap-{snapshot}.qcow2"
         if not source.exists():
             raise StorageError(f"Nie znaleziono snapshotu {snapshot} dla VPS-a {name}.")
 
@@ -232,4 +281,11 @@ class MockStorageDriver(StorageDriver):
 
 
 def build_storage_driver(settings: Settings) -> StorageDriver:
+    """Router magazynów: dysk każdej maszyny trafia do swojego datastore'u."""
+    from .datastores import StorageRouter
+
+    return StorageRouter(settings)
+
+
+def build_default_driver(settings: Settings) -> StorageDriver:
     return MockStorageDriver(settings) if settings.is_mock else Qcow2LocalDriver(settings)

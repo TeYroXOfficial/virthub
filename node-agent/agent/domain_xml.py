@@ -41,7 +41,7 @@ def build_domain_xml(
     vcpu: int,
     ram_mb: int,
     cpu_limit_percent: int | None = None,
-    disk_path: str,
+    disk_path: str = "",
     seed_path: str | None,
     bridge: str,
     mac: str,
@@ -50,6 +50,7 @@ def build_domain_xml(
     vnc_password: str,
     windows: bool = False,
     allow_nested: bool = False,
+    disk_xml: str | None = None,
 ) -> str:
     """Zwraca XML domeny gotowy do `virsh define`.
 
@@ -67,8 +68,9 @@ def build_domain_xml(
       własnego KVM (zagnieżdżanie to główna droga ucieczek do hosta, np. Januscape
       i Zapscape). Działa niezależnie od ustawienia `nested` modułu na hoście.
     """
+    # disk_xml: gotowy element dysku z warstwy magazynów (np. Ceph RBD).
     devices = [
-        f"""    <disk type='file' device='disk'>
+        disk_xml or f"""    <disk type='file' device='disk'>
       <driver name='qemu' type='qcow2' cache='none' io='native' discard='unmap'/>
       <source file='{escape(disk_path)}'/>
       <target dev='vda' bus='virtio'/>

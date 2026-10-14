@@ -122,6 +122,12 @@ class Server extends Model
         return $this->belongsTo(BackupPlan::class);
     }
 
+    /** @return BelongsTo<Datastore, $this> */
+    public function datastore(): BelongsTo
+    {
+        return $this->belongsTo(Datastore::class);
+    }
+
     public function resourcePack(): BelongsTo
     {
         return $this->belongsTo(ResourcePack::class);
