@@ -24,6 +24,17 @@ class ApiDocsTest extends TestCase
             ->assertDontSee('/admin/hypervisors');
     }
 
+    public function test_identyfikatory_sekcji_sa_unikalne(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $html = $this->actingAs($admin)->get(route('api-docs'))->assertOk()->getContent();
+
+        preg_match_all('/\sid="([^"]+)"/', $html, $m);
+        $this->assertSame([], array_values(array_unique(array_diff_assoc($m[1], array_unique($m[1])))));
+        $this->assertStringContainsString('id="ep-console"', $html);
+        $this->assertStringContainsString('href="#ep-console"', $html);
+    }
+
     public function test_personel_widzi_endpointy_administracyjne(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);

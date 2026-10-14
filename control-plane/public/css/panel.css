@@ -943,3 +943,9 @@ dialog.edit-modal .grid-3 { gap: 0 14px; }
 .api-history-item { cursor: pointer; border-radius: 4px; }
 .api-history-item:hover { background: var(--surface-2); }
 @media (max-width: 900px) { .api-layout { grid-template-columns: 1fr; } .api-nav { position: static; max-height: none; } }
+.api-main { display: flex; flex-direction: column; gap: 16px; }
+.api-main > .card { margin: 0; }
+.api-group-head { margin-top: 12px; }
+.api-group-head h2 { margin: 0 0 4px; }
+.api-nav a[aria-current="true"] { background: var(--accent-soft, var(--surface-2)); color: var(--accent); }
+.api-main.api-single .api-console { order: 2; }
