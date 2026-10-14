@@ -2,6 +2,8 @@
 
 namespace App\Domain\Access;
 
+use App\Domain\Mail\TemplateMailer;
+use App\Domain\Security\TwoFactor;
 use App\Models\AuditLog;
 use App\Models\User;
 use App\Models\VpsPackage;
@@ -77,7 +79,7 @@ class UserManager
         });
 
         AuditLog::record('user.created', $user, ['role' => $user->role, 'email' => $user->email], $actor);
-        app(\App\Domain\Mail\TemplateMailer::class)->send($user, 'account.welcome', ['login_url' => route('login')]);
+        app(TemplateMailer::class)->send($user, 'account.welcome', ['login_url' => route('login')]);
 
         return ['user' => $user, 'password' => $generated];
     }
@@ -156,6 +158,16 @@ class UserManager
         AuditLog::record('user.password_reset', $target, [], $actor);
 
         return $password;
+    }
+
+    /** Gdy właściciel stracił telefon z aplikacją 2FA albo zmienił adres IP. */
+    public function resetSecurity(User $actor, User $target): void
+    {
+        $this->assertCanManage($actor, $target);
+
+        app(TwoFactor::class)->disable($target, $actor);
+        $target->forceFill(['allowed_ips' => null])->save();
+        AuditLog::record('user.security_reset', $target, [], $actor);
     }
 
     public function delete(User $actor, User $target): void

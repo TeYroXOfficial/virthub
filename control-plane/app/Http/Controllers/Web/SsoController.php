@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Domain\Security\AccountSecurity;
+use App\Domain\Security\TwoFactor;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\User;
@@ -34,6 +36,15 @@ class SsoController extends Controller
         if ($user === null || $user->isSuspended()) {
             return redirect()->route('login')->withErrors([
                 'email' => __('To konto jest niedostępne. Skontaktuj się z obsługą.'),
+            ]);
+        }
+
+        // Konta personelu z 2FA i konta z listą dozwolonych IP nie omijają tych zabezpieczeń biletem z billingu.
+        $security = app(AccountSecurity::class);
+        if (($user->role !== User::ROLE_CUSTOMER && app(TwoFactor::class)->enabled($user))
+            || ! $security->ipAllowed($user, (string) $request->ip())) {
+            return redirect()->route('login')->withErrors([
+                'email' => __('To konto wymaga zwykłego logowania hasłem.'),
             ]);
         }
 

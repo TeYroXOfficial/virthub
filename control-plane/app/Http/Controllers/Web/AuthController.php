@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Domain\Access\Impersonation;
+use App\Domain\Security\AccountSecurity;
+use App\Domain\Security\TwoFactor;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,6 +18,11 @@ use Illuminate\View\View;
 class AuthController extends Controller
 {
     private const MAX_ATTEMPTS = 5;
+
+    public function __construct(
+        private readonly TwoFactor $twoFactor,
+        private readonly AccountSecurity $security,
+    ) {}
 
     public function showLogin(): View
     {
@@ -55,10 +64,90 @@ class AuthController extends Controller
             ]);
         }
 
+        $user = $request->user();
+        if (! $this->security->ipAllowed($user, (string) $request->ip())) {
+            Auth::logout();
+            RateLimiter::hit($key, 300);
+            AuditLog::record('auth.ip_blocked', $user, ['ip' => $request->ip()], $user);
+
+            throw ValidationException::withMessages([
+                'email' => __('Dostęp do tego konta z adresu :ip jest zablokowany.', ['ip' => $request->ip()]),
+            ]);
+        }
+
         RateLimiter::clear($key);
+
+        // Hasło się zgadza, ale konto ma 2FA — sesja powstanie dopiero po kodzie z aplikacji.
+        if ($this->twoFactor->enabled($user)) {
+            Auth::logout();
+            $request->session()->regenerate();
+            $request->session()->put('login.2fa', [
+                'id' => $user->id,
+                'remember' => $request->boolean('remember'),
+                'expires' => now()->addMinutes(10)->getTimestamp(),
+            ]);
+
+            return redirect()->route('login.two-factor');
+        }
+
+        return $this->completeLogin($request, $user);
+    }
+
+    public function showTwoFactor(Request $request): View|RedirectResponse
+    {
+        if ($this->pendingUser($request) === null) {
+            return redirect()->route('login');
+        }
+
+        return view('auth.two-factor');
+    }
+
+    public function twoFactor(Request $request): RedirectResponse
+    {
+        $user = $this->pendingUser($request);
+        if ($user === null) {
+            return redirect()->route('login')->withErrors(['email' => __('Logowanie wygasło — wpisz hasło ponownie.')]);
+        }
+        $code = (string) $request->validate(['code' => ['required', 'string', 'max:32']])['code'];
+
+        $key = '2fa:'.$user->id;
+        if (RateLimiter::tooManyAttempts($key, self::MAX_ATTEMPTS)) {
+            throw ValidationException::withMessages([
+                'code' => __('Za dużo prób logowania. Spróbuj ponownie za :seconds s.', ['seconds' => RateLimiter::availableIn($key)]),
+            ]);
+        }
+        if (! $this->twoFactor->verify($user, $code)) {
+            RateLimiter::hit($key, 300);
+            AuditLog::record('auth.2fa_failed', $user, ['ip' => $request->ip()], $user);
+
+            throw ValidationException::withMessages(['code' => __('Nieprawidłowy kod.')]);
+        }
+        RateLimiter::clear($key);
+
+        $remember = (bool) $request->session()->pull('login.2fa')['remember'];
+        Auth::login($user, $remember);
+
+        return $this->completeLogin($request, $user);
+    }
+
+    private function pendingUser(Request $request): ?User
+    {
+        $pending = $request->session()->get('login.2fa');
+        if (! is_array($pending) || ($pending['expires'] ?? 0) < now()->getTimestamp()) {
+            $request->session()->forget('login.2fa');
+
+            return null;
+        }
+        $user = User::find($pending['id'] ?? 0);
+
+        return $user && ! $user->isSuspended() && $this->twoFactor->enabled($user) ? $user : null;
+    }
+
+    private function completeLogin(Request $request, User $user): RedirectResponse
+    {
         $request->session()->regenerate();
-        $request->user()->forceFill(['last_login_at' => now()])->save();
-        AuditLog::record('auth.login', $request->user());
+        $user->forceFill(['last_login_at' => now()])->save();
+        AuditLog::record('auth.login', $user);
 
         return redirect()->intended(route('panel.dashboard'));
     }
@@ -66,8 +155,8 @@ class AuthController extends Controller
     public function logout(Request $request): RedirectResponse
     {
         // Wylogowanie podczas „Zaloguj jako” wraca na konto administratora.
-        if (\App\Domain\Access\Impersonation::active()) {
-            $returnTo = app(\App\Domain\Access\Impersonation::class)->stop($request);
+        if (Impersonation::active()) {
+            $returnTo = app(Impersonation::class)->stop($request);
 
             return $returnTo ? redirect()->to($returnTo) : redirect()->route('login');
         }
