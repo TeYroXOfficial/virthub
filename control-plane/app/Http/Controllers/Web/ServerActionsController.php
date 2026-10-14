@@ -8,6 +8,7 @@ use App\Domain\Metrics\Traffic;
 use App\Domain\Network\ReverseDns;
 use App\Domain\Provisioning\AgentResultApplier;
 use App\Domain\Provisioning\GuestOs;
+use App\Domain\Provisioning\IsoLibrary;
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Enums\ServerState;
 use App\Http\Controllers\Controller;
@@ -273,6 +274,28 @@ class ServerActionsController extends Controller
         });
     }
 
+    public function storeCustomIso(Request $request, Server $server): RedirectResponse
+    {
+        $this->authorize('iso', $server);
+        $data = $request->validate([
+            'custom_name' => ['required', 'string', 'max:100'],
+            'custom_url' => ['required', 'url:http,https', 'max:2000'],
+        ]);
+        app(IsoLibrary::class)->addCustom($server, $data['custom_name'], $data['custom_url'], $request->user());
+
+        return redirect()->to(route('panel.servers.show', $server).'#iso')
+            ->with('status', __('Węzeł pobiera obraz — po zakończeniu pojawi się na liście płyt.'));
+    }
+
+    public function destroyCustomIso(Request $request, Server $server, IsoImage $iso): RedirectResponse
+    {
+        $this->authorize('iso', $server);
+        abort_unless($iso->server_id === $server->id, 404);
+        app(IsoLibrary::class)->delete($iso, $request->user());
+
+        return redirect()->to(route('panel.servers.show', $server).'#iso')->with('status', __('Obraz usunięty.'));
+    }
+
     public function iso(Request $request, Server $server): RedirectResponse
     {
         $this->authorize('iso', $server);
@@ -284,7 +307,9 @@ class ServerActionsController extends Controller
         $iso = ! empty($validated['iso']) ? IsoImage::findOrFail($validated['iso']) : null;
 
         // Obraz ukryty jest tylko dla personelu.
-        abort_if($iso !== null && ! $iso->is_public && ! $request->user()->isStaff(), 403);
+        abort_if($iso !== null && ! $iso->is_public && ! $request->user()->isStaff() && $iso->server_id !== $server->id, 403);
+        // Własny obraz innej maszyny — nigdy.
+        abort_if($iso !== null && $iso->isCustom() && $iso->server_id !== $server->id, 403);
 
         try {
             $this->provisioner->mountIso(

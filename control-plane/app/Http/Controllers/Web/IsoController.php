@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Web;
 
 use App\Domain\Provisioning\IsoLibrary;
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Models\IsoImage;
+use App\Models\Setting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -17,7 +19,10 @@ class IsoController extends Controller
     public function index(): View
     {
         return view('panel.admin.isos', [
-            'isos' => IsoImage::query()->with('downloads.hypervisor')->withCount('servers')->orderBy('name')->get(),
+            'isos' => IsoImage::query()->whereNull('server_id')->with('downloads.hypervisor')->withCount('servers')->orderBy('name')->get(),
+            'customLimit' => IsoLibrary::customLimit(),
+            'customMaxGb' => IsoLibrary::customMaxGb(),
+            'customCount' => IsoImage::query()->whereNotNull('server_id')->count(),
         ]);
     }
 
@@ -33,6 +38,19 @@ class IsoController extends Controller
         $iso = $this->library->add([...$data, 'is_public' => $request->boolean('is_public')], $request->user());
 
         return back()->with('status', __('Dodano :name — węzły KVM pobierają obraz.', ['name' => $iso->name]));
+    }
+
+    /** Własne obrazy klientów: liczba na maszynę (0 = wyłączone) i limit rozmiaru. */
+    public function customSettings(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'custom_limit' => ['required', 'integer', 'min:0', 'max:10'],
+            'custom_max_gb' => ['required', 'integer', 'min:1', 'max:100'],
+        ]);
+        Setting::put(['iso.custom_limit' => (string) $data['custom_limit'], 'iso.custom_max_gb' => (string) $data['custom_max_gb']]);
+        AuditLog::record('settings.custom_iso', null, $data);
+
+        return back()->with('status', __('Zapisano ustawienia własnych obrazów klientów.'));
     }
 
     public function retry(IsoImage $iso): RedirectResponse

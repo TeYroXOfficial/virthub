@@ -2,6 +2,7 @@
 
 namespace App\Domain\Agent;
 
+use App\Domain\Provisioning\HypervisorEnrollment;
 use App\Models\Hypervisor;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
@@ -22,6 +23,7 @@ use Illuminate\Support\Facades\Log;
 class AgentClient
 {
     private const TIMEOUT = 20;
+
     private const CONNECT_TIMEOUT = 5;
 
     public function __construct(private readonly Hypervisor $hypervisor) {}
@@ -68,13 +70,16 @@ class AgentClient
     }
 
     /** Pobranie obrazu ISO do biblioteki węzła (zadanie w tle). */
-    public function downloadIso(string $filename, string $url, ?string $sha256): string
+    /** @param  int|null  $customMaxGb  obraz klienta: agent odrzuca adresy prywatne i pilnuje limitu */
+    public function downloadIso(string $filename, string $url, ?string $sha256, ?int $customMaxGb = null): string
     {
         return $this->jobId($this->request('POST', '/images/iso', array_filter([
             'name' => $filename,
             'url' => $url,
             'sha256' => $sha256,
-        ])));
+            'untrusted' => $customMaxGb !== null ? true : null,
+            'max_gb' => $customMaxGb,
+        ], fn ($v) => $v !== null)));
     }
 
     public function deleteIso(string $filename): array
@@ -307,7 +312,7 @@ class AgentClient
 
     private function request(string $method, string $path, ?array $body = null, int $timeout = self::TIMEOUT): array
     {
-        $payload = $body === null ? '' : json_encode($body, JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES);
+        $payload = $body === null ? '' : json_encode($body, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
         $timestamp = (string) time();
 
         $request = Http::timeout($timeout)
@@ -372,7 +377,7 @@ class AgentClient
      */
     private function tlsVerification(): string|bool
     {
-        return app(\App\Domain\Provisioning\HypervisorEnrollment::class)
+        return app(HypervisorEnrollment::class)
             ->certificatePath($this->hypervisor) ?? true;
     }
 

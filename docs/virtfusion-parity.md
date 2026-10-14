@@ -42,7 +42,7 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
    - Blokada IPv6 RA i DHCPv6.
    - Ustawiane globalnie albo per VM.
    - Własne reguły w JSON.
-6. **Własne ISO klienta.** Klient podaje adres ISO; agent pobiera je do katalogu VM, a po odmontowaniu plik jest usuwany.
+6. ✅ **Własne ISO klienta.** Klient podaje adres ISO; agent pobiera je do katalogu VM, a po odmontowaniu plik jest usuwany.
 7. **Alerty.**
    - Progi: CPU, dysk, transfer, hypervisor offline, nieudana kopia.
    - Powiadomienie e-mailem i webhookiem.

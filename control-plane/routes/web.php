@@ -135,6 +135,8 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/rebuild', [ServerActionsController::class, 'rebuild'])->name('servers.rebuild');
     Route::post('/servers/{server}/resize', [ServerActionsController::class, 'resize'])->middleware('throttle:10,1')->name('servers.resize');
     Route::post('/servers/{server}/iso', [ServerActionsController::class, 'iso'])->name('servers.iso');
+    Route::post('/servers/{server}/iso/custom', [ServerActionsController::class, 'storeCustomIso'])->middleware('throttle:10,1')->name('servers.iso.custom');
+    Route::delete('/servers/{server}/iso/custom/{iso}', [ServerActionsController::class, 'destroyCustomIso'])->name('servers.iso.custom.destroy');
     Route::post('/servers/{server}/password', [ServerActionsController::class, 'resetPassword'])->name('servers.password');
     Route::get('/servers/{server}/status', [ServerActionsController::class, 'status'])->name('servers.status');
     Route::delete('/servers/{server}', [ServerActionsController::class, 'destroy'])->name('servers.destroy');
@@ -309,6 +311,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::get('/downloads/status', [AdminController::class, 'downloadsStatus'])->name('downloads.status');
         Route::get('/isos', [IsoController::class, 'index'])->name('isos');
         Route::post('/isos', [IsoController::class, 'store'])->name('isos.store');
+        Route::put('/isos/custom-settings', [IsoController::class, 'customSettings'])->name('isos.custom-settings');
         Route::post('/isos/{iso}/retry', [IsoController::class, 'retry'])->name('isos.retry');
         Route::post('/isos/{iso}/toggle', [IsoController::class, 'toggle'])->name('isos.toggle');
         Route::delete('/isos/{iso}', [IsoController::class, 'destroy'])->name('isos.destroy');

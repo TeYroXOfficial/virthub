@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Domain\Billing\Billing;
+use App\Domain\Metrics\Traffic;
+use App\Domain\Provisioning\IsoLibrary;
 use App\Domain\Provisioning\ServerProvisioner;
+use App\Domain\Provisioning\TemplateCatalog;
 use App\Enums\ServerState;
 use App\Enums\Virtualization;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OrderServerRequest;
+use App\Models\ExternalServer;
 use App\Models\Hypervisor;
-use App\Models\OsTemplate;
+use App\Models\HypervisorGroup;
 use App\Models\Server;
 use App\Models\VpsPackage;
 use Illuminate\Http\RedirectResponse;
@@ -32,7 +37,7 @@ class PanelController extends Controller
         return view('panel.dashboard', [
             'servers' => $servers,
             // VPS-y u dostawców zewnętrznych (reselling) — klient widzi je jak zwykłe maszyny.
-            'cloud' => \App\Models\ExternalServer::query()->where('user_id', $user->id)->latest()->get(),
+            'cloud' => ExternalServer::query()->where('user_id', $user->id)->latest()->get(),
             'running' => $servers->where('state', ServerState::Running)->count(),
             'building' => $servers->filter(fn (Server $s) => $s->state->isTransitioning())->count(),
             // Podsumowanie floty ma sens tylko dla personelu — klientowi
@@ -61,11 +66,11 @@ class PanelController extends Controller
                     : $request->user()->isStaff() || $request->user()->mayOrderPackage($p))
                 ->values(),
             // Reinstalacja: tylko systemy tego samego typu, z automatyczną instalacją.
-            'osChoices' => app(\App\Domain\Provisioning\TemplateCatalog::class)->choices([$server->virtualization->value]),
+            'osChoices' => app(TemplateCatalog::class)->choices([$server->virtualization->value]),
             'isos' => $server->isContainer()
                 ? collect()
-                : app(\App\Domain\Provisioning\IsoLibrary::class)->availableFor($server->hypervisor_id, $request->user()->isStaff()),
-            'traffic' => app(\App\Domain\Metrics\Traffic::class)->usage($server),
+                : app(IsoLibrary::class)->availableFor($server->hypervisor_id, $request->user()->isStaff(), $server),
+            'traffic' => app(Traffic::class)->usage($server),
             // Hasło startowe pokazujemy raz — po wyświetleniu znika z bazy.
             'rootPassword' => $server->consumeRootPassword(),
         ]);
@@ -73,7 +78,7 @@ class PanelController extends Controller
 
     public function createServer(Request $request): View|RedirectResponse
     {
-        if (\App\Domain\Billing\Billing::enabled() && ! $request->user()->isStaff()) {
+        if (Billing::enabled() && ! $request->user()->isStaff()) {
             return redirect()->route('panel.store');
         }
         $this->authorize('create', Server::class);
@@ -92,9 +97,9 @@ class PanelController extends Controller
             'packages' => VpsPackage::query()->active()->orderBy('vcpu')->get()
                 ->filter(fn (VpsPackage $p) => $request->user()->mayOrderPackage($p))
                 ->values(),
-            'osChoices' => app(\App\Domain\Provisioning\TemplateCatalog::class)->choices($availableTypes),
+            'osChoices' => app(TemplateCatalog::class)->choices($availableTypes),
             // Lokalizacje do wyboru: widoczne grupy z działającym węzłem.
-            'locations' => \App\Models\HypervisorGroup::query()
+            'locations' => HypervisorGroup::query()
                 ->where('is_public', true)
                 ->where('accepts_new_servers', true)
                 ->whereHas('hypervisors', fn ($q) => $q->available())
