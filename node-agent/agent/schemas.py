@@ -95,11 +95,14 @@ class NetworkInterfaceSpec(BaseModel):
     prefix: int = Field(ge=0, le=128, description="Długość prefiksu CIDR")
     gateway: str | None = None
     version: Literal[4, 6] = 4
-    mode: Literal["bridged", "nat"] = Field(
+    mode: Literal["bridged", "nat", "routed"] = Field(
         default="bridged",
-        description="bridged — adres publiczny na mostku z kartą fizyczną; nat — adres prywatny za NAT-em węzła",
+        description="bridged — adres publiczny na mostku z kartą fizyczną; nat — adres prywatny za NAT-em węzła; "
+                    "routed — adres z podsieci routowanej do węzła (/32, brama on-link)",
     )
     nat: NatSpec | None = None
+    # Tag 802.1Q: maszyna na mostku vhv<tag> nad <łącze>.<tag> (tylko bridged).
+    vlan: int | None = Field(default=None, ge=1, le=4094)
 
     @field_validator("address")
     @classmethod

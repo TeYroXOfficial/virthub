@@ -61,6 +61,8 @@ class IpPoolManager
             'nat_public_address' => ['nullable', 'ip'],
             'nat_port_start' => ['nullable', 'integer', 'min:1024', 'max:65535'],
             'nat_ports_per_server' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'vlan_id' => ['nullable', 'integer', 'min:1', 'max:4094'],
+            'routed' => ['nullable', 'boolean'],
         ];
     }
 
@@ -423,6 +425,9 @@ class IpPoolManager
             'nat_public_address' => $publicAddress,
             'nat_port_start' => $portStart !== null ? (int) $portStart : null,
             'nat_ports_per_server' => $portsPerServer !== null ? (int) $portsPerServer : null,
+            // VLAN i routowanie dotyczą adresów publicznych (NAT ma własny mostek).
+            'vlan_id' => $nat || empty($data['vlan_id']) ? null : (int) $data['vlan_id'],
+            'routed' => ! $nat && filter_var($data['routed'] ?? false, FILTER_VALIDATE_BOOLEAN),
         ];
     }
 

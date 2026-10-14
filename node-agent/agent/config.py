@@ -104,6 +104,10 @@ class Settings:
     apps_seccomp: bool = True
     # Tylko testy: pobieranie treści z adresów prywatnych (lokalny serwer HTTP).
     apps_content_allow_private: bool = False
+    # Sieci zaawansowane: mostek podsieci routowanych i łącze dla VLAN-ów
+    # (puste = wykryj port fizyczny głównego mostka).
+    routed_bridge: str = "vhroute0"
+    vlan_parent: str = ""
 
     @property
     def is_mock(self) -> bool:
@@ -151,6 +155,8 @@ def get_settings() -> Settings:
         state_db=_env_path("VH_STATE_DB", "/var/lib/virthub/agent-state.sqlite3"),
         bridge=_env("VH_BRIDGE", "br0"),
         nat_bridge=_env("VH_NAT_BRIDGE", "vhnat0"),
+        routed_bridge=_env("VH_ROUTED_BRIDGE", "vhroute0"),
+        vlan_parent=_env("VH_VLAN_PARENT", ""),
         guard_host=_env("VH_GUARD_HOST", "1") not in ("0", "false", "no"),
         ct_max_processes=int(_env("VH_CT_MAX_PROCESSES", "4096")),
         apps_dir=_env_path("VH_APPS_DIR", "/var/lib/virthub/apps"),

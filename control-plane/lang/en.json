@@ -3410,5 +3410,11 @@
     "Pierwsza kopia powstanie według planu.": "The first backup will be created according to the plan.",
     "Maszyna nie ma planu kopii.": "The machine has no backup plan.",
     "Utwórz kopię teraz": "Back up now",
-    "Plan kopii": "Backup plan"
+    "Plan kopii": "Backup plan",
+    "routowana": "routed",
+    "Sieć zaawansowana": "Advanced network",
+    "VLAN (tag 802.1Q)": "VLAN (802.1Q tag)",
+    "Maszyny z tego bloku dostają mostek vhvNNN na interfejsie łącza węzła z tym tagiem. Puste — sieć bez tagu.": "Machines from this block get a vhvNNN bridge on the node's uplink interface with this tag. Empty — untagged network.",
+    "Podsieć routowana do węzła": "Subnet routed to the node",
+    "Dostawca kieruje podsieć na adres węzła (bez L2). Maszyna dostaje adres /32 (/128) z bramą on-link 169.254.0.1 (fe80::1), a węzeł trasę do niej. Brama i maska z formularza nie są wtedy używane.": "The provider routes the subnet to the node's address (no L2). The machine gets a /32 (/128) address with the on-link gateway 169.254.0.1 (fe80::1), and the node gets a route to it. The gateway and mask from the form are not used then."
 }

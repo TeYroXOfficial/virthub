@@ -77,6 +77,21 @@
                 </div>
             </div>
 
+            <fieldset data-type="public" style="border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin:0 0 16px">
+                <legend class="muted" style="padding:0 6px">{{ __('Sieć zaawansowana') }} <span class="muted">{{ __('(opcjonalnie)') }}</span></legend>
+                <div class="grid grid-2">
+                    <div class="field">
+                        <label for="n-vlan">{{ __('VLAN (tag 802.1Q)') }}</label>
+                        <input id="n-vlan" name="vlan_id" type="number" min="1" max="4094" value="{{ old('vlan_id') }}" placeholder="100">
+                        <div class="hint">{{ __('Maszyny z tego bloku dostają mostek vhvNNN na interfejsie łącza węzła z tym tagiem. Puste — sieć bez tagu.') }}</div>
+                    </div>
+                    <div class="field">
+                        <label class="check-line"><input type="checkbox" name="routed" value="1" @checked(old('routed'))> {{ __('Podsieć routowana do węzła') }}</label>
+                        <div class="hint">{{ __('Dostawca kieruje podsieć na adres węzła (bez L2). Maszyna dostaje adres /32 (/128) z bramą on-link 169.254.0.1 (fe80::1), a węzeł trasę do niej. Brama i maska z formularza nie są wtedy używane.') }}</div>
+                    </div>
+                </div>
+            </fieldset>
+
             <fieldset data-type="nat" style="border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin:0 0 16px">
                 <legend class="muted" style="padding:0 6px">{{ __('Ustawienia NAT') }}</legend>
                 <div class="grid grid-3">
