@@ -68,3 +68,7 @@ Schedule::call(fn () => app(App\Domain\Licensing\LicenseManager::class)->refresh
 // VPS-y u dostawców zewnętrznych w trakcie tworzenia/operacji — stan, IP, hasło.
 Schedule::call(fn () => app(App\Domain\External\ExternalServerManager::class)->syncTransitional())
     ->everyMinute()->name('external-servers-sync')->withoutOverlapping();
+
+// Webhooki: ponowienia nieudanych dostarczeń i sprzątanie historii.
+Schedule::call(fn () => app(App\Domain\Webhooks\Webhooks::class)->retryDue())
+    ->everyMinute()->name('webhooks-retry')->withoutOverlapping();

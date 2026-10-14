@@ -19,7 +19,7 @@
         <div class="card" style="margin-bottom:16px; border-color:var(--warning)">
             <h3 class="card-title"><x-icon name="lock" :size="16"/> {{ __('Kody zapasowe') }}</h3>
             <p class="muted">{{ __('Zapisz je w bezpiecznym miejscu. Każdy kod działa raz — gdy stracisz telefon, zalogujesz się nimi zamiast kodem z aplikacji. Nie zobaczysz ich ponownie.') }}</p>
-            <pre class="code-block" style="columns:2; max-width:420px">@foreach (session('recovery_codes') as $code){{ $code }}
+            <pre class="secret" style="white-space:pre-wrap; columns:2; max-width:420px">@foreach (session('recovery_codes') as $code){{ $code }}
 @endforeach</pre>
         </div>
     @endif

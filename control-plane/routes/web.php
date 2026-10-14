@@ -329,6 +329,17 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::post('/addons/{addon}/toggle', [LicenseController::class, 'toggle'])->where('addon', '[a-z][a-z0-9-]{1,39}')->name('addons.toggle');
         Route::delete('/addons/{addon}', [LicenseController::class, 'uninstall'])->where('addon', '[a-z][a-z0-9-]{1,39}')->name('addons.uninstall');
 
+        Route::prefix('/webhooks')->name('webhooks')->controller(\App\Http\Controllers\Web\WebhookController::class)->group(function () {
+            Route::get('/', 'index');
+            Route::post('/', 'store')->name('.store');
+            Route::get('/{webhook}', 'show')->whereNumber('webhook')->name('.show');
+            Route::put('/{webhook}', 'update')->whereNumber('webhook')->name('.update');
+            Route::delete('/{webhook}', 'destroy')->whereNumber('webhook')->name('.destroy');
+            Route::post('/{webhook}/ping', 'ping')->whereNumber('webhook')->middleware('throttle:20,1')->name('.ping');
+            Route::post('/{webhook}/secret', 'rotateSecret')->whereNumber('webhook')->name('.secret');
+            Route::post('/deliveries/{delivery}/redeliver', 'redeliver')->whereNumber('delivery')->middleware('throttle:20,1')->name('.redeliver');
+        });
+
         Route::prefix('/languages')->name('languages')->controller(LanguageController::class)->group(function () {
             Route::get('/', 'index');
             Route::post('/', 'store')->name('.store');

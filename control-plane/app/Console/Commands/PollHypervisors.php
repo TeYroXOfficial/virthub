@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
 use App\Domain\Provisioning\TemplateDistributor;
+use App\Domain\Webhooks\Webhooks;
 use App\Models\Hypervisor;
 use Illuminate\Console\Command;
 
@@ -44,7 +45,13 @@ class PollHypervisors extends Command
             // Tryb konserwacji ustawia administrator ręcznie — nie nadpisujemy go
             // statusem „offline", bo to zatarłoby jego decyzję.
             if ($hypervisor->status !== Hypervisor::STATUS_MAINTENANCE) {
+                $wasOnline = $hypervisor->status !== Hypervisor::STATUS_OFFLINE;
                 $hypervisor->forceFill(['status' => Hypervisor::STATUS_OFFLINE])->save();
+                if ($wasOnline) {
+                    app(Webhooks::class)->dispatch('hypervisor.offline', [
+                        'id' => $hypervisor->id, 'name' => $hypervisor->name, 'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
             $this->error("{$hypervisor->name}: {$e->getMessage()}");

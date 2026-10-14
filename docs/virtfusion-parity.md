@@ -26,7 +26,7 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
    - Lista aktywnych sesji z wylogowaniem.
    - Tokeny API z uprawnieniami (zakresami) w panelu klienta.
    - Zaufane adresy IP dla kont administratorów.
-2. **Webhooki.**
+2. ✅ **Webhooki.**
    - Podpisane (HMAC-SHA256) powiadomienia o zdarzeniach: serwer utworzony/zbudowany/usunięty/zasilanie/zmiana IP/migracja, użytkownik utworzony/zmieniony/usunięty, kopie, mailouty, oraz „wszystkie zdarzenia”.
    - Historia dostarczeń, ponowienia.
 3. **Mailouty.**
@@ -62,3 +62,4 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
 15. **Disaster recovery hypervisora.**
     - Kopia dysków, konfiguracji i stanu hypervisora na lokalny dysk albo S3.
     - Odtworzenie na zastępczym hoście.
+16. **Migracje VM między hypervisorami.** Na zimno (kopiowanie dysku) i na żywo (libvirt migrate z kopiowaniem dysku), z wyborem docelowego węzła i webhookiem `server.migrated`.
