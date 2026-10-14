@@ -89,6 +89,70 @@ class HypervisorDriver(ABC):
     @abstractmethod
     def create_vm(self, req: CreateVmRequest) -> dict[str, Any]: ...
 
+    # --- disaster recovery ----------------------------------------------------
+
+    def recover_vm(self, req: Any) -> dict[str, Any]:
+        """Maszyna z kopii na celu zewnętrznym: dysk z kopii zamiast z szablonu,
+        reszta (sieć, cloud-init, domena) jak przy tworzeniu."""
+        base = CreateVmRequest(**req.model_dump(exclude={"backup"}))
+        return self.create_vm(base, restore=req.backup)
+
+    def _restore_disk(self, name: str, req: CreateVmRequest, restore: Any) -> Path:
+        """Pobiera dysk maszyny z kopii (z weryfikacją sumy) i dopasowuje rozmiar."""
+        if not self.storage.is_file_based(name):
+            raise DriverError("Odtwarzanie z kopii wymaga magazynu katalogowego (qcow2), a dysk ma trafić do Cepha.")
+        path = self.storage.volume_path(name)
+        if path.exists():
+            raise DriverError(f"Dysk {path} już istnieje — odmawiam nadpisania.")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        incoming = path.with_name(f".{name}.recover.qcow2")
+        self._fetch(restore, incoming)
+        if not self.settings.is_mock:
+            import json as _json
+
+            info = _json.loads(run(["qemu-img", "info", "--output=json", str(incoming)]))
+            if int(info["virtual-size"]) < req.disk_gb * 1024**3:
+                run(["qemu-img", "resize", str(incoming), f"{req.disk_gb}G"])
+        os.replace(incoming, path)
+        return path
+
+    def dr_state(self) -> list[dict[str, Any]]:
+        """Domeny węzła z pełną konfiguracją (XML) — do zrzutu DR."""
+        return []
+
+    def dr_snapshot(self, req: Any) -> dict[str, Any]:
+        """Konfiguracja i stan węzła w jednym pliku JSON na celu kopii.
+
+        Źródłem prawdy przy odtwarzaniu jest panel; zrzut służy do wglądu i
+        ręcznego odtworzenia elementów spoza panelu (np. własnych reguł)."""
+        import json as _json
+        import socket
+
+        from . import __version__
+
+        registry = {}
+        for name, spec in (getattr(self.storage, "_load", lambda: {})() or {}).items():
+            registry[name] = {k: v for k, v in spec.items() if k != "key"}  # bez kluczy Cepha
+        state_files = {}
+        for directory in (self.settings.network_state_dir, self.settings.nat_state_dir):
+            if directory.is_dir():
+                for file in sorted(directory.glob("*.json")):
+                    state_files[f"{directory.name}/{file.name}"] = file.read_text(encoding="utf-8")
+        snapshot = {
+            "format": "virthub-dr/1",
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "hostname": socket.gethostname(),
+            "agent_version": __version__,
+            "driver": self.settings.driver,
+            "domains": self.dr_state(),
+            "datastores": registry,
+            "state_files": state_files,
+        }
+        tmp = self.settings.image_dir / f".dr-{secrets.token_hex(4)}.json"
+        tmp.write_text(_json.dumps(snapshot, indent=1), encoding="utf-8")
+        result = self._ship(tmp, req)
+        return result | {"domains": len(snapshot["domains"])}
+
     @abstractmethod
     def power(self, uuid: str, action: PowerAction) -> dict[str, Any]: ...
 
@@ -298,7 +362,7 @@ class LibvirtDriver(HypervisorDriver):
 
     # --- cykl życia ---------------------------------------------------------
 
-    def create_vm(self, req: CreateVmRequest) -> dict[str, Any]:
+    def create_vm(self, req: CreateVmRequest, restore: Any = None) -> dict[str, Any]:
         name = domain_name(req.server_id)
         vm_uuid = str(uuidlib.uuid4())
         mac = req.mac or mac_address(req.server_id)
@@ -310,7 +374,7 @@ class LibvirtDriver(HypervisorDriver):
             progress("image", 20)
             self.storage.bind(name, req.storage)
             created.append("binding")
-            disk = self.storage.create_volume(name, req.template, req.disk_gb)
+            disk = self._restore_disk(name, req, restore) if restore else self.storage.create_volume(name, req.template, req.disk_gb)
             created.append("volume")
 
             progress("network", 55)
@@ -374,6 +438,13 @@ class LibvirtDriver(HypervisorDriver):
             "vnc_password": vnc_password,
             "state": self._state(domain),
         }
+
+    def dr_state(self) -> list[dict[str, Any]]:
+        out = []
+        for domain in self.conn.listAllDomains():
+            if domain.name().startswith("virthub-"):
+                out.append({"name": domain.name(), "uuid": domain.UUIDString(), "state": self._state(domain), "xml": domain.XMLDesc(0)})
+        return out
 
     def _rollback(self, server_id: int, name: str, created: list[str]) -> None:
         import libvirt
@@ -998,6 +1069,9 @@ class MockDriver(HypervisorDriver):
         super().__init__(settings)
         self._state_file: Path = settings.state_db.parent / "mock-domains.json"
 
+    def dr_state(self) -> list[dict[str, Any]]:
+        return [{"name": r["name"], "uuid": uuid, "state": r["state"], "xml": None} for uuid, r in self._load().items()]
+
     def _load(self) -> dict[str, dict]:
         if not self._state_file.exists():
             return {}
@@ -1022,13 +1096,13 @@ class MockDriver(HypervisorDriver):
         if delay > 0:
             time.sleep(delay)
 
-    def create_vm(self, req: CreateVmRequest) -> dict[str, Any]:
+    def create_vm(self, req: CreateVmRequest, restore: Any = None) -> dict[str, Any]:
         name = domain_name(req.server_id)
         vm_uuid = str(uuidlib.uuid4())
         self._stage("prepare", 5)
         self._stage("image", 20)
         self.storage.bind(name, req.storage)
-        disk = self.storage.create_volume(name, req.template, req.disk_gb)
+        disk = self._restore_disk(name, req, restore) if restore else self.storage.create_volume(name, req.template, req.disk_gb)
         self._stage("network", 55)
         self.cloudinit.build(
             name=name,

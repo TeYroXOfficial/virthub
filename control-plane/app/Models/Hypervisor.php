@@ -45,6 +45,9 @@ class Hypervisor extends Model
         'max_servers',
         'notes',
         'cpu_model',
+        'dr_backup_plan_id',
+        'dr_target_id',
+        'dr_snapshot_hours',
     ];
 
     protected $hidden = ['agent_token', 'callback_secret', 'enrollment_token_hash'];
@@ -66,6 +69,7 @@ class Hypervisor extends Model
             'virtualization' => Virtualization::class,
             'enrollment_expires_at' => 'datetime',
             'enrolled_at' => 'datetime',
+            'dr_last_snapshot_at' => 'datetime',
         ];
     }
 
@@ -93,6 +97,18 @@ class Hypervisor extends Model
     public function ipAddresses(): HasMany
     {
         return $this->hasMany(IpAddress::class);
+    }
+
+    /** Plan kopii dla maszyn węzła bez własnego planu (DR). @return BelongsTo<BackupPlan, $this> */
+    public function drBackupPlan(): BelongsTo
+    {
+        return $this->belongsTo(BackupPlan::class, 'dr_backup_plan_id');
+    }
+
+    /** Cel zrzutów konfiguracji węzła (DR). @return BelongsTo<BackupTarget, $this> */
+    public function drTarget(): BelongsTo
+    {
+        return $this->belongsTo(BackupTarget::class, 'dr_target_id');
     }
 
     /** @return BelongsTo<HypervisorGroup, $this> */

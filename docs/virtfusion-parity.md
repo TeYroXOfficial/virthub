@@ -59,7 +59,7 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
 12. ✅ **Sieci zaawansowane.** VLAN (tagowane mosty) i routowane podsieci IPv4/IPv6. (sieci izolowane i wiele kart — etap 19)
 13. ✅ **Magazyny danych.** Datastore'y (katalog qcow2 cienki/gruby, Ceph RBD) przypięte do hypervisorów i pakietów, wybór węzła z magazynem przy zamówieniu, pojemność odczytywana z węzłów co 15 minut. Dyski w Cephie: migawki RBD; Elevate i kopie zewnętrzne tylko dla magazynów katalogowych.
 14. ✅ **Moduły billingowe.** Moduły WHMCS, Blesta i Paymenter (`integrations/`, do pobrania w panelu) na `/api/v1/billing`: zakładanie, zawieszanie, usuwanie, zmiana pakietu i sterowanie serwerem z panelu billingu (zasilanie, konsola, reinstalacja, reset hasła, transfer, SSO), PL/EN.
-15. **Disaster recovery hypervisora.**
+15. ✅ **Disaster recovery hypervisora.** (Hypervisor → Disaster recovery: plan kopii dla maszyn węzła bez planu, zrzuty konfiguracji na cel kopii, odtworzenie na zastępczym hoście z przeniesieniem pul IP)
     - Kopia dysków, konfiguracji i stanu hypervisora na lokalny dysk albo S3.
     - Odtworzenie na zastępczym hoście.
 16. **Migracje VM między hypervisorami.** Na zimno (kopiowanie dysku) i na żywo (libvirt migrate z kopiowaniem dysku), z wyborem docelowego węzła i webhookiem `server.migrated`.

@@ -81,6 +81,7 @@
         <button type="button" role="tab" data-tab="info">{{ __('Informacje') }}</button>
         @if ($node->virtualization?->value === 'kvm')
             <a class="btn btn-sm" href="{{ route('panel.admin.pci', $node) }}" style="margin-left:auto">{{ __('Urządzenia PCI') }}</a>
+            <a class="btn btn-sm" href="{{ route('panel.admin.dr', $node) }}">{{ __('Disaster recovery') }}</a>
         @endif
     </nav>
 

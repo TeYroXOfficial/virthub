@@ -5,6 +5,7 @@ use App\Domain\External\ExternalServerManager;
 use App\Domain\Licensing\LicenseManager;
 use App\Domain\Mail\Mailouts;
 use App\Domain\Metrics\Alerts;
+use App\Domain\Provisioning\DisasterRecovery;
 use App\Domain\Provisioning\RemoteBackups;
 use App\Domain\Provisioning\SelfService;
 use App\Domain\Storage\Datastores;
@@ -95,6 +96,10 @@ Schedule::call(fn () => app(Alerts::class)->evaluate())
 // Samoobsługa: godzinowe opłaty pakietów zasobów z portfela.
 Schedule::call(fn () => app(SelfService::class)->bill())
     ->everyFifteenMinutes()->name('self-service-billing')->withoutOverlapping();
+
+// Zrzuty konfiguracji węzłów (Hypervisor → Disaster recovery).
+Schedule::call(fn () => app(DisasterRecovery::class)->runDue())
+    ->hourly()->name('dr-snapshots')->withoutOverlapping();
 
 // Pojemność magazynów danych (Infrastruktura → Magazyny danych).
 Schedule::call(fn () => app(Datastores::class)->refreshAll())

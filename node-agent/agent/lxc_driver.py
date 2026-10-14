@@ -253,6 +253,9 @@ class IncusDriver(HypervisorDriver):
             "-c", f"cloud-init.network-config={network_config}",
         ]
 
+    def recover_vm(self, req: Any) -> dict[str, Any]:
+        raise DriverError("Odtwarzanie z kopii działa tylko dla maszyn KVM.")
+
     def create_vm(self, req: CreateVmRequest) -> dict[str, Any]:
         name = domain_name(req.server_id)
         vm_uuid = str(uuidlib.uuid4())
