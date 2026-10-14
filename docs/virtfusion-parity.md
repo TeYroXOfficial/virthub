@@ -43,7 +43,7 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
    - Ustawiane globalnie albo per VM.
    - Własne reguły w JSON.
 6. ✅ **Własne ISO klienta.** Klient podaje adres ISO; agent pobiera je do katalogu VM, a po odmontowaniu plik jest usuwany.
-7. **Alerty.**
+7. ✅ **Alerty.**
    - Progi: CPU, dysk, transfer, hypervisor offline, nieudana kopia.
    - Powiadomienie e-mailem i webhookiem.
    - Stan zdrowia hypervisorów.

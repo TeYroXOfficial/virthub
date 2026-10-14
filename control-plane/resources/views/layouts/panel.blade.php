@@ -61,6 +61,7 @@
                 ['panel.admin.hypervisor-groups', __('Grupy hypervisorów'), 'network', 'panel.admin.hypervisor-groups', 'admin.hypervisors|admin.ip_pools'],
                 ['panel.admin.monitoring', __('Monitorowanie'), 'monitor', 'panel.admin.monitoring*', 'admin.hypervisors'],
                 ['panel.admin.security', __('Bezpieczeństwo'), 'shield', 'panel.admin.security*', 'admin.hypervisors'],
+                ['panel.admin.alerts', __('Alerty'), 'clock', 'panel.admin.alerts*', 'admin.hypervisors'],
             ]],
             [__('Sieć'), 'network', [
                 ['panel.admin.ip-pools', __('Bloki IP'), 'network', 'panel.admin.ip-pools*', 'admin.ip_pools'],

@@ -5,7 +5,7 @@
 @php
     $groupNames = [
         'account' => __('Konto'), 'server' => __('Maszyny'), 'app' => __('Aplikacje'),
-        'ticket' => __('Zgłoszenia'), 'billing' => __('Billing'),
+        'ticket' => __('Zgłoszenia'), 'billing' => __('Billing'), 'alert' => __('Alerty'),
     ];
     $lang = \App\Domain\Mail\EmailTemplates::baseOf(app()->getLocale());
     $mailLocales = collect(app(\App\Domain\Settings\Languages::class)->all())->pluck('name', 'code')->all() ?: ['pl' => 'Polski', 'en' => 'English'];
