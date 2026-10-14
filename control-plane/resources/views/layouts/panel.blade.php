@@ -24,6 +24,7 @@
             // Z włączonym billingiem klient zamawia przez sklep; personel nadal bezpośrednio.
             $billingOn ? ['panel.store', __('Sklep'), 'plus', 'panel.store*', null] : null,
             (! $billingOn || $user->isStaff()) ? ['panel.servers.create', __('Zamów serwer'), 'plus', 'panel.servers.create', 'servers.order'] : null,
+            $user->resourcePacks()->where('is_active', true)->exists() ? ['panel.self-service', __('Samoobsługa'), 'sliders', 'panel.self-service*', null] : null,
             ['panel.apps.index', __('Aplikacje'), 'gamepad', 'panel.apps.*', 'apps.order'],
             $billingOn ? ['panel.billing', __('Rozliczenia'), 'wallet', 'panel.billing*', null] : null,
             ['panel.tickets.index', __('Zgłoszenia'), 'ticket', 'panel.tickets.*', null],
@@ -74,6 +75,7 @@
             [__('Oferta'), 'package', [
                 ['panel.admin.packages', __('Pakiety VPS'), 'package', 'panel.admin.packages*', 'admin.packages'],
                 ['panel.admin.apps.plans', __('Plany aplikacji'), 'sliders', 'panel.admin.apps.plans*', 'admin.apps'],
+                ['panel.admin.resource-packs', __('Pakiety zasobów'), 'sliders', 'panel.admin.resource-packs', 'admin'],
                 ['panel.admin.providers', __('Dostawcy zewnętrzni'), 'network', 'panel.admin.providers*', 'admin'],
             ]],
             [__('Media'), 'disc', [

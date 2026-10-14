@@ -117,6 +117,16 @@ class Server extends Model
         return $this->belongsTo(IsoImage::class, 'iso_image_id');
     }
 
+    public function resourcePack(): BelongsTo
+    {
+        return $this->belongsTo(ResourcePack::class);
+    }
+
+    public function isSelfService(): bool
+    {
+        return $this->resource_pack_id !== null;
+    }
+
     public function pciAssets(): HasMany
     {
         return $this->hasMany(PciAsset::class)->orderBy('pci_address');

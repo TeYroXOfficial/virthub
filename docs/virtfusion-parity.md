@@ -49,7 +49,7 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
    - Stan zdrowia hypervisorów.
 8. ✅ **Elevate.** Nakładka (overlay) na wybrane dyski, po zmianach „zatwierdź” albo „odrzuć”.
 9. ✅ **Przekazywanie PCI/GPU.** Zasoby hypervisora (hostdev XML), przypinane przez pakiet albo API, z widokiem, która VM je trzyma.
-10. **Samoobsługa (resource packs).**
+10. ✅ **Samoobsługa (resource packs).**
     - Klient sam tworzy i usuwa VM w ramach pakietu zasobów (CPU/RAM/dysk/IP), rozliczanie godzinowe.
     - Maszyny „tradycyjne” chronione przed usunięciem z samoobsługi.
 11. **Kopie zapasowe na zewnętrzne cele.**
