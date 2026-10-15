@@ -645,6 +645,7 @@ class AdminController extends Controller
         ]);
         if (! $template->isContainer()) {
             $validated['hw_tpm'] = $request->boolean('hw_tpm');
+            $validated['is_rescue'] = $template->family !== 'windows' && $request->boolean('is_rescue');
             $validated['hw_firmware'] = $validated['hw_tpm'] ? 'uefi' : (($validated['hw_firmware'] ?? null) ?: null);
         } else {
             unset($validated['hw_firmware']);

@@ -22,6 +22,9 @@ return [
     | licencji. Bez ustawionego klucza panel działa normalnie, tylko bez addonów.
     */
 
+    // Wybór pliku wymiany (swap) w kreatorze zamówienia maszyny KVM z Linuksem.
+    'swap_selection' => (bool) env('VH_SWAP_SELECTION', true),
+
     // Sieci prywatne klienta (izolowany mostek na węźle) i karty dodatkowe maszyn.
     'private_networks' => [
         'per_user' => (int) env('VH_PRIVATE_NETWORKS_PER_USER', 10),

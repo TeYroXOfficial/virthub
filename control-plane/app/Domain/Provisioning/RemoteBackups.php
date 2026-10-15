@@ -39,6 +39,9 @@ class RemoteBackups
         if ($server->isElevated()) {
             throw new \DomainException(__('Maszyna ma aktywny Elevate — najpierw zatwierdź albo odrzuć zmiany dysku.'));
         }
+        if ($server->inRescue()) {
+            throw new \DomainException(__('Maszyna jest w trybie ratunkowym — najpierw go zakończ.'));
+        }
         if ($server->agent_uuid === null || $server->state->isTransitioning()) {
             throw new \DomainException(__('Maszyna nie jest gotowa do wykonania kopii.'));
         }
@@ -94,6 +97,9 @@ class RemoteBackups
         }
         if ($server->isElevated()) {
             throw new \DomainException(__('Maszyna ma aktywny Elevate — najpierw zatwierdź albo odrzuć zmiany dysku.'));
+        }
+        if ($server->inRescue()) {
+            throw new \DomainException(__('Maszyna jest w trybie ratunkowym — najpierw go zakończ.'));
         }
         $job = ServerJob::create([
             'server_id' => $server->id,
@@ -168,7 +174,7 @@ class RemoteBackups
             ->with(['backupPlan.target', 'hypervisor.drBackupPlan.target'])->get();
         foreach ($servers as $server) {
             $plan = $server->effectiveBackupPlan();
-            if (! $plan?->is_active || ! $plan->target?->is_active || $server->isContainer() || $server->isElevated()) {
+            if (! $plan?->is_active || ! $plan->target?->is_active || $server->isContainer() || $server->isElevated() || $server->inRescue()) {
                 continue;
             }
             $busy = $server->backups()->where('type', Backup::TYPE_REMOTE)->where('status', Backup::STATUS_CREATING)

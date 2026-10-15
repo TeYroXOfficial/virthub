@@ -74,6 +74,9 @@ class Migrations
         if ($server->isSuspended() || ! $server->state->acceptsCommands()) {
             $fail(__('Na maszynie trwa operacja albo jest zawieszona — spróbuj później.'));
         }
+        if ($server->inRescue()) {
+            $fail(__('Maszyna jest w trybie ratunkowym — najpierw go zakończ.'));
+        }
         if ($server->isElevated()) {
             $fail(__('Maszyna ma aktywny Elevate — najpierw zatwierdź albo odrzuć zmiany dysku.'));
         }

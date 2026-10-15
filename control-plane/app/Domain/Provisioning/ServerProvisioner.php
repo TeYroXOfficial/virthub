@@ -56,6 +56,7 @@ class ServerProvisioner
         ?Hypervisor $preferred = null,
         ?string $billingReference = null,
         ?HypervisorGroup $location = null,
+        ?int $swapMb = null,
     ): Server {
         if (! $template->isSelfService()) {
             throw new \InvalidArgumentException(
@@ -88,7 +89,7 @@ class ServerProvisioner
         $rootPassword = $this->generatePassword();
 
         $server = DB::transaction(function () use (
-            $user, $package, $template, $hostname, $label, $preferred, $billingReference, $rootPassword, $location, $datastore
+            $user, $package, $template, $hostname, $label, $preferred, $billingReference, $rootPassword, $location, $datastore, $swapMb
         ) {
             $server = new Server([
                 'user_id' => $user->id,
@@ -113,6 +114,7 @@ class ServerProvisioner
             // Plan kopii z pakietu (kopie na zewnętrzne cele — tylko KVM).
             $server->backup_plan_id = $template->isContainer() ? null : $package->backup_plan_id;
             $server->datastore_id = $datastore?->id;
+            $server->swap_mb = $template->isContainer() || $template->family === 'windows' ? null : $swapMb;
             $server->save();
             if ($package->extra_disk_gb && ! $template->isContainer()) {
                 $server->disks()->create(['slot' => 1, 'size_gb' => $package->extra_disk_gb]);
@@ -562,6 +564,9 @@ class ServerProvisioner
         if ($server->datastore?->isCeph()) {
             throw new \DomainException(__('Elevate działa tylko dla dysków w magazynie katalogowym (qcow2), a ten jest w Cephie.'));
         }
+        if ($action === 'start' && $server->inRescue()) {
+            throw new \DomainException(__('Maszyna jest w trybie ratunkowym — najpierw go zakończ.'));
+        }
         if ($action === 'start' && $server->isElevated()) {
             throw new \DomainException(__('Elevate już trwa — zatwierdź albo odrzuć zmiany.'));
         }
@@ -580,6 +585,9 @@ class ServerProvisioner
     {
         if ($server->isElevated()) {
             throw new \DomainException(__('Maszyna ma aktywny Elevate — najpierw zatwierdź albo odrzuć zmiany dysku.'));
+        }
+        if ($server->inRescue()) {
+            throw new \DomainException(__('Maszyna jest w trybie ratunkowym — najpierw go zakończ.'));
         }
     }
 

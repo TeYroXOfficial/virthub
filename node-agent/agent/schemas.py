@@ -375,6 +375,8 @@ class CreateVmRequest(BaseModel):
     private_nics: Annotated[list[PrivateNicSpec], AfterValidator(_unique_slots)] = Field(default_factory=list, max_length=7)
     hardware: HardwareSpec | None = None
     extra_disks: Annotated[list[ExtraDiskSpec], AfterValidator(_unique_disk_slots)] = Field(default_factory=list, max_length=7)
+    # Plik wymiany zakładany przez cloud-init (tylko Linux); brak/0 = bez swapu.
+    swap_mb: int | None = Field(default=None, ge=0, le=65536)
 
 
 class RebuildVmRequest(BaseModel):
@@ -390,8 +392,38 @@ class RebuildVmRequest(BaseModel):
     # Brak = MAC zostaje taki, jaki karta ma teraz.
     mac: MacAddress | None = None
     scripts: list[ProvisionScript] = Field(default_factory=list, max_length=20)
+    swap_mb: int | None = Field(default=None, ge=0, le=65536)
     # Brak = karty dodatkowe bez zmian (starszy panel); lista = stan docelowy.
     private_nics: Annotated[list[PrivateNicSpec], AfterValidator(_unique_slots)] | None = Field(default=None, max_length=7)
+
+
+class RescueRequest(BaseModel):
+    """Tryb ratunkowy: start z czystego obrazu (nakładka na szablon) z dyskiem maszyny podłączonym jako vdi."""
+
+    action: Literal["start", "stop"]
+    template: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$", description="Szablon systemu ratunkowego (start)")
+    root_password: Password | None = Field(default=None, repr=False)
+    ssh_keys: list[SshKey] = Field(default_factory=list, max_length=10)
+    interfaces: list[NetworkInterfaceSpec] = Field(default_factory=list)
+    nameservers: list[str] = Field(default_factory=lambda: ["1.1.1.1", "9.9.9.9"])
+    mac: MacAddress | None = None
+
+    @model_validator(mode="after")
+    def _start_needs_template(self) -> "RescueRequest":
+        if self.action == "start" and not self.template:
+            raise ValueError("Start trybu ratunkowego wymaga szablonu")
+        return self
+
+
+class SeedRequest(BaseModel):
+    """Dysk konfiguracji (cloud-init / config-2) podłączony albo odłączony — np. na czas instalacji z ISO."""
+
+    enabled: bool
+
+
+class HostnameRequest(BaseModel):
+    hostname: str = Field(pattern=HOSTNAME, max_length=253)
+    os_type: Literal["linux", "windows"] = "linux"
 
 
 ISO_NAME = r"^[a-z0-9][a-z0-9._-]{0,80}\.iso$"

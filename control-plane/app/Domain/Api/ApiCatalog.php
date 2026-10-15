@@ -119,6 +119,19 @@ class ApiCatalog
             self::e('firewall.destroy', 'firewall', 'DELETE', '/servers/{server}/firewall/{rule}', __('Usunięcie reguły'), __('Usuwa regułę zapory.'), 'servers:write',
                 path: [$server, self::path('rule', __('Identyfikator reguły'), 10)], response: ['message' => __('Reguła usunięta.')]),
 
+            // --- tryb ratunkowy i ustawienia systemu --------------------------
+            self::e('power.rescue', 'power', 'GET', '/servers/{server}/rescue', __('Tryb ratunkowy — stan'), __('Czy maszyna jest w trybie ratunkowym i dane logowania (root, hasło, adres, dysk maszyny /dev/vdi).'), 'servers:write',
+                path: [$server], response: ['active' => true, 'since' => '2026-10-15T10:00:00+00:00', 'username' => 'root', 'password' => 'Xk2pQ7rLm4Tz9wHs3VbN', 'address' => '203.0.113.10', 'disk' => '/dev/vdi']),
+            self::e('power.rescue.start', 'power', 'POST', '/servers/{server}/rescue', __('Start trybu ratunkowego'), __('Wyłącza maszynę i uruchamia ją z czystego systemu ratunkowego z tymi samymi adresami; dysk maszyny jest podłączony jako /dev/vdi.'), 'servers:write',
+                path: [$server], body: [self::param('ssh_keys', 'array', false, __('Klucze SSH dla roota w systemie ratunkowym'), ['ssh-ed25519 AAAA… ja@laptop'])], status: 202,
+                response: ['job_id' => 921, 'status' => 'queued', 'message' => __('Maszyna uruchamia się w trybie ratunkowym.')]),
+            self::e('power.rescue.stop', 'power', 'DELETE', '/servers/{server}/rescue', __('Koniec trybu ratunkowego'), __('Uruchamia maszynę z jej własnego dysku, z dokładnie tą samą konfiguracją co przed trybem ratunkowym.'), 'servers:write',
+                path: [$server], status: 202, response: ['job_id' => 922, 'status' => 'queued']),
+            self::e('power.cloud_init', 'power', 'PUT', '/servers/{server}/cloud-init', __('Dysk konfiguracji'), __('Odłącza (false) albo podłącza dysk cloud-init — np. na czas instalacji systemu z ISO. Działa od następnego uruchomienia.'), 'servers:write',
+                path: [$server], body: [self::param('enabled', 'boolean', true, __('Dysk podłączony'), false)], status: 202, response: ['job_id' => 923, 'status' => 'queued']),
+            self::e('power.hostname', 'power', 'PUT', '/servers/{server}/hostname', __('Nazwa hosta'), __('Zmienia nazwę maszyny w panelu i — w działającym Linuksie z qemu-guest-agent — w systemie.'), 'servers:write',
+                path: [$server], body: [self::param('hostname', 'string', true, __('Nowa nazwa hosta'), 'web1.example.com')], response: ['hostname' => 'web1.example.com', 'job_id' => 924]),
+
             // --- sieci prywatne ----------------------------------------------
             self::e('networks.index', 'networks', 'GET', '/servers/{server}/private-networks', __('Karty w sieciach prywatnych'), __('Karty dodatkowe maszyny oraz sieci prywatne właściciela na tym samym węźle.'), 'servers:read',
                 path: [$server], response: ['data' => [['id' => 3, 'slot' => 1, 'mac' => '52:54:01:00:00:2a', 'address' => '10.20.0.1', 'prefix' => 24, 'network' => ['id' => 7, 'name' => 'backend', 'cidr' => '10.20.0.0/24']]],

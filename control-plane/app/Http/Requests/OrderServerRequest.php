@@ -2,11 +2,13 @@
 
 namespace App\Http\Requests;
 
+use App\Models\HypervisorGroup;
 use App\Models\OsTemplate;
 use App\Models\VpsPackage;
+use App\Rules\SshPublicKey;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class OrderServerRequest extends FormRequest
 {
@@ -44,7 +46,8 @@ class OrderServerRequest extends FormRequest
             'label' => ['nullable', 'string', 'max:100'],
             'location' => ['nullable', 'integer'],
             'ssh_keys' => ['array', 'max:10'],
-            'ssh_keys.*' => ['string', 'max:1000', new \App\Rules\SshPublicKey],
+            'ssh_keys.*' => ['string', 'max:1000', new SshPublicKey],
+            'swap_mb' => ['nullable', 'integer', Rule::in(self::SWAP_SIZES)],
         ];
     }
 
@@ -116,16 +119,24 @@ class OrderServerRequest extends FormRequest
     }
 
     /** Lokalizacja wybrana przez klienta — tylko grupa oznaczona jako widoczna. */
-    public function location(): ?\App\Models\HypervisorGroup
+    public function location(): ?HypervisorGroup
     {
         if (! $this->filled('location')) {
             return null;
         }
 
-        return \App\Models\HypervisorGroup::query()
+        return HypervisorGroup::query()
             ->where('is_public', true)
             ->where('accepts_new_servers', true)
             ->find($this->integer('location'));
+    }
+
+    /** Rozmiary pliku wymiany do wyboru w kreatorze (MB; 0 = bez swapu). */
+    public const SWAP_SIZES = [0, 512, 1024, 2048, 4096, 8192];
+
+    public function swapMb(): ?int
+    {
+        return config('virthub.swap_selection', true) && $this->filled('swap_mb') ? ((int) $this->input('swap_mb') ?: null) : null;
     }
 
     /** @return list<string> */

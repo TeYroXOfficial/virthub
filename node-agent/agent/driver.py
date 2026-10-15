@@ -32,7 +32,7 @@ from .guest_os import cpu_model, from_guest_agent, outbound_ipv4, parse_os_relea
 from .isos import IsoLibrary
 from .jobs import progress
 from .config import Settings
-from .domain_xml import CPU_PERIOD_US, build_domain_xml, cpu_quota_us, disk_dev, domain_name, with_hardware
+from .domain_xml import CPU_PERIOD_US, build_domain_xml, cpu_quota_us, disk_dev, domain_name, rescue_xml, with_hardware, with_seed
 from .nat import host_networks
 from . import private_net
 from .network import NetworkManager, interface_name, mac_address
@@ -358,6 +358,26 @@ class HypervisorDriver(ABC):
     def _assert_not_elevated(self, name: str) -> None:
         if self.storage.has_overlay(name):
             raise DriverError("Maszyna ma aktywny Elevate — najpierw zatwierdź albo odrzuć zmiany.")
+        if self._rescue_file(name).exists():
+            raise DriverError("Maszyna jest w trybie ratunkowym — najpierw go zakończ.")
+
+    # --- tryb ratunkowy, dysk konfiguracji, nazwa hosta ----------------------
+
+    def _rescue_file(self, name: str) -> Path:
+        """Zapisana definicja sprzed trybu ratunkowego (jej obecność = maszyna w trybie ratunkowym)."""
+        return self.settings.state_db.parent / "rescue" / f"{name}.xml"
+
+    def _rescue_overlay(self, name: str) -> Path:
+        return self.settings.image_dir / f"{name}.rescue.qcow2"
+
+    def rescue(self, uuid: str, req: Any) -> dict[str, Any]:
+        raise DriverError("Tryb ratunkowy jest dostępny tylko dla maszyn KVM.")
+
+    def set_seed(self, uuid: str, req: Any) -> dict[str, Any]:
+        raise DriverError("Dysk konfiguracji dotyczy maszyn KVM.")
+
+    def set_hostname(self, uuid: str, req: Any) -> dict[str, Any]:
+        raise DriverError("Ten węzeł nie zmienia nazwy hosta w systemie.")
 
     def prefetch_image(self, alias: str) -> dict[str, Any]:
         """Pobiera szablon na węzeł z wyprzedzeniem. Dotyczy kontenerów —
@@ -477,6 +497,7 @@ class LibvirtDriver(HypervisorDriver):
                 os_type=req.os_type,
                 scripts=req.scripts,
                 private_nics=req.private_nics,
+                swap_mb=req.swap_mb,
             )
             created.append("seed")
 
@@ -699,7 +720,10 @@ class LibvirtDriver(HypervisorDriver):
             os_type=req.os_type,
             scripts=req.scripts,
             private_nics=req.private_nics,
+            swap_mb=req.swap_mb,
         )
+        # Klient mógł odłączyć dysk konfiguracji (instalacja z ISO) — nowy system go potrzebuje.
+        self.conn.defineXML(with_seed(domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE), str(self.cloudinit.seed_path(name))))
 
         progress("boot", 85)
         domain.create()
@@ -1034,6 +1058,87 @@ class LibvirtDriver(HypervisorDriver):
         from . import pci
 
         return {"iommu": pci.iommu_enabled(), "devices": pci.list_devices()}
+
+    def rescue(self, uuid: str, req: Any) -> dict[str, Any]:
+        import libvirt
+
+        domain = self._domain(uuid)
+        name = domain.name()
+        state = self._rescue_file(name)
+        overlay = self._rescue_overlay(name)
+        seed_name = f"{name}-rescue"
+        try:
+            if req.action == "start":
+                if state.exists():
+                    raise DriverError("Maszyna już jest w trybie ratunkowym.")
+                if self.storage.has_overlay(name):
+                    raise DriverError("Maszyna ma aktywny Elevate — najpierw zatwierdź albo odrzuć zmiany.")
+                template = self.settings.template_dir / req.template
+                if not template.exists():
+                    raise DriverError(f"Brak szablonu systemu ratunkowego {req.template} na węźle.")
+                progress("prepare", 10)
+                original = domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE)
+                overlay.unlink(missing_ok=True)
+                run(["qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-b", str(template), str(overlay)])
+                seed = self.cloudinit.build(
+                    name=seed_name, server_id=server_id_from_name(name), hostname="rescue", interfaces=req.interfaces,
+                    nameservers=req.nameservers, ssh_keys=req.ssh_keys, root_password=req.root_password,
+                    mac=req.mac or self._domain_mac(domain) or mac_address(server_id_from_name(name)), os_type="linux",
+                )
+                state.parent.mkdir(parents=True, exist_ok=True)
+                fd = os.open(state, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    fh.write(original)
+                progress("boot", 60)
+                if domain.isActive():
+                    domain.destroy()
+                self.conn.defineXML(rescue_xml(original, str(overlay), str(seed)))
+                domain.create()
+                return {"uuid": uuid, "rescue": True, "state": self._state(domain)}
+
+            if not state.exists():
+                raise DriverError("Maszyna nie jest w trybie ratunkowym.")
+            if domain.isActive():
+                domain.destroy()
+            self.conn.defineXML(state.read_text(encoding="utf-8"))
+            state.unlink()
+            overlay.unlink(missing_ok=True)
+            self.cloudinit.seed_path(seed_name).unlink(missing_ok=True)
+            domain.create()
+            return {"uuid": uuid, "rescue": False, "state": self._state(domain)}
+        except libvirt.libvirtError as exc:
+            raise DriverError(f"Nie udało się przełączyć trybu ratunkowego: {exc}") from exc
+
+    def set_seed(self, uuid: str, req: Any) -> dict[str, Any]:
+        """Dysk cloud-init w definicji domeny — zmiana działa od następnego uruchomienia."""
+        import libvirt
+
+        domain = self._domain(uuid)
+        name = domain.name()
+        seed = self.cloudinit.seed_path(name)
+        if req.enabled and not seed.exists():
+            raise DriverError("Brak nośnika konfiguracji tej maszyny — zreinstaluj system, żeby go odtworzyć.")
+        try:
+            self.conn.defineXML(with_seed(domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE), str(seed) if req.enabled else None))
+        except libvirt.libvirtError as exc:
+            raise DriverError(f"Nie udało się zmienić dysku konfiguracji: {exc}") from exc
+        return {"uuid": uuid, "enabled": req.enabled, "restart_required": bool(domain.isActive())}
+
+    def set_hostname(self, uuid: str, req: Any) -> dict[str, Any]:
+        """Nazwa hosta w działającym systemie przez qemu-guest-agent (Linux). Brak agenta
+        nie jest błędem — panel zmienia nazwę i tak, a system dostanie ją przy reinstalacji."""
+        domain = self._domain(uuid)
+        if req.os_type == "windows" or not domain.isActive():
+            return {"uuid": uuid, "applied": False, "reason": "Maszyna nie działa albo to Windows — nazwa zmieni się w systemie przy reinstalacji."}
+        try:
+            import libvirt_qemu
+
+            command = {"execute": "guest-exec", "arguments": {
+                "path": "/usr/bin/hostnamectl", "arg": ["set-hostname", req.hostname], "capture-output": False}}
+            libvirt_qemu.qemuAgentCommand(domain, json.dumps(command), 10, 0)
+        except Exception as exc:  # noqa: BLE001 — brak modułu, agenta w gościu albo hostnamectl
+            return {"uuid": uuid, "applied": False, "reason": f"qemu-guest-agent nie odpowiedział: {str(exc)[:200]}"}
+        return {"uuid": uuid, "applied": True}
 
     @staticmethod
     def _undefine(domain: Any) -> None:
@@ -1564,6 +1669,7 @@ class MockDriver(HypervisorDriver):
             os_type=req.os_type,
             scripts=req.scripts,
             private_nics=req.private_nics,
+            swap_mb=req.swap_mb,
         )
 
         record = {
@@ -1675,6 +1781,44 @@ class MockDriver(HypervisorDriver):
         self.storage.unbind(record["name"])
         self._save(data)
         return {"uuid": uuid, "deleted": True}
+
+    def rescue(self, uuid: str, req: Any) -> dict[str, Any]:
+        data = self._load()
+        record = data.get(uuid)
+        if record is None:
+            raise VmNotFound(uuid)
+        active = bool(record.get("rescue"))
+        if req.action == "start" and active:
+            raise DriverError("Maszyna już jest w trybie ratunkowym.")
+        if req.action == "stop" and not active:
+            raise DriverError("Maszyna nie jest w trybie ratunkowym.")
+        if req.action == "start":
+            self._assert_not_elevated(record["name"])
+            if not (self.settings.template_dir / req.template).exists():
+                raise DriverError(f"Brak szablonu systemu ratunkowego {req.template} na węźle.")
+        record["rescue"] = req.action == "start"
+        record["state"] = "running"
+        state = self._rescue_file(record["name"])
+        if record["rescue"]:
+            state.parent.mkdir(parents=True, exist_ok=True)
+            state.write_text("mock", encoding="utf-8")
+        else:
+            state.unlink(missing_ok=True)
+        self._save(data)
+        return {"uuid": uuid, "rescue": record["rescue"], "state": "running"}
+
+    def set_seed(self, uuid: str, req: Any) -> dict[str, Any]:
+        data = self._load()
+        record = data.get(uuid)
+        if record is None:
+            raise VmNotFound(uuid)
+        record["seed"] = req.enabled
+        self._save(data)
+        return {"uuid": uuid, "enabled": req.enabled, "restart_required": record["state"] == "running"}
+
+    def set_hostname(self, uuid: str, req: Any) -> dict[str, Any]:
+        record = self._get(uuid)
+        return {"uuid": uuid, "applied": record["state"] == "running" and req.os_type == "linux"}
 
     def set_hardware(self, uuid: str, req: Any) -> dict[str, Any]:
         data = self._load()

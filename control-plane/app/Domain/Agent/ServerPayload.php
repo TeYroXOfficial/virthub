@@ -107,7 +107,13 @@ class ServerPayload
             'os_type' => self::osType($server->template),
             'mac' => self::mac($server),
         ] + self::scripts($server) + self::filter($server) + self::storage($server) + self::privateNics($server)
-            + ServerHardware::payload($server) + self::extraDisks($server);
+            + ServerHardware::payload($server) + self::extraDisks($server) + self::swap($server);
+    }
+
+    /** Plik wymiany z kreatora zamówienia (Linux; cloud-init). */
+    public static function swap(Server $server): array
+    {
+        return $server->swap_mb && ! $server->isContainer() && self::osType($server->template) === 'linux' ? ['swap_mb' => (int) $server->swap_mb] : [];
     }
 
     /** @return array{extra_disks?: list<array{slot:int, size_gb:int}>} */

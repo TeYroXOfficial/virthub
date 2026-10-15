@@ -17,6 +17,7 @@ class OsTemplate extends Model
     protected $fillable = [
         'hw_firmware',
         'hw_tpm',
+        'is_rescue',
         'os_template_group_id',
         'sort_order',
         'name',
@@ -47,6 +48,7 @@ class OsTemplate extends Model
     {
         return [
             'hw_tpm' => 'boolean',
+            'is_rescue' => 'boolean',
             'cloud_init_support' => 'boolean',
             'is_active' => 'boolean',
             'virtualization' => Virtualization::class,

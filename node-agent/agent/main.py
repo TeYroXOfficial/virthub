@@ -59,6 +59,9 @@ from .schemas import (
     PrivateNicsRequest,
     DisksRequest,
     HardwareRequest,
+    HostnameRequest,
+    RescueRequest,
+    SeedRequest,
     BackupRequest,
     BackupRestoreRequest,
     BackupDeleteRequest,
@@ -130,6 +133,9 @@ def _handlers() -> dict[str, Any]:
         "hostdevs": lambda p: driver.set_hostdevs(p["uuid"], HostdevRequest(**p["body"])),
         "private_nics": lambda p: driver.set_private_nics(p["uuid"], PrivateNicsRequest(**p["body"])),
         "disks": lambda p: driver.set_disks(p["uuid"], DisksRequest(**p["body"])),
+        "rescue": lambda p: driver.rescue(p["uuid"], RescueRequest(**p["body"])),
+        "seed": lambda p: driver.set_seed(p["uuid"], SeedRequest(**p["body"])),
+        "hostname": lambda p: driver.set_hostname(p["uuid"], HostnameRequest(**p["body"])),
         "hardware": lambda p: driver.set_hardware(p["uuid"], HardwareRequest(**p["body"])),
         "backup": lambda p: driver.backup(p["uuid"], BackupRequest(**p["body"])),
         "backup_restore": lambda p: driver.restore_backup(p["uuid"], BackupRestoreRequest(**p["body"])),
@@ -835,6 +841,43 @@ async def delete_backups(req: BackupDeleteRequest) -> JobAccepted:
 )
 async def set_hostdevs(uuid: str, req: HostdevRequest) -> JobAccepted:
     job_id = jobs.enqueue("hostdevs", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.post(
+    "/vm/{uuid}/rescue",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def rescue(uuid: str, req: RescueRequest) -> JobAccepted:
+    """Tryb ratunkowy: start z systemu ratunkowego (dysk maszyny jako vdi) albo powrót."""
+    job_id = jobs.enqueue("rescue", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.put(
+    "/vm/{uuid}/seed",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def set_seed(uuid: str, req: SeedRequest) -> JobAccepted:
+    job_id = jobs.enqueue("seed", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.put(
+    "/vm/{uuid}/hostname",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def set_hostname(uuid: str, req: HostnameRequest) -> JobAccepted:
+    job_id = jobs.enqueue("hostname", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
     return JobAccepted(job_id=job_id)
 
 

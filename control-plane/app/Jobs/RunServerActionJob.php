@@ -7,6 +7,7 @@ use App\Domain\Agent\AgentException;
 use App\Domain\Agent\ServerPayload;
 use App\Domain\Network\PrivateNetworks;
 use App\Domain\Provisioning\AgentResultApplier;
+use App\Domain\Provisioning\RescueMode;
 use App\Domain\Provisioning\ServerCleanup;
 use App\Domain\Provisioning\ServerDisks;
 use App\Domain\Provisioning\ServerHardware;
@@ -74,6 +75,9 @@ class RunServerActionJob implements ShouldQueue
                 'recover' => $this->recoverCall($client, $server, $payload),
                 'hostdevs' => $client->setHostdevs($server->agent_uuid,
                     $server->pciAssets()->get()->map->toAgentPayload()->values()->all(), (bool) ($payload['restart'] ?? false)),
+                'rescue' => $client->rescue($server->agent_uuid, RescueMode::agentPayload($server, $payload)),
+                'seed' => $client->setSeed($server->agent_uuid, (bool) ($payload['enabled'] ?? true)),
+                'hostname' => $client->setHostname($server->agent_uuid, (string) ($payload['hostname'] ?? $server->hostname), ServerPayload::osType($server->template)),
                 'disks' => $client->setDisks($server->agent_uuid, ServerDisks::payload($server), (int) $server->disk_gb, (bool) ($payload['delete_removed'] ?? false)),
                 'hardware' => $client->setHardware($server->agent_uuid, ServerHardware::payload($server)['hardware'] ?? []),
                 'private_nics' => $client->setPrivateNics($server->agent_uuid, PrivateNetworks::payload($server)),
@@ -88,7 +92,7 @@ class RunServerActionJob implements ShouldQueue
                     'nameservers' => ServerPayload::nameservers($server),
                     'os_type' => ServerPayload::osType($server->template),
                     'mac' => ServerPayload::mac($server),
-                ] + ServerPayload::scripts($server) + ServerPayload::privateNics($server)),
+                ] + ServerPayload::scripts($server) + ServerPayload::privateNics($server) + ServerPayload::swap($server)),
                 'password' => $client->resetPassword(
                     $server->agent_uuid,
                     Crypt::decryptString($payload['password']),

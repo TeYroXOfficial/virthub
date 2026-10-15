@@ -273,6 +273,22 @@
                                 @endcan
                             </dd>
                         @endunless
+                        @if ($ip->version === 6 && ! $ip->isNat() && auth()->user()->can('firewall', $server))
+                            <dt></dt>
+                            <dd>
+                                <details class="form-block">
+                                    <summary>{{ __('Wybierz inny adres IPv6') }}</summary>
+                                    <form method="POST" action="{{ route('panel.servers.ipv6', [$server, $ip]) }}" style="margin-top:8px">
+                                        @csrf @method('PUT')
+                                        <div class="field" style="margin-bottom:8px">
+                                            <input name="address" type="text" placeholder="{{ $ip->address }}" aria-label="{{ __('Nowy adres IPv6') }}" required>
+                                        </div>
+                                        <button class="btn btn-sm btn-primary" type="submit">{{ __('Zmień adres') }}</button>
+                                        <div class="hint">{{ __('Dowolny wolny adres z puli :cidr. Po zmianie ustaw adres w systemie (albo zreinstaluj go).', ['cidr' => $ip->pool->cidr]) }}</div>
+                                    </form>
+                                </details>
+                            </dd>
+                        @endif
                     </dl>
                 @empty
                     <p class="muted">{{ __('Maszyna nie ma jeszcze przypisanego adresu.') }}</p>

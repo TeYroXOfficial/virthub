@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\ServerAdminController;
 use App\Http\Controllers\Api\BillingIntegrationController;
 use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\FirewallController;
+use App\Http\Controllers\Api\GuestSettingsController;
 use App\Http\Controllers\Api\PrivateNetworkController;
 use App\Http\Controllers\Api\ServerController;
 use App\Http\Controllers\Api\SnapshotController;
@@ -70,6 +71,12 @@ Route::prefix('v1')->group(function () {
                 Route::post('/firewall', [FirewallController::class, 'store']);
                 Route::put('/firewall/policy', [FirewallController::class, 'policy']);
                 Route::delete('/firewall/{rule}', [FirewallController::class, 'destroy']);
+
+                Route::get('/rescue', [GuestSettingsController::class, 'rescue']);
+                Route::post('/rescue', [GuestSettingsController::class, 'startRescue'])->middleware('throttle:10,1');
+                Route::delete('/rescue', [GuestSettingsController::class, 'stopRescue']);
+                Route::put('/cloud-init', [GuestSettingsController::class, 'cloudInit']);
+                Route::put('/hostname', [GuestSettingsController::class, 'hostname'])->middleware('throttle:10,1');
 
                 Route::post('/private-networks', [PrivateNetworkController::class, 'attach']);
                 Route::delete('/nics/{nic}', [PrivateNetworkController::class, 'detach']);
