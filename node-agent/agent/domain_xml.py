@@ -383,3 +383,80 @@ def with_disk_source(xml: str, path: str) -> str:
                 disk.remove(backing)
             return ET.tostring(root, encoding="unicode")
     raise ValueError("Domena nie ma dysku vda")
+
+
+SEED_TARGET = "sda"
+RESCUE_DISK_DEV = "vdi"
+
+
+def with_seed(xml: str, seed_path: str | None) -> str:
+    """Dysk konfiguracji (sda) podłączony albo odłączony; reszta definicji bez zmian."""
+    from xml.etree import ElementTree as ET
+
+    root = ET.fromstring(xml)
+    devices = root.find("devices")
+    seed = next((d for d in devices.findall("disk") if d.get("device") == "cdrom"
+                 and (t := d.find("target")) is not None and t.get("dev") == SEED_TARGET), None)
+    if seed_path is None:
+        if seed is not None:
+            devices.remove(seed)
+        return ET.tostring(root, encoding="unicode")
+    if seed is None:
+        seed = ET.Element("disk", {"type": "file", "device": "cdrom"})
+        ET.SubElement(seed, "driver", {"name": "qemu", "type": "raw"})
+        ET.SubElement(seed, "source", {"file": seed_path})
+        ET.SubElement(seed, "target", {"dev": SEED_TARGET, "bus": "sata"})
+        ET.SubElement(seed, "readonly")
+        disks = devices.findall("disk")
+        index = list(devices).index(disks[-1]) + 1 if disks else 0
+        devices.insert(index, seed)
+    else:
+        source = seed.find("source")
+        if source is None:
+            source = ET.SubElement(seed, "source")
+        source.attrib.clear()
+        source.set("file", seed_path)
+    return ET.tostring(root, encoding="unicode")
+
+
+def rescue_xml(xml: str, overlay_path: str, seed_path: str) -> str:
+    """Definicja w trybie ratunkowym: vda = system ratunkowy (nakładka na szablon),
+    dotychczasowy dysk główny podłączony jako vdi, nośnik cloud-init ratunkowy,
+    rozruch z vda (bez ISO). Dysk w Cephie podłącza się tak samo — kopiujemy element."""
+    import copy
+    from xml.etree import ElementTree as ET
+
+    root = ET.fromstring(with_seed(xml, seed_path))
+    devices = root.find("devices")
+    main = next((d for d in devices.findall("disk") if d.get("device") == "disk"
+                 and (t := d.find("target")) is not None and t.get("dev") == "vda"), None)
+    if main is None:
+        raise ValueError("Domena nie ma dysku vda")
+    bus = main.find("target").get("bus") or "virtio"
+
+    original = copy.deepcopy(main)
+    original.find("target").set("dev", RESCUE_DISK_DEV)
+    for child in list(original):
+        if child.tag in ("address", "boot", "alias"):
+            original.remove(child)
+
+    rescue = ET.Element("disk", {"type": "file", "device": "disk"})
+    ET.SubElement(rescue, "driver", {"name": "qemu", "type": "qcow2", "cache": "none", "discard": "unmap"})
+    ET.SubElement(rescue, "source", {"file": overlay_path})
+    ET.SubElement(rescue, "target", {"dev": "vda", "bus": bus})
+    index = list(devices).index(main)
+    devices.remove(main)
+    devices.insert(index, rescue)
+    devices.insert(index + 1, original)
+
+    for disk in devices.findall("disk"):
+        for boot in disk.findall("boot"):
+            disk.remove(boot)
+    iso = next((d for d in devices.findall("disk") if d.get("device") == "cdrom"
+                and (t := d.find("target")) is not None and t.get("dev") == ISO_TARGET), None)
+    if iso is not None:
+        devices.remove(iso)
+    os_el = root.find("os")
+    if os_el is not None and os_el.find("boot") is None:
+        ET.SubElement(os_el, "boot", {"dev": "hd"})
+    return ET.tostring(root, encoding="unicode")

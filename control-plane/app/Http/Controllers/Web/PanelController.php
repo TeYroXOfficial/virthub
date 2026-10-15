@@ -120,6 +120,7 @@ class PanelController extends Controller
             hostname: $request->string('hostname')->lower()->value(),
             sshKeys: $request->sshKeys(),
             label: $request->input('label'),
+            swapMb: $request->swapMb(),
             location: $request->location(),
         );
 

@@ -125,6 +125,9 @@ class ServerDisks
         if ($server->agent_uuid === null || $server->hypervisor_id === null || $server->state->isTransitioning()) {
             throw new \DomainException(__('Maszyna nie jest gotowa — spróbuj, gdy zakończy bieżącą operację.'));
         }
+        if ($server->inRescue()) {
+            throw new \DomainException(__('Maszyna jest w trybie ratunkowym — najpierw go zakończ.'));
+        }
         if ($server->isElevated()) {
             throw new \DomainException(__('Maszyna ma aktywny Elevate — najpierw zatwierdź albo odrzuć zmiany dysku.'));
         }

@@ -13,6 +13,7 @@ use App\Models\OsTemplate;
 use App\Models\Server;
 use App\Models\ServerMetric;
 use App\Models\VpsPackage;
+use App\Rules\SshPublicKey;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -46,6 +47,7 @@ class ServerController extends Controller
             hostname: $request->string('hostname')->lower()->value(),
             sshKeys: $request->sshKeys(),
             label: $request->input('label'),
+            swapMb: $request->swapMb(),
         );
 
         return ServerResource::make($server->load(['package', 'template', 'ipAddresses.pool']))
@@ -99,7 +101,7 @@ class ServerController extends Controller
         $validated = $request->validate([
             'template' => ['required', Rule::exists(OsTemplate::class, 'id')->where('is_active', true)],
             'ssh_keys' => ['array', 'max:10'],
-            'ssh_keys.*' => ['string', 'max:1000', new \App\Rules\SshPublicKey],
+            'ssh_keys.*' => ['string', 'max:1000', new SshPublicKey],
             // Przebudowa kasuje dysk bezpowrotnie — wymagamy świadomego
             // potwierdzenia, żeby nie dało się jej wywołać przypadkiem.
             'confirm' => ['accepted'],

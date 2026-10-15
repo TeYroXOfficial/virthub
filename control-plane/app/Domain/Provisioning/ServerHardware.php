@@ -95,6 +95,9 @@ class ServerHardware
         if ($server->agent_uuid === null || $server->state->isTransitioning()) {
             throw new \DomainException(__('Maszyna nie jest gotowa — spróbuj, gdy zakończy bieżącą operację.'));
         }
+        if ($server->inRescue()) {
+            throw new \DomainException(__('Maszyna jest w trybie ratunkowym — najpierw go zakończ.'));
+        }
         $allowed = $staff ? ['hw_disk_bus', 'hw_io_mode', 'hw_firmware', 'hw_tpm', 'hw_cpu_model'] : ['hw_firmware'];
         $changes = array_intersect_key($settings, array_flip($allowed));
         $server->forceFill($changes);

@@ -32,12 +32,16 @@ class Server extends Model
         'billing_reference',
     ];
 
-    protected $hidden = ['vnc_password', 'root_password'];
+    protected $hidden = ['vnc_password', 'root_password', 'rescue_password'];
 
     protected function casts(): array
     {
         return [
             'hw_tpm' => 'boolean',
+            'rescue_at' => 'datetime',
+            'rescue_password' => 'encrypted',
+            'cloud_init_disabled' => 'boolean',
+            'swap_mb' => 'integer',
             'state' => ServerState::class,
             'virtualization' => Virtualization::class,
             // Hasło root jest jednorazowe: pokazujemy je klientowi raz po
@@ -153,6 +157,11 @@ class Server extends Model
     public function disks(): HasMany
     {
         return $this->hasMany(ServerDisk::class)->orderBy('slot');
+    }
+
+    public function inRescue(): bool
+    {
+        return $this->rescue_at !== null;
     }
 
     /** Miejsce zajęte na węźle: dysk główny i dodatkowe. */

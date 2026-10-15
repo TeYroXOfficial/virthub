@@ -71,6 +71,9 @@ class AgentResultApplier
             'private_nics' => null,
             'disks' => null,
             'hardware' => null,
+            'rescue' => RescueMode::apply($server, $result),
+            'seed' => $server->forceFill(['cloud_init_disabled' => ! ($job->payload['enabled'] ?? true)])->save(),
+            'hostname' => null,
             'backup' => $this->finishRemoteBackup($job, $result),
             'backup_restore' => $server->markState(ServerState::fromAgentState($result['state'] ?? 'running')),
             'elevate' => $server->forceFill(['elevated_at' => ($result['elevated'] ?? false) ? ($server->elevated_at ?? now()) : null])->save(),
@@ -110,6 +113,7 @@ class AgentResultApplier
             'rebuild' => $server->forceFill(['root_password' => null])->save(),
             'password' => $job->forceFill(['payload' => []])->save(),
             'disks' => app(ServerDisks::class)->revert($job),
+            'rescue' => $server->inRescue() ? null : $server->forceFill(['rescue_password' => null])->save(),
             default => null,
         };
 

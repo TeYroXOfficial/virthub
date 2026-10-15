@@ -52,6 +52,7 @@ def render_user_data(
     root_password: str | None,
     packages: list[str] | None = None,
     scripts: list | None = None,
+    swap_mb: int | None = None,
 ) -> str:
     """Konfiguracja pierwszego startu.
 
@@ -117,6 +118,10 @@ def render_user_data(
 
     if files:
         lines += ["write_files:", *files]
+
+    if swap_mb:
+        size = swap_mb * 1024 * 1024
+        lines += ["swap:", "  filename: /swapfile", f"  size: {size}", f"  maxsize: {size}"]
 
     if packages:
         lines += ["package_update: true", f"packages:{_yaml_list(packages, 2)}"]
@@ -271,6 +276,7 @@ class CloudInitBuilder:
         os_type: str = "linux",
         scripts: list | None = None,
         private_nics: list | None = None,
+        swap_mb: int | None = None,
     ) -> Path:
         target = self.seed_path(name)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -285,7 +291,7 @@ class CloudInitBuilder:
 
         payload = {
             "meta-data": render_meta_data(server_id, hostname),
-            "user-data": render_user_data(hostname, ssh_keys, root_password, packages=VM_PACKAGES, scripts=scripts),
+            "user-data": render_user_data(hostname, ssh_keys, root_password, packages=VM_PACKAGES, scripts=scripts, swap_mb=swap_mb),
             "network-config": render_network_config(interfaces, nameservers, mac, private_nics, server_id),
         }
 

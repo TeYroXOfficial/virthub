@@ -184,6 +184,10 @@
                                                     </select></div>
                                                 <div class="field"><label>{{ __('vTPM 2.0') }}</label>
                                                     <label class="check-line"><input type="checkbox" name="hw_tpm" value="1" @checked($template->hw_tpm)> {{ __('np. Windows 11 / Server 2025 (wymaga UEFI)') }}</label></div>
+                                                @if ($template->family !== 'windows')
+                                                    <div class="field"><label>{{ __('Tryb ratunkowy') }}</label>
+                                                        <label class="check-line"><input type="checkbox" name="is_rescue" value="1" @checked($template->is_rescue)> {{ __('System ratunkowy dla klientów') }}</label></div>
+                                                @endif
                                             @endunless
                                         </div>
                                         <button class="btn btn-sm btn-primary" type="submit">{{ __('Zapisz') }}</button>

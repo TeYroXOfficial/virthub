@@ -136,6 +136,22 @@ class AgentClient
         return $this->jobId($this->request('PUT', "/vm/{$uuid}/disks", ['disks' => $disks, 'primary_gb' => $primaryGb, 'delete_removed' => $deleteRemoved]));
     }
 
+    /** @param  array<string, mixed>  $payload */
+    public function rescue(string $uuid, array $payload): string
+    {
+        return $this->jobId($this->request('POST', "/vm/{$uuid}/rescue", $payload));
+    }
+
+    public function setSeed(string $uuid, bool $enabled): string
+    {
+        return $this->jobId($this->request('PUT', "/vm/{$uuid}/seed", ['enabled' => $enabled]));
+    }
+
+    public function setHostname(string $uuid, string $hostname, string $osType): string
+    {
+        return $this->jobId($this->request('PUT', "/vm/{$uuid}/hostname", ['hostname' => $hostname, 'os_type' => $osType]));
+    }
+
     /** @param  array<string, mixed>  $hardware */
     public function setHardware(string $uuid, array $hardware): string
     {

@@ -76,6 +76,18 @@
                 <div class="hint">{{ __('Widoczna tylko dla Ciebie, ułatwia rozpoznanie maszyny na liście.') }}</div>
             </div>
 
+            @if (config('virthub.swap_selection', true))
+                <div class="field">
+                    <label for="swap_mb">{{ __('Plik wymiany (swap)') }} <span class="muted">{{ __('(Linux, KVM)') }}</span></label>
+                    <select id="swap_mb" name="swap_mb">
+                        @foreach (\App\Http\Requests\OrderServerRequest::SWAP_SIZES as $size)
+                            <option value="{{ $size }}" @selected((int) old('swap_mb', 0) === $size)>{{ $size === 0 ? __('bez swapu') : ($size >= 1024 ? ($size / 1024).' GB' : $size.' MB') }}</option>
+                        @endforeach
+                    </select>
+                    <div class="hint">{{ __('Plik /swapfile zakładany przy pierwszym starcie — zabezpiecza przed zabiciem procesów przy braku RAM, kosztem miejsca na dysku.') }}</div>
+                </div>
+            @endif
+
             <div class="field">
                 <label for="ssh_key">{{ __('Klucz publiczny SSH') }} <span class="muted">{{ __('(opcjonalnie)') }}</span></label>
                 <textarea id="ssh_key" name="ssh_keys[]" rows="3"

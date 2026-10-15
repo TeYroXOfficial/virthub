@@ -168,6 +168,14 @@
                     {{ __('Instalację z płyty prowadzisz w konsoli. Po instalacji wysuń płytę albo wyłącz rozruch z niej. Adresy IP maszyny widzisz w zakładce Przegląd — ustaw je w instalatorze.') }}
                 </p>
             </form>
+            <form method="POST" action="{{ route('panel.servers.cloud-init', $server) }}" style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                @csrf @method('PUT')
+                <input type="hidden" name="enabled" value="{{ $server->cloud_init_disabled ? 1 : 0 }}">
+                <span>{{ __('Dysk konfiguracji (cloud-init):') }}
+                    <span class="pill {{ $server->cloud_init_disabled ? 'warning' : 'ok' }}">{{ $server->cloud_init_disabled ? __('odłączony') : __('podłączony') }}</span></span>
+                <button class="btn btn-sm" type="submit" @disabled(! $server->acceptsCommands())>{{ $server->cloud_init_disabled ? __('Podłącz') : __('Odłącz') }}</button>
+                <span class="hint">{{ __('Odłącz na czas instalacji własnego systemu z ISO, żeby instalator nie widział dodatkowej płyty. Reinstalacja z szablonu podłącza go ponownie.') }}</span>
+            </form>
 
             @php
                 $customIsos = \App\Models\IsoImage::query()->where('server_id', $server->id)->with('downloads')->orderBy('id')->get();
@@ -210,6 +218,7 @@
     @endif
 
     @include('panel.servers._hardware')
+    @include('panel.servers._rescue')
 
     <div class="card">
         <h3 class="card-title"><x-icon name="node" :size="16"/> {{ __('Informacje') }}</h3>
