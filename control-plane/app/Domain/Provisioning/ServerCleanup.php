@@ -26,6 +26,7 @@ class ServerCleanup
         app(PciAssets::class)->release($server);
         $server->nics()->delete();
         $this->selector->release($server);
+        $server->disks()->delete();
 
         $server->forceFill([
             'agent_uuid' => null,

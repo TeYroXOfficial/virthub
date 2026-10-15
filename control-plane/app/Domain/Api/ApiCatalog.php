@@ -2,6 +2,8 @@
 
 namespace App\Domain\Api;
 
+use App\Domain\Provisioning\ServerHardware;
+
 /**
  * Opis publicznego API panelu — jedno źródło dla strony dokumentacji, pliku
  * OpenAPI 3 i kolekcji Postman. Teksty przechodzą przez __(), więc
@@ -170,6 +172,28 @@ class ApiCatalog
             self::e('admin.servers.migrate', 'admin', 'POST', '/admin/servers/{server}/migrate', __('Migracja maszyny'), __('Przenosi maszynę KVM na inny hypervisor: cold — zatrzymanie, kopia dysku między węzłami i start na celu; live — bez przerwy (libvirt z kopiowaniem dysku). Adresy IP zostają, więc ich pula musi obejmować węzeł docelowy. Webhook server.migrated po zakończeniu.'), 'admin',
                 path: [$server], body: [self::param('hypervisor_id', 'integer', true, __('Węzeł docelowy'), 3), self::param('mode', 'string', false, __('Tryb'), 'cold', ['cold', 'live'])],
                 status: 202, response: ['message' => __('Migracja rozpoczęta.'), 'job_id' => 1234]),
+            self::e('admin.servers.disks', 'admin', 'GET', '/admin/servers/{server}/disks', __('Dyski maszyny'), __('Dysk główny (vda) i dodatkowe dyski (vdb–vdh) z rozmiarami.'), 'admin',
+                path: [$server], response: ['data' => [['dev' => 'vda', 'size_gb' => 40, 'primary' => true], ['dev' => 'vdb', 'size_gb' => 100, 'primary' => false]]]),
+            self::e('admin.servers.disks.store', 'admin', 'POST', '/admin/servers/{server}/disks', __('Nowy dysk'), __('Tworzy pusty dysk i dołącza go do maszyny — na działającej od razu. Miejsce na węźle jest rezerwowane.'), 'admin',
+                path: [$server], body: [self::param('size_gb', 'integer', true, __('Rozmiar w GB'), 100)], status: 202,
+                response: ['data' => [['dev' => 'vda', 'size_gb' => 40, 'primary' => true], ['dev' => 'vdb', 'size_gb' => 100, 'primary' => false]], 'job_id' => 901]),
+            self::e('admin.servers.disks.update', 'admin', 'PUT', '/admin/servers/{server}/disks/{dev}', __('Powiększenie dysku'), __('Powiększa dysk (całe GB, tylko w górę), także na działającej maszynie. Partycję rozszerza się w systemie.'), 'admin',
+                path: [$server, self::path('dev', __('Dysk: vda albo vdb–vdh'), 'vdb', 'string')], body: [self::param('size_gb', 'integer', true, __('Nowy rozmiar w GB'), 150)], status: 202,
+                response: ['data' => [['dev' => 'vda', 'size_gb' => 40, 'primary' => true], ['dev' => 'vdb', 'size_gb' => 150, 'primary' => false]], 'job_id' => 902]),
+            self::e('admin.servers.disks.destroy', 'admin', 'DELETE', '/admin/servers/{server}/disks/{dev}', __('Usunięcie dysku'), __('Odłącza dodatkowy dysk i kasuje jego dane. Dysku głównego nie można usunąć.'), 'admin',
+                path: [$server, self::path('dev', __('Dysk: vdb–vdh'), 'vdb', 'string')], status: 202,
+                response: ['data' => [['dev' => 'vda', 'size_gb' => 40, 'primary' => true]], 'job_id' => 903]),
+            self::e('admin.servers.hardware', 'admin', 'GET', '/admin/servers/{server}/hardware', __('Sprzęt maszyny'), __('Ustawienia po dziedziczeniu (maszyna → szablon/węzeł → domyślne) ze źródłem każdej wartości.'), 'admin',
+                path: [$server], response: ['data' => ['disk_bus' => ['value' => 'virtio', 'source' => 'default'], 'io_mode' => ['value' => 'io_uring', 'source' => 'hypervisor'],
+                    'firmware' => ['value' => 'uefi', 'source' => 'template'], 'tpm' => ['value' => true, 'source' => 'template'], 'cpu_model' => ['value' => 'host-passthrough', 'source' => 'default'], 'cpuset' => ['value' => null, 'source' => 'default']]]),
+            self::e('admin.servers.hardware.update', 'admin', 'PUT', '/admin/servers/{server}/hardware', __('Zmiana sprzętu'), __('Ustawia sprzęt maszyny; null przywraca dziedziczenie. Działa po wyłączeniu i włączeniu maszyny.'), 'admin',
+                path: [$server], body: [
+                    self::param('firmware', 'string', false, __('Rozruch'), 'uefi', ServerHardware::FIRMWARES),
+                    self::param('tpm', 'boolean', false, __('vTPM 2.0 (wymaga UEFI)'), true),
+                    self::param('disk_bus', 'string', false, __('Magistrala dysków'), 'scsi', ServerHardware::DISK_BUSES),
+                    self::param('io_mode', 'string', false, __('Tryb I/O'), 'io_uring', ServerHardware::IO_MODES),
+                    self::param('cpu_model', 'string', false, __('Model procesora'), 'EPYC-Milan', ServerHardware::CPU_MODELS),
+                ], status: 202, response: ['data' => ['firmware' => ['value' => 'uefi', 'source' => 'server']], 'job_id' => 904, 'message' => __('Zmiany działają po wyłączeniu i włączeniu maszyny.')]),
             self::e('admin.packages.store', 'admin', 'POST', '/admin/packages', __('Nowy pakiet'), __('Dodaje pakiet VPS do oferty.'), 'admin',
                 body: [
                     self::param('name', 'string', true, __('Nazwa'), 'VPS M'),

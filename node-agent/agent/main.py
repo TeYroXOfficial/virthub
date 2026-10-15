@@ -57,6 +57,8 @@ from .schemas import (
     ElevateRequest,
     HostdevRequest,
     PrivateNicsRequest,
+    DisksRequest,
+    HardwareRequest,
     BackupRequest,
     BackupRestoreRequest,
     BackupDeleteRequest,
@@ -127,6 +129,8 @@ def _handlers() -> dict[str, Any]:
         "elevate": lambda p: driver.elevate(p["uuid"], ElevateRequest(**p["body"]).action),
         "hostdevs": lambda p: driver.set_hostdevs(p["uuid"], HostdevRequest(**p["body"])),
         "private_nics": lambda p: driver.set_private_nics(p["uuid"], PrivateNicsRequest(**p["body"])),
+        "disks": lambda p: driver.set_disks(p["uuid"], DisksRequest(**p["body"])),
+        "hardware": lambda p: driver.set_hardware(p["uuid"], HardwareRequest(**p["body"])),
         "backup": lambda p: driver.backup(p["uuid"], BackupRequest(**p["body"])),
         "backup_restore": lambda p: driver.restore_backup(p["uuid"], BackupRestoreRequest(**p["body"])),
         "backup_delete": lambda p: driver.delete_backups(BackupDeleteRequest(**p)),
@@ -831,6 +835,32 @@ async def delete_backups(req: BackupDeleteRequest) -> JobAccepted:
 )
 async def set_hostdevs(uuid: str, req: HostdevRequest) -> JobAccepted:
     job_id = jobs.enqueue("hostdevs", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.put(
+    "/vm/{uuid}/disks",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def set_disks(uuid: str, req: DisksRequest) -> JobAccepted:
+    """Dodatkowe dyski (pełna lista docelowa) i powiększenie dysku głównego — na żywo."""
+    job_id = jobs.enqueue("disks", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
+    return JobAccepted(job_id=job_id)
+
+
+@app.put(
+    "/vm/{uuid}/hardware",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_control_plane)],
+    tags=["vm"],
+)
+async def set_hardware(uuid: str, req: HardwareRequest) -> JobAccepted:
+    """Magistrala i I/O dysków, UEFI/BIOS, vTPM, model CPU i cpuset — po wyłączeniu i włączeniu."""
+    job_id = jobs.enqueue("hardware", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid)
     return JobAccepted(job_id=job_id)
 
 

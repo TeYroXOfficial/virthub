@@ -24,6 +24,10 @@ class Hypervisor extends Model
     public const HEARTBEAT_TIMEOUT = 120;
 
     protected $fillable = [
+        'hw_disk_bus',
+        'hw_io_mode',
+        'hw_cpu_model',
+        'hw_cpuset',
         'hypervisor_group_id',
         'name',
         'hostname',

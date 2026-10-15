@@ -72,7 +72,7 @@ class ServerProvisioner
 
         $datastore = $this->datastoreFor($package, $template, $preferred);
         if ($datastore !== null && $preferred === null && $this->selector->select(
-            $package->vcpu, $package->ram_mb, $package->disk_gb, $template->virtualization,
+            $package->vcpu, $package->ram_mb, $package->totalDiskGb(), $template->virtualization,
             fn (Hypervisor $h) => self::nodeHasDatastore($h, $datastore),
         ) === null) {
             throw new NoCapacityException(__('Żaden węzeł z magazynem :name nie ma wolnych zasobów albo magazyn na nim nie odpowiada — sprawdź Infrastruktura → Magazyny danych.', ['name' => $datastore->name]));
@@ -114,6 +114,9 @@ class ServerProvisioner
             $server->backup_plan_id = $template->isContainer() ? null : $package->backup_plan_id;
             $server->datastore_id = $datastore?->id;
             $server->save();
+            if ($package->extra_disk_gb && ! $template->isContainer()) {
+                $server->disks()->create(['slot' => 1, 'size_gb' => $package->extra_disk_gb]);
+            }
 
             $networkType = $package->network_type ?: IpPool::TYPE_PUBLIC;
             $ipv6Count = (int) $package->ipv6_count;
@@ -150,7 +153,7 @@ class ServerProvisioner
     private function locationHasCapacity(HypervisorGroup $location, VpsPackage $package, OsTemplate $template): bool
     {
         return $this->selector->select(
-            $package->vcpu, $package->ram_mb, $package->disk_gb, $template->virtualization,
+            $package->vcpu, $package->ram_mb, $package->totalDiskGb(), $template->virtualization,
             fn (Hypervisor $h) => $h->hypervisor_group_id === $location->id
                 && self::nodeHasDatastore($h, $package->datastore_id ? $package->datastore : null),
         ) !== null;
@@ -448,6 +451,23 @@ class ServerProvisioner
     public function syncHostdevs(Server $server, bool $restart = false, ?User $actor = null): ServerJob
     {
         $job = $this->createJobRecord($server, 'hostdevs', $actor, ['restart' => $restart]);
+        RunServerActionJob::dispatch($job->id);
+
+        return $job;
+    }
+
+    /** Dyski maszyny na węzeł (komplet z bazy; payload: stan sprzed zmiany do cofnięcia). */
+    public function syncDisks(Server $server, ?User $actor = null, array $payload = []): ServerJob
+    {
+        $job = $this->createJobRecord($server, 'disks', $actor, $payload);
+        RunServerActionJob::dispatch($job->id);
+
+        return $job;
+    }
+
+    public function syncHardware(Server $server, ?User $actor = null): ServerJob
+    {
+        $job = $this->createJobRecord($server, 'hardware', $actor);
         RunServerActionJob::dispatch($job->id);
 
         return $job;

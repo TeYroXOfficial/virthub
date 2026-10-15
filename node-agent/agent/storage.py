@@ -55,15 +55,19 @@ class StorageDriver(ABC):
     # węzłami operują na pliku. Magazyny sieciowe (Ceph) tego nie mają.
     file_based = True
 
-    def disk_xml(self, name: str) -> str:
-        """Element <disk> dysku vda do XML domeny libvirt."""
+    def disk_xml(self, name: str, dev: str = "vda") -> str:
+        """Element <disk> (domyślnie główny vda) do XML domeny libvirt."""
         return (
             "    <disk type='file' device='disk'>\n"
             "      <driver name='qemu' type='qcow2' cache='none' io='native' discard='unmap'/>\n"
             f"      <source file={quoteattr(str(self.volume_path(name)))}/>\n"
-            "      <target dev='vda' bus='virtio'/>\n"
+            f"      <target dev={quoteattr(dev)} bus='virtio'/>\n"
             "    </disk>"
         )
+
+    def create_blank(self, name: str, disk_gb: int) -> Path:
+        """Pusty dysk (dodatkowy dysk maszyny)."""
+        raise StorageError("Ten magazyn nie obsługuje dodatkowych dysków.")
 
     def size_gb(self, name: str) -> int:
         """Rozmiar wirtualny dysku w GB."""
@@ -153,6 +157,16 @@ class Qcow2LocalDriver(StorageDriver):
             f"{disk_gb}G",
         ])
         log.info("Utworzono dysk %s (%sGB, backing=%s)", target, disk_gb, backing.name)
+        return target
+
+    def create_blank(self, name: str, disk_gb: int) -> Path:
+        target = self.volume_path(name)
+        if target.exists():
+            raise StorageError(f"Dysk {target} już istnieje — odmawiam nadpisania.")
+        self.root.mkdir(parents=True, exist_ok=True)
+        run(["qemu-img", "create", "-f", "qcow2", *([] if self.thin else ["-o", "preallocation=falloc"]), str(target), f"{disk_gb}G"],
+            timeout=7200)
+        log.info("Utworzono pusty dysk %s (%sGB)", target, disk_gb)
         return target
 
     def resize_volume(self, name: str, disk_gb: int) -> None:
@@ -245,7 +259,17 @@ class MockStorageDriver(StorageDriver):
         target.write_text(f"mock volume template={template} size={disk_gb}G\n", encoding="utf-8")
         return target
 
+    def create_blank(self, name: str, disk_gb: int) -> Path:
+        target = self.volume_path(name)
+        if target.exists():
+            raise StorageError(f"Dysk {target} już istnieje — odmawiam nadpisania.")
+        self.root.mkdir(parents=True, exist_ok=True)
+        target.write_text(f"mock volume blank size={disk_gb}G\n", encoding="utf-8")
+        return target
+
     def resize_volume(self, name: str, disk_gb: int) -> None:
+        if self.volume_path(name).exists() and disk_gb < self.size_gb(name):
+            raise StorageError(f"Zmniejszenie dysku do {disk_gb}GB nie jest wspierane.")
         self.volume_path(name).write_text(f"mock volume size={disk_gb}G\n", encoding="utf-8")
 
     def delete_volume(self, name: str) -> None:

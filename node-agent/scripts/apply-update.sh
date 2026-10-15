@@ -114,6 +114,9 @@ bash "$AGENT_DIR/scripts/setup-apps.sh" || warn "Nie udało się przygotować Do
 # Węzły KVM: budowa szablonów Windows (grupa kvm dla konta agenta, QEMU).
 bash "$AGENT_DIR/scripts/setup-builder.sh" || warn "Nie udało się przygotować budowy szablonów"
 
+# Węzły KVM: OVMF (UEFI) i swtpm (vTPM) dla maszyn, które ich wymagają.
+bash "$AGENT_DIR/scripts/setup-firmware.sh" || warn "Nie udało się zainstalować OVMF / swtpm"
+
 # Węzły kontenerów: osobny zakres UID/GID dla każdego kontenera.
 bash "$AGENT_DIR/scripts/harden-incus.sh" || warn "Nie udało się ustawić przydziału UID/GID dla Incusa"
 

@@ -127,6 +127,51 @@ class NetworkInterfaceSpec(BaseModel):
         return self
 
 
+class HardwareSpec(BaseModel):
+    """Sprzęt wirtualny maszyny KVM. Brak pola = wartość domyślna (jak w starszych wersjach)."""
+
+    disk_bus: Literal["virtio", "scsi"] = Field(default="virtio", description="virtio-blk albo VirtIO SCSI (wielowątkowy kontroler)")
+    io_mode: Literal["native", "threads", "io_uring"] = "native"
+    firmware: Literal["bios", "uefi"] = "bios"
+    tpm: bool = Field(default=False, description="vTPM 2.0 (swtpm) — wymaga UEFI")
+    # None = host-passthrough (pełny procesor hosta); host-model albo nazwa modelu QEMU (np. EPYC-Milan).
+    cpu_model: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,40}$")
+    cpuset: str | None = Field(default=None, pattern=r"^[0-9]+(-[0-9]+)?(,\^?[0-9]+(-[0-9]+)?){0,99}$",
+                               description="Rdzenie hosta dla vCPU, np. 0-15,32-47")
+
+    @model_validator(mode="after")
+    def _tpm_needs_uefi(self) -> "HardwareSpec":
+        if self.tpm and self.firmware != "uefi":
+            raise ValueError("vTPM wymaga rozruchu UEFI")
+        return self
+
+
+class ExtraDiskSpec(BaseModel):
+    """Dodatkowy dysk maszyny: slot 1–7 → vdb–vdh."""
+
+    slot: int = Field(ge=1, le=7)
+    size_gb: int = Field(ge=1, le=65536)
+
+
+def _unique_disk_slots(disks: list[ExtraDiskSpec]) -> list[ExtraDiskSpec]:
+    if len({d.slot for d in disks}) != len(disks):
+        raise ValueError("Numery dysków muszą być unikalne")
+    return disks
+
+
+class DisksRequest(BaseModel):
+    """Stan docelowy dysków: brakujące są tworzone, mniejsze powiększane, zbędne usuwane."""
+
+    disks: Annotated[list[ExtraDiskSpec], AfterValidator(_unique_disk_slots)] = Field(default_factory=list, max_length=7)
+    primary_gb: int | None = Field(default=None, ge=1, le=65536, description="Nowy rozmiar dysku głównego (tylko powiększenie)")
+    # Usunięcie dysku kasuje dane — panel musi to potwierdzić wprost.
+    delete_removed: bool = False
+
+
+class HardwareRequest(BaseModel):
+    hardware: HardwareSpec
+
+
 class PrivateNicSpec(BaseModel):
     """Dodatkowa karta maszyny w sieci prywatnej (izolowany mostek węzła)."""
 
@@ -328,6 +373,8 @@ class CreateVmRequest(BaseModel):
     storage: DatastoreSpec | None = None
     # Karty w sieciach prywatnych (sloty 1–7).
     private_nics: Annotated[list[PrivateNicSpec], AfterValidator(_unique_slots)] = Field(default_factory=list, max_length=7)
+    hardware: HardwareSpec | None = None
+    extra_disks: Annotated[list[ExtraDiskSpec], AfterValidator(_unique_disk_slots)] = Field(default_factory=list, max_length=7)
 
 
 class RebuildVmRequest(BaseModel):

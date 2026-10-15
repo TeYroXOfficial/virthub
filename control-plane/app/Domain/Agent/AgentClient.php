@@ -130,6 +130,18 @@ class AgentClient
         return $this->jobId($this->request('POST', '/backups/delete', ['keys' => $keys, 'target' => $target]));
     }
 
+    /** @param  list<array{slot:int, size_gb:int}>  $disks  pełna lista dodatkowych dysków */
+    public function setDisks(string $uuid, array $disks, int $primaryGb, bool $deleteRemoved): string
+    {
+        return $this->jobId($this->request('PUT', "/vm/{$uuid}/disks", ['disks' => $disks, 'primary_gb' => $primaryGb, 'delete_removed' => $deleteRemoved]));
+    }
+
+    /** @param  array<string, mixed>  $hardware */
+    public function setHardware(string $uuid, array $hardware): string
+    {
+        return $this->jobId($this->request('PUT', "/vm/{$uuid}/hardware", ['hardware' => $hardware]));
+    }
+
     /** @param  list<array<string, mixed>>  $nics  pełna lista kart w sieciach prywatnych */
     public function setPrivateNics(string $uuid, array $nics): string
     {

@@ -80,6 +80,9 @@ class Migrations
         if ($server->pciAssets()->exists()) {
             $fail(__('Maszyna ma przypisane urządzenia PCI — odepnij je przed migracją.'));
         }
+        if ($server->disks()->exists()) {
+            $fail(__('Maszyna ma dodatkowe dyski — migracja przenosi tylko dysk główny. Usuń dodatkowe dyski albo przenieś dane przed migracją.'));
+        }
         if ($server->nics()->exists()) {
             $fail(__('Maszyna jest w sieci prywatnej węzła — odłącz jej karty prywatne przed migracją.'));
         }

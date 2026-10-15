@@ -5,6 +5,8 @@ namespace App\Domain\Agent;
 use App\Domain\Network\Firewall;
 use App\Domain\Network\PortForwarding;
 use App\Domain\Network\PrivateNetworks;
+use App\Domain\Provisioning\ServerDisks;
+use App\Domain\Provisioning\ServerHardware;
 use App\Models\IpAddress;
 use App\Models\OsTemplate;
 use App\Models\Provisioner;
@@ -104,7 +106,16 @@ class ServerPayload
             'nameservers' => self::nameservers($server),
             'os_type' => self::osType($server->template),
             'mac' => self::mac($server),
-        ] + self::scripts($server) + self::filter($server) + self::storage($server) + self::privateNics($server);
+        ] + self::scripts($server) + self::filter($server) + self::storage($server) + self::privateNics($server)
+            + ServerHardware::payload($server) + self::extraDisks($server);
+    }
+
+    /** @return array{extra_disks?: list<array{slot:int, size_gb:int}>} */
+    public static function extraDisks(Server $server): array
+    {
+        $disks = ServerDisks::payload($server);
+
+        return $disks === [] ? [] : ['extra_disks' => $disks];
     }
 
     /**

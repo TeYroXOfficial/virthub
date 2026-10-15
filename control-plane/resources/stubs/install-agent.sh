@@ -181,7 +181,8 @@ if [ "$VIRT" = "kvm" ]; then
     else
         LIBVIRT_PY="libvirt-dev"
     fi
-    apt-get install -y -qq qemu-kvm libvirt-daemon-system qemu-utils genisoimage \
+    # ovmf + swtpm: maszyny z rozruchem UEFI i z vTPM (Windows 11 / Server 2025).
+    apt-get install -y -qq qemu-kvm libvirt-daemon-system qemu-utils genisoimage ovmf swtpm swtpm-tools \
         "$LIBVIRT_PY" >/dev/null
     systemctl enable --now libvirtd >/dev/null 2>&1 || true
     ok "KVM i libvirtd zainstalowane"

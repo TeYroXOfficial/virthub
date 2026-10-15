@@ -116,6 +116,12 @@ Route::prefix('v1')->group(function () {
         Route::post('servers/{server}/suspend', [ServerAdminController::class, 'suspend']);
         Route::post('servers/{server}/unsuspend', [ServerAdminController::class, 'unsuspend']);
         Route::post('servers/{server}/migrate', [ServerAdminController::class, 'migrate']);
+        Route::get('servers/{server}/disks', [ServerAdminController::class, 'disks']);
+        Route::post('servers/{server}/disks', [ServerAdminController::class, 'addDisk']);
+        Route::put('servers/{server}/disks/{dev}', [ServerAdminController::class, 'growDisk']);
+        Route::delete('servers/{server}/disks/{dev}', [ServerAdminController::class, 'removeDisk']);
+        Route::get('servers/{server}/hardware', [ServerAdminController::class, 'hardware']);
+        Route::put('servers/{server}/hardware', [ServerAdminController::class, 'updateHardware']);
     });
 
     // --- system rozliczeniowy ----------------------------------------------

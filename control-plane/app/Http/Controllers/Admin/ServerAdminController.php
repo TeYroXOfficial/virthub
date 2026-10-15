@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Provisioning\Migrations;
+use App\Domain\Provisioning\ServerDisks;
+use App\Domain\Provisioning\ServerHardware;
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ServerResource;
 use App\Models\AuditLog;
 use App\Models\Hypervisor;
 use App\Models\Server;
+use App\Models\ServerDisk;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -60,6 +63,79 @@ class ServerAdminController extends Controller
         $job = $migrations->start($server, Hypervisor::findOrFail($validated['hypervisor_id']), $validated['mode'] ?? 'cold', $request->user());
 
         return response()->json(['message' => __('Migracja rozpoczęta.'), 'job_id' => $job->id], 202);
+    }
+
+    /** Dyski maszyny: główny i dodatkowe (vdb–vdh). */
+    public function disks(Server $server): JsonResponse
+    {
+        return response()->json(['data' => $this->diskList($server)]);
+    }
+
+    public function addDisk(Request $request, Server $server, ServerDisks $disks): JsonResponse
+    {
+        $data = $request->validate(['size_gb' => ['required', 'integer', 'min:1', 'max:65536']]);
+        $job = $disks->add($server, (int) $data['size_gb'], $request->user());
+
+        return response()->json(['data' => $this->diskList($server->fresh()), 'job_id' => $job->id], 202);
+    }
+
+    /** Powiększenie dysku — dev: vda (główny) albo vdb–vdh. */
+    public function growDisk(Request $request, Server $server, string $dev, ServerDisks $disks): JsonResponse
+    {
+        $data = $request->validate(['size_gb' => ['required', 'integer', 'min:1', 'max:65536']]);
+        $job = $disks->grow($server, $this->diskByDev($server, $dev), (int) $data['size_gb'], $request->user());
+
+        return response()->json(['data' => $this->diskList($server->fresh()), 'job_id' => $job->id], 202);
+    }
+
+    public function removeDisk(Request $request, Server $server, string $dev, ServerDisks $disks): JsonResponse
+    {
+        $disk = $this->diskByDev($server, $dev);
+        abort_if($disk === null, 422, __('Dysku głównego nie można usunąć.'));
+        $job = $disks->remove($disk, $request->user());
+
+        return response()->json(['data' => $this->diskList($server->fresh()), 'job_id' => $job->id], 202);
+    }
+
+    public function hardware(Server $server): JsonResponse
+    {
+        return response()->json(['data' => ServerHardware::resolve($server)]);
+    }
+
+    public function updateHardware(Request $request, Server $server, ServerHardware $hardware): JsonResponse
+    {
+        $data = $request->validate([
+            'firmware' => ['sometimes', 'nullable', Rule::in(ServerHardware::FIRMWARES)],
+            'tpm' => ['sometimes', 'nullable', 'boolean'],
+            'disk_bus' => ['sometimes', 'nullable', Rule::in(ServerHardware::DISK_BUSES)],
+            'io_mode' => ['sometimes', 'nullable', Rule::in(ServerHardware::IO_MODES)],
+            'cpu_model' => ['sometimes', 'nullable', Rule::in(ServerHardware::CPU_MODELS)],
+        ]);
+        $settings = [];
+        foreach ($data as $key => $value) {
+            $settings['hw_'.$key] = $key === 'tpm' && $value !== null ? (bool) $value : $value;
+        }
+        $job = $hardware->update($server, $settings, $request->user());
+
+        return response()->json(['data' => ServerHardware::resolve($server->fresh()), 'job_id' => $job->id,
+            'message' => __('Zmiany działają po wyłączeniu i włączeniu maszyny.')], 202);
+    }
+
+    private function diskByDev(Server $server, string $dev): ?ServerDisk
+    {
+        if ($dev === 'vda') {
+            return null;
+        }
+        abort_unless(preg_match('/^vd([b-h])$/', $dev, $m), 404);
+
+        return $server->disks()->where('slot', strpos('abcdefgh', $m[1]))->firstOrFail();
+    }
+
+    /** @return list<array{dev: string, size_gb: int, primary: bool}> */
+    private function diskList(Server $server): array
+    {
+        return [['dev' => 'vda', 'size_gb' => (int) $server->disk_gb, 'primary' => true],
+            ...$server->disks()->get()->map(fn (ServerDisk $d) => ['dev' => $d->dev(), 'size_gb' => $d->size_gb, 'primary' => false])->all()];
     }
 
     public function unsuspend(Request $request, Server $server): JsonResponse

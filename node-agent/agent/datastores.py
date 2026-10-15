@@ -163,6 +163,13 @@ class CephRbdDriver(StorageDriver):
         log.info("Utworzono dysk %s (%sGB, klon %s)", image, disk_gb, base)
         return Path(f"rbd:{image}")
 
+    def create_blank(self, name: str, disk_gb: int) -> Path:
+        image = self._image(name)
+        if self._info(image) is not None:
+            raise StorageError(f"Obraz {image} już istnieje — odmawiam nadpisania.")
+        self._rbd("create", "--size", f"{disk_gb}G", image)
+        return Path(f"rbd:{image}")
+
     def size_gb(self, name: str) -> int:
         info = self._info(self._image(name))
         if info is None:
@@ -215,7 +222,7 @@ class CephRbdDriver(StorageDriver):
             secret = conn.secretDefineXML(xml)
         secret.setValue(base64.b64decode(self.spec.key or ""))
 
-    def disk_xml(self, name: str) -> str:
+    def disk_xml(self, name: str, dev: str = "vda") -> str:
         hosts = "".join(
             f"\n        <host name={quoteattr(host)} port={quoteattr(port)}/>"
             for host, port in map(parse_monitor, self.spec.monitors)
@@ -228,7 +235,7 @@ class CephRbdDriver(StorageDriver):
             "      </auth>\n"
             f"      <source protocol='rbd' name={quoteattr(self._image(name))}>{hosts}\n"
             "      </source>\n"
-            "      <target dev='vda' bus='virtio'/>\n"
+            f"      <target dev={quoteattr(dev)} bus='virtio'/>\n"
             "    </disk>"
         )
 
@@ -269,7 +276,9 @@ class StorageRouter:
         self.bind(name, None)
 
     def spec_for(self, name: str) -> DatastoreSpec | None:
-        raw = self._load().get(name)
+        data = self._load()
+        # Dodatkowe dyski (virthub-<id>-d<n>) leżą w magazynie dysku głównego.
+        raw = data.get(name) or data.get(re.sub(r"-d[1-7]$", "", name))
         return DatastoreSpec.model_validate(raw) if raw else None
 
     def driver_for_spec(self, spec: DatastoreSpec | None) -> StorageDriver:
@@ -322,8 +331,11 @@ class StorageRouter:
     def size_gb(self, name: str) -> int:
         return self.for_volume(name).size_gb(name)
 
-    def disk_xml(self, name: str) -> str:
-        return self.for_volume(name).disk_xml(name)
+    def disk_xml(self, name: str, dev: str = "vda") -> str:
+        return self.for_volume(name).disk_xml(name, dev)
+
+    def create_blank(self, name: str, disk_gb: int) -> Path:
+        return self.for_volume(name).create_blank(name, disk_gb)
 
     def libvirt_prepare(self, conn: Any, name: str) -> None:
         self.for_volume(name).libvirt_prepare(conn)
