@@ -108,6 +108,8 @@
         </div>
     </div>
 
+    <div class="dash-layout">
+    <div class="dash-main">
     @if ($billing)
         <div class="dash-head" style="padding:0 0 10px">
             <h2 class="section-title" style="margin:0"><x-icon name="wallet" :size="17"/> {{ __('Billing') }}</h2>
@@ -179,7 +181,46 @@
         </div>
     </div>
 
-    <div class="grid grid-2 dash-section">
+    @if ($canServers || $canApps)
+        <div class="card flush dash-section">
+            <div class="dash-head">
+                <h3 class="card-title"><x-icon name="list" :size="16"/> {{ __('Ostatnie usługi') }}</h3>
+                <div class="segmented" role="group" aria-label="{{ __('Liczba pozycji') }}">
+                    @foreach (\App\Domain\Admin\Dashboard::RECENT_SIZES as $size)
+                        <a href="{{ route('panel.admin.index', ['recent' => $size]) }}" @if ($size === $recent) aria-current="true" @endif>{{ $size }}</a>
+                    @endforeach
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr><th>{{ __('Usługa') }}</th><th>{{ __('Rodzaj') }}</th><th>{{ __('Klient') }}</th><th>{{ __('Stan') }}</th><th>{{ __('Adres') }}</th><th>{{ __('Węzeł') }}</th><th>{{ __('Zasoby') }}</th><th>{{ __('Utworzona') }}</th></tr>
+                    </thead>
+                    <tbody>
+                    @forelse ($recentServices as $item)
+                        @include('panel.admin._service-row')
+                    @empty
+                        <tr><td colspan="8" class="muted" style="text-align:center; padding:24px">{{ __('Nie ma jeszcze żadnych usług.') }}</td></tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    @endif
+
+    @if (auth()->user()->isAdmin())
+        <div class="card flush dash-section">
+            <div class="dash-head">
+                <h3 class="card-title"><x-icon name="archive" :size="16"/> {{ __('Ostatnie zdarzenia') }}</h3>
+                <a class="btn btn-sm" href="{{ route('panel.admin.logs') }}">{{ __('Pełny dziennik') }}</a>
+            </div>
+            @include('panel.admin._log-table', ['logs' => $recentLogs])
+        </div>
+    @endif
+    </div>
+
+    {{-- Kolumna boczna: zadania i aktywni użytkownicy (na wąskim ekranie pod treścią). --}}
+    <aside class="dash-aside">
         <div class="card">
             <h3 class="card-title"><x-icon name="clock" :size="16"/> {{ __('Zadania') }}</h3>
             @php $taskRows = $tasks['running']->concat($tasks['failed']); @endphp
@@ -234,42 +275,6 @@
                 </div>
             @endif
         </div>
+    </aside>
     </div>
-
-    @if ($canServers || $canApps)
-        <div class="card flush dash-section">
-            <div class="dash-head">
-                <h3 class="card-title"><x-icon name="list" :size="16"/> {{ __('Ostatnie usługi') }}</h3>
-                <div class="segmented" role="group" aria-label="{{ __('Liczba pozycji') }}">
-                    @foreach (\App\Domain\Admin\Dashboard::RECENT_SIZES as $size)
-                        <a href="{{ route('panel.admin.index', ['recent' => $size]) }}" @if ($size === $recent) aria-current="true" @endif>{{ $size }}</a>
-                    @endforeach
-                </div>
-            </div>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                    <tr><th>{{ __('Usługa') }}</th><th>{{ __('Rodzaj') }}</th><th>{{ __('Klient') }}</th><th>{{ __('Stan') }}</th><th>{{ __('Adres') }}</th><th>{{ __('Węzeł') }}</th><th>{{ __('Zasoby') }}</th><th>{{ __('Utworzona') }}</th></tr>
-                    </thead>
-                    <tbody>
-                    @forelse ($recentServices as $item)
-                        @include('panel.admin._service-row')
-                    @empty
-                        <tr><td colspan="8" class="muted" style="text-align:center; padding:24px">{{ __('Nie ma jeszcze żadnych usług.') }}</td></tr>
-                    @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    @endif
-
-    @if (auth()->user()->isAdmin())
-        <div class="card flush dash-section">
-            <div class="dash-head">
-                <h3 class="card-title"><x-icon name="archive" :size="16"/> {{ __('Ostatnie zdarzenia') }}</h3>
-                <a class="btn btn-sm" href="{{ route('panel.admin.logs') }}">{{ __('Pełny dziennik') }}</a>
-            </div>
-            @include('panel.admin._log-table', ['logs' => $recentLogs])
-        </div>
-    @endif
 @endsection
