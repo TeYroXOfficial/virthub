@@ -57,7 +57,7 @@ class ServerHardwareTest extends TestCase
         $this->assertSame(240, $node->fresh()->disk_gb_used);
         $payload = ServerPayload::forCreate($server->fresh());
         $this->assertSame([['slot' => 1, 'size_gb' => 200]], $payload['extra_disks']);
-        $this->assertSame(['disk_bus' => 'virtio', 'io_mode' => 'native', 'firmware' => 'uefi', 'tpm' => true, 'cpu_model' => null, 'cpuset' => null], $payload['hardware']);
+        $this->assertSame(['disk_bus' => 'virtio', 'io_mode' => 'native', 'firmware' => 'uefi', 'tpm' => true, 'cpu_model' => null, 'cpuset' => null, 'hyperv' => 'off'], $payload['hardware']);
 
         app(HypervisorSelector::class)->recalculate($node);
         $this->assertSame(240, $node->fresh()->disk_gb_used, 'Przeliczenie liczy też dodatkowe dyski');
@@ -136,7 +136,7 @@ class ServerHardwareTest extends TestCase
         $job = ServerJob::where('action', 'hardware')->latest('id')->firstOrFail();
         (new RunServerActionJob($job->id))->handle();
         Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/hardware') && $r['hardware'] === [
-            'disk_bus' => 'scsi', 'io_mode' => 'io_uring', 'firmware' => 'uefi', 'tpm' => true, 'cpu_model' => 'EPYC-Milan', 'cpuset' => '2-31']);
+            'disk_bus' => 'scsi', 'io_mode' => 'io_uring', 'firmware' => 'uefi', 'tpm' => true, 'cpu_model' => 'EPYC-Milan', 'cpuset' => '2-31', 'hyperv' => 'off']);
     }
 
     public function test_api_administracji_i_formularze(): void

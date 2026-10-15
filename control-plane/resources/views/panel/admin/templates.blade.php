@@ -184,6 +184,15 @@
                                                     </select></div>
                                                 <div class="field"><label>{{ __('vTPM 2.0') }}</label>
                                                     <label class="check-line"><input type="checkbox" name="hw_tpm" value="1" @checked($template->hw_tpm)> {{ __('np. Windows 11 / Server 2025 (wymaga UEFI)') }}</label></div>
+                                                <div class="field"><label>{{ __('Oświecenia Hyper-V') }}</label>
+                                                    <select name="hw_hyperv">
+                                                        <option value="">{{ __('dziedzicz z węzła') }}</option>
+                                                        @foreach (['off' => __('wyłączone'), 'standard' => __('standardowe'), 'full' => __('pełne (TSC, IPI, TLB, vendor_id)'), 'passthrough' => __('passthrough (wszystko z hosta)')] as $value => $label) <option value="{{ $value }}" @selected($template->hw_hyperv === $value)>{{ $label }}</option> @endforeach
+                                                    </select></div>
+                                                @if ($template->family === 'windows')
+                                                    <div class="field"><label>{{ __('Direct RDP') }}</label>
+                                                        <label class="check-line"><input type="checkbox" name="direct_rdp" value="1" @checked($template->direct_rdp)> {{ __('Gotowy RDP: dane logowania mailem i plik .rdp w panelu') }}</label></div>
+                                                @endif
                                                 @if ($template->family !== 'windows')
                                                     <div class="field"><label>{{ __('Tryb ratunkowy') }}</label>
                                                         <label class="check-line"><input type="checkbox" name="is_rescue" value="1" @checked($template->is_rescue)> {{ __('System ratunkowy dla klientów') }}</label></div>

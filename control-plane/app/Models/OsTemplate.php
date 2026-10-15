@@ -16,6 +16,8 @@ class OsTemplate extends Model
 
     protected $fillable = [
         'hw_firmware',
+        'hw_hyperv',
+        'direct_rdp',
         'hw_tpm',
         'is_rescue',
         'os_template_group_id',
@@ -48,6 +50,7 @@ class OsTemplate extends Model
     {
         return [
             'hw_tpm' => 'boolean',
+            'direct_rdp' => 'boolean',
             'is_rescue' => 'boolean',
             'cloud_init_support' => 'boolean',
             'is_active' => 'boolean',

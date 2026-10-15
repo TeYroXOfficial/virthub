@@ -253,6 +253,12 @@
                     <div class="field"><label for="n-cpuset">{{ __('Rdzenie hosta dla maszyn (cpuset)') }}</label>
                         <input id="n-cpuset" name="hw_cpuset" value="{{ old('hw_cpuset', $node->hw_cpuset) }}" placeholder="{{ __('np. 2-31,34-63') }}" maxlength="300">
                         <div class="hint">{{ __('Puste = wszystkie rdzenie. Pozwala zostawić rdzenie dla systemu węzła.') }}</div></div>
+                    <div class="field"><label for="n-hyperv">{{ __('Oświecenia Hyper-V') }}</label>
+                        <select id="n-hyperv" name="hw_hyperv">
+                            <option value="">{{ __('według systemu (Windows — standardowe, Linux — wyłączone)') }}</option>
+                            @foreach (['off' => __('wyłączone'), 'standard' => __('standardowe'), 'full' => __('pełne (TSC, IPI, TLB, vendor_id)'), 'passthrough' => __('passthrough (wszystko z hosta)')] as $value => $label) <option value="{{ $value }}" @selected($node->hw_hyperv === $value)>{{ $label }}</option> @endforeach
+                        </select>
+                        <div class="hint">{{ __('Przyspieszają Windows w KVM. Szablon i maszyna mogą to nadpisać. Passthrough tylko dla węzłów z tym samym procesorem i QEMU — inaczej migracja na żywo się nie uda.') }}</div></div>
                 </fieldset>
             @endif
             @if ($node->virtualization === \App\Enums\Virtualization::Kvm)

@@ -4073,5 +4073,16 @@
     "Sterownik zgodny z dokumentacją producenta, ale niesprawdzony na prawdziwym klastrze. Migawki: StorPool tak, Lightbits nie. Kopie zewnętrzne są pełne.": "The driver follows the vendor's documentation but has not been tested on a real cluster. Snapshots: StorPool yes, Lightbits no. External backups are full.",
     "Gdzie leżą dyski maszyn KVM: katalog z plikami qcow2 (cienki albo gruby), zasób sieciowy montowany przez agenta (NFS, SMB, CephFS, iSCSI) albo dyski blokowe (Ceph RBD, StorPool, Lightbits). Magazyn przypinasz do węzłów i do pakietu VPS — nowe maszyny z pakietu powstają w nim. Bez magazynu dysk trafia do katalogu domyślnego węzła.": "Where KVM server disks live: a directory of qcow2 files (thin or thick), a network share mounted by the agent (NFS, SMB, CephFS, iSCSI) or block disks (Ceph RBD, StorPool, Lightbits). Attach the datastore to nodes and to a VPS package — new servers from the package are created in it. Without a datastore the disk goes to the node's default directory.",
     "Dyski blokowe (:type): pełne kopie na zewnętrzne cele działają; Elevate, kopie przyrostowe, migracja z kopiowaniem dysku i odtwarzanie DR wymagają magazynu plikowego (katalog albo zasób montowany).": "Block disks (:type): full backups to external targets work; Elevate, incremental backups, migration with disk copy and DR restore require file-based storage (a directory or a mounted share).",
-    "Zmiana adresu, ścieżki, puli albo klucza dotyczy nowych maszyn — istniejące zachowują dysk tam, gdzie powstał.": "Changing the address, path, pool or key applies to new servers — existing ones keep their disk where it was created."
+    "Zmiana adresu, ścieżki, puli albo klucza dotyczy nowych maszyn — istniejące zachowują dysk tam, gdzie powstał.": "Changing the address, path, pool or key applies to new servers — existing ones keep their disk where it was created.",
+    "(w panelu)": "(in the panel)",
+    "Oświecenia Hyper-V": "Hyper-V enlightenments",
+    "według systemu (Windows — standardowe, Linux — wyłączone)": "by OS (Windows — standard, Linux — off)",
+    "standardowe": "standard",
+    "pełne (TSC, IPI, TLB, vendor_id)": "full (TSC, IPI, TLB, vendor_id)",
+    "passthrough (wszystko z hosta)": "passthrough (everything from the host)",
+    "Przyspieszają Windows w KVM. Szablon i maszyna mogą to nadpisać. Passthrough tylko dla węzłów z tym samym procesorem i QEMU — inaczej migracja na żywo się nie uda.": "They speed up Windows on KVM. The template and the server can override this. Use passthrough only on nodes with the same CPU and QEMU — otherwise live migration will fail.",
+    "dziedzicz z węzła": "inherit from node",
+    "Direct RDP": "Direct RDP",
+    "Gotowy RDP: dane logowania mailem i plik .rdp w panelu": "Ready RDP: login details by e-mail and an .rdp file in the panel",
+    "Plik RDP": "RDP file"
 }

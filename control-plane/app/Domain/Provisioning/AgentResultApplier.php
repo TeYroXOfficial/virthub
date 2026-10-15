@@ -4,6 +4,7 @@ namespace App\Domain\Provisioning;
 
 use App\Domain\Mail\Notify;
 use App\Domain\Webhooks\Webhooks;
+use App\Domain\Windows\DirectRdp;
 use App\Enums\ServerState;
 use App\Models\Backup;
 use App\Models\Server;
@@ -84,7 +85,9 @@ class AgentResultApplier
         };
 
         $mail = ['create' => 'server.created', 'rebuild' => 'server.reinstalled', 'password' => 'server.password_reset'][$job->action] ?? null;
-        if ($mail !== null) {
+        if (in_array($job->action, ['create', 'rebuild'], true) && DirectRdp::enabled($server)) {
+            DirectRdp::notify($server, $job->action);
+        } elseif ($mail !== null) {
             app(Notify::class)->server($server, $mail);
         }
 
