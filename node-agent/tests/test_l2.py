@@ -62,3 +62,31 @@ def test_konfiguracja_goscia_routowanego_ma_brame_on_link():
     eth = data["ethernets"]["primary"]
     assert eth["addresses"] == ["198.51.100.9/32"]
     assert eth["routes"][0] == {"to": "0.0.0.0/0", "via": "169.254.0.1", "on-link": True}
+
+
+def test_restart_hosta_odtwarza_mostki_vlan_i_routowane(settings, monkeypatch):
+    net = NetworkManager(settings)
+    net._save_state(7, [spec("203.0.113.7", vlan=120)], [], None)
+    net._save_state(8, [spec("198.51.100.9", mode="routed", prefix=32, gateway="169.254.0.1")], [], None)
+    net._save_state(9, [spec("203.0.113.9", vlan=300)], [], None)
+
+    monkeypatch.setattr(type(settings), "is_mock", property(lambda self: False))
+    ran: list[list[str]] = []
+    configured: list[int] = []
+    monkeypatch.setattr(l2, "vlan_parent", lambda s: "eno1")
+    monkeypatch.setattr(net, "ensure_base_table", lambda: None)
+    monkeypatch.setattr(net.nat, "prepare", lambda interfaces: None)
+    monkeypatch.setattr(net.nat, "_require_sysctl", lambda *a: None)
+    monkeypatch.setattr(net, "configure", lambda server_id, *a, **k: configured.append(server_id))
+
+    # Mostek VLAN 300 nie powstaje — reguły maszyny i tak muszą wrócić.
+    def flaky(commands):
+        if any("eno1.300" in argv for argv in commands):
+            raise RuntimeError("brak łącza")
+        ran.extend(commands)
+
+    monkeypatch.setattr(l2, "run_idempotent", flaky)
+    assert net.restore() == 3
+    assert configured == [7, 8, 9]
+    assert ["ip", "link", "set", "dev", "eno1.120", "master", "vhv120"] in ran
+    assert ["ip", "link", "add", "name", settings.routed_bridge, "type", "bridge"] in ran
