@@ -21,9 +21,9 @@ class PrivateNetworkController extends Controller
 
         return response()->json([
             'data' => $server->nics()->with('network')->get()->map(fn (ServerNic $nic) => $this->nic($nic))->values(),
-            'networks' => PrivateNetwork::query()->where('user_id', $server->user_id)->where('hypervisor_id', $server->hypervisor_id)
-                ->withCount('nics')->orderBy('name')->get()
-                ->map(fn (PrivateNetwork $n) => ['id' => $n->id, 'name' => $n->name, 'cidr' => $n->cidr, 'servers' => $n->nics_count])->values(),
+            'networks' => PrivateNetwork::query()->where('user_id', $server->user_id)
+                ->withCount('nics')->orderBy('name')->get()->filter(fn (PrivateNetwork $n) => $n->reachableFrom($server->hypervisor))
+                ->map(fn (PrivateNetwork $n) => ['id' => $n->id, 'name' => $n->name, 'cidr' => $n->cidr, 'servers' => $n->nics_count, 'spans_group' => $n->spansGroup()])->values(),
             'limit' => (int) config('virthub.private_networks.nics_per_server', 4),
         ]);
     }

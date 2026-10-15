@@ -24,6 +24,7 @@ class Hypervisor extends Model
     public const HEARTBEAT_TIMEOUT = 120;
 
     protected $fillable = [
+        'vxlan_address',
         'hw_disk_bus',
         'hw_io_mode',
         'hw_cpu_model',
@@ -165,6 +166,12 @@ class Hypervisor extends Model
     public function diskGbFree(): int
     {
         return max(0, $this->disk_gb_total - $this->disk_gb_used);
+    }
+
+    /** Topologia sieci maszyn zgłaszana przez agenta: bridge, ovs albo direct. */
+    public function networkBackend(): string
+    {
+        return (string) ($this->last_health['network_backend'] ?? 'bridge');
     }
 
     public function hasCapacityFor(int $vcpu, int $ramMb, int $diskGb): bool

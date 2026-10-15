@@ -255,6 +255,19 @@
                         <div class="hint">{{ __('Puste = wszystkie rdzenie. Pozwala zostawić rdzenie dla systemu węzła.') }}</div></div>
                 </fieldset>
             @endif
+            @if ($node->virtualization === \App\Enums\Virtualization::Kvm)
+                <div class="field">
+                    <label for="n-vxlan">{{ __('Adres w sieci wewnętrznej (VXLAN)') }} <span class="muted">{{ __('(opcjonalnie)') }}</span></label>
+                    <input id="n-vxlan" name="vxlan_address" value="{{ old('vxlan_address', $node->vxlan_address) }}" placeholder="10.10.0.11">
+                    <div class="hint">{{ __('Adres węzła w sieci między węzłami grupy. Gdy jest ustawiony, sieci prywatne klientów z tego węzła obejmują całą grupę (tunel VXLAN, UDP 4789) — maszyny mogą być na różnych węzłach i migrować z kartami prywatnymi. Tunel nie jest szyfrowany: używaj sieci wydzielonej.') }}</div>
+                </div>
+                @php $backend = $node->networkBackend(); @endphp
+                <p class="hint">{{ __('Topologia sieci maszyn (VH_NETWORK_BACKEND w agent.env):') }}
+                    <span class="pill {{ $backend === 'bridge' ? 'ok' : 'warning' }}">{{ ['bridge' => __('mostek Linuksa'), 'ovs' => 'Open vSwitch', 'direct' => 'macvtap'][$backend] ?? $backend }}</span>
+                    @if ($backend === 'ovs') {{ __('Anty-spoofing przez OpenFlow; zapora klienta na karcie głównej nie działa w tym trybie.') }} @endif
+                    @if ($backend === 'direct') {{ __('Bez mostka i bez filtrowania na hoście — tylko dla zaufanych, jednodzierżawnych węzłów.') }} @endif
+                </p>
+            @endif
             <fieldset class="grid grid-3" style="border:0;padding:0;margin:0 0 12px">
                 <legend class="muted" style="margin-bottom:6px">{{ __('Transfer maszyn na węźle (pakiet i maszyna mogą nadpisać)') }}</legend>
                 <div class="field"><label for="n-tc">{{ __('Liczony ruch') }}</label>

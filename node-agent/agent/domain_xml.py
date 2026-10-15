@@ -55,6 +55,7 @@ def build_domain_xml(
     extra_interfaces: list[str] | None = None,
     extra_disks: list[str] | None = None,
     hardware: Any = None,
+    interface_xml: str | None = None,
 ) -> str:
     """Zwraca XML domeny gotowy do `virsh define`.
 
@@ -93,14 +94,7 @@ def build_domain_xml(
     </disk>"""
         )
 
-    devices.append(
-        f"""    <interface type='bridge'>
-      <source bridge='{escape(bridge)}'/>
-      <mac address='{escape(mac)}'/>
-      <target dev='{escape(interface_target)}'/>
-      <model type='virtio'/>
-    </interface>"""
-    )
+    devices.append(interface_xml or primary_interface_xml("bridge", bridge, mac, interface_target))
     # Karty w sieciach prywatnych — po karcie głównej, żeby ta pozostała pierwszą (eth0/ens3).
     devices.extend(extra_interfaces or [])
 
@@ -162,6 +156,22 @@ def build_domain_xml(
 </domain>
 """
     return with_hardware(xml, hardware, allow_nested) if hardware is not None else xml
+
+
+def primary_interface_xml(backend: str, bridge: str, mac: str, target: str, vlan: int | None = None, direct_dev: str = "") -> str:
+    """Karta główna: mostek Linuksa, port Open vSwitch (VLAN tagiem na porcie) albo
+    macvtap na karcie fizycznej (tryb bridge — maszyny na tej karcie widzą się nawzajem)."""
+    common = (f"      <mac address='{escape(mac)}'/>\n      <target dev='{escape(target)}'/>\n"
+              "      <model type='virtio'/>\n")
+    if backend == "direct":
+        return (f"    <interface type='direct'>\n      <source dev='{escape(direct_dev)}' mode='bridge'/>\n"
+                f"{common}    </interface>")
+    if backend == "ovs":
+        tag = f"      <vlan><tag id='{int(vlan)}'/></vlan>\n" if vlan else ""
+        return (f"    <interface type='bridge'>\n      <source bridge='{escape(bridge)}'/>\n"
+                f"      <virtualport type='openvswitch'/>\n{tag}{common}    </interface>")
+    return (f"    <interface type='bridge'>\n      <source bridge='{escape(bridge)}'/>\n"
+            f"{common}    </interface>")
 
 
 def disk_dev(slot: int) -> str:

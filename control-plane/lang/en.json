@@ -4028,5 +4028,19 @@
     "Systemy plików zamrożone przez qemu-guest-agent na czas migawki.": "Filesystems were frozen by qemu-guest-agent for the snapshot.",
     "spójna": "consistent",
     "Bez qemu-guest-agent w maszynie — kopia jak po nagłym wyłączeniu zasilania.": "No qemu-guest-agent in the machine — the backup is like after a sudden power cut.",
-    "bez zamrożenia": "not frozen"
+    "bez zamrożenia": "not frozen",
+    "Sieć :name obejmuje grupę węzłów — maszyna jest na węźle spoza grupy albo bez adresu w sieci wewnętrznej (VXLAN).": "Network :name spans a node group — the machine is on a node outside the group or without an internal network (VXLAN) address.",
+    "Maszyna nie ma takiej karty sieciowej.": "The machine has no such network card.",
+    "Sieć prywatna :name obejmuje inną grupę węzłów albo węzeł docelowy nie ma adresu VXLAN — odłącz kartę przed migracją.": "Private network :name spans another node group or the destination node has no VXLAN address — detach the card before migrating.",
+    "Adres w sieci wewnętrznej (VXLAN)": "Internal network address (VXLAN)",
+    "Adres węzła w sieci między węzłami grupy. Gdy jest ustawiony, sieci prywatne klientów z tego węzła obejmują całą grupę (tunel VXLAN, UDP 4789) — maszyny mogą być na różnych węzłach i migrować z kartami prywatnymi. Tunel nie jest szyfrowany: używaj sieci wydzielonej.": "The node's address on the network between the group's nodes. When set, customer private networks from this node span the whole group (VXLAN tunnel, UDP 4789) — machines can be on different nodes and migrate with private cards. The tunnel is not encrypted: use a dedicated network.",
+    "Topologia sieci maszyn (VH_NETWORK_BACKEND w agent.env):": "Machine network topology (VH_NETWORK_BACKEND in agent.env):",
+    "mostek Linuksa": "Linux bridge",
+    "Anty-spoofing przez OpenFlow; zapora klienta na karcie głównej nie działa w tym trybie.": "Anti-spoofing via OpenFlow; the customer firewall on the primary card does not work in this mode.",
+    "Bez mostka i bez filtrowania na hoście — tylko dla zaufanych, jednodzierżawnych węzłów.": "No bridge and no filtering on the host — only for trusted, single-tenant nodes.",
+    "Maszyny tej sieci mogą być na różnych węzłach grupy.": "Machines in this network can be on different nodes of the group.",
+    "cała grupa": "whole group",
+    "główna (internet)": "primary (internet)",
+    "sieć prywatna :name": "private network :name",
+    "karta :slot": "card :slot"
 }

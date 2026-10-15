@@ -57,6 +57,8 @@ class Firewall
             'source' => ['nullable', 'string', 'max:64'],
             'comment' => ['nullable', 'string', 'max:120'],
             'admin_rule' => ['sometimes', 'boolean'],
+            // Karta: główna albo karta w sieci prywatnej (n1–n7).
+            'interface' => ['nullable', 'string', 'regex:/^(primary|n[1-7])$/'],
         ];
     }
 
@@ -109,6 +111,11 @@ class Firewall
     {
         $this->assertCanManage($actor, $server);
         $clean = $this->normalizeRule($data);
+        $interface = (string) ($data['interface'] ?? 'primary') ?: 'primary';
+        if ($interface !== 'primary' && ! $server->nics()->where('slot', (int) substr($interface, 1))->exists()) {
+            throw ValidationException::withMessages(['interface' => __('Maszyna nie ma takiej karty sieciowej.')]);
+        }
+        $clean['interface'] = $interface;
 
         if ($server->firewallRules()->count() >= self::MAX_RULES) {
             throw ValidationException::withMessages([

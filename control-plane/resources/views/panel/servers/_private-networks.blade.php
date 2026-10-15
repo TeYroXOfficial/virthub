@@ -3,7 +3,9 @@
     $canEditNics = auth()->user()->can('firewall', $server);
     $nics = $server->isContainer() ? collect() : $server->nics()->with('network')->get();
     $ownNetworks = $server->isContainer() || ! $server->hypervisor_id ? collect()
-        : \App\Models\PrivateNetwork::query()->where('user_id', $server->user_id)->where('hypervisor_id', $server->hypervisor_id)->withCount('nics')->orderBy('name')->get();
+        : \App\Models\PrivateNetwork::query()->where('user_id', $server->user_id)
+            ->where(fn ($q) => $q->where('hypervisor_id', $server->hypervisor_id)->orWhere(fn ($g) => $g->whereNotNull('hypervisor_group_id')->where('hypervisor_group_id', $server->hypervisor?->hypervisor_group_id)))
+            ->withCount('nics')->orderBy('name')->get()->filter(fn ($n) => $n->reachableFrom($server->hypervisor) || $nics->contains('private_network_id', $n->id));
     $joinable = $ownNetworks->whereNotIn('id', $nics->pluck('private_network_id'));
     $suggested = $canEditNics && $server->user ? app(\App\Domain\Network\PrivateNetworks::class)->suggestCidr($server->user) : null;
 @endphp
@@ -21,7 +23,8 @@
                     <tbody>
                     @foreach ($nics as $nic)
                         <tr>
-                            <td>{{ $nic->network->name }} <span class="muted">{{ $nic->network->cidr }}</span></td>
+                            <td>{{ $nic->network->name }} <span class="muted">{{ $nic->network->cidr }}</span>
+                                @if ($nic->network->spansGroup()) <span class="pill neutral plain" title="{{ __('Maszyny tej sieci mogą być na różnych węzłach grupy.') }}">{{ __('cała grupa') }}</span> @endif</td>
                             <td><code>{{ $nic->address ? $nic->address.'/'.$nic->network->prefix() : '—' }}</code></td>
                             <td><span class="muted">#{{ $nic->slot + 1 }}</span> <code>{{ $nic->effectiveMac() }}</code></td>
                             <td style="text-align:right">

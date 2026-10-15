@@ -553,13 +553,15 @@ class LibvirtDriver(HypervisorDriver):
                 extra_interfaces=[private_net.interface_xml(req.server_id, n) for n in req.private_nics],
                 extra_disks=[self.storage.disk_xml(self.extra_disk_name(name, d.slot), disk_dev(d.slot)) for d in req.extra_disks],
                 hardware=req.hardware,
+                interface_xml=self._primary_interface(req.interfaces, bridge, mac, target),
             )
 
             self.storage.libvirt_prepare(self.conn, name)
             domain = self.conn.defineXML(xml)
             created.append("domain")
 
-            self.network.configure(req.server_id, req.interfaces, firewall=[], net_filter=req.filter)
+            self.network.configure(req.server_id, req.interfaces, firewall=[], net_filter=req.filter,
+                                   private_nics=req.private_nics, mac=mac)
             created.append("network")
             if req.bandwidth_mbps:
                 self._apply_bandwidth(domain, req.server_id, req.bandwidth_mbps)
@@ -1529,7 +1531,9 @@ class LibvirtDriver(HypervisorDriver):
     def configure_network(self, uuid: str, req: NetworkConfigRequest) -> dict[str, Any]:
         domain = self._domain(uuid)
         server_id = server_id_from_name(domain.name())
-        self.network.configure(server_id, req.interfaces, req.firewall, req.policy, req.filter)
+        self.network.configure(server_id, req.interfaces, req.firewall, req.policy, req.filter,
+                               private_nics=req.private_nics,
+                               mac=self._domain_mac(domain) if self.settings.network_backend == "ovs" else None)
         if "bandwidth_mbps" in req.model_fields_set:
             self._apply_bandwidth(domain, server_id, req.bandwidth_mbps)
         return {
@@ -1538,6 +1542,16 @@ class LibvirtDriver(HypervisorDriver):
             "firewall_rules": len(req.firewall),
             "bandwidth_mbps": req.bandwidth_mbps,
         }
+
+    def _primary_interface(self, interfaces: list, bridge: str, mac: str, target: str) -> str:
+        from . import l2
+        from .domain_xml import primary_interface_xml
+
+        backend = self.network.backend_for(interfaces)
+        if backend == "direct" and not self.settings.direct_dev:
+            raise DriverError("VH_NETWORK_BACKEND=direct wymaga VH_DIRECT_DEV (karta fizyczna dla macvtap).")
+        _, vlan = l2.layout(interfaces)
+        return primary_interface_xml(backend, bridge, mac, target, vlan=vlan, direct_dev=self.settings.direct_dev)
 
     def _apply_bandwidth(self, domain: Any, server_id: int, mbps: int | None) -> None:
         """Limit prędkości karty głównej (tc w libvirt) — od razu i w definicji. 0 = bez limitu."""
@@ -1669,6 +1683,7 @@ class LibvirtDriver(HypervisorDriver):
             libvirt_connected=connected,
             running_vms=running,
             security={"apparmor": apparmor_enabled(), "host_guard": self.settings.guard_host},
+            network_backend=self.settings.network_backend,
             **metrics,
         )
 

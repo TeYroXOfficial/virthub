@@ -108,6 +108,11 @@ class Settings:
     # (puste = wykryj port fizyczny głównego mostka).
     routed_bridge: str = "vhroute0"
     vlan_parent: str = ""
+    # Topologia sieci publicznej maszyn: bridge (mostek Linuksa, domyślnie), ovs (mostek
+    # Open vSwitch — VLAN tagiem na porcie, anty-spoofing regułami OpenFlow) albo direct
+    # (macvtap na karcie VH_DIRECT_DEV — bez mostka i bez filtrowania na hoście).
+    network_backend: str = "bridge"
+    direct_dev: str = ""
     # Migracja na żywo: adres libvirt węzła docelowego ({host} = jego adres z panelu).
     # Wymaga skonfigurowanego połączenia libvirt między węzłami (TLS albo SSH).
     migration_uri: str = "qemu+tls://{host}/system"
@@ -160,6 +165,8 @@ def get_settings() -> Settings:
         nat_bridge=_env("VH_NAT_BRIDGE", "vhnat0"),
         routed_bridge=_env("VH_ROUTED_BRIDGE", "vhroute0"),
         vlan_parent=_env("VH_VLAN_PARENT", ""),
+        network_backend=_env("VH_NETWORK_BACKEND", "bridge") if _env("VH_NETWORK_BACKEND", "bridge") in ("bridge", "ovs", "direct") else "bridge",
+        direct_dev=_env("VH_DIRECT_DEV", ""),
         migration_uri=_env("VH_MIGRATION_URI", "qemu+tls://{host}/system"),
         guard_host=_env("VH_GUARD_HOST", "1") not in ("0", "false", "no"),
         ct_max_processes=int(_env("VH_CT_MAX_PROCESSES", "4096")),

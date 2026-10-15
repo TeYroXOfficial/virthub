@@ -26,6 +26,7 @@ class FirewallRule extends Model
         'source',
         'comment',
         'position',
+        'interface',
     ];
 
     protected function casts(): array
@@ -53,6 +54,7 @@ class FirewallRule extends Model
     public function toAgentPayload(): array
     {
         return [
+            'interface' => $this->interface ?: 'primary',
             'action' => $this->action,
             'direction' => $this->direction,
             'protocol' => $this->protocol,
@@ -72,8 +74,7 @@ class FirewallRule extends Model
 
         $ports = match (true) {
             ! in_array($this->protocol, ['tcp', 'udp'], true) => null,
-            $this->port_from && $this->port_to && $this->port_from !== $this->port_to
-                => __('porty :from–:to', ['from' => $this->port_from, 'to' => $this->port_to]),
+            $this->port_from && $this->port_to && $this->port_from !== $this->port_to => __('porty :from–:to', ['from' => $this->port_from, 'to' => $this->port_to]),
             (bool) $this->port_from => __('port :port', ['port' => $this->port_from]),
             default => __('wszystkie porty'),
         };

@@ -94,7 +94,17 @@
 
                 <form method="POST" action="{{ route('panel.servers.firewall.store', $server) }}" id="fw-form">
                     @csrf
+                    @php $fwNics = $server->isContainer() ? collect() : $server->nics()->with('network')->get(); @endphp
                     <div class="grid-compact">
+                        @if ($fwNics->isNotEmpty())
+                            <div class="field">
+                                <label for="fw-interface">{{ __('Karta') }}</label>
+                                <select id="fw-interface" name="interface">
+                                    <option value="primary">{{ __('główna (internet)') }}</option>
+                                    @foreach ($fwNics as $nic) <option value="n{{ $nic->slot }}" @selected(old('interface') === 'n'.$nic->slot)>{{ __('sieć prywatna :name', ['name' => $nic->network->name]) }}</option> @endforeach
+                                </select>
+                            </div>
+                        @endif
                         <div class="field">
                             <label for="fw-action">{{ __('Akcja') }}</label>
                             <select id="fw-action" name="action">
@@ -172,6 +182,7 @@
                             <span class="pill {{ $rule->action === 'accept' ? 'ok' : 'critical' }}">{{ $rule->action === 'accept' ? __('zezwól') : __('blokuj') }}</span>
                             <span class="muted">{{ $rule->direction === 'in' ? __('przychodzący') : __('wychodzący') }}</span>
                             @if ($rule->isAdminRule()) <span class="pill info plain">{{ __('administrator') }}</span> @endif
+                            @if (($rule->interface ?? 'primary') !== 'primary') <span class="pill neutral plain">{{ __('karta :slot', ['slot' => '#'.((int) substr($rule->interface, 1) + 1)]) }}</span> @endif
                             @unless ($rule->enabled) <span class="pill neutral plain">{{ __('wyłączona') }}</span> @endunless
                         </td>
                         <td class="mono">

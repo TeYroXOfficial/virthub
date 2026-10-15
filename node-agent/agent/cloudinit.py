@@ -196,6 +196,8 @@ def render_network_config(
         ]
         if nic.address:
             lines.append(f"    addresses:{_yaml_list([f'{nic.address}/{nic.prefix}'], 6)}")
+        if getattr(nic, "vxlan", None):
+            lines.append(f"    mtu: {int(nic.vxlan.mtu)}")  # tunel VXLAN między węzłami: 50 B nagłówka
 
     return "\n".join(lines) + "\n"
 
