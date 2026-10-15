@@ -56,6 +56,12 @@ log = logging.getLogger("virthub.driver")
 AGENT_VERSION = "0.1.0"
 
 
+def host_arch() -> str:
+    """Architektura węzła w nazewnictwie libvirt: x86_64 albo aarch64."""
+    machine = platform.machine().lower()
+    return {"amd64": "x86_64", "arm64": "aarch64"}.get(machine, machine or "x86_64")
+
+
 class DriverError(RuntimeError):
     pass
 
@@ -573,6 +579,7 @@ class LibvirtDriver(HypervisorDriver):
                 cpu_limit_percent=req.cpu_limit_percent,
                 disk_path=str(disk),
                 disk_xml=self.storage.disk_xml(name),
+                arch=host_arch(),
                 seed_path=str(seed),
                 bridge=bridge,
                 mac=mac,
@@ -1775,6 +1782,7 @@ class LibvirtDriver(HypervisorDriver):
             running_vms=running,
             security={"apparmor": apparmor_enabled(), "host_guard": self.settings.guard_host},
             network_backend=self.settings.network_backend,
+            arch=host_arch(),
             **metrics,
         )
 
@@ -2306,6 +2314,7 @@ class MockDriver(HypervisorDriver):
             virtualization="mock",
             libvirt_connected=False,
             running_vms=sum(1 for r in self._load().values() if r["state"] == "running"),
+            arch=host_arch(),
             **self._host_metrics(),
         )
 

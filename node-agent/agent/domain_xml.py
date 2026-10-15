@@ -105,6 +105,7 @@ def build_domain_xml(
     extra_disks: list[str] | None = None,
     hardware: Any = None,
     interface_xml: str | None = None,
+    arch: str = "x86_64",
 ) -> str:
     """Zwraca XML domeny gotowy do `virsh define`.
 
@@ -204,7 +205,56 @@ def build_domain_xml(
   </devices>
 </domain>
 """
+    if arch == "aarch64":
+        xml = adapt_aarch64(xml)
     return with_hardware(xml, hardware, allow_nested) if hardware is not None else xml
+
+
+def domain_arch(root: Any) -> str:
+    type_el = root.find("./os/type")
+    return (type_el.get("arch") if type_el is not None else None) or "x86_64"
+
+
+def adapt_aarch64(xml: str) -> str:
+    """Definicja dla węzła ARM (aarch64): maszyna `virt` z UEFI (AAVMF), GICv3,
+    konsola PL011, nośnik cloud-init na VirtIO SCSI i mysz/klawiatura USB dla VNC
+    — bez elementów istniejących tylko na x86 (APIC, zegary RTC/PIT/HPET, vmx/svm,
+    oświecenia Hyper-V, SATA)."""
+    from xml.etree import ElementTree as ET
+
+    root = ET.fromstring(xml)
+    os_el = root.find("os")
+    type_el = os_el.find("type")
+    type_el.set("arch", "aarch64")
+    type_el.set("machine", "virt")
+    os_el.set("firmware", "efi")
+    features = root.find("features")
+    for child in list(features):
+        if child.tag in ("apic", "hyperv"):
+            features.remove(child)
+    ET.SubElement(features, "gic", {"version": "3"})
+    cpu = root.find("cpu")
+    for feature in cpu.findall("feature"):
+        cpu.remove(feature)
+    clock = root.find("clock")
+    for timer in list(clock):
+        clock.remove(timer)
+    devices = root.find("devices")
+    devices.find("emulator").text = "/usr/bin/qemu-system-aarch64"
+    for serial in devices.findall("serial"):
+        serial.find("target").set("type", "system-serial")
+        ET.SubElement(serial.find("target"), "model", {"name": "pl011"})
+    for disk in devices.findall("disk"):
+        target = disk.find("target")
+        if disk.get("device") == "cdrom" and target is not None and target.get("bus") == "sata":
+            target.set("bus", "scsi")
+    if not any(c.get("type") == "scsi" for c in devices.findall("controller")):
+        first = next((i for i, el in enumerate(devices) if el.tag == "disk"), 1)
+        devices.insert(first, ET.Element("controller", {"type": "scsi", "index": "0", "model": "virtio-scsi"}))
+    devices.append(ET.Element("controller", {"type": "usb", "model": "qemu-xhci"}))
+    devices.append(ET.Element("input", {"type": "tablet", "bus": "usb"}))
+    devices.append(ET.Element("input", {"type": "keyboard", "bus": "usb"}))
+    return ET.tostring(root, encoding="unicode")
 
 
 def primary_interface_xml(backend: str, bridge: str, mac: str, target: str, vlan: int | None = None, direct_dev: str = "") -> str:
@@ -239,6 +289,7 @@ def with_hardware(xml: str, hw: Any, allow_nested: bool = False) -> str:
     devices = root.find("devices")
     if devices is None:
         raise ValueError("Nieprawidłowa definicja domeny — brak <devices>.")
+    arm = domain_arch(root) == "aarch64"
 
     vcpu = root.find("vcpu")
     if vcpu is not None:
@@ -253,7 +304,7 @@ def with_hardware(xml: str, hw: Any, allow_nested: bool = False) -> str:
         for child in list(os_el):
             if child.tag in ("loader", "nvram", "firmware"):
                 os_el.remove(child)
-        if hw.firmware == "uefi":
+        if hw.firmware == "uefi" or arm:  # ARM (virt) uruchamia się tylko z UEFI
             os_el.set("firmware", "efi")
             # Bez Secure Boot: nie wymaga SMM ani zapisanych kluczy, a Windows 11 i tak się zainstaluje z vTPM.
             fw = ET.Element("firmware")
@@ -267,7 +318,7 @@ def with_hardware(xml: str, hw: Any, allow_nested: bool = False) -> str:
     for tpm in devices.findall("tpm"):
         devices.remove(tpm)
     if hw.tpm:
-        tpm = ET.SubElement(devices, "tpm", {"model": "tpm-crb"})
+        tpm = ET.SubElement(devices, "tpm", {"model": "tpm-tis-device" if arm else "tpm-crb"})
         ET.SubElement(tpm, "backend", {"type": "emulator", "version": "2.0"})
 
     # --- procesor ---------------------------------------------------------
@@ -275,7 +326,8 @@ def with_hardware(xml: str, hw: Any, allow_nested: bool = False) -> str:
     index = list(root).index(old_cpu) if old_cpu is not None else len(root)
     if old_cpu is not None:
         root.remove(old_cpu)
-    if hw.cpu_model in (None, "host-passthrough"):
+    # Modele CPU z listy panelu są x86 — na ARM zawsze procesor hosta.
+    if hw.cpu_model in (None, "host-passthrough") or (arm and hw.cpu_model != "host-model"):
         cpu = ET.Element("cpu", {"mode": "host-passthrough", "check": "none"})
     elif hw.cpu_model == "host-model":
         cpu = ET.Element("cpu", {"mode": "host-model", "check": "partial"})
@@ -283,7 +335,7 @@ def with_hardware(xml: str, hw: Any, allow_nested: bool = False) -> str:
         # Stały model: ta sama maszyna wystartuje (i zmigruje na żywo) na węzłach z różnymi procesorami.
         cpu = ET.Element("cpu", {"mode": "custom", "match": "exact", "check": "partial"})
         ET.SubElement(cpu, "model", {"fallback": "allow"}).text = hw.cpu_model
-    if not allow_nested:
+    if not allow_nested and not arm:
         for name in ("vmx", "svm"):
             ET.SubElement(cpu, "feature", {"policy": "disable", "name": name})
     root.insert(index, cpu)
@@ -322,7 +374,7 @@ def with_hardware(xml: str, hw: Any, allow_nested: bool = False) -> str:
     elif iothreads is not None:
         root.remove(iothreads)
 
-    if getattr(hw, "hyperv", None):
+    if getattr(hw, "hyperv", None) and not arm:
         apply_hyperv(root, hw.hyperv)
 
     return ET.tostring(root, encoding="unicode")

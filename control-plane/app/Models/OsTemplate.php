@@ -16,6 +16,7 @@ class OsTemplate extends Model
 
     protected $fillable = [
         'hw_firmware',
+        'arch',
         'hw_hyperv',
         'direct_rdp',
         'hw_tpm',

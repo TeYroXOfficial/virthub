@@ -123,10 +123,14 @@ class ServerProvisioner
             $networkType = $package->network_type ?: IpPool::TYPE_PUBLIC;
             $ipv6Count = (int) $package->ipv6_count;
 
+            if ($preferred !== null && $preferred->arch() !== ($template->arch ?: 'x86_64')) {
+                throw new NoCapacityException(__('Węzeł :name ma architekturę :node, a szablon :template.', ['name' => $preferred->name, 'node' => $preferred->arch(), 'template' => $template->arch ?: 'x86_64']));
+            }
             $hypervisor = $this->selector->reserve(
                 $server,
                 $preferred,
                 fn (Hypervisor $h) => ($location === null || $h->hypervisor_group_id === $location->id)
+                    && $h->arch() === ($template->arch ?: 'x86_64')
                     && self::nodeHasDatastore($h, $datastore)
                     && $this->ips->hasCapacity($h, $networkType, $package->ip_count, $ipv6Count),
             );

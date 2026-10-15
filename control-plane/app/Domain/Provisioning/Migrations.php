@@ -241,6 +241,9 @@ class Migrations
         if ($destination->virtualization !== Virtualization::Kvm || ! Hypervisor::query()->available()->whereKey($destination->id)->exists()) {
             $fail(__('Węzeł :name nie przyjmuje teraz maszyn KVM.', ['name' => $destination->name]));
         }
+        if ($destination->arch() !== $server->hypervisor->arch()) {
+            $fail(__('Węzeł :name ma inną architekturę (:arch) — maszyny nie da się przenieść między x86 a ARM.', ['name' => $destination->name, 'arch' => $destination->arch()]));
+        }
         if (! $destination->hasCapacityFor($server->vcpu, $server->ram_mb, $server->disk_gb)) {
             $fail(__('Węzeł :name nie ma wolnych zasobów na tę maszynę.', ['name' => $destination->name]));
         }

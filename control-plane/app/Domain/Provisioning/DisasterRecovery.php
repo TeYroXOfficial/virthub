@@ -6,6 +6,7 @@ use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
 use App\Enums\ServerState;
 use App\Enums\Virtualization;
+use App\Jobs\DrHookJob;
 use App\Jobs\DrSnapshotJob;
 use App\Models\AuditLog;
 use App\Models\Backup;
@@ -14,6 +15,7 @@ use App\Models\IpAddress;
 use App\Models\IpPool;
 use App\Models\PrivateNetwork;
 use App\Models\Server;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -75,6 +77,19 @@ class DisasterRecovery
         $skipped = [];
         $pools = 0;
         $items = $this->inventory($failed);
+        $env = ['VH_PHASE' => 'pre', 'VH_FAILED_NODE' => $failed->name, 'VH_REPLACEMENT_NODE' => $replacement->name,
+            'VH_SERVERS' => $items->map(fn ($i) => $i['server']->id)->implode(',')];
+
+        // Skrypt przed odtworzeniem trafia do kolejki zastępczego węzła pierwszy —
+        // odtwarzanie maszyn czeka za nim (kolejka agenta jest jednowątkowa).
+        $pre = (string) Setting::get('dr.pre_script', '');
+        if (trim($pre) !== '') {
+            try {
+                DrHookJob::dispatch($replacement->id, 'pre', $env, [], (new AgentClient($replacement))->runHook('dr-pre', $pre, $env));
+            } catch (AgentException $e) {
+                throw new \DomainException(__('Nie udało się zlecić skryptu przed odtworzeniem: :error', ['error' => $e->getMessage()]));
+            }
+        }
 
         DB::transaction(function () use ($failed, $replacement, $items, $actor, &$queued, &$skipped, &$pools) {
             // Adresy jadą razem z maszynami — ta sama sieć L2 albo przeniesiona trasa po stronie dostawcy.
@@ -111,6 +126,10 @@ class DisasterRecovery
                 $queued[] = $server->id;
             }
         });
+
+        if (trim((string) Setting::get('dr.post_script', '')) !== '' && $queued !== []) {
+            DrHookJob::dispatch($replacement->id, 'post', ['VH_PHASE' => 'post'] + $env, $queued)->delay(now()->addSeconds(30));
+        }
 
         AuditLog::record('hypervisor.recovered', $failed, [
             'replacement' => $replacement->name, 'queued' => $queued, 'skipped' => $skipped, 'pools' => $pools,

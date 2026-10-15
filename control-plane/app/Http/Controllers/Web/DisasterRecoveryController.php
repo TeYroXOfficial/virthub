@@ -8,6 +8,7 @@ use App\Models\AuditLog;
 use App\Models\BackupPlan;
 use App\Models\BackupTarget;
 use App\Models\Hypervisor;
+use App\Models\Setting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -26,7 +27,24 @@ class DisasterRecoveryController extends Controller
             'plans' => BackupPlan::query()->orderBy('name')->get(),
             'targets' => BackupTarget::query()->where('is_active', true)->orderBy('name')->get(),
             'replacements' => Hypervisor::query()->available()->where('virtualization', 'kvm')->whereKeyNot($hypervisor->id)->orderBy('name')->get(),
+            'preScript' => (string) Setting::get('dr.pre_script', ''),
+            'postScript' => (string) Setting::get('dr.post_script', ''),
+            'hookLogs' => AuditLog::query()->where('action', 'hypervisor.dr_hook')->latest('id')->limit(5)->get(),
         ]);
+    }
+
+    /** Skrypty przed i po odtworzeniu (wspólne dla wszystkich węzłów) — wyłącznie administrator. */
+    public function scripts(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->isAdmin(), 403);
+        $data = $request->validate([
+            'pre_script' => ['nullable', 'string', 'max:65536'],
+            'post_script' => ['nullable', 'string', 'max:65536'],
+        ]);
+        Setting::put(['dr.pre_script' => ($data['pre_script'] ?? '') ?: null, 'dr.post_script' => ($data['post_script'] ?? '') ?: null]);
+        AuditLog::record('dr.scripts', null, ['pre' => ! empty($data['pre_script']), 'post' => ! empty($data['post_script'])]);
+
+        return back()->with('status', __('Zapisano skrypty DR.'));
     }
 
     public function update(Request $request, Hypervisor $hypervisor): RedirectResponse

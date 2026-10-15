@@ -176,6 +176,11 @@
                                             </div>
                                             <div class="field"><label>{{ __('Min. dysk (GB)') }}</label><input name="min_disk_gb" type="text" inputmode="numeric" value="{{ $template->min_disk_gb }}" required></div>
                                             <div class="field"><label>{{ __('Kolejność') }}</label><input name="sort_order" type="text" inputmode="numeric" value="{{ $template->sort_order }}"></div>
+                                            <div class="field"><label>{{ __('Architektura') }}</label>
+                                                <select name="arch">
+                                                    <option value="x86_64" @selected(($template->arch ?: 'x86_64') === 'x86_64')>x86_64</option>
+                                                    <option value="aarch64" @selected($template->arch === 'aarch64')>aarch64 (ARM)</option>
+                                                </select></div>
                                             @unless ($template->isContainer())
                                                 <div class="field"><label>{{ __('Rozruch') }}</label>
                                                     <select name="hw_firmware">

@@ -10,7 +10,16 @@ command -v virsh >/dev/null 2>&1 || exit 0
 command -v apt-get >/dev/null 2>&1 || exit 0
 
 missing=()
-[ -e /usr/share/OVMF/OVMF_CODE_4M.fd ] || [ -e /usr/share/OVMF/OVMF_CODE.fd ] || missing+=(ovmf)
+case "$(uname -m)" in
+    aarch64|arm64)
+        # Węzeł ARM: emulator aarch64 i UEFI AAVMF — bez nich maszyna `virt` nie wystartuje.
+        command -v qemu-system-aarch64 >/dev/null 2>&1 || missing+=(qemu-system-arm)
+        [ -e /usr/share/AAVMF/AAVMF_CODE.fd ] || missing+=(qemu-efi-aarch64)
+        ;;
+    *)
+        [ -e /usr/share/OVMF/OVMF_CODE_4M.fd ] || [ -e /usr/share/OVMF/OVMF_CODE.fd ] || missing+=(ovmf)
+        ;;
+esac
 command -v swtpm >/dev/null 2>&1 || missing+=(swtpm swtpm-tools)
 
 if [ "${#missing[@]}" -gt 0 ]; then

@@ -668,7 +668,9 @@ class AdminController extends Controller
             'min_disk_gb' => ['required', 'integer', 'min:1'],
             'hw_firmware' => ['nullable', Rule::in(['bios', 'uefi'])],
             'hw_hyperv' => ['nullable', Rule::in(ServerHardware::HYPERV_PROFILES)],
+            'arch' => ['nullable', Rule::in(['x86_64', 'aarch64'])],
         ]);
+        $validated['arch'] = ($validated['arch'] ?? null) ?: ($template->arch ?: 'x86_64');
         if (! $template->isContainer()) {
             $validated['hw_tpm'] = $request->boolean('hw_tpm');
             $validated['is_rescue'] = $template->family !== 'windows' && $request->boolean('is_rescue');

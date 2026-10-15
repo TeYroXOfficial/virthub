@@ -273,6 +273,8 @@
                     <div class="hint">{{ __('Adres albo nazwa węzła w szybkiej sieci wewnętrznej. Gdy jest ustawiony, inne węzły pobierają z niego dyski migracji na zimno (port agenta), a migracja na żywo łączy się z nim zamiast z adresem publicznym.') }}</div>
                 </div>
                 @php $backend = $node->networkBackend(); @endphp
+                <p class="hint">{{ __('Architektura węzła:') }} <span class="pill {{ $node->arch() === 'aarch64' ? 'warning' : 'neutral' }}">{{ $node->arch() === 'aarch64' ? 'ARM (aarch64)' : 'x86_64' }}</span>
+                    @if ($node->arch() === 'aarch64') {{ __('— trafiają tu tylko maszyny z szablonów aarch64; migracja wyłącznie między węzłami ARM.') }} @endif</p>
                 <p class="hint">{{ __('Topologia sieci maszyn (VH_NETWORK_BACKEND w agent.env):') }}
                     <span class="pill {{ $backend === 'bridge' ? 'ok' : 'warning' }}">{{ ['bridge' => __('mostek Linuksa'), 'ovs' => 'Open vSwitch', 'direct' => 'macvtap'][$backend] ?? $backend }}</span>
                     @if ($backend === 'ovs') {{ __('Anty-spoofing przez OpenFlow; zapora klienta na karcie głównej nie działa w tym trybie.') }} @endif

@@ -16,6 +16,8 @@ return [
     'step_up_minutes' => (int) env('VH_STEP_UP_MINUTES', 15),
     // Domyślna strategia rozmieszczania nowych maszyn (pack | spread | fewest | random); grupa może mieć własną.
     'placement_strategy' => env('VH_PLACEMENT_STRATEGY', 'pack'),
+    // Ile archiwów kopii systemowej panelu trzymać (najstarsze ponad limit są usuwane).
+    'system_backup_keep' => (int) env('VH_SYSTEM_BACKUP_KEEP', 7),
     // Identyfikator RP dla kluczy dostępu (passkey); domyślnie host z APP_URL.
     'webauthn_rp_id' => env('VH_WEBAUTHN_RP_ID'),
     // Domyślny limit zapytań tokenu API na minutę (token może mieć własny).

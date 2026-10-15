@@ -66,6 +66,30 @@
         </div>
     </div>
 
+    <details class="card" @if ($preScript || $postScript) open @endif>
+        <summary><strong>{{ __('Skrypty przed i po odtworzeniu') }}</strong> <span class="muted">{{ __('(wspólne dla wszystkich węzłów)') }}</span></summary>
+        <p class="hint" style="margin-top:8px">{{ __('Bash uruchamiany przez agenta na zastępczym węźle (do 15 min): „przed” — zanim odtworzy pierwszą maszynę (np. przełączenie trasy adresów u dostawcy), „po” — gdy skończą się wszystkie odtworzenia (np. powiadomienie, testy). Zmienne: VH_PHASE, VH_FAILED_NODE, VH_REPLACEMENT_NODE, VH_SERVERS, a po: VH_RECOVERED, VH_FAILED. Błąd skryptu nie zatrzymuje odtwarzania — wynik trafia do dziennika.') }}</p>
+        @if (auth()->user()->isAdmin())
+            <form method="POST" action="{{ route('panel.admin.dr.scripts') }}">
+                @csrf @method('PUT')
+                <div class="grid grid-2">
+                    <div class="field"><label for="dr-pre">{{ __('Przed odtworzeniem') }}</label>
+                        <textarea id="dr-pre" name="pre_script" rows="6" spellcheck="false" style="font-family:var(--mono); font-size:12px" placeholder="curl -fsS https://api.dostawca.example/route -d ip=…">{{ $preScript }}</textarea></div>
+                    <div class="field"><label for="dr-post">{{ __('Po odtworzeniu') }}</label>
+                        <textarea id="dr-post" name="post_script" rows="6" spellcheck="false" style="font-family:var(--mono); font-size:12px" placeholder='echo "Odtworzono $VH_RECOVERED maszyn" | mail -s DR noc@example.com'>{{ $postScript }}</textarea></div>
+                </div>
+                <button class="btn" type="submit">{{ __('Zapisz skrypty') }}</button>
+            </form>
+        @endif
+        @if ($hookLogs->isNotEmpty())
+            <h4 style="margin:14px 0 6px">{{ __('Ostatnie uruchomienia') }}</h4>
+            @foreach ($hookLogs as $log)
+                <div class="hint"><span class="pill {{ ($log->meta['ok'] ?? false) ? 'ok' : 'critical' }}">{{ $log->meta['phase'] ?? '?' }}</span> {{ $log->created_at->diffForHumans() }}</div>
+                <pre class="secret" style="white-space:pre-wrap; max-height:160px; overflow:auto">{{ $log->meta['output'] ?? ($log->meta['error'] ?? '') }}</pre>
+            @endforeach
+        @endif
+    </details>
+
     <section class="card" style="border-color:var(--critical)">
         <h2 class="card-title"><x-icon name="shield" :size="16"/> {{ __('Odtwórz na zastępczym węźle') }}</h2>
         <p>{{ __('Używaj tylko, gdy węzeł nie wróci w rozsądnym czasie. Panel przeniesie pule IP węzła na zastępczy host, zarezerwuje zasoby i odtworzy każdą maszynę z jej najnowszej kopii (zmiany po kopii przepadną). Węzeł zostanie przełączony w tryb serwisowy. Kontenery, maszyny bez kopii i dyski w Cephie zostaną oznaczone do ręcznej obsługi.') }}</p>

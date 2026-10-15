@@ -171,6 +171,12 @@ class Hypervisor extends Model
     }
 
     /** Topologia sieci maszyn zgłaszana przez agenta: bridge, ovs albo direct. */
+    /** Architektura węzła z raportu agenta (x86_64 albo aarch64). */
+    public function arch(): string
+    {
+        return (string) ($this->last_health['arch'] ?? 'x86_64');
+    }
+
     public function networkBackend(): string
     {
         return (string) ($this->last_health['network_backend'] ?? 'bridge');

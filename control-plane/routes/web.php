@@ -55,6 +55,7 @@ use App\Http\Controllers\Web\ServerHardwareController;
 use App\Http\Controllers\Web\ServerShareController;
 use App\Http\Controllers\Web\SsoController;
 use App\Http\Controllers\Web\StoreController;
+use App\Http\Controllers\Web\SystemBackupController;
 use App\Http\Controllers\Web\TicketAdminController;
 use App\Http\Controllers\Web\TicketController;
 use App\Http\Controllers\Web\UpdatesController;
@@ -334,6 +335,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
             Route::post('/snapshot', 'snapshot')->middleware('throttle:10,1')->name('.snapshot');
             Route::post('/recover', 'recover')->middleware('throttle:5,1')->name('.recover');
         });
+        Route::put('/dr-scripts', [DisasterRecoveryController::class, 'scripts'])->middleware('step-up')->name('dr.scripts');
         Route::post('/hypervisors/{hypervisor}/pci', [PciAssetController::class, 'store'])->name('pci.store');
         Route::put('/pci/{asset}', [PciAssetController::class, 'update'])->name('pci.update');
         Route::delete('/pci/{asset}', [PciAssetController::class, 'destroy'])->name('pci.destroy');
@@ -446,6 +448,11 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
 
     // Licencja, addony i konta dostawców zewnętrznych — tylko administrator.
     Route::middleware('admin')->group(function () {
+        Route::get('/system-backups', [SystemBackupController::class, 'index'])->name('system-backups');
+        Route::post('/system-backups', [SystemBackupController::class, 'store'])->middleware('throttle:5,1')->name('system-backups.store');
+        Route::put('/system-backups/settings', [SystemBackupController::class, 'settings'])->name('system-backups.settings');
+        Route::get('/system-backups/{name}', [SystemBackupController::class, 'download'])->where('name', '[A-Za-z0-9._-]+')->middleware('step-up')->name('system-backups.download');
+        Route::delete('/system-backups/{name}', [SystemBackupController::class, 'destroy'])->where('name', '[A-Za-z0-9._-]+')->middleware('step-up')->name('system-backups.destroy');
         Route::get('/license', [LicenseController::class, 'index'])->name('license');
         Route::post('/license', [LicenseController::class, 'activate'])->middleware('throttle:10,1')->name('license.activate');
         Route::post('/license/refresh', [LicenseController::class, 'refresh'])->middleware('throttle:10,1')->name('license.refresh');
