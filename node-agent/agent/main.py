@@ -593,7 +593,8 @@ async def restore(uuid: str, req: SnapshotRequest) -> JobAccepted:
 )
 async def configure_network(uuid: str, req: NetworkConfigRequest) -> JobAccepted:
     job_id = jobs.enqueue(
-        "configure_network", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid
+        # exclude_unset: brak bandwidth_mbps (starszy panel) ma zostać „bez zmian”, a nie „bez limitu”.
+        "configure_network", {"uuid": uuid, "body": req.model_dump(exclude_unset=True)}, uuid=uuid
     )
     return JobAccepted(job_id=job_id)
 

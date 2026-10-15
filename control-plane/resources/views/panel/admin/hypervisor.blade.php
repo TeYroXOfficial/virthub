@@ -255,6 +255,24 @@
                         <div class="hint">{{ __('Puste = wszystkie rdzenie. Pozwala zostawić rdzenie dla systemu węzła.') }}</div></div>
                 </fieldset>
             @endif
+            <fieldset class="grid grid-3" style="border:0;padding:0;margin:0 0 12px">
+                <legend class="muted" style="margin-bottom:6px">{{ __('Transfer maszyn na węźle (pakiet i maszyna mogą nadpisać)') }}</legend>
+                <div class="field"><label for="n-tc">{{ __('Liczony ruch') }}</label>
+                    <select id="n-tc" name="traffic_counting">
+                        <option value="">{{ __('globalnie') }}</option>
+                        @foreach (['total' => __('oba kierunki'), 'in' => __('przychodzący'), 'out' => __('wychodzący')] as $k => $label)
+                            <option value="{{ $k }}" @selected($node->traffic_counting === $k)>{{ $label }}</option>
+                        @endforeach
+                    </select></div>
+                <div class="field"><label for="n-ta">{{ __('Po przekroczeniu transferu') }}</label>
+                    <select id="n-ta" name="traffic_limit_action">
+                        <option value="">{{ __('globalnie') }}</option>
+                        <option value="block" @selected($node->traffic_limit_action === 'block')>{{ __('blokada (zawieszenie)') }}</option>
+                        <option value="throttle" @selected($node->traffic_limit_action === 'throttle')>{{ __('dławienie prędkości') }}</option>
+                    </select></div>
+                <div class="field"><label for="n-tt">{{ __('Prędkość dławienia (Mbit/s)') }}</label>
+                    <input id="n-tt" name="traffic_throttle_mbps" type="number" min="1" value="{{ $node->traffic_throttle_mbps }}" placeholder="{{ config('virthub.traffic_throttle_mbps', 10) }}"></div>
+            </fieldset>
             <div class="field">
                 <label for="n-notes">{{ __('Notatki') }} <span class="muted">{{ __('(dla personelu)') }}</span></label>
                 <textarea id="n-notes" name="notes" rows="3" placeholder="{{ __('Dostawca, numer szafy, kontakt do DC…') }}">{{ old('notes', $node->notes) }}</textarea>

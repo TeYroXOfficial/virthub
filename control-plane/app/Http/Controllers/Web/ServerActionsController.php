@@ -136,13 +136,38 @@ class ServerActionsController extends Controller
         $this->authorize('manageTraffic', $server);
 
         $validated = $request->validate([
-            'action' => ['required', Rule::in(['limit', 'reset'])],
+            'action' => ['required', Rule::in(['limit', 'reset', 'policy', 'block', 'unblock'])],
             'bandwidth_gb' => ['required_if:action,limit', 'nullable', 'integer', 'min:0', 'max:10000000'],
+            'traffic_counting' => ['nullable', Rule::in(Traffic::COUNTING)],
+            'traffic_limit_action' => ['nullable', Rule::in(Traffic::ACTIONS)],
+            'traffic_throttle_mbps' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'port_speed_mbps' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'gb' => ['required_if:action,block', 'nullable', 'integer', 'min:1', 'max:10000000'],
+            'note' => ['nullable', 'string', 'max:255'],
+            'block_id' => ['required_if:action,unblock', 'nullable', 'integer'],
         ]);
 
         if ($validated['action'] === 'reset') {
             $traffic->reset($server, $request->user());
             $message = __('Licznik transferu wyzerowany.');
+        } elseif ($validated['action'] === 'policy') {
+            $policy = array_map(fn ($v) => $v === '' ? null : $v, array_intersect_key($validated + array_fill_keys(['traffic_counting', 'traffic_limit_action', 'traffic_throttle_mbps', 'port_speed_mbps'], null),
+                array_flip(['traffic_counting', 'traffic_limit_action', 'traffic_throttle_mbps', 'port_speed_mbps'])));
+            $speedChanged = $server->port_speed_mbps !== ($policy['port_speed_mbps'] === null ? null : (int) $policy['port_speed_mbps'])
+                || $server->traffic_throttle_mbps !== ($policy['traffic_throttle_mbps'] === null ? null : (int) $policy['traffic_throttle_mbps']);
+            $server->forceFill($policy)->save();
+            AuditLog::record('server.traffic_policy', $server, $policy, $request->user());
+            $traffic->releaseEligible($server);
+            if ($speedChanged && $server->agent_uuid !== null && ! $server->isSuspended()) {
+                app(ServerProvisioner::class)->syncNetwork($server, $request->user());
+            }
+            $message = __('Zapisano politykę transferu.');
+        } elseif ($validated['action'] === 'block') {
+            $traffic->addBlock($server, (int) $validated['gb'], $validated['note'] ?? null, $request->user());
+            $message = __('Dodano pakiet transferu.');
+        } elseif ($validated['action'] === 'unblock') {
+            $traffic->removeBlock($server->trafficBlocks()->findOrFail($validated['block_id']), $request->user());
+            $message = __('Usunięto pakiet transferu.');
         } else {
             $old = $server->bandwidth_gb;
             $server->forceFill(['bandwidth_gb' => (int) $validated['bandwidth_gb']])->save();

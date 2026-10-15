@@ -194,6 +194,11 @@
                                 {{ __('· do limitu liczy się tylko ruch :przychodzcy', ['przychodzcy' => $traffic['counting'] === 'out' ? __('wychodzący') : __('przychodzący')]) }}
                             @endif
                             <br>{{ __('Licznik zeruje się :y.', ['y' => \Carbon\Carbon::parse($traffic['resets_at'])->format('d.m.Y')]) }}
+                            @if ($traffic['throttled'])
+                                <br><span class="pill warning">{{ __('Limit przekroczony — prędkość ograniczona do :mbps Mbit/s do końca okresu.', ['mbps' => $traffic['throttle_mbps']]) }}</span>
+                            @elseif ($traffic['limit'] && $traffic['action'] === 'throttle')
+                                <br>{{ __('Po przekroczeniu limitu prędkość spadnie do :mbps Mbit/s (bez blokady).', ['mbps' => $traffic['throttle_mbps']]) }}
+                            @endif
                         </div>
                     </dd>
                     <dt>{{ __('Szablon') }}</dt><dd>{{ $server->template?->name ?? '—' }}</dd>

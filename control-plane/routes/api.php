@@ -123,6 +123,10 @@ Route::prefix('v1')->group(function () {
         Route::post('servers/{server}/suspend', [ServerAdminController::class, 'suspend']);
         Route::post('servers/{server}/unsuspend', [ServerAdminController::class, 'unsuspend']);
         Route::post('servers/{server}/migrate', [ServerAdminController::class, 'migrate']);
+        Route::get('servers/{server}/traffic', [ServerAdminController::class, 'traffic']);
+        Route::put('servers/{server}/traffic', [ServerAdminController::class, 'updateTraffic']);
+        Route::post('servers/{server}/traffic/blocks', [ServerAdminController::class, 'addTrafficBlock']);
+        Route::delete('servers/{server}/traffic/blocks/{block}', [ServerAdminController::class, 'removeTrafficBlock'])->whereNumber('block');
         Route::get('servers/{server}/disks', [ServerAdminController::class, 'disks']);
         Route::post('servers/{server}/disks', [ServerAdminController::class, 'addDisk']);
         Route::put('servers/{server}/disks/{dev}', [ServerAdminController::class, 'growDisk']);

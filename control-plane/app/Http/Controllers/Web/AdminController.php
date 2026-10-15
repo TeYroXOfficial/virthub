@@ -7,6 +7,7 @@ use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
 use App\Domain\Billing\Billing;
 use App\Domain\Billing\BillingStats;
+use App\Domain\Metrics\Traffic;
 use App\Domain\Network\HypervisorGroupManager;
 use App\Domain\Provisioning\HypervisorEnrollment;
 use App\Domain\Provisioning\ServerHardware;
@@ -215,6 +216,9 @@ class AdminController extends Controller
             'hw_io_mode' => ['nullable', Rule::in(ServerHardware::IO_MODES)],
             'hw_cpu_model' => ['nullable', Rule::in(ServerHardware::CPU_MODELS)],
             'hw_cpuset' => ['nullable', 'string', 'max:300', 'regex:'.ServerHardware::CPUSET_PATTERN],
+            'traffic_counting' => ['nullable', Rule::in(Traffic::COUNTING)],
+            'traffic_limit_action' => ['nullable', Rule::in(Traffic::ACTIONS)],
+            'traffic_throttle_mbps' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'status' => ['required', Rule::in([
                 Hypervisor::STATUS_ONLINE,
                 Hypervisor::STATUS_OFFLINE,
@@ -233,7 +237,7 @@ class AdminController extends Controller
             'max_servers' => $validated['max_servers'] ?? null,
             'cpu_model' => isset($validated['cpu_model']) ? trim($validated['cpu_model']) ?: null : null,
             'public_address' => ($validated['public_address'] ?? null) ?: null,
-            ...array_map(fn ($v) => $v ?: null, array_intersect_key($validated, array_flip(['hw_disk_bus', 'hw_io_mode', 'hw_cpu_model', 'hw_cpuset']))),
+            ...array_map(fn ($v) => $v ?: null, array_intersect_key($validated, array_flip(['hw_disk_bus', 'hw_io_mode', 'hw_cpu_model', 'hw_cpuset', 'traffic_counting', 'traffic_limit_action', 'traffic_throttle_mbps']))),
             'accepts_new_servers' => $request->boolean('accepts_new_servers'),
             'apps_enabled' => $request->boolean('apps_enabled'),
         ]);
@@ -362,6 +366,10 @@ class AdminController extends Controller
             'backup_plan_id' => ['nullable', 'integer', 'exists:backup_plans,id'],
             'datastore_id' => ['nullable', 'integer', 'exists:datastores,id'],
             'extra_disk_gb' => ['nullable', 'integer', 'min:1', 'max:65536'],
+            'port_speed_mbps' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'traffic_limit_action' => ['nullable', Rule::in(Traffic::ACTIONS)],
+            'traffic_throttle_mbps' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'traffic_counting' => ['nullable', Rule::in(Traffic::COUNTING)],
         ];
         // Błędy edycji w osobnym worku — okno edycji danego pakietu otwiera się z nimi ponownie.
         $validated = $bag ? $request->validateWithBag($bag, $rules) : $request->validate($rules);
@@ -377,6 +385,8 @@ class AdminController extends Controller
             'backup_plan_id' => $validated['backup_plan_id'] ?? null,
             'datastore_id' => $validated['datastore_id'] ?? null,
             'extra_disk_gb' => $validated['extra_disk_gb'] ?? null,
+            ...array_map(fn ($v) => $v ?: null, array_intersect_key($validated + array_fill_keys(['port_speed_mbps', 'traffic_limit_action', 'traffic_throttle_mbps', 'traffic_counting'], null),
+                array_flip(['port_speed_mbps', 'traffic_limit_action', 'traffic_throttle_mbps', 'traffic_counting']))),
             'price_hint_cents' => $request->filled('price_hint') ? (int) round((float) $request->input('price_hint') * 100) : null,
         ];
     }

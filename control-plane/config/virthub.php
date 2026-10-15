@@ -22,6 +22,12 @@ return [
     | licencji. Bez ustawionego klucza panel działa normalnie, tylko bez addonów.
     */
 
+    // Transfer: jednostki (decimal = 1000³ B w GB, binary = 1024³ B) i domyślna
+    // akcja po limicie (block = zawieszenie, throttle = dławienie do N Mbit/s).
+    'traffic_units' => env('VH_TRAFFIC_UNITS', 'decimal'),
+    'traffic_limit_action' => env('VH_TRAFFIC_LIMIT_ACTION', 'block'),
+    'traffic_throttle_mbps' => (int) env('VH_TRAFFIC_THROTTLE_MBPS', 10),
+
     // Wybór pliku wymiany (swap) w kreatorze zamówienia maszyny KVM z Linuksem.
     'swap_selection' => (bool) env('VH_SWAP_SELECTION', true),
 

@@ -377,6 +377,7 @@ class CreateVmRequest(BaseModel):
     extra_disks: Annotated[list[ExtraDiskSpec], AfterValidator(_unique_disk_slots)] = Field(default_factory=list, max_length=7)
     # Plik wymiany zakładany przez cloud-init (tylko Linux); brak/0 = bez swapu.
     swap_mb: int | None = Field(default=None, ge=0, le=65536)
+    bandwidth_mbps: int | None = Field(default=None, ge=1, le=100_000)
 
 
 class RebuildVmRequest(BaseModel):
@@ -578,6 +579,9 @@ class NetworkConfigRequest(BaseModel):
     policy: FirewallPolicy | None = None
     # Brak profilu (starszy panel) = domyślny NetworkFilter.
     filter: NetworkFilter | None = None
+    # Limit prędkości karty głównej w obie strony (Mbit/s). Pole pominięte = bez zmian,
+    # null = bez limitu (dławienie po przekroczeniu transferu albo prędkość portu z pakietu).
+    bandwidth_mbps: int | None = Field(default=None, ge=1, le=100_000)
 
 
 class SnapshotRequest(BaseModel):

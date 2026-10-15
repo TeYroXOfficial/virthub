@@ -2,6 +2,7 @@
 
 namespace App\Domain\Agent;
 
+use App\Domain\Metrics\Traffic;
 use App\Domain\Network\Firewall;
 use App\Domain\Network\PortForwarding;
 use App\Domain\Network\PrivateNetworks;
@@ -107,7 +108,8 @@ class ServerPayload
             'os_type' => self::osType($server->template),
             'mac' => self::mac($server),
         ] + self::scripts($server) + self::filter($server) + self::storage($server) + self::privateNics($server)
-            + ServerHardware::payload($server) + self::extraDisks($server) + self::swap($server);
+            + ServerHardware::payload($server) + self::extraDisks($server) + self::swap($server)
+            + array_filter(['bandwidth_mbps' => Traffic::bandwidthMbps($server)]);
     }
 
     /** Plik wymiany z kreatora zamówienia (Linux; cloud-init). */
@@ -215,6 +217,8 @@ class ServerPayload
                 ->values()
                 ->all(),
             'policy' => Firewall::policyPayload($server),
+            // Zawsze wysyłane: null zdejmuje limit (koniec dławienia, brak prędkości portu).
+            'bandwidth_mbps' => Traffic::bandwidthMbps($server),
         ] + self::filter($server);
     }
 

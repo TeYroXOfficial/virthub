@@ -256,6 +256,12 @@
                 @if ($traffic['blocked'])
                     <span class="pill critical">{{ __('zablokowana za transfer') }}</span>
                 @endif
+                @if ($traffic['throttled'])
+                    <span class="pill warning">{{ __('dławiona do :mbps Mbit/s', ['mbps' => $traffic['throttle_mbps']]) }}</span>
+                @endif
+                @if ($traffic['extra_gb'])
+                    <span class="muted">{{ __('(w tym dokupione: :gb GB)', ['gb' => $traffic['extra_gb']]) }}</span>
+                @endif
             </p>
             <div class="grid grid-2">
                 <form method="POST" action="{{ route('panel.servers.traffic', $server) }}">
@@ -279,6 +285,50 @@
                     <button class="btn" type="submit">{{ __('Wyzeruj licznik') }}</button>
                 </form>
             </div>
+
+            @php $policy = \App\Domain\Metrics\Traffic::policy($server); @endphp
+            <form method="POST" action="{{ route('panel.servers.traffic', $server) }}" class="grid grid-3" style="margin-top:14px;align-items:end">
+                @csrf <input type="hidden" name="action" value="policy">
+                <div class="field"><label>{{ __('Liczony ruch') }}</label>
+                    <select name="traffic_counting">
+                        <option value="">{{ __('dziedzicz (:value)', ['value' => ['in' => __('przychodzący'), 'out' => __('wychodzący'), 'total' => __('oba kierunki')][$policy['counting']]]) }}</option>
+                        <option value="total" @selected($server->traffic_counting === 'total')>{{ __('oba kierunki') }}</option>
+                        <option value="in" @selected($server->traffic_counting === 'in')>{{ __('przychodzący') }}</option>
+                        <option value="out" @selected($server->traffic_counting === 'out')>{{ __('wychodzący') }}</option>
+                    </select></div>
+                <div class="field"><label>{{ __('Po przekroczeniu limitu') }}</label>
+                    <select name="traffic_limit_action">
+                        <option value="">{{ __('dziedzicz (:value)', ['value' => $policy['action'] === 'throttle' ? __('dławienie') : __('blokada')]) }}</option>
+                        <option value="block" @selected($server->traffic_limit_action === 'block')>{{ __('blokada (zawieszenie)') }}</option>
+                        <option value="throttle" @selected($server->traffic_limit_action === 'throttle')>{{ __('dławienie prędkości') }}</option>
+                    </select></div>
+                <div class="field"><label>{{ __('Prędkość dławienia (Mbit/s)') }}</label>
+                    <input name="traffic_throttle_mbps" type="number" min="1" value="{{ $server->traffic_throttle_mbps }}" placeholder="{{ $policy['throttle_mbps'] }}"></div>
+                <div class="field"><label>{{ __('Prędkość portu (Mbit/s)') }}</label>
+                    <input name="port_speed_mbps" type="number" min="1" value="{{ $server->port_speed_mbps }}" placeholder="{{ $server->package?->port_speed_mbps ?? __('bez limitu') }}">
+                    <div class="hint">{{ __('Stały limit karty w obie strony; puste = z pakietu.') }}</div></div>
+                <div class="field"><button class="btn" type="submit">{{ __('Zapisz politykę') }}</button></div>
+            </form>
+
+            <h4 style="margin:14px 0 6px">{{ __('Pakiety transferu w tym okresie') }}</h4>
+            @php $blocks = $server->trafficBlocks()->whereDate('period_start', $traffic['period_start'])->latest('id')->get(); @endphp
+            @if ($blocks->isNotEmpty())
+                <ul class="list-plain">
+                    @foreach ($blocks as $block)
+                        <li><span style="flex:1"><strong>+{{ $block->gb }} GB</strong> <span class="muted">{{ $block->note }} · {{ $block->created_at->diffForHumans() }}</span></span>
+                            <form method="POST" action="{{ route('panel.servers.traffic', $server) }}" style="margin:0" data-confirm="{{ __('Usunąć ten pakiet transferu?') }}">
+                                @csrf <input type="hidden" name="action" value="unblock"><input type="hidden" name="block_id" value="{{ $block->id }}">
+                                <button class="btn btn-sm btn-danger" type="submit">{{ __('Usuń') }}</button>
+                            </form></li>
+                    @endforeach
+                </ul>
+            @endif
+            <form method="POST" action="{{ route('panel.servers.traffic', $server) }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                @csrf <input type="hidden" name="action" value="block">
+                <input name="gb" type="number" min="1" placeholder="GB" required style="width:100px" aria-label="{{ __('Dodatkowy transfer (GB)') }}">
+                <input name="note" maxlength="255" placeholder="{{ __('Notatka, np. numer faktury') }}" style="flex:1;min-width:180px">
+                <button class="btn btn-sm" type="submit">{{ __('Dodaj pakiet') }}</button>
+            </form>
         </div>
     @endcan
 

@@ -593,10 +593,19 @@ class IncusDriver(HypervisorDriver):
     def configure_network(self, uuid: str, req: NetworkConfigRequest) -> dict[str, Any]:
         name = self._name_for(uuid)
         self.network.configure(server_id_from_name(name), req.interfaces, req.firewall, req.policy, req.filter)
+        if "bandwidth_mbps" in req.model_fields_set:
+            # Incus ustawia tc na karcie hosta (ingress = do kontenera, egress = z kontenera).
+            if req.bandwidth_mbps:
+                self._incus("config", "device", "set", name, "eth0",
+                            f"limits.ingress={req.bandwidth_mbps}Mbit", f"limits.egress={req.bandwidth_mbps}Mbit")
+            else:
+                self._incus("config", "device", "unset", name, "eth0", "limits.ingress")
+                self._incus("config", "device", "unset", name, "eth0", "limits.egress")
         return {
             "uuid": uuid,
             "interfaces": len(req.interfaces),
             "firewall_rules": len(req.firewall),
+            "bandwidth_mbps": req.bandwidth_mbps,
         }
 
     # --- telemetria ---------------------------------------------------------
