@@ -4,7 +4,7 @@
 
 @section('content')
     <div class="page-header"><div><h1>{{ __('Magazyny danych') }}</h1>
-        <p class="lede">{{ __('Gdzie leżą dyski maszyn KVM: katalog z plikami qcow2 (cienki albo gruby) albo pula Ceph RBD współdzielona przez węzły. Magazyn przypinasz do węzłów i do pakietu VPS — nowe maszyny z pakietu powstają w nim. Bez magazynu dysk trafia do katalogu domyślnego węzła.') }}</p></div></div>
+        <p class="lede">{{ __('Gdzie leżą dyski maszyn KVM: katalog z plikami qcow2 (cienki albo gruby), zasób sieciowy montowany przez agenta (NFS, SMB, CephFS, iSCSI) albo dyski blokowe (Ceph RBD, StorPool, Lightbits). Magazyn przypinasz do węzłów i do pakietu VPS — nowe maszyny z pakietu powstają w nim. Bez magazynu dysk trafia do katalogu domyślnego węzła.') }}</p></div></div>
 
     @foreach ($datastores as $ds)
         @php $cap = $ds->capacity(); $used = $cap['total_gb'] ? (int) round(100 * ($cap['total_gb'] - $cap['free_gb']) / max(1, $cap['total_gb'])) : null; @endphp
@@ -12,7 +12,8 @@
             <summary style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
                 <strong>{{ $ds->name }}</strong>
                 <span class="pill neutral plain">{{ $ds->typeLabel() }}</span>
-                @unless ($ds->isCeph()) <span class="pill neutral plain">{{ $ds->thin ? __('cienki') : __('gruby') }}</span> @endunless
+                @if ($ds->isExperimental()) <span class="pill warning">{{ __('eksperymentalny') }}</span> @endif
+                @if ($ds->isFileBased()) <span class="pill neutral plain">{{ $ds->thin ? __('cienki') : __('gruby') }}</span> @endif
                 <code class="muted">{{ $ds->describe() }}</code>
                 @unless ($ds->is_active) <span class="pill neutral">{{ __('wyłączony') }}</span> @endunless
                 <span class="muted" style="margin-left:auto">
@@ -51,14 +52,14 @@
             <form method="POST" action="{{ route('panel.admin.datastores.refresh', $ds) }}" style="margin:10px 0">
                 @csrf <button class="btn btn-sm" type="submit"><x-icon name="refresh" :size="14"/> {{ __('Odśwież pojemność') }}</button>
             </form>
-            @if ($ds->isCeph())
-                <p class="hint">{{ __('Dyski w Cephie: migawki RBD i pełne kopie na zewnętrzne cele (eksport migawki RBD) działają; Elevate, kopie przyrostowe i odtwarzanie DR wymagają magazynu katalogowego.') }}</p>
-            @endif
+            @unless ($ds->isFileBased())
+                <p class="hint">{{ __('Dyski blokowe (:type): pełne kopie na zewnętrzne cele działają; Elevate, kopie przyrostowe, migracja z kopiowaniem dysku i odtwarzanie DR wymagają magazynu plikowego (katalog albo zasób montowany).', ['type' => $ds->typeLabel()]) }}</p>
+            @endunless
 
             <form method="POST" action="{{ route('panel.admin.datastores.update', $ds) }}" style="margin-top:14px" autocomplete="off">
                 @csrf @method('PUT')
                 @include('panel.admin._datastore-fields', ['ds' => $ds, 'type' => $ds->type])
-                <p class="hint">{{ __('Zmiana ścieżki, puli albo klucza dotyczy nowych maszyn — istniejące zachowują dysk tam, gdzie powstał.') }}</p>
+                <p class="hint">{{ __('Zmiana adresu, ścieżki, puli albo klucza dotyczy nowych maszyn — istniejące zachowują dysk tam, gdzie powstał.') }}</p>
                 <button class="btn btn-primary" type="submit">{{ __('Zapisz') }}</button>
             </form>
             <form method="POST" action="{{ route('panel.admin.datastores.destroy', $ds) }}" style="margin-top:8px" data-confirm="{{ __('Usunąć magazyn :name? Dane na dyskach nie są kasowane.', ['name' => $ds->name]) }}">
@@ -70,8 +71,8 @@
     <details class="card" @if ($datastores->isEmpty() || request()->has('type')) open @endif>
         <summary><strong>{{ __('Nowy magazyn') }}</strong></summary>
         <div class="btn-row" style="margin:12px 0">
-            @foreach (['directory' => __('Katalog (qcow2)'), 'ceph' => 'Ceph RBD'] as $type => $label)
-                <a class="btn btn-sm @if ($newType === $type) btn-primary @endif" href="{{ route('panel.admin.datastores', ['type' => $type]) }}">{{ $label }}</a>
+            @foreach (\App\Models\Datastore::TYPES as $type)
+                <a class="btn btn-sm @if ($newType === $type) btn-primary @endif" href="{{ route('panel.admin.datastores', ['type' => $type]) }}">{{ \App\Models\Datastore::labelFor($type) }}</a>
             @endforeach
         </div>
         <form method="POST" action="{{ route('panel.admin.datastores.store') }}" autocomplete="off">

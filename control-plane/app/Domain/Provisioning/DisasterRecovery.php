@@ -90,7 +90,7 @@ class DisasterRecovery
                 $reason = match (true) {
                     $server->isContainer() => __('kontener — kopie na cele zewnętrzne obejmują tylko KVM'),
                     $backup === null => __('brak gotowej kopii na celu zewnętrznym'),
-                    $server->datastore?->isCeph() === true => __('dysk w Cephie — odtwarzanie z kopii wymaga magazynu katalogowego'),
+                    $server->datastore?->isFileBased() === false => __('dysk w magazynie blokowym — odtwarzanie z kopii wymaga magazynu plikowego'),
                     ! $replacement->hasCapacityFor($server->vcpu, $server->ram_mb, $server->totalDiskGb()) => __('brak wolnych zasobów na zastępczym węźle'),
                     default => null,
                 };

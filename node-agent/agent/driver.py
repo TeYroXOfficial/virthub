@@ -102,7 +102,7 @@ class HypervisorDriver(ABC):
     def _restore_disk(self, name: str, req: CreateVmRequest, restore: Any) -> Path:
         """Pobiera dysk maszyny z kopii (z weryfikacją sumy) i dopasowuje rozmiar."""
         if not self.storage.is_file_based(name):
-            raise DriverError("Odtwarzanie z kopii wymaga magazynu katalogowego (qcow2), a dysk ma trafić do Cepha.")
+            raise DriverError("Odtwarzanie z kopii wymaga magazynu plikowego (qcow2), a dysk ma trafić do magazynu blokowego.")
         path = self.storage.volume_path(name)
         if path.exists():
             raise DriverError(f"Dysk {path} już istnieje — odmawiam nadpisania.")
@@ -1006,7 +1006,7 @@ class LibvirtDriver(HypervisorDriver):
             image.unlink(missing_ok=True)
             if fs_frozen:
                 self._thaw(domain)
-            raise DriverError(f"Eksport dysku z Cephu nie powiódł się: {exc}") from exc
+            raise DriverError(f"Eksport dysku z magazynu blokowego nie powiódł się: {exc}") from exc
         return self._ship(image, req) | {"kind": "full", "checkpoint": None, "fs_frozen": fs_frozen}
 
     def _drop_checkpoints(self, domain: Any, keep: str | None = None) -> None:

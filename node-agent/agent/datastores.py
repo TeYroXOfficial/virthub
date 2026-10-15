@@ -10,6 +10,8 @@ Rodzaje:
 * katalog — pliki qcow2 w podanym katalogu (np. drugi dysk, NFS, iSCSI z
   systemem plików), cienkie (backing file na szablonie) albo grube (pełna kopia
   z rezerwacją miejsca);
+* zasoby montowane (NFS, SMB/CIFS, CephFS, iSCSI) i dyski blokowe StorPool /
+  Lightbits — zob. remote_storage.py;
 * Ceph RBD — szablon importowany raz do puli jako obraz ze snapshotem `base`,
   dysk maszyny to jego klon (cienki z natury). QEMU łączy się z klastrem sam,
   klucz trafia do sekretu libvirt; narzędzia `rbd`/`ceph` dostają go z pliku
@@ -35,6 +37,7 @@ from xml.sax.saxutils import escape, quoteattr
 from .config import Settings
 from .schemas import DatastoreSpec
 from .shell import CommandError, run
+from .remote_storage import BlockVolumeDriver, LightbitsDriver, RemoteMount, StorPoolDriver
 from .storage import MockStorageDriver, Qcow2LocalDriver, StorageDriver, StorageError, build_default_driver
 
 log = logging.getLogger("virthub.datastores")
@@ -323,7 +326,31 @@ class StorageRouter:
             return MockStorageDriver(self.settings, root=self.settings.image_dir / f"datastore-{spec.id}", thin=spec.thin)
         if spec.type == "directory":
             return Qcow2LocalDriver(self.settings, root=Path(spec.path or ""), thin=spec.thin)
+        if spec.mounted:
+            # Zasób sieciowy montowany przez agenta; na nim zwykłe pliki qcow2.
+            return Qcow2LocalDriver(self.settings, root=RemoteMount(self.settings, spec).ensure(), thin=spec.thin)
+        if spec.type == "storpool":
+            return StorPoolDriver(self.settings, spec)
+        if spec.type == "lightbits":
+            return LightbitsDriver(self.settings, spec)
         return CephRbdDriver(self.settings, spec)
+
+    def restore_mounts(self) -> int:
+        """Po starcie węzła: montuje zasoby i podłącza woluminy przypisanych dysków,
+        zanim libvirt uruchomi maszyny (autostart)."""
+        done = 0
+        for name, raw in self._load().items():
+            try:
+                spec = DatastoreSpec.model_validate(raw)
+                if spec.type in ("directory", "ceph"):
+                    continue
+                driver = self.driver_for_spec(spec)
+                if isinstance(driver, BlockVolumeDriver):
+                    driver.device(name)
+                done += 1
+            except Exception:  # noqa: BLE001 — jeden niedostępny magazyn nie blokuje reszty
+                log.exception("Nie udało się przygotować magazynu dysku %s", name)
+        return done
 
     def for_volume(self, name: str) -> StorageDriver:
         return self.driver_for_spec(self.spec_for(name))

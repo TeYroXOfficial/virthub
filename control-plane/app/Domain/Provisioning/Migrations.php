@@ -93,8 +93,8 @@ class Migrations
                 ? __('Sieć prywatna :name obejmuje inną grupę węzłów albo węzeł docelowy nie ma adresu VXLAN — odłącz kartę przed migracją.', ['name' => $local->network->name])
                 : __('Maszyna jest w sieci prywatnej węzła — odłącz jej karty prywatne przed migracją.'));
         }
-        if ($server->datastore?->isCeph()) {
-            $fail(__('Dysk maszyny jest w Cephie — migracja z kopiowaniem dysku obsługuje magazyny katalogowe.'));
+        if ($server->datastore?->isFileBased() === false) {
+            $fail(__('Dysk maszyny jest w magazynie blokowym (:type) — migracja z kopiowaniem dysku obsługuje magazyny plikowe.', ['type' => $server->datastore->typeLabel()]));
         }
         if ($mode === 'live' && $server->state !== ServerState::Running) {
             $fail(__('Migracja na żywo dotyczy działającej maszyny — zatrzymaną przenieś na zimno.'));

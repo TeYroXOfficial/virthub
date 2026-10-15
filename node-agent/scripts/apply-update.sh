@@ -119,6 +119,7 @@ bash "$AGENT_DIR/scripts/setup-firmware.sh" || warn "Nie udało się zainstalowa
 
 # Cele kopii: rclone (i proxmox-backup-client, jeśli jest repozytorium Proxmox).
 bash "$AGENT_DIR/scripts/setup-backup-tools.sh" || warn "Nie udało się zainstalować narzędzi kopii"
+bash "$AGENT_DIR/scripts/setup-remote-storage.sh" || warn "Nie udało się zainstalować klientów zdalnych magazynów"
 
 # Węzły kontenerów: osobny zakres UID/GID dla każdego kontenera.
 bash "$AGENT_DIR/scripts/harden-incus.sh" || warn "Nie udało się ustawić przydziału UID/GID dla Incusa"
