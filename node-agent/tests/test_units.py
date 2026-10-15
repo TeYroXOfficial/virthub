@@ -284,3 +284,21 @@ def test_brak_trasy_nie_wywraca_heartbeatu(monkeypatch):
 
     monkeypatch.setattr(socket.socket, "connect", no_route)
     assert outbound_ipv4() is None
+
+
+def test_haslo_roota_naprawia_sshd_config_po_instalacji_ssh():
+    import base64
+
+    import yaml
+
+    from agent.cloudinit import SSH_ROOT_PASSWORD_PATH, SSH_ROOT_PASSWORD_SCRIPT
+
+    data = yaml.safe_load(render_user_data("ct.example.com", [], "Tajne123", packages=["openssh-server"]))
+    script = next(f for f in data["write_files"] if f["path"] == SSH_ROOT_PASSWORD_PATH)
+    assert base64.b64decode(script["content"]).decode() == SSH_ROOT_PASSWORD_SCRIPT
+    # runcmd działa po instalacji pakietów — skrypt przed restartem ssh.
+    assert data["runcmd"][0] == ["sh", SSH_ROOT_PASSWORD_PATH]
+    assert "restart ssh" in " ".join(data["runcmd"][2])
+
+    bez_hasla = yaml.safe_load(render_user_data("ct.example.com", ["ssh-ed25519 AAA"], None, packages=["openssh-server"]))
+    assert ["sh", SSH_ROOT_PASSWORD_PATH] not in bez_hasla["runcmd"]
