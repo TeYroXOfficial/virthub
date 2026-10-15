@@ -47,7 +47,7 @@
                 <div class="cycle-grid">
                     @foreach ($gross as $cycle => $amount)
                         <label class="cycle-option">
-                            <input type="radio" name="cycle" value="{{ $cycle }}" data-amount="{{ $amount }}" data-metered="{{ $product->renews($cycle) && Cycle::metered($cycle) ? 1 : 0 }}" @checked($defaultCycle === $cycle)>
+                            <input type="radio" name="cycle" value="{{ $cycle }}" data-amount="{{ $amount }}" data-metered="{{ $product->renews($cycle) && Cycle::metered($cycle) ? 1 : 0 }}" data-hours="{{ Cycle::hours($cycle) }}" @checked($defaultCycle === $cycle)>
                             <span>
                                 <strong>{{ $product->renews($cycle) ? Cycle::label($cycle) : Cycle::duration($cycle) }}</strong>
                                 <span class="price-sm">@if ($amount === 0) {{ __('Za darmo') }} @else {{ Money::format($amount) }} <span class="muted">{{ $product->renews($cycle) ? Cycle::per($cycle) : '' }}</span> @endif</span>
@@ -104,6 +104,22 @@
                         </select>
                         @error('template') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror
                     </div>
+                    @if ($options = $product->resourceOptions())
+                        <div class="grid grid-3">
+                            @foreach ($options as $key => $o)
+                                @php [$unit, $field, $mul] = \App\Models\Product::RESOURCE_OPTIONS[$key]; $base = (int) intdiv((int) $product->package?->{$field}, $mul); @endphp
+                                <div class="field">
+                                    <label for="o-x-{{ $key }}">{{ __('Dodatkowo: :unit', ['unit' => $unit]) }}</label>
+                                    <input id="o-x-{{ $key }}" name="extra[{{ $key }}]" type="number" min="0" max="{{ $o['max'] }}" step="1" value="{{ old('extra.'.$key, 0) }}" data-extra-price="{{ Billing::gross($o['price_hour']) }}">
+                                    <div class="hint">{{ __('W pakiecie :base, dobierz do :max', ['base' => $base, 'max' => $o['max']]) }} · {{ __(':price / h za jednostkę', ['price' => Money::format(Billing::gross($o['price_hour']))]) }}</div>
+                                    @error('extra.'.$key) <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                    @if ($product->addon_ip_hour > 0 || $product->addon_pci_hour > 0)
+                        <p class="hint">{{ __('Dodatki rozliczane godzinowo z portfela: dodatkowy adres IP :ip / h, GPU / urządzenie PCI :pci / h.', ['ip' => Money::format(Billing::gross($product->addon_ip_hour)), 'pci' => Money::format(Billing::gross($product->addon_pci_hour))]) }}</p>
+                    @endif
                 @endif
                 @if (in_array($product->type, ['vps', 'external'], true))
                     <div class="field">
@@ -182,6 +198,10 @@
                 var picked = form.querySelector('input[name=cycle]:checked');
                 if (!picked) return;
                 var amount = parseInt(picked.dataset.amount, 10);
+                form.querySelectorAll('[data-extra-price]').forEach(function (input) {
+                    var units = Math.max(0, Math.min(parseInt(input.max, 10) || 0, parseInt(input.value, 10) || 0));
+                    amount += units * parseInt(input.dataset.extraPrice, 10) * parseInt(picked.dataset.hours, 10);
+                });
                 var metered = picked.dataset.metered === '1';
                 var free = amount + setup === 0;
                 document.getElementById('sum-price').textContent = amount === 0 ? @js(__('Za darmo')) : fmt(amount);
@@ -191,6 +211,7 @@
                 if (metered) { form.querySelector('input[name=payment][value=wallet]').checked = true; }
             }
             form.addEventListener('change', update);
+            form.addEventListener('input', update);
             update();
         })();
     </script>

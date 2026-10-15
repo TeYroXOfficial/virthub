@@ -122,7 +122,7 @@ class SelfService
             return 0;
         }
         $servers = $pack->servers()->get();
-        $cost = $servers->sum(fn (Server $s) => $pack->hourlyCost($s->vcpu, $s->ram_mb, $s->disk_gb));
+        $cost = $servers->sum(fn (Server $s) => $pack->serverHourlyCost($s));
 
         if ($pack->suspended_at !== null) {
             if ($cost > 0 && $this->wallet->balance($pack->user) >= $cost) {

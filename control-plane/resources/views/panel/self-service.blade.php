@@ -34,7 +34,10 @@
                     'cpu' => \App\Domain\Billing\Money::format((int) $pack->price_vcpu_hour),
                     'ram' => \App\Domain\Billing\Money::format((int) $pack->price_ram_gb_hour),
                     'disk' => \App\Domain\Billing\Money::format((int) $pack->price_disk_gb_hour),
-                ]) }}</p>
+                ]) }}@if ($pack->price_ip_hour > 0) {{ __('Dodatkowy adres IP: :ip / h.', ['ip' => \App\Domain\Billing\Money::format((int) $pack->price_ip_hour)]) }}@endif</p>
+            @endif
+            @if ($pack->poolsTraffic())
+                <p class="hint">{{ __('Transfer wspólny dla wszystkich maszyn pakietu: :gb GB miesięcznie.', ['gb' => $pack->traffic_gb]) }}</p>
             @endif
 
             @if ($pack->servers->isNotEmpty())

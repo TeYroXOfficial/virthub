@@ -54,6 +54,9 @@ class ServiceManager
     {
         $product = $product->fresh(['prices', 'package', 'plan']) ?? throw new \DomainException(__('Produkt nie istnieje.'));
         $price = $product->priceFor($cycle);
+        if ($price !== null && ! empty($config['extra'])) {
+            $price += $product->extrasPrice((array) $config['extra'], $cycle);
+        }
         if ($price === null || ! $product->is_active || ! $product->deliverable()) {
             throw new \DomainException(__('Ten produkt nie jest dostępny w wybranym cyklu.'));
         }
@@ -191,7 +194,7 @@ class ServiceManager
             $location = isset($config['location_id']) ? HypervisorGroup::query()->find($config['location_id']) : null;
 
             if ($product->type === Product::TYPE_VPS) {
-                $package = $product->package ?? throw new \DomainException(__('Pakiet produktu nie istnieje.'));
+                $package = $product->packageWith((array) ($config['extra'] ?? [])) ?? throw new \DomainException(__('Pakiet produktu nie istnieje.'));
                 $template = OsTemplate::query()->where('is_active', true)->find($config['template_id'] ?? 0)
                     ?? throw new \DomainException(__('Wybrany system nie jest już dostępny.'));
                 $server = app(ServerProvisioner::class)->order(
@@ -518,15 +521,18 @@ class ServiceManager
     {
         $charged = 0;
         $users = [];
-        BillingService::query()->with('user')->where('status', BillingService::STATUS_ACTIVE)
+        BillingService::query()->with(['user', 'product', 'server'])->where('status', BillingService::STATUS_ACTIVE)
             ->where('metered', true)->where('next_due_at', '<=', now())
             ->each(function (BillingService $service) use (&$charged, &$users) {
                 $due = $service->next_due_at;
-                $amount = Billing::gross($service->amount);
+                // Dodatki (adresy IP ponad pakiet, GPU) — według stanu maszyny w chwili naliczenia.
+                $addons = $service->product && $service->server ? Addons::hourly($service->product, $service->server) * Cycle::hours($service->cycle) : 0;
+                $amount = Billing::gross($service->amount + $addons);
                 for ($i = 0; $i < self::MAX_CATCH_UP && $due->lessThanOrEqualTo(now()); $i++) {
-                    DB::transaction(function () use ($service, $amount, $due) {
+                    DB::transaction(function () use ($service, $amount, $due, $addons) {
                         if ($amount > 0) {
-                            $this->wallet->debit($service->user, $amount, 'usage', $this->usageDescription($service, $due), ['billing_service_id' => $service->id], true);
+                            $description = $this->usageDescription($service, $due).($addons > 0 ? ' + '.Addons::describe($service->server) : '');
+                            $this->wallet->debit($service->user, $amount, 'usage', $description, ['billing_service_id' => $service->id], true);
                         }
                         $service->update(['next_due_at' => Cycle::add($due, $service->cycle)]);
                     });

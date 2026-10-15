@@ -14,5 +14,8 @@
     <div class="field"><label>{{ __('Grosze / vCPU / h') }}</label><input name="price_vcpu_hour" type="number" min="0" value="{{ $p?->price_vcpu_hour }}"></div>
     <div class="field"><label>{{ __('Grosze / GB RAM / h') }}</label><input name="price_ram_gb_hour" type="number" min="0" value="{{ $p?->price_ram_gb_hour }}"></div>
     <div class="field"><label>{{ __('Grosze / GB dysku / h') }}</label><input name="price_disk_gb_hour" type="number" min="0" value="{{ $p?->price_disk_gb_hour }}"></div>
+    <div class="field"><label>{{ __('Grosze / dodatkowy IP / h') }}</label><input name="price_ip_hour" type="number" min="0" value="{{ $p?->price_ip_hour }}"></div>
+    <div class="field"><label>{{ __('Wspólny transfer (GB / mies.)') }}</label><input name="traffic_gb" type="number" min="1" value="{{ $p?->traffic_gb ?? old('traffic_gb') }}" placeholder="{{ __('osobno dla każdej maszyny') }}">
+        <div class="hint">{{ __('Jeden limit dla wszystkich maszyn pakietu zamiast limitu z pakietu VPS.') }}</div></div>
 </div>
 <label class="check-line" style="margin-bottom:10px"><input type="checkbox" name="is_active" value="1" @checked($p?->is_active ?? true)> {{ __('Aktywny') }}</label>

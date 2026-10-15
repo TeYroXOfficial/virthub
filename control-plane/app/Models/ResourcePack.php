@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Billing\Addons;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -14,7 +15,7 @@ class ResourcePack extends Model
 {
     protected $fillable = [
         'user_id', 'name', 'vcpu', 'ram_mb', 'disk_gb', 'max_servers', 'vps_package_id',
-        'price_vcpu_hour', 'price_ram_gb_hour', 'price_disk_gb_hour', 'is_active',
+        'price_vcpu_hour', 'price_ram_gb_hour', 'price_disk_gb_hour', 'is_active', 'traffic_gb', 'price_ip_hour',
     ];
 
     protected $attributes = ['is_active' => true, 'max_servers' => 5];
@@ -24,6 +25,7 @@ class ResourcePack extends Model
         return [
             'vcpu' => 'integer', 'ram_mb' => 'integer', 'disk_gb' => 'integer', 'max_servers' => 'integer',
             'price_vcpu_hour' => 'integer', 'price_ram_gb_hour' => 'integer', 'price_disk_gb_hour' => 'integer',
+            'traffic_gb' => 'integer', 'price_ip_hour' => 'integer',
             'billed_until' => 'datetime', 'suspended_at' => 'datetime', 'is_active' => 'boolean',
         ];
     }
@@ -56,7 +58,21 @@ class ResourcePack extends Model
 
     public function hasPricing(): bool
     {
-        return (int) $this->price_vcpu_hour + (int) $this->price_ram_gb_hour + (int) $this->price_disk_gb_hour > 0;
+        return (int) $this->price_vcpu_hour + (int) $this->price_ram_gb_hour + (int) $this->price_disk_gb_hour + (int) $this->price_ip_hour > 0;
+    }
+
+    /** Wspólny limit transferu dla wszystkich maszyn pakietu (zamiast limitów z pakietu VPS). */
+    public function poolsTraffic(): bool
+    {
+        return (int) $this->traffic_gb > 0;
+    }
+
+    /** Koszt godziny maszyny pakietu razem z adresami ponad pakiet VPS. */
+    public function serverHourlyCost(Server $server): int
+    {
+        $extraIps = (int) $this->price_ip_hour > 0 ? Addons::count($server)['ips'] : 0;
+
+        return $this->hourlyCost($server->vcpu, $server->ram_mb, $server->disk_gb) + $extraIps * (int) $this->price_ip_hour;
     }
 
     /** Koszt godziny maszyny o podanych zasobach (grosze). */

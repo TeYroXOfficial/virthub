@@ -161,6 +161,25 @@
                         <div class="field"><label for="p-peruser">{{ __('Limit na klienta') }}</label><input id="p-peruser" type="number" name="per_user_limit" min="1" value="{{ old('per_user_limit', $product->per_user_limit) }}" placeholder="{{ __('bez limitu') }}">
                             <div class="hint">{{ __('Np. 1 dla darmowego produktu — jeden na konto.') }}</div></div>
                     </div>
+                    <div data-type="vps">
+                        <h4 style="margin:12px 0 6px">{{ __('Dodatki i zmienne zasoby (netto za godzinę)') }}</h4>
+                        <div class="grid grid-2">
+                            <div class="field"><label for="p-addon-ip">{{ __('Dodatkowy adres IP / h') }}</label><input id="p-addon-ip" name="addon_ip_hour" inputmode="decimal" value="{{ old('addon_ip_hour', $product->addon_ip_hour ? Money::input($product->addon_ip_hour) : '') }}" placeholder="0">
+                                <div class="hint">{{ __('Adresy ponad pulę pakietu — naliczane przy każdej opłacie usługi godzinowej/dziennej.') }}</div></div>
+                            <div class="field"><label for="p-addon-pci">{{ __('GPU / urządzenie PCI / h') }}</label><input id="p-addon-pci" name="addon_pci_hour" inputmode="decimal" value="{{ old('addon_pci_hour', $product->addon_pci_hour ? Money::input($product->addon_pci_hour) : '') }}" placeholder="0"></div>
+                        </div>
+                        <div class="grid grid-3">
+                            @foreach (\App\Models\Product::RESOURCE_OPTIONS as $key => [$unit])
+                                @php $ro = (array) ($product->resource_options[$key] ?? []); @endphp
+                                <div class="field"><label>{{ __('Klient dobiera: :unit', ['unit' => $unit]) }}</label>
+                                    <div style="display:flex; gap:6px">
+                                        <input type="number" name="resource_options[{{ $key }}][max]" min="0" max="1024" value="{{ old('resource_options.'.$key.'.max', $ro['max'] ?? '') }}" placeholder="{{ __('maks.') }}" aria-label="{{ __('Najwięcej jednostek') }}">
+                                        <input name="resource_options[{{ $key }}][price]" inputmode="decimal" value="{{ old('resource_options.'.$key.'.price', isset($ro['price_hour']) ? Money::input($ro['price_hour']) : '') }}" placeholder="{{ __('cena / h') }}" aria-label="{{ __('Cena za jednostkę na godzinę') }}">
+                                    </div></div>
+                            @endforeach
+                        </div>
+                        <p class="hint">{{ __('Puste = klient nie może dobrać. Dopłata = jednostki × cena × godziny okresu (miesiąc = 730 h).') }}</p>
+                    </div>
                 </div>
                 @php
                     [$kaCount, $kaUnit] = $product->keepalive_interval ? Cycle::parse($product->keepalive_interval) : [1, 'd'];

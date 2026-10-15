@@ -23,7 +23,11 @@ class Product extends Model
         'product_category_id', 'name', 'description', 'type', 'vps_package_id', 'app_plan_id', 'provider_account_id', 'external_config',
         'app_egg_ids', 'hypervisor_group_ids', 'setup_fee', 'stock', 'per_user_limit', 'is_active', 'sort_order',
         'keepalive_interval', 'keepalive_window', 'keepalive_delete_after',
+        'addon_ip_hour', 'addon_pci_hour', 'resource_options',
     ];
+
+    /** Zasoby, które klient może dobrać ponad pakiet: klucz => [jednostka, pole pakietu, mnożnik]. */
+    public const RESOURCE_OPTIONS = ['vcpu' => ['vCPU', 'vcpu', 1], 'ram_gb' => ['GB RAM', 'ram_mb', 1024], 'disk_gb' => ['GB', 'disk_gb', 1]];
 
     protected $attributes = ['is_active' => true, 'setup_fee' => 0, 'sort_order' => 0];
 
@@ -38,6 +42,9 @@ class Product extends Model
             'per_user_limit' => 'integer',
             'is_active' => 'boolean',
             'sort_order' => 'integer',
+            'addon_ip_hour' => 'integer',
+            'addon_pci_hour' => 'integer',
+            'resource_options' => 'array',
         ];
     }
 
@@ -73,6 +80,53 @@ class Product extends Model
     public function externalImages(): array
     {
         return array_values(array_filter((array) ($this->external_config['images'] ?? []), fn ($i) => is_array($i) && isset($i['id'], $i['name'])));
+    }
+
+    /**
+     * Zmienne limity pakietu: ile jednostek klient może dobrać i za ile (netto/h).
+     *
+     * @return array<string, array{max: int, price_hour: int}>
+     */
+    public function resourceOptions(): array
+    {
+        $out = [];
+        foreach (self::RESOURCE_OPTIONS as $key => $_) {
+            $o = (array) ($this->resource_options[$key] ?? []);
+            if ((int) ($o['max'] ?? 0) > 0) {
+                $out[$key] = ['max' => (int) $o['max'], 'price_hour' => max(0, (int) ($o['price_hour'] ?? 0))];
+            }
+        }
+
+        return $this->type === self::TYPE_VPS ? $out : [];
+    }
+
+    /** Dopłata netto za dobrane zasoby w danym okresie (grosze). */
+    public function extrasPrice(array $extra, string $cycle): int
+    {
+        $hourly = 0;
+        foreach ($this->resourceOptions() as $key => $o) {
+            $hourly += min($o['max'], max(0, (int) ($extra[$key] ?? 0))) * $o['price_hour'];
+        }
+
+        return $hourly * Cycle::hours($cycle);
+    }
+
+    /** Pakiet powiększony o dobrane zasoby (niezapisywany — do utworzenia maszyny). */
+    public function packageWith(array $extra): ?VpsPackage
+    {
+        $base = $this->package;
+        $options = $this->resourceOptions();
+        if ($base === null || $options === [] || array_sum(array_map('intval', $extra)) === 0) {
+            return $base;
+        }
+        $package = $base->replicate();
+        foreach ($options as $key => $o) {
+            [, $field, $multiplier] = self::RESOURCE_OPTIONS[$key];
+            $package->{$field} = (int) $base->{$field} + min($o['max'], max(0, (int) ($extra[$key] ?? 0))) * $multiplier;
+        }
+        $package->id = $base->id;
+
+        return $package;
     }
 
     /** @return HasMany<ProductPrice, $this> */

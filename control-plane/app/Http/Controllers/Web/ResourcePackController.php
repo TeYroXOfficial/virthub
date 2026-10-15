@@ -68,8 +68,12 @@ class ResourcePackController extends Controller
             'price_vcpu_hour' => ['nullable', 'integer', 'min:0'],
             'price_ram_gb_hour' => ['nullable', 'integer', 'min:0'],
             'price_disk_gb_hour' => ['nullable', 'integer', 'min:0'],
+            'price_ip_hour' => ['nullable', 'integer', 'min:0'],
+            'traffic_gb' => ['nullable', 'integer', 'min:1', 'max:10000000'],
         ]);
         unset($data['email']);
+        $data['price_ip_hour'] = (int) ($data['price_ip_hour'] ?? 0);
+        $data['traffic_gb'] ??= null;
 
         return $data + ['is_active' => $request->boolean('is_active')];
     }

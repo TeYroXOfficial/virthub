@@ -8,14 +8,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /** Adres, na który panel wysyła podpisane powiadomienia o zdarzeniach. */
 class Webhook extends Model
 {
-    protected $fillable = ['name', 'url', 'secret', 'events', 'is_active'];
+    protected $fillable = ['name', 'url', 'secret', 'events', 'is_active', 'bearer_token', 'format', 'options'];
 
-    protected $hidden = ['secret'];
+    protected $hidden = ['secret', 'bearer_token', 'options'];
 
     protected function casts(): array
     {
         return [
             'secret' => 'encrypted',
+            'bearer_token' => 'encrypted',
+            'options' => 'encrypted:array',
             'events' => 'array',
             'is_active' => 'boolean',
             'last_delivery_at' => 'datetime',

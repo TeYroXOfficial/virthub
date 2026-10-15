@@ -458,6 +458,11 @@ class BillingAdminController extends Controller
             'hypervisor_group_ids' => ['nullable', 'array'],
             'hypervisor_group_ids.*' => ['integer', 'exists:hypervisor_groups,id'],
             'setup_fee' => [$moneyRule],
+            'addon_ip_hour' => [$moneyRule],
+            'addon_pci_hour' => [$moneyRule],
+            'resource_options' => ['nullable', 'array'],
+            'resource_options.*.max' => ['nullable', 'integer', 'min:0', 'max:1024'],
+            'resource_options.*.price' => [$moneyRule],
             'stock' => ['nullable', 'integer', 'min:0'],
             'per_user_limit' => ['nullable', 'integer', 'min:1'],
             'sort_order' => ['nullable', 'integer', 'between:0,10000'],
@@ -560,11 +565,29 @@ class BillingAdminController extends Controller
             'external_config' => $external,
             'hypervisor_group_ids' => $external !== null || empty($data['hypervisor_group_ids']) ? null : array_map('intval', $data['hypervisor_group_ids']),
             'setup_fee' => ($data['setup_fee'] ?? '') === '' ? 0 : Money::parse((string) $data['setup_fee']),
+            'addon_ip_hour' => $isVps && ($data['addon_ip_hour'] ?? '') !== '' ? Money::parse((string) $data['addon_ip_hour']) : 0,
+            'addon_pci_hour' => $isVps && ($data['addon_pci_hour'] ?? '') !== '' ? Money::parse((string) $data['addon_pci_hour']) : 0,
+            'resource_options' => $isVps ? $this->resourceOptions($data['resource_options'] ?? []) : null,
             'stock' => $data['stock'] ?? null,
             'per_user_limit' => $data['per_user_limit'] ?? null,
             'sort_order' => $data['sort_order'] ?? 0,
             'is_active' => $request->boolean('is_active'),
         ], $prices, $replace];
+    }
+
+    /** Zmienne limity: tylko zasoby z maksimum > 0; cena (Money) za jednostkę na godzinę. */
+    private function resourceOptions(array $rows): ?array
+    {
+        $out = [];
+        foreach (array_keys(Product::RESOURCE_OPTIONS) as $key) {
+            $max = (int) ($rows[$key]['max'] ?? 0);
+            if ($max > 0) {
+                $price = (string) ($rows[$key]['price'] ?? '');
+                $out[$key] = ['max' => $max, 'price_hour' => $price === '' ? 0 : Money::parse($price)];
+            }
+        }
+
+        return $out ?: null;
     }
 
     /**
