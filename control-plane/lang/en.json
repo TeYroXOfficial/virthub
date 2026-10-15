@@ -4334,5 +4334,8 @@
     "W pakiecie :base, dobierz do :max": "Package includes :base, add up to :max",
     ":price / h za jednostkę": ":price / h per unit",
     "Dodatki rozliczane godzinowo z portfela: dodatkowy adres IP :ip / h, GPU / urządzenie PCI :pci / h.": "Add-ons billed hourly from the wallet: extra IP address :ip / h, GPU / PCI device :pci / h.",
-    "Wspólny transfer pakietu :pack (:count maszyn) — ta maszyna: :own": "Shared traffic of pack :pack (:count machines) — this machine: :own"
+    "Wspólny transfer pakietu :pack (:count maszyn) — ta maszyna: :own": "Shared traffic of pack :pack (:count machines) — this machine: :own",
+    "Ruch kart maszyny (także sieci prywatnych) z jej punktu widzenia: ↓ pobiera, ↑ wysyła. Łącznie — od uruchomienia maszyny.": "Traffic of the machine's interfaces (including private networks) from its point of view: ↓ download, ↑ upload. Totals — since the machine started.",
+    "Karty hosta. Ruch poszczególnych maszyn — w kolumnie „Sieć” usług poniżej.": "Host interfaces. Traffic of individual machines is in the “Network” column of the services below.",
+    "łącznie ↓ :in · ↑ :out": "total ↓ :in · ↑ :out"
 }

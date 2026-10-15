@@ -185,8 +185,9 @@
                 <td class="metric-cell"><span class="num">${bytes(s.memory)}${s.memory_limit ? ` / ${bytes(s.memory_limit)}` : ''}</span>${memPct !== null ? meter(memPct, 85, 95) : ''}</td>
                 <td class="num">${rate(s.read_bps)}</td>
                 <td class="num">${rate(s.write_bps)}</td>
+                <td class="num">${s.net_bps == null ? '—' : `↓ ${bits(s.net_in_bps)}<br>↑ ${bits(s.net_out_bps)}`}${s.net_in_total == null ? '' : `<div class="hint">${esc(L.netTotals.replace(':in', bytes(s.net_in_total)).replace(':out', bytes(s.net_out_total)))}</div>`}</td>
                 <td class="num">${s.pids ?? '—'}</td></tr>`;
-        }).join('') : `<tr><td colspan="9" class="muted" style="text-align:center;padding:20px">${esc(L.noServices)}</td></tr>`);
+        }).join('') : `<tr><td colspan="10" class="muted" style="text-align:center;padding:20px">${esc(L.noServices)}</td></tr>`);
         root.querySelectorAll('[data-table="services"] th[data-sort]').forEach((th) => {
             th.setAttribute('aria-sort', th.dataset.sort === sort.key ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none');
         });
@@ -216,7 +217,8 @@
             renderTemps(data);
             renderDisks(data);
             renderNetwork(data);
-            services = data.services || [];
+            // Suma obu kierunków — do sortowania po ruchu sieciowym.
+            services = (data.services || []).map((x) => ({ ...x, net_bps: x.net_in_bps == null ? null : x.net_in_bps + x.net_out_bps }));
             renderServices();
             renderProcesses(data);
         } catch (e) {

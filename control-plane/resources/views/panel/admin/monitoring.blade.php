@@ -107,7 +107,8 @@
             </div>
 
             <div class="card flush dash-section">
-                <div class="dash-head"><h3 class="card-title"><x-icon name="network" :size="16"/> {{ __('Sieć') }}</h3></div>
+                <div class="dash-head"><h3 class="card-title"><x-icon name="network" :size="16"/> {{ __('Sieć') }}</h3>
+                    <span class="hint" style="margin:0">{{ __('Karty hosta. Ruch poszczególnych maszyn — w kolumnie „Sieć” usług poniżej.') }}</span></div>
                 <div class="table-wrap">
                     <table>
                         <thead><tr><th>{{ __('Interfejs') }}</th><th>{{ __('Pobieranie') }}</th><th>{{ __('Wysyłanie') }}</th><th>{{ __('Odebrane łącznie') }}</th><th>{{ __('Wysłane łącznie') }}</th></tr></thead>
@@ -132,6 +133,7 @@
                             <th data-sort="memory">{{ __('Pamięć') }}</th>
                             <th data-sort="read_bps">{{ __('Odczyt') }}</th>
                             <th data-sort="write_bps">{{ __('Zapis') }}</th>
+                            <th data-sort="net_bps" title="{{ __('Ruch kart maszyny (także sieci prywatnych) z jej punktu widzenia: ↓ pobiera, ↑ wysyła. Łącznie — od uruchomienia maszyny.') }}">{{ __('Sieć') }}</th>
                             <th data-sort="pids">{{ __('Procesy') }}</th>
                         </tr></thead>
                         <tbody data-v="services"></tbody>
@@ -161,6 +163,7 @@
                 'unknown' => __('nieznana w panelu'),
                 'noTemps' => __('Węzeł nie udostępnia czujników temperatury (typowe dla serwerów wirtualnych). Temperatury dysków SATA wymagają modułu drivetemp.'),
                 'noServices' => __('Na węźle nie działa teraz żadna usługa.'),
+                'netTotals' => __('łącznie ↓ :in · ↑ :out'),
                 'live' => __('na żywo'),
                 'offline' => __('brak danych z węzła'),
                 'cores' => __('rdzeni'),

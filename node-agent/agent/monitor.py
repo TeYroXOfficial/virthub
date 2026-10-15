@@ -36,6 +36,8 @@ _KVM = re.compile(r"qemu.*?virthub(?:\\x2d|-)(\d+)")
 _LXC = re.compile(r"^lxc\.payload\.(.+)$")
 _DOCKER = re.compile(r"^(?:docker-)?([0-9a-f]{64})(?:\.scope)?$")
 _VIRTHUB_ID = re.compile(r"virthub-(\d+)$")
+# Karty maszyn po stronie hosta: vh<id> (główna) i vh<id>n<slot> (sieci prywatne).
+_SERVER_NIC = re.compile(r"^vh(\d+)(?:n\d+)?$")
 
 _SKIP_DISKS = ("loop", "ram", "zram", "sr", "fd", "nbd")
 _SKIP_NICS = ("lo", "veth", "vnet", "tap", "fwbr", "fwln", "fwpr", "virbr0-nic")
@@ -202,6 +204,7 @@ class HostMonitor:
                     "pids": _int(child / "pids.current"),
                     "io": (rbytes, wbytes, rios, wios) if io_stat is not None or blkio is not None else None,
                     "pressure": self._pressure_file(child / "cpu.pressure"),
+                    "net": self._netns_counters(child) if kind[0] == "app" else None,
                 }
                 # cgroup v1 ma osobne drzewo na każdy kontroler — ta sama usługa
                 # pojawia się kilka razy; scalamy, biorąc pierwszą znaną wartość.
@@ -215,6 +218,28 @@ class HostMonitor:
 
         walk(self.cgroup, 0)
         return out
+
+    def _netns_counters(self, cgroup_dir: Path) -> tuple[int, int] | None:
+        """Ruch kontenera aplikacji: /proc/<pid>/net/dev pokazuje karty z jego
+        przestrzeni sieciowej (rx = pobrane przez kontener). Kontener w sieci
+        hosta pomijamy — liczyłby cały ruch węzła."""
+        first = (_read(cgroup_dir / "cgroup.procs") or _read(cgroup_dir / "tasks") or "").split()
+        if not first or not first[0].isdigit():
+            return None
+        pid = first[0]
+        try:
+            if os.readlink(self.proc / pid / "ns" / "net") == os.readlink(self.proc / "self" / "ns" / "net"):
+                return None
+        except OSError:
+            pass
+        rx = tx = 0
+        found = False
+        for line in (_read(self.proc / pid / "net" / "dev") or "").splitlines()[2:]:
+            name, _, rest = line.partition(":")
+            vals = rest.split()
+            if name.strip() != "lo" and len(vals) >= 9:
+                rx, tx, found = rx + int(vals[0]), tx + int(vals[8]), True
+        return (rx, tx) if found else None
 
     def _proc_counters(self) -> dict[int, dict[str, Any]]:
         out: dict[int, dict[str, Any]] = {}
@@ -381,7 +406,8 @@ class HostMonitor:
     def _network(self, prev: _Snapshot, now: _Snapshot, seconds: float) -> list[dict[str, Any]]:
         out = []
         for name, (rx, tx) in sorted(now.nics.items()):
-            if name.startswith(_SKIP_NICS):
+            # Karty maszyn są w tabeli maszyn (ruch per serwer), nie wśród kart hosta.
+            if name.startswith(_SKIP_NICS) or _SERVER_NIC.match(name):
                 continue
             old = prev.nics.get(name)
             out.append({
@@ -434,8 +460,26 @@ class HostMonitor:
                                 "celsius": round(value / 1000, 1), "critical": None})
         return out
 
+    @staticmethod
+    def _server_traffic(prev: _Snapshot, now: _Snapshot, seconds: float) -> dict[int, dict[str, int]]:
+        """Ruch maszyn z ich kart na hoście. Kierunki z punktu widzenia maszyny:
+        to, co host wysyła na kartę, maszyna pobiera (in) — i odwrotnie."""
+        out: dict[int, dict[str, int]] = {}
+        for name, (rx, tx) in now.nics.items():
+            m = _SERVER_NIC.match(name)
+            if not m:
+                continue
+            row = out.setdefault(int(m.group(1)), {"net_in_bps": 0, "net_out_bps": 0, "net_in_total": 0, "net_out_total": 0})
+            old = prev.nics.get(name)
+            row["net_in_bps"] += round(_rate(tx, old[1] if old else None, seconds) or 0)
+            row["net_out_bps"] += round(_rate(rx, old[0] if old else None, seconds) or 0)
+            row["net_in_total"] += tx
+            row["net_out_total"] += rx
+        return out
+
     def _services(self, prev: _Snapshot, now: _Snapshot, seconds: float, apps: dict[str, str]) -> list[dict[str, Any]]:
         cores = max(1, len(now.cpu) - 1)
+        traffic = self._server_traffic(prev, now, seconds)
         out = []
         for path, cur in now.cgroups.items():
             old = prev.cgroups.get(path)
@@ -456,6 +500,14 @@ class HostMonitor:
                 server_id = int(ref)
             elif cur["kind"] == "lxc" and (m := _VIRTHUB_ID.search(ref)):
                 server_id = int(m.group(1))
+            net = traffic.get(server_id) if server_id is not None else None
+            if net is None and cur.get("net") is not None:
+                old_net = old.get("net") if old else None
+                net = {
+                    "net_in_bps": round(_rate(cur["net"][0], old_net[0] if old_net else None, seconds) or 0),
+                    "net_out_bps": round(_rate(cur["net"][1], old_net[1] if old_net else None, seconds) or 0),
+                    "net_in_total": cur["net"][0], "net_out_total": cur["net"][1],
+                }
             mem_max = cur["memory_max"]
             out.append({
                 "kind": cur["kind"],
@@ -471,6 +523,7 @@ class HostMonitor:
                 "pids": cur["pids"],
                 "read_bps": read_bps,
                 "write_bps": write_bps,
+                **(net or {"net_in_bps": None, "net_out_bps": None, "net_in_total": None, "net_out_total": None}),
             })
         # Aplikacje bez naszego kontenera (np. inne kontenery Dockera) pomijamy.
         out = [s for s in out if s["kind"] != "app" or s["app_uuid"]]
