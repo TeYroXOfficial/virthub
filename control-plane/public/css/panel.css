@@ -1008,3 +1008,7 @@ dialog.edit-modal .grid-3 { gap: 0 14px; }
     table { font-size: 14.5px; }
     .card { padding: 22px 24px; }
 }
+
+/* --- klucze dostępu ----------------------------------------------------------- */
+.or-sep { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12.5px; margin: 14px 0; }
+.or-sep::before, .or-sep::after { content: ""; flex: 1; border-top: 1px solid var(--border); }

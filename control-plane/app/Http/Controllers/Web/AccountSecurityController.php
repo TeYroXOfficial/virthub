@@ -18,7 +18,7 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\IpUtils;
 
-/** Moje konto → Bezpieczeństwo: 2FA, sesje, tokeny API, dozwolone adresy IP. */
+/** Moje konto → Bezpieczeństwo: 2FA, klucze dostępu, sesje, tokeny API, dozwolone adresy IP. */
 class AccountSecurityController extends Controller
 {
     public function __construct(
@@ -53,6 +53,8 @@ class AccountSecurityController extends Controller
             'qr' => $user->two_factor_secret !== null && ! $this->twoFactor->enabled($user) ? $this->twoFactor->qrSvg($user) : null,
             'recoveryLeft' => $this->twoFactor->recoveryCodesLeft($user),
             'mustEnable' => $this->security->mustEnableTwoFactor($user),
+            'passkeys' => $user->passkeys()->orderBy('name')->get(),
+            'defaultRateLimit' => (int) config('virthub.api_token_rate_limit', 120),
             'sessions' => $sessions,
             'tokens' => $user->tokens()->orderByDesc('id')->get(),
             'scopes' => ApiScopes::for($user),
@@ -162,11 +164,13 @@ class AccountSecurityController extends Controller
             'scopes' => ['required', 'array', 'min:1'],
             'scopes.*' => ['string', Rule::in(array_keys(ApiScopes::for($user)))],
             'expires_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'rate_limit' => ['nullable', 'integer', 'min:1', 'max:10000'],
         ]);
         abort_if($user->tokens()->count() >= 50, 422, __('Osiągnięto limit 50 tokenów — usuń nieużywane.'));
         $scopes = array_values(array_unique($data['scopes']));
         $token = $user->createToken($data['name'], $scopes, isset($data['expires_days']) ? now()->addDays((int) $data['expires_days']) : null);
-        AuditLog::record('account.token_created', $user, ['name' => $data['name'], 'scopes' => $scopes]);
+        $token->accessToken->forceFill(['rate_limit' => isset($data['rate_limit']) ? (int) $data['rate_limit'] : null])->save();
+        AuditLog::record('account.token_created', $user, ['name' => $data['name'], 'scopes' => $scopes, 'rate_limit' => $data['rate_limit'] ?? null]);
 
         return back()->with('status', __('Token utworzony. Skopiuj go teraz — nie zobaczysz go ponownie.'))
             ->with('new_token', $token->plainTextToken);

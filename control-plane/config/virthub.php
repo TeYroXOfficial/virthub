@@ -12,6 +12,13 @@ return [
 
     'brand' => env('VIRTHUB_BRAND', 'VirtHub'),
 
+    // Ponowne potwierdzenie tożsamości przed operacjami wrażliwymi — ważne przez N minut.
+    'step_up_minutes' => (int) env('VH_STEP_UP_MINUTES', 15),
+    // Identyfikator RP dla kluczy dostępu (passkey); domyślnie host z APP_URL.
+    'webauthn_rp_id' => env('VH_WEBAUTHN_RP_ID'),
+    // Domyślny limit zapytań tokenu API na minutę (token może mieć własny).
+    'api_token_rate_limit' => (int) env('VH_API_TOKEN_RATE_LIMIT', 120),
+
     /*
     |--------------------------------------------------------------------------
     | Licencja i addony

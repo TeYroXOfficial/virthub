@@ -99,6 +99,11 @@
                 {{ __('Wymagaj weryfikacji dwuetapowej od administratorów i wsparcia') }}
             </label>
             <p class="hint">{{ __('Konto personelu bez 2FA nie otworzy administracji (panel ani API), dopóki jej nie włączy w Moje konto → Bezpieczeństwo.') }}</p>
+            <label style="font-weight:400; display:flex; gap:8px; align-items:center">
+                <input type="checkbox" name="customer_2fa" value="1" style="width:auto" @checked($customer2fa)>
+                {{ __('Wymagaj weryfikacji dwuetapowej także od klientów') }}
+            </label>
+            <p class="hint">{{ __('Klient bez kodu z aplikacji ani klucza dostępu widzi tylko Moje konto, dopóki go nie doda; jego tokeny API dostają odmowę.') }}</p>
             <button class="btn btn-primary" type="submit">{{ __('Zapisz') }}</button>
         </form>
     @endif

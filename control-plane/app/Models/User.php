@@ -67,7 +67,14 @@ class User extends Authenticatable
             'wallet_balance' => 'integer',
             'wallet_notified_at' => 'datetime',
             'mailout_opt_out' => 'boolean',
+            'session_lock' => 'boolean',
         ];
+    }
+
+    /** @return HasMany<WebauthnCredential, $this> */
+    public function passkeys(): HasMany
+    {
+        return $this->hasMany(WebauthnCredential::class);
     }
 
     /** @return HasMany<Server, $this> */

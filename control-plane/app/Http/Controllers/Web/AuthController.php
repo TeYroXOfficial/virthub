@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Domain\Access\Impersonation;
 use App\Domain\Security\AccountSecurity;
+use App\Domain\Security\LoginFlow;
 use App\Domain\Security\TwoFactor;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
@@ -77,8 +78,8 @@ class AuthController extends Controller
 
         RateLimiter::clear($key);
 
-        // Hasło się zgadza, ale konto ma 2FA — sesja powstanie dopiero po kodzie z aplikacji.
-        if ($this->twoFactor->enabled($user)) {
+        // Hasło się zgadza, ale konto ma 2FA — sesja powstanie dopiero po kodzie z aplikacji albo kluczu dostępu.
+        if ($this->security->hasSecondFactor($user)) {
             Auth::logout();
             $request->session()->regenerate();
             $request->session()->put('login.2fa', [
@@ -99,7 +100,9 @@ class AuthController extends Controller
             return redirect()->route('login');
         }
 
-        return view('auth.two-factor');
+        $user = $this->pendingUser($request);
+
+        return view('auth.two-factor', ['totp' => $this->twoFactor->enabled($user), 'passkeys' => $user->passkeys()->exists()]);
     }
 
     public function twoFactor(Request $request): RedirectResponse
@@ -140,16 +143,18 @@ class AuthController extends Controller
         }
         $user = User::find($pending['id'] ?? 0);
 
-        return $user && ! $user->isSuspended() && $this->twoFactor->enabled($user) ? $user : null;
+        return $user && ! $user->isSuspended() && $this->security->hasSecondFactor($user) ? $user : null;
+    }
+
+    /** Użytkownik po haśle, czekający na drugi składnik (dla logowania kluczem dostępu). */
+    public function pendingTwoFactorUser(Request $request): ?User
+    {
+        return $this->pendingUser($request);
     }
 
     private function completeLogin(Request $request, User $user): RedirectResponse
     {
-        $request->session()->regenerate();
-        $user->forceFill(['last_login_at' => now()])->save();
-        AuditLog::record('auth.login', $user);
-
-        return redirect()->intended(route('panel.dashboard'));
+        return redirect()->to(LoginFlow::complete($request, $user));
     }
 
     public function logout(Request $request): RedirectResponse

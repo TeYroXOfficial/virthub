@@ -63,7 +63,7 @@ Route::prefix('v1')->group(function () {
             Route::delete('/servers/{server}', [ServerController::class, 'destroy']);
             Route::prefix('servers/{server}')->group(function () {
                 Route::post('/power', [ServerController::class, 'power']);
-                Route::post('/rebuild', [ServerController::class, 'rebuild']);
+                Route::post('/rebuild', [ServerController::class, 'rebuild'])->middleware('step-up');
                 Route::post('/resize', [ServerController::class, 'resize']);
                 Route::get('/credentials', [ServerController::class, 'credentials']);
                 Route::post('/console-token', [ServerController::class, 'consoleToken']);

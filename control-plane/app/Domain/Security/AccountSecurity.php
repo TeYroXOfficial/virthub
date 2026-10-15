@@ -4,9 +4,14 @@ namespace App\Domain\Security;
 
 use App\Models\Setting;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\IpUtils;
 
-/** Zasady dostępu do konta: dozwolone adresy IP i wymóg 2FA dla personelu. */
+/**
+ * Zasady dostępu do konta: dozwolone adresy IP, wymóg drugiego składnika
+ * (kod z aplikacji albo klucz dostępu) dla personelu i — opcjonalnie — klientów,
+ * przypięcie sesji do adresu IP i przeglądarki.
+ */
 class AccountSecurity
 {
     public function __construct(private readonly TwoFactor $twoFactor) {}
@@ -29,9 +34,28 @@ class AccountSecurity
         return (bool) Setting::get('security.staff_2fa', false);
     }
 
+    public static function customersMustUseTwoFactor(): bool
+    {
+        return (bool) Setting::get('security.customer_2fa', false);
+    }
+
+    /** Kod TOTP albo co najmniej jeden klucz dostępu (passkey). */
+    public function hasSecondFactor(User $user): bool
+    {
+        return $this->twoFactor->enabled($user) || $user->passkeys()->exists();
+    }
+
     public function mustEnableTwoFactor(User $user): bool
     {
-        return $user->role !== User::ROLE_CUSTOMER && self::staffMustUseTwoFactor() && ! $this->twoFactor->enabled($user);
+        $required = $user->role === User::ROLE_CUSTOMER ? self::customersMustUseTwoFactor() : self::staffMustUseTwoFactor();
+
+        return $required && ! $this->hasSecondFactor($user);
+    }
+
+    /** Odcisk sesji przypiętej do adresu i przeglądarki. */
+    public static function fingerprint(Request $request): string
+    {
+        return hash('sha256', $request->ip().'|'.$request->userAgent());
     }
 
     /**
