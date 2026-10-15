@@ -12,12 +12,42 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class PrivateNetwork extends Model
 {
-    protected $fillable = ['user_id', 'hypervisor_id', 'name', 'cidr'];
+    protected $fillable = ['user_id', 'hypervisor_id', 'hypervisor_group_id', 'name', 'cidr'];
+
+    /** Sieć rozpięta na grupę węzłów (tunel VXLAN), a nie tylko na węzeł, na którym powstała. */
+    public function spansGroup(): bool
+    {
+        return $this->hypervisor_group_id !== null;
+    }
+
+    public function vni(): int
+    {
+        return 100000 + $this->id;
+    }
+
+    /** Czy maszyna na tym węźle może dołączyć do sieci. */
+    public function reachableFrom(?Hypervisor $node): bool
+    {
+        if ($node === null) {
+            return false;
+        }
+        if (! $this->spansGroup()) {
+            return $node->id === $this->hypervisor_id;
+        }
+
+        return $node->hypervisor_group_id === $this->hypervisor_group_id && filled($node->vxlan_address);
+    }
 
     /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** @return BelongsTo<HypervisorGroup, $this> */
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(HypervisorGroup::class, 'hypervisor_group_id');
     }
 
     /** @return BelongsTo<Hypervisor, $this> */

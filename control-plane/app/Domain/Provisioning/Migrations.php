@@ -3,6 +3,7 @@
 namespace App\Domain\Provisioning;
 
 use App\Domain\Agent\ServerPayload;
+use App\Domain\Network\PrivateNetworks;
 use App\Domain\Webhooks\Webhooks;
 use App\Enums\ServerState;
 use App\Enums\Virtualization;
@@ -86,8 +87,11 @@ class Migrations
         if ($server->disks()->exists()) {
             $fail(__('Maszyna ma dodatkowe dyski — migracja przenosi tylko dysk główny. Usuń dodatkowe dyski albo przenieś dane przed migracją.'));
         }
-        if ($server->nics()->exists()) {
-            $fail(__('Maszyna jest w sieci prywatnej węzła — odłącz jej karty prywatne przed migracją.'));
+        $local = $server->nics()->with('network')->get()->first(fn ($nic) => ! $nic->network->spansGroup() || ! $nic->network->reachableFrom($destination));
+        if ($local !== null) {
+            $fail($local->network->spansGroup()
+                ? __('Sieć prywatna :name obejmuje inną grupę węzłów albo węzeł docelowy nie ma adresu VXLAN — odłącz kartę przed migracją.', ['name' => $local->network->name])
+                : __('Maszyna jest w sieci prywatnej węzła — odłącz jej karty prywatne przed migracją.'));
         }
         if ($server->datastore?->isCeph()) {
             $fail(__('Dysk maszyny jest w Cephie — migracja z kopiowaniem dysku obsługuje magazyny katalogowe.'));
@@ -116,6 +120,11 @@ class Migrations
             unset($payload['storage']);
         }
         unset($payload['root_password'], $payload['ssh_keys']);
+        // Tunele VXLAN sieci prywatnych zestawiane z węzła docelowego.
+        $nics = PrivateNetworks::payload($server, $destination);
+        if ($nics !== []) {
+            $payload['private_nics'] = $nics;
+        }
 
         return $payload;
     }
@@ -145,6 +154,10 @@ class Migrations
         });
 
         $job->markDone(['to' => $destination->name, 'mode' => $payload['mode']]);
+        // Węzły sieci prywatnych dostają nową listę węzłów w tunelu.
+        foreach ($server->nics()->with('network')->get() as $nic) {
+            app(PrivateNetworks::class)->syncPeers($nic->network, $server->fresh());
+        }
         AuditLog::record('server.migrated', $server, ['from' => $source?->name, 'to' => $destination->name, 'mode' => $payload['mode']]);
         $webhooks = app(Webhooks::class);
         $webhooks->dispatch('server.migrated', $webhooks->describe($server->fresh()) + ['from_hypervisor' => $source?->name, 'to_hypervisor' => $destination->name, 'mode' => $payload['mode']]);

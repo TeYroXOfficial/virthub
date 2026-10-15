@@ -19,7 +19,7 @@ import subprocess
 
 from .config import Settings
 from .nat import NatManager
-from .schemas import FirewallPolicy, FirewallRule, NetworkFilter, NetworkInterfaceSpec
+from .schemas import FirewallPolicy, FirewallRule, NetworkFilter, NetworkInterfaceSpec, PrivateNicSpec
 from .shell import CommandError, run
 
 log = logging.getLogger("virthub.network")
@@ -89,6 +89,8 @@ class NetworkManager:
             return self.settings.nat_bridge
         if mode == "routed":
             return self.settings.routed_bridge
+        if self.settings.network_backend == "ovs":
+            return self.settings.bridge  # VLAN tagiem na porcie OVS, bez osobnego mostka
         return l2.vlan_bridge(vlan) if vlan else self.settings.bridge
 
     def prepare(self, interfaces: list[NetworkInterfaceSpec]) -> str:
@@ -103,7 +105,7 @@ class NetworkManager:
                 self.nat._require_sysctl("/proc/sys/net/ipv4/ip_forward", "net.ipv4.ip_forward")
                 if any(i.version == 6 for i in interfaces):
                     self.nat._require_sysctl("/proc/sys/net/ipv6/conf/all/forwarding", "net.ipv6.conf.all.forwarding")
-            elif vlan:
+            elif vlan and self.settings.network_backend == "bridge":
                 l2.run_idempotent(l2.vlan_commands(l2.vlan_parent(self.settings), vlan))
         return self.bridge_for(interfaces)
 
@@ -137,7 +139,7 @@ class NetworkManager:
     def _state_file(self, server_id: int) -> Path:
         return self.settings.network_state_dir / f"{server_id}.json"
 
-    def _save_state(self, server_id, interfaces, firewall, policy, net_filter=None) -> None:
+    def _save_state(self, server_id, interfaces, firewall, policy, net_filter=None, private_nics=None) -> None:
         self.settings.network_state_dir.mkdir(parents=True, exist_ok=True)
         path = self._state_file(server_id)
         tmp = path.with_suffix(".tmp")
@@ -146,6 +148,7 @@ class NetworkManager:
             "firewall": [r.model_dump() for r in firewall],
             "policy": policy.model_dump() if policy is not None else None,
             "filter": net_filter.model_dump() if net_filter is not None else None,
+            "private_nics": [n.model_dump() for n in private_nics or []],
         }), encoding="utf-8")
         tmp.replace(path)
 
@@ -176,6 +179,7 @@ class NetworkManager:
                     [FirewallRule(**r) for r in data.get("firewall", [])],
                     FirewallPolicy(**data["policy"]) if data.get("policy") else None,
                     NetworkFilter(**data["filter"]) if data.get("filter") else None,
+                    private_nics=[PrivateNicSpec(**n) for n in data.get("private_nics") or []],
                 )
                 restored += 1
             except Exception:
@@ -229,22 +233,79 @@ class NetworkManager:
         firewall: list[FirewallRule],
         policy: FirewallPolicy | None = None,
         net_filter: NetworkFilter | None = None,
+        private_nics: list | None = None,
+        mac: str | None = None,
     ) -> None:
-        """Podmienia komplet reguł jednej maszyny w jednej transakcji."""
+        """Podmienia komplet reguł jednej maszyny w jednej transakcji (osobno dla
+        karty głównej i każdej karty w sieci prywatnej)."""
+        primary_rules = [r for r in firewall if getattr(r, "interface", "primary") == "primary"]
         if self.settings.is_mock:
             log.info("[mock] pominięto konfigurację nftables dla maszyny %s", server_id)
             self.nat.configure(server_id, interfaces)
-            self._save_state(server_id, interfaces, firewall, policy, net_filter)
+            self._save_state(server_id, interfaces, firewall, policy, net_filter, private_nics)
             return
 
         self.ensure_base_table()
-        self._apply(self.render_machine(
-            server_id, interfaces, firewall, policy, stateful=self.stateful(), net_filter=net_filter,
-        ))
+        backend = self.backend_for(interfaces)
+        if backend == "ovs":
+            from . import ovs
+
+            v4 = [i.address for i in interfaces if i.version == 4]
+            v6 = [i.address for i in interfaces if i.version == 6]
+            ovs.apply(self.bridge_for(interfaces), server_id, interface_name(server_id), mac or "00:00:00:00:00:00", v4, v6)
+            if primary_rules:
+                log.warning("Maszyna %s na mostku OVS: %s reguł zapory klienta nie jest egzekwowanych (tylko anty-spoofing).",
+                            server_id, len(primary_rules))
+        elif backend == "direct":
+            log.warning("Maszyna %s na macvtap (VH_NETWORK_BACKEND=direct): bez anty-spoofingu i zapory na hoście.", server_id)
+        else:
+            self._apply(self.render_machine(
+                server_id, interfaces, primary_rules, policy, stateful=self.stateful(), net_filter=net_filter,
+            ))
+        self._configure_private(server_id, firewall, policy, private_nics or [])
         self.nat.configure(server_id, interfaces)
         self._sync_routes(server_id, interfaces)
-        self._save_state(server_id, interfaces, firewall, policy, net_filter)
+        self._save_state(server_id, interfaces, firewall, policy, net_filter, private_nics)
         log.info("Zastosowano %s reguł firewalla dla maszyny %s", len(firewall), server_id)
+
+    def backend_for(self, interfaces: list[NetworkInterfaceSpec]) -> str:
+        """OVS i macvtap dotyczą adresów publicznych na mostku; NAT i podsieci routowane
+        zawsze idą przez mostki Linuksa węzła (filtrowane nftables)."""
+        from . import l2
+
+        mode, _ = l2.layout(interfaces)
+        return self.settings.network_backend if mode == "bridged" else "bridge"
+
+    def _configure_private(self, server_id: int, firewall: list[FirewallRule], policy, private_nics: list) -> None:
+        """Łańcuch na każdej karcie w sieci prywatnej: anty-spoofing (gdy karta ma adres)
+        i reguły klienta przypisane do tej karty. Łańcuchy usuniętych kart znikają."""
+        from .private_net import nic_target
+
+        present = set()
+        for nic in private_nics:
+            present.add(nic.slot)
+            ifaces = [NetworkInterfaceSpec(address=nic.address, prefix=nic.prefix)] if nic.address else []
+            rules = [r for r in firewall if getattr(r, "interface", "primary") == f"n{nic.slot}"]
+            self._apply(self.render_machine(
+                server_id, ifaces, rules, policy, stateful=self.stateful(),
+                net_filter=NetworkFilter(anti_spoofing=bool(nic.address)),
+                iface=nic_target(server_id, nic.slot), chain=f"vm_{server_id}_n{nic.slot}",
+            ))
+        for slot in range(1, 8):
+            if slot not in present:
+                self._remove_chain(nic_target(server_id, slot), f"vm_{server_id}_n{slot}")
+
+    def _remove_chain(self, iface: str, chain: str) -> None:
+        for script in (
+            f'delete element {self.FAMILY} {self.table} {self.PORTS_MAP} {{ "{iface}" }}\n',
+            f"flush chain {self.FAMILY} {self.table} {chain}\n",
+            f"delete chain {self.FAMILY} {self.table} {chain}\n",
+        ):
+            try:
+                self._apply(script)
+            except CommandError as exc:
+                if "No such file or directory" not in exc.stderr:
+                    raise
 
     def stateful(self) -> bool:
         """Czy zapora może śledzić połączenia w rodzinie bridge.
@@ -306,20 +367,17 @@ class NetworkManager:
             return
         l2.run_idempotent(l2.route_commands(self.settings.routed_bridge, saved, "del"))
 
-        chain = f"vm_{server_id}"
-        iface = interface_name(server_id)
         # Każdy krok osobno: brak elementu czy łańcucha nie jest błędem —
         # maszyna mogła nigdy nie dostać reguł (nieudany provisioning).
-        for script in (
-            f'delete element {self.FAMILY} {self.table} {self.PORTS_MAP} {{ "{iface}" }}\n',
-            f"flush chain {self.FAMILY} {self.table} {chain}\n",
-            f"delete chain {self.FAMILY} {self.table} {chain}\n",
-        ):
-            try:
-                self._apply(script)
-            except CommandError as exc:
-                if "No such file or directory" not in exc.stderr:
-                    raise
+        self._remove_chain(interface_name(server_id), f"vm_{server_id}")
+        from .private_net import nic_target
+
+        for slot in range(1, 8):
+            self._remove_chain(nic_target(server_id, slot), f"vm_{server_id}_n{slot}")
+        if self.settings.network_backend == "ovs":
+            from . import ovs
+
+            ovs.remove(self.settings.bridge, server_id)
 
     # --- generowanie reguł (czyste funkcje, testowalne bez nft) --------------
 
@@ -343,10 +401,12 @@ class NetworkManager:
         policy: FirewallPolicy | None = None,
         stateful: bool = True,
         net_filter: NetworkFilter | None = None,
+        iface: str | None = None,
+        chain: str | None = None,
     ) -> str:
         t = f"{self.FAMILY} {self.table}"
-        chain = f"vm_{server_id}"
-        iface = interface_name(server_id)
+        chain = chain or f"vm_{server_id}"
+        iface = iface or interface_name(server_id)
         out = f'iifname "{iface}"'
         inbound = f'oifname "{iface}"'
 

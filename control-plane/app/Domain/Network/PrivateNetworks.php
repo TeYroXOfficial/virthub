@@ -35,7 +35,9 @@ class PrivateNetworks
             throw new \DomainException(__('Osiągnięto limit sieci prywatnych (:limit).', ['limit' => $limit]));
         }
         $cidr = $this->normaliseCidr($cidr ?: $this->suggestCidr($owner));
-        $network = PrivateNetwork::create(['user_id' => $owner->id, 'hypervisor_id' => $node->id, 'name' => trim($name), 'cidr' => $cidr]);
+        // Węzeł z adresem w sieci wewnętrznej grupy: sieć obejmuje całą grupę (tunel VXLAN).
+        $group = $node->hypervisor_group_id && filled($node->vxlan_address) ? $node->hypervisor_group_id : null;
+        $network = PrivateNetwork::create(['user_id' => $owner->id, 'hypervisor_id' => $node->id, 'hypervisor_group_id' => $group, 'name' => trim($name), 'cidr' => $cidr]);
         AuditLog::record('private_network.created', $network, ['name' => $network->name, 'cidr' => $cidr], $actor);
 
         return $network;
@@ -71,8 +73,10 @@ class PrivateNetworks
             ]);
         });
         AuditLog::record('server.nic_attached', $server, ['network' => $network->name, 'address' => $nic->address, 'slot' => $nic->slot], $actor);
+        $job = $this->provisioner->syncPrivateNics($server, $actor);
+        $this->syncPeers($network, $server);
 
-        return $this->provisioner->syncPrivateNics($server, $actor);
+        return $job;
     }
 
     public function detach(ServerNic $nic, ?User $actor = null): ServerJob
@@ -81,20 +85,42 @@ class PrivateNetworks
         if ($server->state->isTransitioning()) {
             throw new \DomainException(__('Trwa operacja na maszynie — spróbuj za chwilę.'));
         }
-        AuditLog::record('server.nic_detached', $server, ['network' => $nic->network?->name, 'address' => $nic->address], $actor);
+        $network = $nic->network;
+        AuditLog::record('server.nic_detached', $server, ['network' => $network?->name, 'address' => $nic->address], $actor);
         $nic->delete();
+        $job = $this->provisioner->syncPrivateNics($server, $actor);
+        if ($network) {
+            $this->syncPeers($network, $server);
+        }
 
-        return $this->provisioner->syncPrivateNics($server, $actor);
+        return $job;
+    }
+
+    /**
+     * Sieć w grupie: lista węzłów w tunelu zmieniła się na każdym węźle sieci —
+     * po jednej maszynie z każdego innego węzła wystarczy, bo tunel jest wspólny.
+     */
+    public function syncPeers(PrivateNetwork $network, ?Server $except = null): void
+    {
+        if (! $network->spansGroup()) {
+            return;
+        }
+        $servers = Server::query()->whereIn('id', $network->nics()->select('server_id'))
+            ->when($except, fn ($q) => $q->whereKeyNot($except->id)->where('hypervisor_id', '!=', $except->hypervisor_id))
+            ->whereNotNull('agent_uuid')->get()->unique('hypervisor_id');
+        foreach ($servers as $peer) {
+            $this->provisioner->syncPrivateNics($peer);
+        }
     }
 
     /** @return list<array<string, mixed>> */
-    public static function payload(Server $server): array
+    public static function payload(Server $server, ?Hypervisor $node = null): array
     {
         if ($server->isContainer()) {
             return [];
         }
 
-        return $server->nics()->with('network')->get()->map->toAgentPayload()->values()->all();
+        return $server->nics()->with('network')->get()->map(fn (ServerNic $nic) => $nic->toAgentPayload($node))->values()->all();
     }
 
     /** Te same warunki co przy podłączaniu, zanim powstanie nowa sieć dla maszyny. */
@@ -120,8 +146,10 @@ class PrivateNetworks
         if ($server->user_id !== $network->user_id) {
             throw new \DomainException(__('Sieć należy do innego klienta.'));
         }
-        if ($server->hypervisor_id !== $network->hypervisor_id) {
-            throw new \DomainException(__('Sieć prywatna działa na jednym węźle — maszyna jest na innym niż sieć :name.', ['name' => $network->name]));
+        if (! $network->reachableFrom($server->hypervisor)) {
+            throw new \DomainException($network->spansGroup()
+                ? __('Sieć :name obejmuje grupę węzłów — maszyna jest na węźle spoza grupy albo bez adresu w sieci wewnętrznej (VXLAN).', ['name' => $network->name])
+                : __('Sieć prywatna działa na jednym węźle — maszyna jest na innym niż sieć :name.', ['name' => $network->name]));
         }
         if ($server->agent_uuid === null || $server->state->isTransitioning()) {
             throw new \DomainException(__('Maszyna nie jest gotowa — spróbuj, gdy zakończy bieżącą operację.'));

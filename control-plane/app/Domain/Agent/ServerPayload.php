@@ -219,6 +219,8 @@ class ServerPayload
             'policy' => Firewall::policyPayload($server),
             // Zawsze wysyłane: null zdejmuje limit (koniec dławienia, brak prędkości portu).
             'bandwidth_mbps' => Traffic::bandwidthMbps($server),
+            // Karty prywatne: zapora na każdej z nich (reguły z interface = nX).
+            'private_nics' => PrivateNetworks::payload($server),
         ] + self::filter($server);
     }
 

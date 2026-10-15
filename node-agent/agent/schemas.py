@@ -172,6 +172,26 @@ class HardwareRequest(BaseModel):
     hardware: HardwareSpec
 
 
+class VxlanSpec(BaseModel):
+    """Sieć prywatna rozpięta na kilka węzłów: tunel VXLAN (unicast, bez multicastu)
+    między adresami węzłów w sieci wewnętrznej (interconnect)."""
+
+    vni: int = Field(ge=1, le=16_777_215)
+    local: str
+    peers: list[str] = Field(default_factory=list, max_length=200)
+    mtu: int = Field(default=1450, ge=1280, le=9000)
+
+    @field_validator("local")
+    @classmethod
+    def _local_ip(cls, value: str) -> str:
+        return str(ipaddress.ip_address(value))
+
+    @field_validator("peers")
+    @classmethod
+    def _peer_ips(cls, value: list[str]) -> list[str]:
+        return sorted({str(ipaddress.ip_address(v)) for v in value})
+
+
 class PrivateNicSpec(BaseModel):
     """Dodatkowa karta maszyny w sieci prywatnej (izolowany mostek węzła)."""
 
@@ -180,6 +200,7 @@ class PrivateNicSpec(BaseModel):
     mac: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
     address: str | None = Field(default=None, description="Adres IPv4 w sieci prywatnej (cloud-init); brak = bez adresacji")
     prefix: int = Field(default=24, ge=8, le=30)
+    vxlan: VxlanSpec | None = None
 
     @field_validator("address")
     @classmethod
@@ -205,6 +226,8 @@ class PrivateNicsRequest(BaseModel):
 
 
 class FirewallRule(BaseModel):
+    # Karta, której dotyczy reguła: główna albo karta w sieci prywatnej (n1–n7).
+    interface: str = Field(default="primary", pattern=r"^(primary|n[1-7])$")
     action: Literal["accept", "drop"] = "accept"
     direction: Literal["in", "out"] = "in"
     protocol: Literal["tcp", "udp", "icmp", "any"] = "tcp"
@@ -586,6 +609,8 @@ class NetworkConfigRequest(BaseModel):
     # Limit prędkości karty głównej w obie strony (Mbit/s). Pole pominięte = bez zmian,
     # null = bez limitu (dławienie po przekroczeniu transferu albo prędkość portu z pakietu).
     bandwidth_mbps: int | None = Field(default=None, ge=1, le=100_000)
+    # Karty w sieciach prywatnych — dla reguł zapory przypisanych do nich (interface = nX).
+    private_nics: list[PrivateNicSpec] | None = None
 
 
 class SnapshotRequest(BaseModel):
@@ -666,6 +691,7 @@ class HostHealth(BaseModel):
     disk_gb_free: int
     running_vms: int
     cpu_model: str | None = Field(default=None, description="Model procesora hosta z /proc/cpuinfo")
+    network_backend: str | None = Field(default=None, description="Topologia sieci maszyn: bridge, ovs albo direct")
     apps: dict | None = Field(default=None, description="Docker dla aplikacji: dostępność, wersja, liczba aplikacji")
     host_networks: list[dict] | None = Field(
         default=None,
