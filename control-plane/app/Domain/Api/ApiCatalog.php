@@ -2,6 +2,7 @@
 
 namespace App\Domain\Api;
 
+use App\Domain\Metrics\Traffic;
 use App\Domain\Provisioning\ServerHardware;
 
 /**
@@ -185,6 +186,23 @@ class ApiCatalog
             self::e('admin.servers.migrate', 'admin', 'POST', '/admin/servers/{server}/migrate', __('Migracja maszyny'), __('Przenosi maszynę KVM na inny hypervisor: cold — zatrzymanie, kopia dysku między węzłami i start na celu; live — bez przerwy (libvirt z kopiowaniem dysku). Adresy IP zostają, więc ich pula musi obejmować węzeł docelowy. Webhook server.migrated po zakończeniu.'), 'admin',
                 path: [$server], body: [self::param('hypervisor_id', 'integer', true, __('Węzeł docelowy'), 3), self::param('mode', 'string', false, __('Tryb'), 'cold', ['cold', 'live'])],
                 status: 202, response: ['message' => __('Migracja rozpoczęta.'), 'job_id' => 1234]),
+            self::e('admin.servers.traffic', 'admin', 'GET', '/admin/servers/{server}/traffic', __('Transfer maszyny'), __('Zużycie w bieżącym okresie, limit z dokupionymi pakietami, polityka po dziedziczeniu (maszyna → pakiet → węzeł → globalne) i stan blokady albo dławienia.'), 'admin',
+                path: [$server], response: ['data' => ['period_start' => '2026-10-01', 'resets_at' => '2026-11-01', 'rx' => 120000000000, 'tx' => 80000000000, 'used' => 200000000000,
+                    'limit' => 1100000000000, 'extra_gb' => 100, 'percent' => 18.2, 'counting' => 'total', 'action' => 'throttle', 'blocked' => false, 'throttled' => false,
+                    'throttle_mbps' => 10, 'units' => 'decimal', 'port_speed_mbps' => 1000, 'blocks' => [['id' => 4, 'gb' => 100, 'note' => 'FV/2026/10/17', 'created_at' => '2026-10-12T09:00:00+00:00']]]]),
+            self::e('admin.servers.traffic.update', 'admin', 'PUT', '/admin/servers/{server}/traffic', __('Polityka transferu'), __('Limit miesięczny i polityka maszyny; null przywraca dziedziczenie. Zwiększenie limitu zdejmuje blokadę albo dławienie.'), 'admin',
+                path: [$server], body: [
+                    self::param('bandwidth_gb', 'integer', false, __('Limit miesięczny w GB (0 = bez limitu)'), 1000),
+                    self::param('counting', 'string', false, __('Liczony ruch'), 'out', Traffic::COUNTING),
+                    self::param('limit_action', 'string', false, __('Po przekroczeniu limitu'), 'throttle', Traffic::ACTIONS),
+                    self::param('throttle_mbps', 'integer', false, __('Prędkość dławienia (Mbit/s)'), 10),
+                    self::param('port_speed_mbps', 'integer', false, __('Stała prędkość portu (Mbit/s)'), 1000),
+                ], response: ['data' => ['limit' => 1000000000000, 'action' => 'throttle']]),
+            self::e('admin.servers.traffic.blocks.store', 'admin', 'POST', '/admin/servers/{server}/traffic/blocks', __('Pakiet transferu'), __('Dokupiony transfer na bieżący okres — powiększa limit, zdejmuje blokadę albo dławienie.'), 'admin',
+                path: [$server], body: [self::param('gb', 'integer', true, __('Dodatkowy transfer (GB)'), 100), self::param('note', 'string', false, __('Notatka'), 'FV/2026/10/17')], status: 201,
+                response: ['data' => ['extra_gb' => 100, 'blocks' => [['id' => 4, 'gb' => 100, 'note' => 'FV/2026/10/17']]]]),
+            self::e('admin.servers.traffic.blocks.destroy', 'admin', 'DELETE', '/admin/servers/{server}/traffic/blocks/{block}', __('Usunięcie pakietu transferu'), __('Usuwa dokupiony pakiet z bieżącego okresu.'), 'admin',
+                path: [$server, self::path('block', __('Identyfikator pakietu'), 4)], response: ['data' => ['extra_gb' => 0, 'blocks' => []]]),
             self::e('admin.servers.disks', 'admin', 'GET', '/admin/servers/{server}/disks', __('Dyski maszyny'), __('Dysk główny (vda) i dodatkowe dyski (vdb–vdh) z rozmiarami.'), 'admin',
                 path: [$server], response: ['data' => [['dev' => 'vda', 'size_gb' => 40, 'primary' => true], ['dev' => 'vdb', 'size_gb' => 100, 'primary' => false]]]),
             self::e('admin.servers.disks.store', 'admin', 'POST', '/admin/servers/{server}/disks', __('Nowy dysk'), __('Tworzy pusty dysk i dołącza go do maszyny — na działającej od razu. Miejsce na węźle jest rezerwowane.'), 'admin',

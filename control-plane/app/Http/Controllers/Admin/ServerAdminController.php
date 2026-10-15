@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Metrics\Traffic;
 use App\Domain\Provisioning\Migrations;
 use App\Domain\Provisioning\ServerDisks;
 use App\Domain\Provisioning\ServerHardware;
@@ -63,6 +64,67 @@ class ServerAdminController extends Controller
         $job = $migrations->start($server, Hypervisor::findOrFail($validated['hypervisor_id']), $validated['mode'] ?? 'cold', $request->user());
 
         return response()->json(['message' => __('Migracja rozpoczęta.'), 'job_id' => $job->id], 202);
+    }
+
+    /** Transfer: zużycie w okresie, polityka po dziedziczeniu i dokupione pakiety. */
+    public function traffic(Server $server, Traffic $traffic): JsonResponse
+    {
+        return response()->json(['data' => $this->trafficState($server, $traffic)]);
+    }
+
+    public function updateTraffic(Request $request, Server $server, Traffic $traffic): JsonResponse
+    {
+        $data = $request->validate([
+            'bandwidth_gb' => ['sometimes', 'integer', 'min:0', 'max:10000000'],
+            'counting' => ['sometimes', 'nullable', Rule::in(Traffic::COUNTING)],
+            'limit_action' => ['sometimes', 'nullable', Rule::in(Traffic::ACTIONS)],
+            'throttle_mbps' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000'],
+            'port_speed_mbps' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000'],
+        ]);
+        $map = ['bandwidth_gb' => 'bandwidth_gb', 'counting' => 'traffic_counting', 'limit_action' => 'traffic_limit_action',
+            'throttle_mbps' => 'traffic_throttle_mbps', 'port_speed_mbps' => 'port_speed_mbps'];
+        $changes = [];
+        foreach ($data as $key => $value) {
+            $changes[$map[$key]] = $value;
+        }
+        $speed = $server->port_speed_mbps;
+        $server->forceFill($changes)->save();
+        AuditLog::record('server.traffic_policy', $server, $changes, $request->user());
+        $traffic->releaseEligible($server);
+        $traffic->enforce($server->fresh());
+        if ($server->port_speed_mbps !== $speed && $server->agent_uuid !== null && ! $server->isSuspended()) {
+            $this->provisioner->syncNetwork($server, $request->user());
+        }
+
+        return response()->json(['data' => $this->trafficState($server->fresh(), $traffic)]);
+    }
+
+    public function addTrafficBlock(Request $request, Server $server, Traffic $traffic): JsonResponse
+    {
+        $data = $request->validate(['gb' => ['required', 'integer', 'min:1', 'max:10000000'], 'note' => ['nullable', 'string', 'max:255']]);
+        $traffic->addBlock($server, (int) $data['gb'], $data['note'] ?? null, $request->user());
+
+        return response()->json(['data' => $this->trafficState($server->fresh(), $traffic)], 201);
+    }
+
+    public function removeTrafficBlock(Request $request, Server $server, int $block, Traffic $traffic): JsonResponse
+    {
+        $traffic->removeBlock($server->trafficBlocks()->findOrFail($block), $request->user());
+
+        return response()->json(['data' => $this->trafficState($server->fresh(), $traffic)]);
+    }
+
+    /** @return array<string, mixed> */
+    private function trafficState(Server $server, Traffic $traffic): array
+    {
+        $usage = $traffic->usage($server);
+
+        return $usage + [
+            'units' => config('virthub.traffic_units') === 'binary' ? 'binary' : 'decimal',
+            'port_speed_mbps' => $server->port_speed_mbps ?? $server->package?->port_speed_mbps,
+            'blocks' => $server->trafficBlocks()->whereDate('period_start', $usage['period_start'])->orderBy('id')->get()
+                ->map(fn ($b) => ['id' => $b->id, 'gb' => $b->gb, 'note' => $b->note, 'created_at' => $b->created_at?->toIso8601String()])->values(),
+        ];
     }
 
     /** Dyski maszyny: główny i dodatkowe (vdb–vdh). */

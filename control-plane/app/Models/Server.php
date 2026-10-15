@@ -56,6 +56,9 @@ class Server extends Model
             'boot_from_iso' => 'boolean',
             'guest_os_checked_at' => 'datetime',
             'traffic_blocked_at' => 'datetime',
+            'traffic_throttled_at' => 'datetime',
+            'traffic_throttle_mbps' => 'integer',
+            'port_speed_mbps' => 'integer',
         ];
     }
 
@@ -151,6 +154,12 @@ class Server extends Model
     public function isSelfService(): bool
     {
         return $this->resource_pack_id !== null;
+    }
+
+    /** @return HasMany<TrafficBlock, $this> */
+    public function trafficBlocks(): HasMany
+    {
+        return $this->hasMany(TrafficBlock::class);
     }
 
     /** @return HasMany<ServerDisk, $this> */

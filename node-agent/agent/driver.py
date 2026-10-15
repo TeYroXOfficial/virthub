@@ -532,6 +532,8 @@ class LibvirtDriver(HypervisorDriver):
 
             self.network.configure(req.server_id, req.interfaces, firewall=[], net_filter=req.filter)
             created.append("network")
+            if req.bandwidth_mbps:
+                self._apply_bandwidth(domain, req.server_id, req.bandwidth_mbps)
 
             progress("boot", 85)
             if getattr(restore, "start", True):
@@ -1433,11 +1435,27 @@ class LibvirtDriver(HypervisorDriver):
         domain = self._domain(uuid)
         server_id = server_id_from_name(domain.name())
         self.network.configure(server_id, req.interfaces, req.firewall, req.policy, req.filter)
+        if "bandwidth_mbps" in req.model_fields_set:
+            self._apply_bandwidth(domain, server_id, req.bandwidth_mbps)
         return {
             "uuid": uuid,
             "interfaces": len(req.interfaces),
             "firewall_rules": len(req.firewall),
+            "bandwidth_mbps": req.bandwidth_mbps,
         }
+
+    def _apply_bandwidth(self, domain: Any, server_id: int, mbps: int | None) -> None:
+        """Limit prędkości karty głównej (tc w libvirt) — od razu i w definicji. 0 = bez limitu."""
+        import libvirt
+
+        kbytes = (mbps or 0) * 125  # Mbit/s → kB/s
+        params = {"inbound.average": kbytes, "inbound.peak": kbytes, "inbound.burst": max(kbytes // 8, 64) if kbytes else 0,
+                  "outbound.average": kbytes, "outbound.peak": kbytes, "outbound.burst": max(kbytes // 8, 64) if kbytes else 0}
+        flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG | (libvirt.VIR_DOMAIN_AFFECT_LIVE if domain.isActive() else 0)
+        try:
+            domain.setInterfaceParameters(interface_name(server_id), params, flags)
+        except libvirt.libvirtError as exc:
+            raise DriverError(f"Nie udało się ustawić limitu prędkości karty: {exc}") from exc
 
     # --- telemetria ---------------------------------------------------------
 
@@ -1883,11 +1901,18 @@ class MockDriver(HypervisorDriver):
         return {"uuid": uuid, "snapshot": name, "state": record["state"]}
 
     def configure_network(self, uuid: str, req: NetworkConfigRequest) -> dict[str, Any]:
-        self._get(uuid)
+        data = self._load()
+        record = data.get(uuid)
+        if record is None:
+            raise VmNotFound(uuid)
+        if "bandwidth_mbps" in req.model_fields_set:
+            record["bandwidth_mbps"] = req.bandwidth_mbps
+            self._save(data)
         return {
             "uuid": uuid,
             "interfaces": len(req.interfaces),
             "firewall_rules": len(req.firewall),
+            "bandwidth_mbps": record.get("bandwidth_mbps"),
         }
 
     def stats(self, uuid: str) -> VmStats:

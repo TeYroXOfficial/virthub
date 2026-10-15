@@ -37,6 +37,31 @@
                     <input id="disk_gb" name="disk_gb" type="text" value="{{ old('disk_gb', 50) }}" required>
                 </div>
                 <div class="field">
+                    <label for="port_speed_mbps">{{ __('Prędkość portu (Mbit/s)') }} <span class="muted">{{ __('(opcjonalnie)') }}</span></label>
+                    <input id="port_speed_mbps" name="port_speed_mbps" type="number" min="1" value="{{ old('port_speed_mbps') }}" placeholder="{{ __('bez limitu') }}">
+                </div>
+                <div class="field">
+                    <label for="traffic_limit_action">{{ __('Po przekroczeniu transferu') }}</label>
+                    <select id="traffic_limit_action" name="traffic_limit_action">
+                        <option value="">{{ __('jak na węźle / globalnie') }}</option>
+                        <option value="block">{{ __('blokada (zawieszenie)') }}</option>
+                        <option value="throttle">{{ __('dławienie prędkości') }}</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="traffic_throttle_mbps">{{ __('Prędkość dławienia (Mbit/s)') }}</label>
+                    <input id="traffic_throttle_mbps" name="traffic_throttle_mbps" type="number" min="1" value="{{ old('traffic_throttle_mbps') }}" placeholder="{{ config('virthub.traffic_throttle_mbps', 10) }}">
+                </div>
+                <div class="field">
+                    <label for="traffic_counting">{{ __('Liczony ruch') }}</label>
+                    <select id="traffic_counting" name="traffic_counting">
+                        <option value="">{{ __('jak na węźle / globalnie') }}</option>
+                        <option value="total">{{ __('oba kierunki') }}</option>
+                        <option value="in">{{ __('przychodzący') }}</option>
+                        <option value="out">{{ __('wychodzący') }}</option>
+                    </select>
+                </div>
+                <div class="field">
                     <label for="extra_disk_gb">{{ __('Dodatkowy dysk (GB)') }} <span class="muted">{{ __('(opcjonalnie)') }}</span></label>
                     <input id="extra_disk_gb" name="extra_disk_gb" type="number" min="1" value="{{ old('extra_disk_gb') }}" placeholder="{{ __('brak') }}">
                 </div>
@@ -154,6 +179,21 @@
                                         <div class="field"><label>{{ __('Limit CPU (%)') }}</label><input name="cpu_limit_percent" type="number" min="1" placeholder="{{ __('bez limitu') }}" value="{{ $v('cpu_limit_percent', $package->cpu_limit_percent) }}"></div>
                                         <div class="field"><label>{{ __('RAM (MB)') }}</label><input name="ram_mb" type="number" min="512" required value="{{ $v('ram_mb', $package->ram_mb) }}"></div>
                                         <div class="field"><label>{{ __('Dysk (GB)') }}</label><input name="disk_gb" type="number" min="5" required value="{{ $v('disk_gb', $package->disk_gb) }}"></div>
+                                        <div class="field"><label>{{ __('Prędkość portu (Mbit/s)') }}</label><input name="port_speed_mbps" type="number" min="1" placeholder="{{ __('bez limitu') }}" value="{{ $v('port_speed_mbps', $package->port_speed_mbps) }}"></div>
+                                        <div class="field"><label>{{ __('Po przekroczeniu transferu') }}</label>
+                                            <select name="traffic_limit_action">
+                                                <option value="">{{ __('jak na węźle / globalnie') }}</option>
+                                                <option value="block" @selected($v('traffic_limit_action', $package->traffic_limit_action) === 'block')>{{ __('blokada (zawieszenie)') }}</option>
+                                                <option value="throttle" @selected($v('traffic_limit_action', $package->traffic_limit_action) === 'throttle')>{{ __('dławienie prędkości') }}</option>
+                                            </select></div>
+                                        <div class="field"><label>{{ __('Prędkość dławienia (Mbit/s)') }}</label><input name="traffic_throttle_mbps" type="number" min="1" placeholder="{{ config('virthub.traffic_throttle_mbps', 10) }}" value="{{ $v('traffic_throttle_mbps', $package->traffic_throttle_mbps) }}"></div>
+                                        <div class="field"><label>{{ __('Liczony ruch') }}</label>
+                                            <select name="traffic_counting">
+                                                <option value="">{{ __('jak na węźle / globalnie') }}</option>
+                                                @foreach (['total' => __('oba kierunki'), 'in' => __('przychodzący'), 'out' => __('wychodzący')] as $k => $label)
+                                                    <option value="{{ $k }}" @selected($v('traffic_counting', $package->traffic_counting) === $k)>{{ $label }}</option>
+                                                @endforeach
+                                            </select></div>
                                         <div class="field"><label>{{ __('Dodatkowy dysk (GB)') }}</label><input name="extra_disk_gb" type="number" min="1" placeholder="{{ __('brak') }}" value="{{ $v('extra_disk_gb', $package->extra_disk_gb) }}"></div>
                                         <div class="field"><label>{{ __('Transfer (GB/mies.)') }}</label><input name="bandwidth_gb" type="number" min="0" required value="{{ $v('bandwidth_gb', $package->bandwidth_gb) }}"></div>
                                         <div class="field"><label>{{ __('Sieć') }}</label>
