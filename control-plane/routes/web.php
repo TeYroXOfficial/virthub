@@ -626,3 +626,7 @@ Route::prefix('enroll/{token}')->name('enroll.')->group(function () {
 Route::get('/console/{token}', [ConsoleController::class, 'show'])
     ->middleware('auth')
     ->name('console.show');
+Route::middleware('auth')->group(function () {
+    Route::post('/console-snippets', [ConsoleController::class, 'storeSnippet'])->middleware('throttle:30,1')->name('console.snippets.store');
+    Route::delete('/console-snippets/{snippet}', [ConsoleController::class, 'destroySnippet'])->name('console.snippets.destroy');
+});

@@ -361,6 +361,7 @@ details.form-block[open] > summary { margin-bottom: 16px; }
 /* --- konsola -------------------------------------------------------------- */
 
 .console-frame {
+    position: relative;
     background: #000; border-radius: var(--radius); overflow: hidden;
     border: 1px solid var(--border); box-shadow: var(--shadow);
     display: flex; flex-direction: column;
@@ -376,6 +377,31 @@ details.form-block[open] > summary { margin-bottom: 16px; }
 .console-screen { position: relative; height: calc(100vh - 240px); min-height: 420px; }
 .console-screen > div { position: absolute; inset: 0; }
 .console-terminal { padding: 8px; }
+.console-toolbar .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.console-toolbar .btn.recording { border-color: var(--critical); color: var(--critical); }
+.console-toolbar .btn.recording .icon { animation: vh-blink 1s steps(2, start) infinite; }
+@keyframes vh-blink { to { visibility: hidden; } }
+.console-sep { width: 1px; height: 20px; background: #2a3644; margin: 0 2px; }
+.console-quality select { background: #161e29; border: 1px solid #2a3644; color: #e8edf3; border-radius: var(--radius-sm); font-size: 13px; padding: 4px 8px; height: 30px; }
+.console-panel { background: #0d1219; border-bottom: 1px solid #1d2733; padding: 8px 10px; color: #c2ccd7; }
+.console-panel .hint { color: #8595a7; margin: 6px 0 0; }
+.console-keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+.console-panel .btn { background: #161e29; border-color: #2a3644; color: #e8edf3; min-width: 38px; justify-content: center; }
+.console-panel .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.snippet-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.snippet-list li { display: inline-flex; align-items: stretch; }
+.snippet-type { background: #161e29; border: 1px solid #2a3644; color: #e8edf3; border-radius: var(--radius-sm) 0 0 var(--radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; font-size: 13px; }
+.snippet-type:hover { border-color: var(--accent); }
+.snippet-list .snippet-del { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-left: 0; min-width: 30px; }
+.snippet-form { display: grid; grid-template-columns: minmax(160px, 240px) minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.snippet-form input, .snippet-form textarea { background: #0b1017; border: 1px solid #2a3644; color: #e8edf3; border-radius: var(--radius-sm); padding: 6px 8px; font: inherit; font-size: 13px; }
+.snippet-form textarea { font-family: var(--mono); resize: vertical; }
+@media (max-width: 700px) { .snippet-form { grid-template-columns: 1fr; } }
+.console-vk { position: absolute; opacity: 0; width: 1px; height: 1px; left: -100px; }
+.console-touch-only { display: none; }
+@media (pointer: coarse) { .console-touch-only { display: inline-flex; } }
+.view-only .console-screen canvas { cursor: default !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .console-frame:fullscreen .console-screen { height: calc(100vh - 50px); }
 
 /* --- ekran logowania ------------------------------------------------------ */

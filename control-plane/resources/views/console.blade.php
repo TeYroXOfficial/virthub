@@ -39,8 +39,38 @@
                     <button class="btn btn-sm" type="button" id="btn-cad" title="{{ __('Wyślij Ctrl+Alt+Del') }}">
                         <x-icon name="keyboard" :size="14"/> {{ __('Ctrl+Alt+Del') }}
                     </button>
+                    <button class="btn btn-sm" type="button" id="btn-keys" aria-pressed="false" title="{{ __('Klawisze specjalne i skróty') }}">
+                        <x-icon name="keyboard" :size="14"/> {{ __('Klawisze') }}
+                    </button>
                     <button class="btn btn-sm" type="button" id="btn-paste" title="{{ __('Wpisz tekst ze schowka do maszyny') }}">
-                        <x-icon name="copy" :size="14"/> {{ __('Wklej tekst') }}
+                        <x-icon name="copy" :size="14"/> {{ __('Wpisz tekst') }}
+                    </button>
+                    <button class="btn btn-sm" type="button" id="btn-snippets" aria-pressed="false" title="{{ __('Zapisane fragmenty do wpisania') }}">
+                        <x-icon name="list" :size="14"/> {{ __('Fragmenty') }}
+                    </button>
+                    <button class="btn btn-sm console-touch-only" type="button" id="btn-vk" title="{{ __('Klawiatura ekranowa') }}">
+                        <x-icon name="keyboard" :size="14"/> {{ __('Klawiatura') }}
+                    </button>
+                    <span class="console-sep" aria-hidden="true"></span>
+                    <label class="console-quality">
+                        <span class="sr-only">{{ __('Jakość obrazu') }}</span>
+                        <select id="console-quality" title="{{ __('Jakość obrazu') }}">
+                            <option value="best">{{ __('Najlepsza jakość') }}</option>
+                            <option value="balanced">{{ __('Zrównoważona') }}</option>
+                            <option value="low">{{ __('Słabe łącze') }}</option>
+                        </select>
+                    </label>
+                    <button class="btn btn-sm" type="button" id="btn-view-only" aria-pressed="false" title="{{ __('Tylko podgląd — klawiatura i mysz nie trafiają do maszyny') }}">
+                        <x-icon name="eye" :size="14"/> {{ __('Tylko podgląd') }}
+                    </button>
+                    <button class="btn btn-sm" type="button" id="btn-shot" title="{{ __('Zapisz zrzut ekranu (PNG)') }}">
+                        <x-icon name="camera" :size="14"/> {{ __('Zrzut') }}
+                    </button>
+                    <button class="btn btn-sm" type="button" id="btn-record" aria-pressed="false" title="{{ __('Nagraj ekran do pliku WebM (zapis w przeglądarce)') }}">
+                        <x-icon name="record" :size="14"/> <span>{{ __('Nagrywaj') }}</span>
+                    </button>
+                    <button class="btn btn-sm" type="button" id="btn-pip" title="{{ __('Obraz w obrazie — ekran maszyny w małym oknie nad innymi') }}">
+                        <x-icon name="pip" :size="14"/> {{ __('Obraz w obrazie') }}
                     </button>
                 @endif
                 <button class="btn btn-sm" type="button" id="btn-full"><x-icon name="maximize" :size="14"/> {{ __('Pełny ekran') }}</button>
@@ -51,6 +81,41 @@
                     </button>
                 </span>
             </div>
+            @if ($kind === 'vnc')
+                <div class="console-panel" id="console-keys" hidden>
+                    <div class="console-keys">
+                        @foreach (['Ctrl', 'Alt', 'Shift', 'Super'] as $mod)
+                            <button class="btn btn-sm" type="button" data-mod="{{ $mod }}" aria-pressed="false">{{ $mod === 'Super' ? 'Win' : $mod }}</button>
+                        @endforeach
+                        <span class="console-sep" aria-hidden="true"></span>
+                        @foreach (['Escape' => 'Esc', 'Tab' => 'Tab', 'BackSpace' => '⌫', 'Return' => 'Enter', 'Delete' => 'Del', 'Insert' => 'Ins', 'Home' => 'Home', 'End' => 'End', 'PageUp' => 'PgUp', 'PageDown' => 'PgDn', 'Left' => '←', 'Up' => '↑', 'Down' => '↓', 'Right' => '→', 'Print' => 'PrtSc'] as $key => $label)
+                            <button class="btn btn-sm" type="button" data-key="{{ $key }}">{{ $label }}</button>
+                        @endforeach
+                    </div>
+                    <div class="console-keys">
+                        @foreach (range(1, 12) as $n)
+                            <button class="btn btn-sm" type="button" data-key="F{{ $n }}">F{{ $n }}</button>
+                        @endforeach
+                    </div>
+                    <div class="console-keys">
+                        <span class="muted">{{ __('Skróty:') }}</span>
+                        @foreach (['Ctrl+Alt+F1', 'Ctrl+Alt+F2', 'Ctrl+Alt+F7', 'Alt+Tab', 'Alt+F4', 'Super+R', 'Ctrl+Shift+Escape', 'Ctrl+C', 'Ctrl+D', 'Ctrl+Z'] as $combo)
+                            <button class="btn btn-sm" type="button" data-combo="{{ $combo }}">{{ str_replace(['Super', 'Escape'], ['Win', 'Esc'], $combo) }}</button>
+                        @endforeach
+                    </div>
+                    <p class="hint">{{ __('Modyfikatory (Ctrl, Alt, Shift, Win) są przyklejane — kliknij modyfikator, potem klawisz.') }}</p>
+                </div>
+                <div class="console-panel" id="console-snippets" hidden>
+                    <ul class="snippet-list" id="snippet-list"></ul>
+                    <form id="snippet-form" class="snippet-form" autocomplete="off">
+                        <input name="name" required maxlength="80" placeholder="{{ __('Nazwa, np. konfiguracja sieci') }}">
+                        <textarea name="body" required maxlength="4000" rows="2" spellcheck="false" placeholder="{{ __('Tekst do wpisania (nowy wiersz = Enter)') }}"></textarea>
+                        <button class="btn btn-sm" type="submit">{{ __('Zapisz fragment') }}</button>
+                    </form>
+                    <p class="hint">{{ __('Fragmenty są Twoje (widoczne w konsoli każdej maszyny) i szyfrowane w bazie. Kliknij nazwę, żeby wpisać tekst w maszynie.') }}</p>
+                </div>
+                <input id="console-vk" class="console-vk" type="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="{{ __('Klawiatura ekranowa') }}">
+            @endif
             <div class="console-screen">
                 <div id="console-screen" class="{{ $kind === 'terminal' ? 'console-terminal' : '' }}"></div>
             </div>
@@ -90,6 +155,7 @@
         @if ($kind === 'vnc')
             <script type="module">
                 import RFB from @js(asset('vendor/novnc/core/rfb.js'));
+                import { initVncTools } from @js(asset('js/vnc-console.js').'?v='.@filemtime(public_path('js/vnc-console.js')));
 
                 const rfb = new RFB(document.getElementById('console-screen'), window.VH_CONSOLE.url, {
                     credentials: { password: @js($vncPassword ?? '') },
@@ -108,20 +174,19 @@
                 });
                 rfb.addEventListener('securityfailure', () => vhConsoleState(@js(__('odmowa dostępu VNC')), 'critical'));
 
-                document.getElementById('btn-cad').addEventListener('click', () => rfb.sendCtrlAltDel());
-
-                // Wklejanie jako naciśnięcia klawiszy — schowek VNC nie działa
-                // w konsoli przed zalogowaniem, a wpisanie hasła z menedżera tak.
-                document.getElementById('btn-paste').addEventListener('click', async () => {
-                    let text = '';
-                    try { text = await navigator.clipboard.readText(); } catch (e) {}
-                    if (!text) text = (await vhPrompt(@js(__('Tekst do wpisania w maszynie:')), '', { title: @js(__('Wklej tekst')), okLabel: @js(__('Wpisz')) })) || '';
-                    for (const ch of text) {
-                        const code = ch.codePointAt(0);
-                        const keysym = ch === '\n' ? 0xff0d : (code < 0x100 ? code : 0x01000000 + code);
-                        rfb.sendKey(keysym);
-                    }
-                    rfb.focus();
+                initVncTools(rfb, {
+                    root: document.getElementById('console-frame'),
+                    hostname: @js($server->hostname),
+                    snippets: @js($snippets),
+                    snippetUrl: @js(url('/console-snippets')),
+                    csrf: document.querySelector('meta[name=csrf-token]').content,
+                    t: {
+                        typePrompt: @js(__('Tekst do wpisania w maszynie:')), typeTitle: @js(__('Wpisz tekst')), typeOk: @js(__('Wpisz')),
+                        snippets: @js(__('Fragmenty')), noSnippets: @js(__('Brak zapisanych fragmentów.')),
+                        typeSnippet: @js(__('Wpisz w maszynie')), deleteSnippet: @js(__('Usuń fragment')),
+                        deleteConfirm: @js(__('Usunąć fragment „:name”?')), saveFailed: @js(__('Nie udało się zapisać fragmentu.')),
+                        record: @js(__('Nagrywaj')), stopRecording: @js(__('Zatrzymaj nagrywanie')),
+                    },
                 });
             </script>
         @else

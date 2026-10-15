@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Enums\ServerState;
+use App\Models\ConsoleSnippet;
 use App\Models\Hypervisor;
 use App\Models\Server;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -65,6 +67,28 @@ class ConsoleTest extends TestCase
         $this->assertMatchesRegularExpression('#core\\\\?/rfb\.js#', $html);
         $this->assertStringNotContainsString('203.0.113.9', $html, 'Adres węzła nie może trafić do przeglądarki');
         $this->assertStringNotContainsString($this->server->hypervisor->agent_token, $html);
+    }
+
+    public function test_narzedzia_konsoli_vnc_i_fragmenty(): void
+    {
+        $this->actingAs($this->owner)->postJson(route('console.snippets.store'), ['name' => 'Sieć', 'body' => "ip a\nsystemctl restart networking"])
+            ->assertCreated()->assertJsonPath('data.0.name', 'Sieć');
+        $this->assertStringNotContainsString('systemctl', (string) DB::table('console_snippets')->value('body'));
+
+        [$html] = $this->openConsole();
+        foreach (['btn-keys', 'btn-snippets', 'btn-view-only', 'btn-shot', 'btn-record', 'btn-pip', 'console-quality', 'data-combo="Ctrl+Alt+F2"', 'vnc-console.js'] as $needle) {
+            $this->assertStringContainsString($needle, $html);
+        }
+        $this->assertStringContainsString('systemctl restart networking', $html);
+
+        // Cudzy fragment: ani nie widać, ani nie da się usunąć.
+        $other = User::factory()->create();
+        $snippet = ConsoleSnippet::firstOrFail();
+        $this->actingAs($other)->deleteJson(route('console.snippets.destroy', $snippet))->assertNotFound();
+        $this->actingAs($this->owner)->deleteJson(route('console.snippets.destroy', $snippet))->assertOk()->assertJsonPath('data', []);
+
+        $this->postJson(route('console.snippets.store'), ['name' => '', 'body' => 'x'])->assertUnprocessable();
+        $this->postJson(route('console.snippets.store'), ['name' => 'Długi', 'body' => str_repeat('a', ConsoleSnippet::MAX_LENGTH + 1)])->assertUnprocessable();
     }
 
     public function test_kontener_dostaje_terminal_xterm(): void
