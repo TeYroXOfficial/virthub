@@ -14,7 +14,7 @@ final class JsTranslations
         'na żywo', 'brak danych z węzła', 'łączenie…', 'Nie udało się pobrać historii.', 'Uruchamiam reinstalację…',
         'Zlecenie czeka w kolejce panelu…', 'Węzeł przyjął zlecenie — zaraz zacznie.',
         'Węzeł pobiera obraz systemu. Przy pierwszym użyciu tego systemu może to potrwać kilka minut.',
-        'Węzeł pobiera obraz systemu: ', 'Gotowe! Serwer działa.', 'Operacja nie powiodła się',
+        'Węzeł pobiera obraz systemu: ', 'Przenoszenie dysku między węzłami…', 'Przenoszenie: ', 'Gotowe! Serwer działa.', 'Operacja nie powiodła się',
         'Szczegóły pojawią się na stronie.', 'Odświeżam panel…', 'Wybierz system operacyjny.',
         'OK', 'Anuluj', 'Potwierdź', 'Podaj wartość', 'Uwaga',
     ];

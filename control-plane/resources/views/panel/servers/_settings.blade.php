@@ -337,27 +337,116 @@
 
     @can('manageResources', $server)
         @if (! $server->isContainer())
-            @php $targets = \App\Models\Hypervisor::query()->available()->where('virtualization', 'kvm')->whereKeyNot($server->hypervisor_id)->orderBy('name')->get(); @endphp
+            @php
+                $migrations = app(\App\Domain\Provisioning\Migrations::class);
+                $candidates = $migrations->candidates($server);
+                $targets = $candidates->filter(fn ($c) => $c['cold'] === null);
+                $blocked = $candidates->filter(fn ($c) => $c['cold'] !== null);
+                $lastMigration = $migrations->latest($server);
+                $phaseLabels = ['start' => __('Kolejka'), 'resume-import' => __('Wznowienie'), 'exporting' => __('Eksport dysku na źródle'),
+                    'importing' => __('Pobranie dysku i start na celu'), 'preparing' => __('Przygotowanie celu'), 'migrating' => __('Przenoszenie pamięci i dysku')];
+                $nodeNames = \App\Models\Hypervisor::query()->pluck('name', 'id');
+            @endphp
             <div class="card" id="migrate">
                 <h3 class="card-title"><x-icon name="node" :size="16"/> {{ __('Migracja na inny węzeł') }} <span class="pill neutral">{{ __('personel') }}</span></h3>
                 @error('migrate') <div class="alert alert-error"><div>{{ $message }}</div></div> @enderror
+
+                @if ($lastMigration && ($lastMigration->status !== \App\Models\ServerJob::STATUS_DONE || $lastMigration->finished_at?->gt(now()->subDay())))
+                    @php
+                        $mp = $lastMigration->payload;
+                        $running = ! $lastMigration->isFinished();
+                        $percent = \App\Domain\Provisioning\Migrations::overall($lastMigration);
+                        $failed = $lastMigration->status === \App\Models\ServerJob::STATUS_FAILED;
+                        $handled = ! empty($mp['reverted_at']) || ! empty($mp['resumed_at']);
+                    @endphp
+                    <div class="migration-state" @if ($running) data-autorefresh="10" @endif>
+                        <div class="meta-line">
+                            <strong>{{ $nodeNames[$mp['source_id']] ?? '?' }} → {{ $nodeNames[$mp['destination_id']] ?? '?' }}</strong>
+                            <span class="pill neutral plain">{{ $mp['mode'] === 'live' ? __('na żywo') : __('na zimno') }}</span>
+                            @if ($running)
+                                <span class="pill warning">{{ ($mp['cancel'] ?? false) ? __('anulowanie…') : __('w toku') }}</span>
+                            @elseif ($failed)
+                                <span class="pill {{ ($mp['cancelled'] ?? false) ? 'neutral' : 'critical' }}">{{ ($mp['cancelled'] ?? false) ? __('anulowana') : __('nieudana') }}</span>
+                            @else
+                                <span class="pill ok">{{ __('zakończona') }}</span>
+                            @endif
+                            <span class="muted">{{ $lastMigration->created_at->diffForHumans() }}</span>
+                        </div>
+                        @if ($running)
+                            @push('scripts')
+                                <script>
+                                    // Postęp migracji: odświeżenie strony co 10 s, chyba że ktoś właśnie pisze w formularzu.
+                                    setTimeout(function tick() {
+                                        const a = document.activeElement;
+                                        if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return setTimeout(tick, 5000);
+                                        location.hash = 'migrate';
+                                        location.reload();
+                                    }, 10000);
+                                </script>
+                            @endpush
+                            <div class="meter" style="margin:10px 0 4px" title="{{ $percent }}%"><i style="width: {{ $percent }}%"></i></div>
+                            <div class="hint">{{ $percent }}% @if (! empty($mp['progress']['detail'])) · {{ $mp['progress']['detail'] }} @endif</div>
+                        @endif
+                        <ol class="migration-steps">
+                            @foreach ($mp['steps'] ?? [] as $step)
+                                @php
+                                    $state = ! empty($step['failed']) ? 'failed' : ($step['finished_at'] ? 'done' : 'active');
+                                    $took = $step['finished_at'] ? \Illuminate\Support\Carbon::parse($step['started_at'])->diffForHumans(\Illuminate\Support\Carbon::parse($step['finished_at']), true) : null;
+                                @endphp
+                                <li class="step-{{ $state }}">
+                                    <span>{{ $phaseLabels[$step['phase']] ?? $step['phase'] }}</span>
+                                    <span class="muted">{{ $state === 'active' ? __('trwa') : ($state === 'failed' ? __('błąd') : $took) }}</span>
+                                </li>
+                            @endforeach
+                        </ol>
+                        @if ($failed && $lastMigration->error)
+                            <p class="hint" style="color:var(--critical)">{{ $lastMigration->error }}</p>
+                        @endif
+                        <div class="btn-row">
+                            @if ($running && ! ($mp['cancel'] ?? false))
+                                <form method="POST" action="{{ route('panel.servers.migration', [$server, 'cancel']) }}" data-confirm="{{ __('Anulować migrację? Maszyna zostanie na węźle źródłowym.') }}">
+                                    @csrf <button class="btn btn-sm btn-danger" type="submit">{{ __('Anuluj migrację') }}</button></form>
+                            @endif
+                            @if ($failed && ! $handled && $server->hypervisor_id === $mp['source_id'])
+                                <form method="POST" action="{{ route('panel.servers.migration', [$server, 'resume']) }}">
+                                    @csrf <button class="btn btn-sm btn-primary" type="submit" @disabled(! $server->acceptsCommands())>
+                                        {{ ($mp['resumable'] ?? null) === 'importing' ? __('Wznów od pobierania dysku') : __('Ponów migrację') }}</button></form>
+                                <form method="POST" action="{{ route('panel.servers.migration', [$server, 'revert']) }}" data-confirm="{{ __('Usunąć pozostałości migracji z węzła docelowego i unieważnić eksport dysku?') }}">
+                                    @csrf <button class="btn btn-sm" type="submit">{{ __('Cofnij (posprzątaj cel)') }}</button></form>
+                            @elseif ($handled)
+                                <span class="hint">{{ ! empty($mp['reverted_at']) ? __('Cofnięta — cel posprzątany.') : __('Wznowiona jako nowa migracja.') }}</span>
+                            @endif
+                        </div>
+                    </div>
+                @endif
+
                 @if ($targets->isEmpty())
-                    <p class="muted">{{ __('Brak innego dostępnego węzła KVM.') }}</p>
-                @else
-                    <form method="POST" action="{{ route('panel.servers.migrate', $server) }}" data-confirm="{{ __('Przenieść maszynę na wybrany węzeł?') }}">
+                    <p class="muted">{{ __('Brak węzła, na który można teraz przenieść tę maszynę.') }}</p>
+                @elseif (! $lastMigration || $lastMigration->isFinished())
+                    <form method="POST" action="{{ route('panel.servers.migrate', $server) }}" data-confirm="{{ __('Przenieść maszynę na wybrany węzeł?') }}" style="margin-top:12px">
                         @csrf
                         <div class="grid grid-2">
                             <div class="field"><label for="mig-node">{{ __('Węzeł docelowy') }}</label>
-                                <select id="mig-node" name="hypervisor_id">@foreach ($targets as $t) <option value="{{ $t->id }}">{{ $t->name }} — {{ __(':cpu vCPU, :ram GB RAM wolne', ['cpu' => $t->cpu_cores_total - $t->cpu_cores_used, 'ram' => intdiv($t->ram_mb_total - $t->ram_mb_used, 1024)]) }}</option> @endforeach</select></div>
+                                <select id="mig-node" name="hypervisor_id">@foreach ($targets as $c) @php $t = $c['node']; @endphp <option value="{{ $t->id }}" data-live="{{ $c['live'] === null ? 1 : 0 }}">{{ $t->name }} — {{ __(':cpu vCPU, :ram GB RAM wolne', ['cpu' => $t->cpu_cores_total - $t->cpu_cores_used, 'ram' => intdiv($t->ram_mb_total - $t->ram_mb_used, 1024)]) }}{{ $c['live'] === null ? '' : ' · '.__('tylko na zimno') }}</option> @endforeach</select></div>
                             <div class="field"><label for="mig-mode">{{ __('Tryb') }}</label>
                                 <select id="mig-mode" name="mode">
                                     <option value="cold">{{ __('Na zimno — zatrzymanie, kopia dysku, start na nowym węźle') }}</option>
                                     <option value="live" @disabled(! $server->isRunning())>{{ __('Na żywo — bez przerwy (wymaga połączenia libvirt między węzłami)') }}</option>
                                 </select></div>
                         </div>
-                        <p class="hint">{{ __('Adresy IP zostają, więc ich pula musi obejmować węzeł docelowy (np. pula grupy). Na zimno maszyna jest niedostępna przez czas kopiowania dysku.') }}</p>
+                        <p class="hint">{{ __('Adresy IP zostają, więc ich pula musi obejmować węzeł docelowy (np. pula grupy). Na zimno maszyna jest niedostępna przez czas kopiowania dysku. Dysk idzie adresem do migracji węzła, jeśli jest ustawiony.') }}</p>
                         <button class="btn" type="submit" @disabled($server->state->isTransitioning())>{{ __('Migruj') }}</button>
                     </form>
+                @endif
+                @if ($blocked->isNotEmpty())
+                    <details style="margin-top:10px">
+                        <summary class="muted">{{ trans_choice(':count węzeł niedostępny|:count węzły niedostępne|:count węzłów niedostępnych', $blocked->count()) }}</summary>
+                        <ul class="list-plain" style="margin-top:6px">
+                            @foreach ($blocked as $c)
+                                <li><strong>{{ $c['node']->name }}</strong> — <span class="muted">{{ $c['cold'] }}</span></li>
+                            @endforeach
+                        </ul>
+                    </details>
                 @endif
             </div>
         @endif

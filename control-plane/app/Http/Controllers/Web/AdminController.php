@@ -221,6 +221,7 @@ class AdminController extends Controller
             'traffic_limit_action' => ['nullable', Rule::in(Traffic::ACTIONS)],
             'traffic_throttle_mbps' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'vxlan_address' => ['nullable', 'ip'],
+            'migration_address' => ['nullable', 'string', 'max:255', 'regex:/^[A-Za-z0-9.:-]+$/'],
             'status' => ['required', Rule::in([
                 Hypervisor::STATUS_ONLINE,
                 Hypervisor::STATUS_OFFLINE,
@@ -239,7 +240,7 @@ class AdminController extends Controller
             'max_servers' => $validated['max_servers'] ?? null,
             'cpu_model' => isset($validated['cpu_model']) ? trim($validated['cpu_model']) ?: null : null,
             'public_address' => ($validated['public_address'] ?? null) ?: null,
-            ...array_map(fn ($v) => $v ?: null, array_intersect_key($validated, array_flip(['hw_disk_bus', 'hw_io_mode', 'hw_cpu_model', 'hw_cpuset', 'hw_hyperv', 'traffic_counting', 'traffic_limit_action', 'traffic_throttle_mbps', 'vxlan_address']))),
+            ...array_map(fn ($v) => $v ?: null, array_intersect_key($validated, array_flip(['hw_disk_bus', 'hw_io_mode', 'hw_cpu_model', 'hw_cpuset', 'hw_hyperv', 'traffic_counting', 'traffic_limit_action', 'traffic_throttle_mbps', 'vxlan_address', 'migration_address']))),
             'accepts_new_servers' => $request->boolean('accepts_new_servers'),
             'apps_enabled' => $request->boolean('apps_enabled'),
         ]);

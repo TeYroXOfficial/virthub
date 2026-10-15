@@ -297,10 +297,29 @@ class AgentClient
         $this->request('DELETE', '/transfer/'.rawurlencode($token));
     }
 
-    /** Adres, pod którym inne węzły pobierają wystawiony dysk. */
+    /** Adres, pod którym inne węzły pobierają wystawiony dysk (adres migracji węzła, jeśli ustawiony). */
     public function transferUrl(string $token): string
     {
-        return rtrim((string) $this->hypervisor->agent_url, '/').'/transfer/'.rawurlencode($token);
+        $base = rtrim((string) $this->hypervisor->agent_url, '/');
+        if ($alt = $this->hypervisor->migration_address) {
+            $parts = parse_url($base);
+            $host = str_contains($alt, ':') && ! str_starts_with($alt, '[') ? '['.$alt.']' : $alt;
+            $base = ($parts['scheme'] ?? 'https').'://'.$host.(isset($parts['port']) ? ':'.$parts['port'] : '');
+        }
+
+        return $base.'/transfer/'.rawurlencode($token);
+    }
+
+    /** Przerwanie trwającej migracji na żywo (od razu, poza kolejką agenta). */
+    public function abortMigration(string $uuid): void
+    {
+        $this->request('POST', "/vm/{$uuid}/migrate/abort");
+    }
+
+    /** Sprzątanie pozostałości maszyny na węźle docelowym (domena, dyski, sieć). */
+    public function cleanupIncoming(int $serverId): string
+    {
+        return $this->jobId($this->request('POST', "/migration/cleanup/{$serverId}"));
     }
 
     /** DR: maszyna z kopii na celu zewnętrznym (ładunek jak createVm + backup). */

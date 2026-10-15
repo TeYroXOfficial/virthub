@@ -123,6 +123,9 @@ Route::prefix('v1')->group(function () {
         Route::post('servers/{server}/suspend', [ServerAdminController::class, 'suspend']);
         Route::post('servers/{server}/unsuspend', [ServerAdminController::class, 'unsuspend']);
         Route::post('servers/{server}/migrate', [ServerAdminController::class, 'migrate']);
+        Route::get('servers/{server}/migration-targets', [ServerAdminController::class, 'migrationTargets']);
+        Route::get('servers/{server}/migration', [ServerAdminController::class, 'migration']);
+        Route::post('servers/{server}/migration/{action}', [ServerAdminController::class, 'migrationAction'])->whereIn('action', ['cancel', 'resume', 'revert']);
         Route::get('servers/{server}/traffic', [ServerAdminController::class, 'traffic']);
         Route::put('servers/{server}/traffic', [ServerAdminController::class, 'updateTraffic']);
         Route::post('servers/{server}/traffic/blocks', [ServerAdminController::class, 'addTrafficBlock']);

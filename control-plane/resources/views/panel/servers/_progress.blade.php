@@ -15,15 +15,20 @@
         ServerState::Resizing => [__('Zmiana pakietu'), [
             ['prepare', __('Rezerwacja zasobów'), 3], ['disk', __('Powiększanie dysku'), 8], ['resources', __('Zmiana procesora i pamięci'), 6],
         ]],
-        ServerState::Migrating => [__('Migracja na inny węzeł'), [
-            ['export', __('Przygotowanie dysku na węźle źródłowym'), 20], ['download', __('Przenoszenie dysku'), 60], ['boot', __('Uruchamianie na nowym węźle'), 10],
-        ]],
+        ServerState::Migrating => ($recentJobs->first()?->payload['mode'] ?? 'cold') === 'live'
+            ? [__('Migracja na żywo'), [
+                ['export', __('Przygotowanie węzła docelowego'), 10], ['download', __('Przenoszenie pamięci i dysku'), 80], ['boot', __('Przełączenie na nowy węzeł'), 5],
+            ]]
+            : [__('Migracja na inny węzeł'), [
+                ['export', __('Przygotowanie dysku na węźle źródłowym'), 20], ['download', __('Przenoszenie dysku'), 60], ['boot', __('Uruchamianie na nowym węźle'), 10],
+            ]],
         default => [__('Usuwanie serwera'), [['stop', 'Zatrzymywanie', 4], ['disk', __('Usuwanie dysku'), 8]]],
     };
     $job = $recentJobs->first();
 @endphp
 <section class="card progress-panel" id="progress"
          data-status-url="{{ route('panel.servers.status', $server) }}"
+         data-kind="{{ $job?->action }}"
          data-elapsed="{{ $job ? (int) $job->created_at->diffInSeconds(now(), true) : 0 }}"
          data-durations='@json(array_column($steps, 2))'>
     <div class="progress-visual" aria-hidden="true">
@@ -42,5 +47,14 @@
             @endforeach
         </ol>
         <p class="hint progress-foot">{{ __('Strona odświeży się sama, gdy serwer będzie gotowy.') }}</p>
+        @if ($job?->action === 'migrate' && ! $job->isFinished() && auth()->user()->can('manageResources', $server))
+            @if ($job->payload['cancel'] ?? false)
+                <p class="hint">{{ __('Anulowanie zgłoszone — maszyna wróci na węzeł źródłowy po zakończeniu bieżącego kroku.') }}</p>
+            @else
+                <form method="POST" action="{{ route('panel.servers.migration', [$server, 'cancel']) }}" data-confirm="{{ __('Anulować migrację? Maszyna zostanie na węźle źródłowym.') }}">
+                    @csrf <button class="btn btn-sm btn-danger" type="submit">{{ __('Anuluj migrację') }}</button>
+                </form>
+            @endif
+        @endif
     </div>
 </section>

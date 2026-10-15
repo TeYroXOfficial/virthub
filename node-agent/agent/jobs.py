@@ -44,6 +44,23 @@ def progress(stage: str, percent: int | None = None, detail: str | None = None) 
     except sqlite3.Error:
         log.warning("Nie udało się zapisać etapu %s zadania %s", stage, job_id)
 
+def progress_reporter():
+    """progress() do użycia z innego wątku (np. obserwatora migracji): zapamiętuje
+    bieżące zadanie wątku, który ją wywołał."""
+    queue_ = getattr(_current, "queue", None)
+    job_id = getattr(_current, "job_id", None)
+
+    def report(stage: str, percent: int | None = None, detail: str | None = None) -> None:
+        if queue_ is None or job_id is None:
+            return
+        try:
+            queue_.set_progress(job_id, stage, percent, detail)
+        except sqlite3.Error:
+            log.warning("Nie udało się zapisać etapu %s zadania %s", stage, job_id)
+
+    return report
+
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
     job_id      TEXT PRIMARY KEY,

@@ -184,6 +184,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/traffic', [ServerActionsController::class, 'traffic'])->name('servers.traffic');
     Route::post('/servers/{server}/cpu-limit', [ServerActionsController::class, 'cpuLimit'])->name('servers.cpu-limit');
     Route::post('/servers/{server}/migrate', [ServerActionsController::class, 'migrate'])->middleware('throttle:10,1')->name('servers.migrate');
+    Route::post('/servers/{server}/migration/{action}', [ServerActionsController::class, 'migrationAction'])->whereIn('action', ['cancel', 'resume', 'revert'])->middleware('throttle:10,1')->name('servers.migration');
     Route::post('/servers/{server}/network-filter', [NetworkFilterController::class, 'assign'])->name('servers.network-filter');
     Route::put('/servers/{server}/ips/{address}/rdns', [ServerActionsController::class, 'rdns'])->middleware('throttle:10,1')->name('servers.rdns');
     Route::post('/servers/{server}/rescue', [GuestSettingsController::class, 'startRescue'])->middleware('throttle:10,1')->name('servers.rescue.start');

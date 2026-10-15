@@ -2,6 +2,8 @@
 
 namespace App\Domain\Provisioning;
 
+use App\Domain\Agent\AgentClient;
+use App\Domain\Agent\AgentException;
 use App\Domain\Agent\ServerPayload;
 use App\Domain\Network\PrivateNetworks;
 use App\Domain\Webhooks\Webhooks;
@@ -14,6 +16,7 @@ use App\Models\IpPool;
 use App\Models\Server;
 use App\Models\ServerJob;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -27,10 +30,21 @@ use Illuminate\Support\Facades\DB;
  *
  * Zasoby celu są rezerwowane od razu (jak przy zamówieniu), źródła zwalniane
  * po sukcesie. Adresy IP zostają — dlatego ich pule muszą obejmować cel.
+ *
+ * Każdy etap zapisuje się w payload.steps (początek, koniec), bieżący postęp
+ * agenta w payload.progress. Trwającą migrację można anulować; nieudaną
+ * wznowić (na zimno od pobierania, jeśli eksport na źródle przetrwał) albo
+ * cofnąć — sprzątnięcie pozostałości na celu i unieważnienie eksportu.
  */
 class Migrations
 {
     public const MODES = ['cold', 'live'];
+
+    /** Etapy i ich udział w całości postępu (%), dla paska postępu. */
+    public const PHASES = [
+        'cold' => ['start' => [0, 0], 'exporting' => [0, 45], 'importing' => [45, 100]],
+        'live' => ['start' => [0, 0], 'preparing' => [0, 10], 'migrating' => [10, 100]],
+    ];
 
     public function start(Server $server, Hypervisor $destination, string $mode = 'cold', ?User $actor = null): ServerJob
     {
@@ -48,13 +62,138 @@ class Migrations
                 'action' => 'migrate',
                 'status' => ServerJob::STATUS_QUEUED,
                 'payload' => ['destination_id' => $destination->id, 'source_id' => $server->hypervisor_id, 'mode' => $mode,
-                    'phase' => 'start', 'was_running' => $wasRunning],
+                    'phase' => 'start', 'was_running' => $wasRunning, 'steps' => []],
             ]);
         });
         AuditLog::record('server.migrate_started', $server, ['to' => $destination->name, 'mode' => $mode], $actor);
         MigrateServerJob::dispatch($job->id);
 
         return $job;
+    }
+
+    /**
+     * Węzły KVM poza bieżącym z oceną: można przenieść (na zimno / na żywo) albo dlaczego nie.
+     *
+     * @return Collection<int, array{node: Hypervisor, cold: ?string, live: ?string}>
+     */
+    public function candidates(Server $server): Collection
+    {
+        return Hypervisor::query()->where('virtualization', Virtualization::Kvm)->whereKeyNot($server->hypervisor_id)->orderBy('name')->get()
+            ->map(function (Hypervisor $node) use ($server) {
+                $reason = fn (string $mode) => rescue(fn () => $this->assertMigratable($server, $node, $mode), fn (\DomainException $e) => $e->getMessage(), false);
+
+                return ['node' => $node, 'cold' => $reason('cold'), 'live' => $reason('live')];
+            })
+            ->sortBy(fn (array $c) => [$c['cold'] !== null, $c['node']->name])->values();
+    }
+
+    /** Ostatnia migracja maszyny (do karty na stronie maszyny). */
+    public function latest(Server $server): ?ServerJob
+    {
+        return $server->jobs()->where('action', 'migrate')->latest('id')->first();
+    }
+
+    /** Postęp całości (%) z etapu i postępu zadania agenta. */
+    public static function overall(ServerJob $job): int
+    {
+        if ($job->status === ServerJob::STATUS_DONE) {
+            return 100;
+        }
+        $p = $job->payload;
+        [$from, $to] = self::PHASES[$p['mode'] ?? 'cold'][$p['phase'] ?? 'start'] ?? [0, 0];
+        $agent = (int) ($p['progress']['percent'] ?? 0);
+
+        return (int) round($from + ($to - $from) * min(100, max(0, $agent)) / 100);
+    }
+
+    /** Anulowanie trwającej migracji — zadanie w tle doprowadza je do bezpiecznego końca. */
+    public function cancel(ServerJob $job, ?User $actor = null): void
+    {
+        if ($job->action !== 'migrate' || $job->isFinished()) {
+            throw new \DomainException(__('Ta migracja już się zakończyła.'));
+        }
+        $job->forceFill(['payload' => array_merge($job->payload, ['cancel' => true])])->save();
+        AuditLog::record('server.migrate_cancel_requested', $job->server, ['phase' => $job->payload['phase']], $actor);
+        MigrateServerJob::dispatch($job->id);
+    }
+
+    /** Wznowienie nieudanej migracji: na zimno od pobrania, gdy eksport przetrwał; inaczej od początku. */
+    public function resume(ServerJob $failed, ?User $actor = null): ServerJob
+    {
+        $this->assertRecoverable($failed);
+        $server = $failed->server;
+        $p = $failed->payload;
+        $destination = Hypervisor::findOrFail($p['destination_id']);
+        if (($p['resumable'] ?? null) !== 'importing' || empty($p['export']['token'])) {
+            $failed->forceFill(['payload' => $p + ['resumed_at' => now()->toIso8601String()]])->save();
+
+            return $this->start($server, $destination, $p['mode'], $actor);
+        }
+        $this->assertMigratable($server, $destination, 'cold');
+        $job = DB::transaction(function () use ($server, $destination, $p, $actor) {
+            $this->adjustUsage($destination, $server, +1);
+            $server->markState(ServerState::Migrating, __('Wznowienie przenoszenia na węzeł :name.', ['name' => $destination->name]));
+
+            return ServerJob::create([
+                'server_id' => $server->id, 'hypervisor_id' => $server->hypervisor_id, 'user_id' => $actor?->id,
+                'action' => 'migrate', 'status' => ServerJob::STATUS_QUEUED,
+                'payload' => ['destination_id' => $destination->id, 'source_id' => $server->hypervisor_id, 'mode' => 'cold',
+                    'phase' => 'resume-import', 'was_running' => (bool) ($p['was_running'] ?? false), 'export' => $p['export'],
+                    'token' => $p['export']['token'], 'steps' => [], 'resumed_from' => $p['phase'] ?? null],
+            ]);
+        });
+        $failed->forceFill(['payload' => $p + ['resumed_at' => now()->toIso8601String()]])->save();
+        AuditLog::record('server.migrate_resumed', $server, ['to' => $destination->name], $actor);
+        MigrateServerJob::dispatch($job->id);
+
+        return $job;
+    }
+
+    /** Cofnięcie nieudanej migracji: pozostałości na celu znikają, eksport na źródle też. */
+    public function revert(ServerJob $failed, ?User $actor = null): void
+    {
+        $this->assertRecoverable($failed);
+        $p = $failed->payload;
+        $server = $failed->server;
+        $errors = [];
+        if ($destination = Hypervisor::find($p['destination_id'])) {
+            try {
+                (new AgentClient($destination))->cleanupIncoming($server->id);
+            } catch (AgentException $e) {
+                $errors[] = $destination->name.': '.$e->getMessage();
+            }
+        }
+        $token = $p['export']['token'] ?? $p['token'] ?? null;
+        if ($token && ($source = Hypervisor::find($p['source_id']))) {
+            try {
+                (new AgentClient($source))->revokeTransfer($token);
+            } catch (AgentException) {
+                // Wygasły albo już usunięty — bez znaczenia.
+            }
+        }
+        if ($errors !== []) {
+            throw new \DomainException(__('Nie udało się posprzątać węzła docelowego: :error', ['error' => implode('; ', $errors)]));
+        }
+        $failed->forceFill(['payload' => array_merge($p, ['reverted_at' => now()->toIso8601String(), 'resumable' => null])])->save();
+        AuditLog::record('server.migrate_reverted', $server, ['destination_id' => $p['destination_id']], $actor);
+    }
+
+    private function assertRecoverable(ServerJob $job): void
+    {
+        $p = $job->payload;
+        if ($job->action !== 'migrate' || $job->status !== ServerJob::STATUS_FAILED) {
+            throw new \DomainException(__('Wznowić albo cofnąć można tylko nieudaną migrację.'));
+        }
+        if (! empty($p['reverted_at']) || ! empty($p['resumed_at'])) {
+            throw new \DomainException(__('Ta migracja została już wznowiona albo cofnięta.'));
+        }
+        $server = $job->server;
+        if ($server === null || $server->hypervisor_id !== ($p['source_id'] ?? null)) {
+            throw new \DomainException(__('Maszyna nie jest już na węźle źródłowym tej migracji.'));
+        }
+        if ($this->latest($server)?->id !== $job->id) {
+            throw new \DomainException(__('Po tej migracji była już kolejna.'));
+        }
     }
 
     public function assertMigratable(Server $server, Hypervisor $destination, string $mode): void
@@ -164,7 +303,7 @@ class Migrations
     }
 
     /** Porażka: maszyna zostaje na źródle, rezerwacja celu wraca. */
-    public function fail(ServerJob $job, string $error): void
+    public function fail(ServerJob $job, string $error, bool $cancelled = false): void
     {
         $server = $job->server;
         $destination = Hypervisor::find($job->payload['destination_id']);
@@ -174,9 +313,9 @@ class Migrations
             }
         });
         $running = ($job->payload['was_running'] ?? false) && ($job->payload['restarted'] ?? $job->payload['mode'] === 'live');
-        $server->markState($running ? ServerState::Running : ServerState::Stopped, __('Migracja nie powiodła się: :error', ['error' => $error]));
+        $server->markState($running ? ServerState::Running : ServerState::Stopped, $cancelled ? __('Migracja anulowana.') : __('Migracja nie powiodła się: :error', ['error' => $error]));
         $job->markFailed($error);
-        AuditLog::record('server.migrate_failed', $server, ['error' => $error]);
+        AuditLog::record($cancelled ? 'server.migrate_cancelled' : 'server.migrate_failed', $server, ['error' => $error]);
     }
 
     private function adjustUsage(Hypervisor $node, Server $server, int $sign): void

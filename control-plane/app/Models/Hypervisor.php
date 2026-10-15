@@ -25,6 +25,7 @@ class Hypervisor extends Model
 
     protected $fillable = [
         'vxlan_address',
+        'migration_address',
         'hw_disk_bus',
         'hw_io_mode',
         'hw_cpu_model',

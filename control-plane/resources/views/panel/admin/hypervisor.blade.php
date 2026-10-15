@@ -267,6 +267,11 @@
                     <input id="n-vxlan" name="vxlan_address" value="{{ old('vxlan_address', $node->vxlan_address) }}" placeholder="10.10.0.11">
                     <div class="hint">{{ __('Adres węzła w sieci między węzłami grupy. Gdy jest ustawiony, sieci prywatne klientów z tego węzła obejmują całą grupę (tunel VXLAN, UDP 4789) — maszyny mogą być na różnych węzłach i migrować z kartami prywatnymi. Tunel nie jest szyfrowany: używaj sieci wydzielonej.') }}</div>
                 </div>
+                <div class="field">
+                    <label for="n-migration">{{ __('Adres do migracji') }} <span class="muted">{{ __('(opcjonalnie)') }}</span></label>
+                    <input id="n-migration" name="migration_address" value="{{ old('migration_address', $node->migration_address) }}" placeholder="10.10.0.11">
+                    <div class="hint">{{ __('Adres albo nazwa węzła w szybkiej sieci wewnętrznej. Gdy jest ustawiony, inne węzły pobierają z niego dyski migracji na zimno (port agenta), a migracja na żywo łączy się z nim zamiast z adresem publicznym.') }}</div>
+                </div>
                 @php $backend = $node->networkBackend(); @endphp
                 <p class="hint">{{ __('Topologia sieci maszyn (VH_NETWORK_BACKEND w agent.env):') }}
                     <span class="pill {{ $backend === 'bridge' ? 'ok' : 'warning' }}">{{ ['bridge' => __('mostek Linuksa'), 'ovs' => 'Open vSwitch', 'direct' => 'macvtap'][$backend] ?? $backend }}</span>

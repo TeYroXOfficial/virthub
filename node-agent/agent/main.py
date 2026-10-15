@@ -146,6 +146,7 @@ def _handlers() -> dict[str, Any]:
         "import_vm": lambda p: driver.import_vm(ImportVmRequest(**p)),
         "prepare_incoming": lambda p: driver.prepare_incoming(CreateVmRequest(**p)),
         "migrate_live": lambda p: driver.migrate_live(p["uuid"], LiveMigrationRequest(**p["body"])),
+        "cleanup_incoming": lambda p: driver.cleanup_incoming(int(p["server_id"])),
         "dr_snapshot": lambda p: driver.dr_snapshot(DrSnapshotRequest(**p)),
     }
 
@@ -813,6 +814,24 @@ async def prepare_migration(req: CreateVmRequest) -> JobAccepted:
 async def migrate_live(uuid: str, req: LiveMigrationRequest) -> JobAccepted:
     """Migracja na żywo, źródło: libvirt z kopiowaniem dysku do węzła docelowego."""
     return JobAccepted(job_id=jobs.enqueue("migrate_live", {"uuid": uuid, "body": req.model_dump()}, uuid=uuid))
+
+
+@app.post("/vm/{uuid}/migrate/abort", dependencies=[Depends(require_control_plane)], tags=["migration"])
+async def abort_migration(uuid: str) -> dict[str, Any]:
+    """Przerwanie trwającej migracji na żywo — od razu, poza kolejką (ta jest zajęta migracją)."""
+    try:
+        return await run_in_threadpool(driver.abort_migration, uuid)
+    except VmNotFound:
+        raise HTTPException(status_code=404, detail="Nie ma takiej maszyny.")
+    except DriverError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@app.post("/migration/cleanup/{server_id}", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED,
+          dependencies=[Depends(require_control_plane)], tags=["migration"])
+async def cleanup_incoming(server_id: int) -> JobAccepted:
+    """Sprzątanie celu po nieudanej, anulowanej albo cofniętej migracji."""
+    return JobAccepted(job_id=jobs.enqueue("cleanup_incoming", {"server_id": server_id}, server_id=server_id))
 
 
 @app.post(

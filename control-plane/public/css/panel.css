@@ -1012,3 +1012,12 @@ dialog.edit-modal .grid-3 { gap: 0 14px; }
 /* --- klucze dostępu ----------------------------------------------------------- */
 .or-sep { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12.5px; margin: 14px 0; }
 .or-sep::before, .or-sep::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+
+/* --- migracja: etapy ------------------------------------------------------------ */
+.migration-state { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; background: var(--surface-2); }
+.migration-steps { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 4px; font-size: 13.5px; }
+.migration-steps li { display: flex; justify-content: space-between; gap: 12px; padding-left: 22px; position: relative; }
+.migration-steps li::before { content: ""; position: absolute; left: 4px; top: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--border-strong); }
+.migration-steps .step-done::before { background: var(--ok); }
+.migration-steps .step-active::before { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 25%, transparent); }
+.migration-steps .step-failed::before { background: var(--critical); }
