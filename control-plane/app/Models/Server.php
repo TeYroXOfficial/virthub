@@ -37,6 +37,7 @@ class Server extends Model
     protected function casts(): array
     {
         return [
+            'hw_tpm' => 'boolean',
             'state' => ServerState::class,
             'virtualization' => Virtualization::class,
             // Hasło root jest jednorazowe: pokazujemy je klientowi raz po
@@ -146,6 +147,18 @@ class Server extends Model
     public function isSelfService(): bool
     {
         return $this->resource_pack_id !== null;
+    }
+
+    /** @return HasMany<ServerDisk, $this> */
+    public function disks(): HasMany
+    {
+        return $this->hasMany(ServerDisk::class)->orderBy('slot');
+    }
+
+    /** Miejsce zajęte na węźle: dysk główny i dodatkowe. */
+    public function totalDiskGb(): int
+    {
+        return (int) $this->disk_gb + (int) $this->disks()->sum('size_gb');
     }
 
     /** @return HasMany<ServerNic, $this> */

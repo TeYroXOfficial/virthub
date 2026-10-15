@@ -176,6 +176,15 @@
                                             </div>
                                             <div class="field"><label>{{ __('Min. dysk (GB)') }}</label><input name="min_disk_gb" type="text" inputmode="numeric" value="{{ $template->min_disk_gb }}" required></div>
                                             <div class="field"><label>{{ __('Kolejność') }}</label><input name="sort_order" type="text" inputmode="numeric" value="{{ $template->sort_order }}"></div>
+                                            @unless ($template->isContainer())
+                                                <div class="field"><label>{{ __('Rozruch') }}</label>
+                                                    <select name="hw_firmware">
+                                                        <option value="">{{ __('BIOS (domyślnie)') }}</option>
+                                                        <option value="uefi" @selected($template->hw_firmware === 'uefi')>UEFI</option>
+                                                    </select></div>
+                                                <div class="field"><label>{{ __('vTPM 2.0') }}</label>
+                                                    <label class="check-line"><input type="checkbox" name="hw_tpm" value="1" @checked($template->hw_tpm)> {{ __('np. Windows 11 / Server 2025 (wymaga UEFI)') }}</label></div>
+                                            @endunless
                                         </div>
                                         <button class="btn btn-sm btn-primary" type="submit">{{ __('Zapisz') }}</button>
                                     </form>

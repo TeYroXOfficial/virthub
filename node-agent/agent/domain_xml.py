@@ -7,6 +7,7 @@ deweloperskiej, bez hypervisora.
 
 from __future__ import annotations
 
+from typing import Any
 from xml.sax.saxutils import escape
 
 
@@ -52,6 +53,8 @@ def build_domain_xml(
     allow_nested: bool = False,
     disk_xml: str | None = None,
     extra_interfaces: list[str] | None = None,
+    extra_disks: list[str] | None = None,
+    hardware: Any = None,
 ) -> str:
     """Zwraca XML domeny gotowy do `virsh define`.
 
@@ -77,6 +80,8 @@ def build_domain_xml(
       <target dev='vda' bus='virtio'/>
     </disk>"""
     ]
+    # Dodatkowe dyski (vdb…) zaraz po głównym.
+    devices.extend(extra_disks or [])
 
     if seed_path:
         devices.append(
@@ -127,7 +132,7 @@ def build_domain_xml(
 
     devices_xml = "\n".join(devices)
 
-    return f"""<domain type='kvm'>
+    xml = f"""<domain type='kvm'>
   <name>{escape(name)}</name>
   <uuid>{escape(uuid)}</uuid>
   <memory unit='MiB'>{ram_mb}</memory>
@@ -156,6 +161,109 @@ def build_domain_xml(
   </devices>
 </domain>
 """
+    return with_hardware(xml, hardware, allow_nested) if hardware is not None else xml
+
+
+def disk_dev(slot: int) -> str:
+    """Nazwa urządzenia dysku: slot 0 = vda (główny), 1–7 = vdb–vdh."""
+    return "vd" + "abcdefgh"[slot]
+
+
+def with_hardware(xml: str, hw: Any, allow_nested: bool = False) -> str:
+    """Nakłada ustawienia sprzętu (magistrala i I/O dysków, firmware, vTPM, CPU,
+    cpuset) na definicję domeny. Czysta funkcja: ta sama ścieżka dla nowej
+    maszyny i dla zmiany istniejącej (zmiana działa po wyłączeniu i włączeniu).
+    """
+    from xml.etree import ElementTree as ET
+
+    root = ET.fromstring(xml)
+    devices = root.find("devices")
+    if devices is None:
+        raise ValueError("Nieprawidłowa definicja domeny — brak <devices>.")
+
+    vcpu = root.find("vcpu")
+    if vcpu is not None:
+        if hw.cpuset:
+            vcpu.set("cpuset", hw.cpuset)
+        else:
+            vcpu.attrib.pop("cpuset", None)
+
+    # --- firmware ---------------------------------------------------------
+    os_el = root.find("os")
+    if os_el is not None:
+        for child in list(os_el):
+            if child.tag in ("loader", "nvram", "firmware"):
+                os_el.remove(child)
+        if hw.firmware == "uefi":
+            os_el.set("firmware", "efi")
+            # Bez Secure Boot: nie wymaga SMM ani zapisanych kluczy, a Windows 11 i tak się zainstaluje z vTPM.
+            fw = ET.Element("firmware")
+            ET.SubElement(fw, "feature", {"enabled": "no", "name": "enrolled-keys"})
+            ET.SubElement(fw, "feature", {"enabled": "no", "name": "secure-boot"})
+            os_el.insert(0, fw)
+        else:
+            os_el.attrib.pop("firmware", None)
+
+    # --- vTPM -------------------------------------------------------------
+    for tpm in devices.findall("tpm"):
+        devices.remove(tpm)
+    if hw.tpm:
+        tpm = ET.SubElement(devices, "tpm", {"model": "tpm-crb"})
+        ET.SubElement(tpm, "backend", {"type": "emulator", "version": "2.0"})
+
+    # --- procesor ---------------------------------------------------------
+    old_cpu = root.find("cpu")
+    index = list(root).index(old_cpu) if old_cpu is not None else len(root)
+    if old_cpu is not None:
+        root.remove(old_cpu)
+    if hw.cpu_model in (None, "host-passthrough"):
+        cpu = ET.Element("cpu", {"mode": "host-passthrough", "check": "none"})
+    elif hw.cpu_model == "host-model":
+        cpu = ET.Element("cpu", {"mode": "host-model", "check": "partial"})
+    else:
+        # Stały model: ta sama maszyna wystartuje (i zmigruje na żywo) na węzłach z różnymi procesorami.
+        cpu = ET.Element("cpu", {"mode": "custom", "match": "exact", "check": "partial"})
+        ET.SubElement(cpu, "model", {"fallback": "allow"}).text = hw.cpu_model
+    if not allow_nested:
+        for name in ("vmx", "svm"):
+            ET.SubElement(cpu, "feature", {"policy": "disable", "name": name})
+    root.insert(index, cpu)
+
+    # --- dyski ------------------------------------------------------------
+    bus = "scsi" if hw.disk_bus == "scsi" else "virtio"
+    for disk in devices.findall("disk"):
+        if disk.get("device") != "disk":
+            continue
+        target = disk.find("target")
+        if target is not None and target.get("bus") != bus:
+            target.set("bus", bus)
+            # Adres zależy od magistrali (PCI ↔ drive) — libvirt nada nowy.
+            for address in disk.findall("address"):
+                disk.remove(address)
+        driver = disk.find("driver")
+        if driver is not None and disk.get("type") != "network":
+            driver.set("io", hw.io_mode)
+            if hw.io_mode == "native":
+                driver.set("cache", "none")  # io=native działa tylko z O_DIRECT
+
+    for controller in devices.findall("controller"):
+        if controller.get("type") == "scsi" and controller.get("model") == "virtio-scsi":
+            devices.remove(controller)
+    iothreads = root.find("iothreads")
+    if bus == "scsi":
+        controller = ET.Element("controller", {"type": "scsi", "index": "0", "model": "virtio-scsi"})
+        # „Threaded”: kontroler w osobnym wątku I/O, poza głównym wątkiem QEMU.
+        ET.SubElement(controller, "driver", {"iothread": "1"})
+        first_disk = next((i for i, el in enumerate(devices) if el.tag == "disk"), 0)
+        devices.insert(first_disk, controller)
+        if iothreads is None:
+            iothreads = ET.Element("iothreads")
+            root.insert(list(root).index(vcpu) + 1 if vcpu is not None else 0, iothreads)
+        iothreads.text = "1"
+    elif iothreads is not None:
+        root.remove(iothreads)
+
+    return ET.tostring(root, encoding="unicode")
 
 
 CPU_PERIOD_US = 100_000

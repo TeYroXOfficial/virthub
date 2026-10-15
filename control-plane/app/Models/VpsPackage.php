@@ -28,6 +28,7 @@ class VpsPackage extends Model
         'pci_count',
         'backup_plan_id',
         'datastore_id',
+        'extra_disk_gb',
         'price_hint_cents',
         'currency',
         'is_active',
@@ -40,7 +41,14 @@ class VpsPackage extends Model
             'ip_count' => 'integer',
             'ipv6_count' => 'integer',
             'cpu_limit_percent' => 'integer',
+            'extra_disk_gb' => 'integer',
         ];
+    }
+
+    /** Dysk główny i dodatkowy (zajętość węzła). */
+    public function totalDiskGb(): int
+    {
+        return (int) $this->disk_gb + (int) $this->extra_disk_gb;
     }
 
     public function usesNat(): bool

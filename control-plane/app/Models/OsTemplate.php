@@ -15,6 +15,8 @@ class OsTemplate extends Model
     use HasFactory;
 
     protected $fillable = [
+        'hw_firmware',
+        'hw_tpm',
         'os_template_group_id',
         'sort_order',
         'name',
@@ -44,6 +46,7 @@ class OsTemplate extends Model
     protected function casts(): array
     {
         return [
+            'hw_tpm' => 'boolean',
             'cloud_init_support' => 'boolean',
             'is_active' => 'boolean',
             'virtualization' => Virtualization::class,

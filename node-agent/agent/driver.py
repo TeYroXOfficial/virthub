@@ -32,7 +32,7 @@ from .guest_os import cpu_model, from_guest_agent, outbound_ipv4, parse_os_relea
 from .isos import IsoLibrary
 from .jobs import progress
 from .config import Settings
-from .domain_xml import CPU_PERIOD_US, build_domain_xml, cpu_quota_us, domain_name
+from .domain_xml import CPU_PERIOD_US, build_domain_xml, cpu_quota_us, disk_dev, domain_name, with_hardware
 from .nat import host_networks
 from . import private_net
 from .network import NetworkManager, interface_name, mac_address
@@ -333,6 +333,17 @@ class HypervisorDriver(ABC):
         """Karty w sieciach prywatnych — tylko maszyny wirtualne KVM."""
         raise DriverError("Sieci prywatne są dostępne tylko dla maszyn KVM.")
 
+    def set_disks(self, uuid: str, req: Any) -> dict[str, Any]:
+        """Dodatkowe dyski i powiększanie dysków — tylko maszyny wirtualne KVM."""
+        raise DriverError("Dodatkowe dyski są dostępne tylko dla maszyn KVM.")
+
+    def set_hardware(self, uuid: str, req: Any) -> dict[str, Any]:
+        raise DriverError("Ustawienia sprzętu dotyczą maszyn wirtualnych KVM.")
+
+    @staticmethod
+    def extra_disk_name(name: str, slot: int) -> str:
+        return f"{name}-d{slot}"
+
     def set_hostdevs(self, uuid: str, req: Any) -> dict[str, Any]:
         """Urządzenia PCI (GPU, karty) — tylko maszyny wirtualne KVM."""
         raise DriverError("Przekazywanie urządzeń PCI jest dostępne tylko dla maszyn KVM.")
@@ -449,6 +460,9 @@ class LibvirtDriver(HypervisorDriver):
             created.append("binding")
             disk = self._restore_disk(name, req, restore) if restore else self.storage.create_volume(name, req.template, req.disk_gb)
             created.append("volume")
+            for extra in req.extra_disks:
+                self.storage.create_blank(self.extra_disk_name(name, extra.slot), extra.size_gb)
+                created.append(f"disk:{extra.slot}")
 
             progress("network", 55)
             seed = self.cloudinit.build(
@@ -487,6 +501,8 @@ class LibvirtDriver(HypervisorDriver):
                 windows=req.os_type == "windows",
                 allow_nested=self.nested_enabled(),
                 extra_interfaces=[private_net.interface_xml(req.server_id, n) for n in req.private_nics],
+                extra_disks=[self.storage.disk_xml(self.extra_disk_name(name, d.slot), disk_dev(d.slot)) for d in req.extra_disks],
+                hardware=req.hardware,
             )
 
             self.storage.libvirt_prepare(self.conn, name)
@@ -598,9 +614,15 @@ class LibvirtDriver(HypervisorDriver):
                 dom = self.conn.lookupByName(name)
                 if dom.isActive():
                     dom.destroy()
-                dom.undefine()
+                self._undefine(dom)
             except libvirt.libvirtError:
                 log.exception("Rollback: nie udało się usunąć domeny %s", name)
+        for item in created:
+            if item.startswith("disk:"):
+                try:
+                    self.storage.delete_volume(self.extra_disk_name(name, int(item[5:])))
+                except Exception:
+                    log.exception("Rollback: nie udało się usunąć dodatkowego dysku %s", item)
         if "volume" in created or "seed" in created:
             try:
                 self.storage.delete_volume(name)
@@ -840,12 +862,14 @@ class LibvirtDriver(HypervisorDriver):
             domain.destroy()
 
         try:
-            domain.undefine()
+            self._undefine(domain)
         except libvirt.libvirtError as exc:
             raise DriverError(f"Nie udało się usunąć definicji domeny: {exc}") from exc
 
         self.network.teardown(server_id)
         private_net.prune_bridges(self.settings)
+        for slot in range(1, 8):
+            self.storage.delete_volume(self.extra_disk_name(name, slot))
         self.storage.delete_volume(name)
         self.storage.unbind(name)
         return {"uuid": uuid, "deleted": True}
@@ -975,13 +999,27 @@ class LibvirtDriver(HypervisorDriver):
             domain.create()
         return {"uuid": uuid, "key": req.key, "state": self._state(domain)}
 
+    @staticmethod
+    def _other_disks_excluded(domain: Any) -> str:
+        """Migawka dyskowa obejmuje tylko vda — bez jawnego snapshot='no' libvirt
+        założyłby nakładki także na dodatkowych dyskach."""
+        import xml.etree.ElementTree as ET
+
+        import libvirt
+
+        root = ET.fromstring(domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE))
+        devs = [t.get("dev") for d in root.findall("./devices/disk")
+                if d.get("device") == "disk" and (t := d.find("target")) is not None and t.get("dev") != "vda"]
+        return "".join(f"<disk name='{escape(dev)}' snapshot='no'/>" for dev in devs)
+
     def _external_overlay(self, domain: Any, overlay: Path, snap_name: str) -> None:
         import libvirt
 
         snap = (
             f"<domainsnapshot><name>{snap_name}</name><disks>"
             f"<disk name='vda' snapshot='external'><driver type='qcow2'/><source file='{escape(str(overlay))}'/></disk>"
-            "</disks></domainsnapshot>"
+            + self._other_disks_excluded(domain)
+            + "</disks></domainsnapshot>"
         )
         domain.snapshotCreateXML(
             snap,
@@ -996,6 +1034,102 @@ class LibvirtDriver(HypervisorDriver):
         from . import pci
 
         return {"iommu": pci.iommu_enabled(), "devices": pci.list_devices()}
+
+    @staticmethod
+    def _undefine(domain: Any) -> None:
+        """Usunięcie definicji razem ze zmiennymi UEFI (NVRAM) i stanem vTPM —
+        zwykłe undefine() odmawia dla maszyny z UEFI."""
+        import libvirt
+
+        flags = getattr(libvirt, "VIR_DOMAIN_UNDEFINE_NVRAM", 4) | getattr(libvirt, "VIR_DOMAIN_UNDEFINE_TPM", 0)
+        try:
+            domain.undefineFlags(flags)
+        except (AttributeError, TypeError):
+            domain.undefine()
+
+    def set_hardware(self, uuid: str, req: Any) -> dict[str, Any]:
+        """Nowy sprzęt w trwałej definicji — działa po wyłączeniu i włączeniu maszyny."""
+        import libvirt
+
+        domain = self._domain(uuid)
+        xml = domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE)
+        try:
+            new_xml = with_hardware(xml, req.hardware, self.nested_enabled())
+            self.conn.defineXML(new_xml)
+        except (ValueError, libvirt.libvirtError) as exc:
+            raise DriverError(f"Nie udało się zmienić sprzętu maszyny: {exc}") from exc
+        changed = new_xml != xml
+        return {"uuid": uuid, "changed": changed, "restart_required": changed and bool(domain.isActive()),
+                "state": self._state(domain)}
+
+    def set_disks(self, uuid: str, req: Any) -> dict[str, Any]:
+        """Dodatkowe dyski (vdb–vdh) i powiększanie — na żywo, jeśli maszyna działa."""
+        import xml.etree.ElementTree as ET
+
+        import libvirt
+
+        domain = self._domain(uuid)
+        name = domain.name()
+        self._assert_not_elevated(name)
+        live = bool(domain.isActive())
+        flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG | (libvirt.VIR_DOMAIN_AFFECT_LIVE if live else 0)
+        root = ET.fromstring(domain.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE))
+        current: dict[int, ET.Element] = {}
+        bus = "virtio"
+        for disk in root.findall("./devices/disk"):
+            target = disk.find("target")
+            if disk.get("device") != "disk" or target is None:
+                continue
+            dev = target.get("dev", "")
+            if dev == "vda":
+                bus = target.get("bus") or bus
+            elif re.fullmatch(r"vd[b-h]", dev):
+                current["abcdefgh".index(dev[2])] = disk
+        wanted = {d.slot: d for d in req.disks}
+        removed = sorted(set(current) - set(wanted))
+        if removed and not req.delete_removed:
+            raise DriverError("Usunięcie dysku kasuje jego dane — potwierdź usunięcie dysków " + ", ".join(disk_dev(s) for s in removed) + ".")
+
+        def grow(volume: str, dev: str, size_gb: int) -> bool:
+            current_gb = self.storage.size_gb(volume)
+            if size_gb < current_gb:
+                raise DriverError(f"Dysk {dev} ma {current_gb} GB — zmniejszanie dysków nie jest wspierane.")
+            if size_gb == current_gb:
+                return False
+            if live:
+                domain.blockResize(dev, size_gb * 1024**3, libvirt.VIR_DOMAIN_BLOCK_RESIZE_BYTES)
+            else:
+                self.storage.resize_volume(volume, size_gb)
+            return True
+
+        changed: list[str] = []
+        try:
+            if req.primary_gb and grow(name, "vda", req.primary_gb):
+                changed.append("vda")
+            for slot in removed:
+                domain.detachDeviceFlags(ET.tostring(current[slot], encoding="unicode"), flags)
+                self.storage.delete_volume(self.extra_disk_name(name, slot))
+                changed.append(disk_dev(slot))
+            for slot, spec in sorted(wanted.items()):
+                volume, dev = self.extra_disk_name(name, slot), disk_dev(slot)
+                if slot in current:
+                    if grow(volume, dev, spec.size_gb):
+                        changed.append(dev)
+                    continue
+                self.storage.create_blank(volume, spec.size_gb)
+                element = ET.fromstring(self.storage.disk_xml(volume, dev))
+                element.find("target").set("bus", bus)
+                domain.attachDeviceFlags(ET.tostring(element, encoding="unicode"), flags)
+                changed.append(dev)
+        except libvirt.libvirtError as exc:
+            raise DriverError(f"Nie udało się zmienić dysków maszyny: {exc}") from exc
+        return {"uuid": uuid, "changed": changed, "disks": self._disk_sizes(name, wanted), "state": self._state(domain)}
+
+    def _disk_sizes(self, name: str, wanted: dict[int, Any]) -> list[dict[str, Any]]:
+        out = [{"slot": 0, "dev": "vda", "size_gb": self.storage.size_gb(name)}]
+        for slot in sorted(wanted):
+            out.append({"slot": slot, "dev": disk_dev(slot), "size_gb": self.storage.size_gb(self.extra_disk_name(name, slot))})
+        return out
 
     def _ensure_domain_bridges(self, domain: Any) -> int:
         """Mostki sieci prywatnych z definicji domeny (`ip link` nie przetrwa restartu hosta)."""
@@ -1109,7 +1243,8 @@ class LibvirtDriver(HypervisorDriver):
                     snap = (
                         "<domainsnapshot><name>virthub-elevate</name><disks>"
                         f"<disk name='vda' snapshot='external'><driver type='qcow2'/><source file='{escape(str(overlay))}'/></disk>"
-                        "</disks></domainsnapshot>"
+                        + self._other_disks_excluded(domain)
+                        + "</disks></domainsnapshot>"
                     )
                     domain.snapshotCreateXML(
                         snap,
@@ -1448,7 +1583,11 @@ class MockDriver(HypervisorDriver):
             "disk_path": str(disk),
             "datastore_id": req.storage.id if req.storage else None,
             "private_nics": self._nic_records(req.server_id, req.private_nics),
+            "extra_disks": {str(d.slot): d.size_gb for d in req.extra_disks},
+            "hardware": req.hardware.model_dump() if req.hardware else None,
         }
+        for extra in req.extra_disks:
+            self.storage.create_blank(self.extra_disk_name(name, extra.slot), extra.size_gb)
         if not getattr(restore, "start", True):
             record["state"] = "stopped"
         self._stage("boot", 85)
@@ -1530,10 +1669,62 @@ class MockDriver(HypervisorDriver):
         record = data.pop(uuid, None)
         if record is None:
             raise VmNotFound(uuid)
+        for slot in range(1, 8):
+            self.storage.delete_volume(self.extra_disk_name(record["name"], slot))
         self.storage.delete_volume(record["name"])
         self.storage.unbind(record["name"])
         self._save(data)
         return {"uuid": uuid, "deleted": True}
+
+    def set_hardware(self, uuid: str, req: Any) -> dict[str, Any]:
+        data = self._load()
+        record = data.get(uuid)
+        if record is None:
+            raise VmNotFound(uuid)
+        changed = record.get("hardware") != req.hardware.model_dump()
+        record["hardware"] = req.hardware.model_dump()
+        self._save(data)
+        return {"uuid": uuid, "changed": changed, "restart_required": changed and record["state"] == "running", "state": record["state"]}
+
+    def set_disks(self, uuid: str, req: Any) -> dict[str, Any]:
+        data = self._load()
+        record = data.get(uuid)
+        if record is None:
+            raise VmNotFound(uuid)
+        name = record["name"]
+        self._assert_not_elevated(name)
+        current = {int(k): v for k, v in (record.get("extra_disks") or {}).items()}
+        wanted = {d.slot: d.size_gb for d in req.disks}
+        removed = sorted(set(current) - set(wanted))
+        if removed and not req.delete_removed:
+            raise DriverError("Usunięcie dysku kasuje jego dane — potwierdź usunięcie dysków " + ", ".join(disk_dev(s) for s in removed) + ".")
+        for slot, size in wanted.items():
+            if size < current.get(slot, 0):
+                raise DriverError(f"Dysk {disk_dev(slot)} ma {current[slot]} GB — zmniejszanie dysków nie jest wspierane.")
+        if req.primary_gb and req.primary_gb < record["disk_gb"]:
+            raise DriverError(f"Dysk vda ma {record['disk_gb']} GB — zmniejszanie dysków nie jest wspierane.")
+        changed = []
+        if req.primary_gb and req.primary_gb != record["disk_gb"]:
+            record["disk_gb"] = req.primary_gb
+            self.storage.resize_volume(name, req.primary_gb)
+            changed.append("vda")
+        for slot in removed:
+            self.storage.delete_volume(self.extra_disk_name(name, slot))
+            changed.append(disk_dev(slot))
+        for slot, size in sorted(wanted.items()):
+            volume = self.extra_disk_name(name, slot)
+            if slot not in current:
+                self.storage.create_blank(volume, size)
+            elif size != current[slot]:
+                self.storage.resize_volume(volume, size)
+            else:
+                continue
+            changed.append(disk_dev(slot))
+        record["extra_disks"] = {str(k): v for k, v in wanted.items()}
+        self._save(data)
+        disks = [{"slot": 0, "dev": "vda", "size_gb": record["disk_gb"]}] + [
+            {"slot": s, "dev": disk_dev(s), "size_gb": wanted[s]} for s in sorted(wanted)]
+        return {"uuid": uuid, "changed": changed, "disks": disks, "state": record["state"]}
 
     def snapshot(self, uuid: str, name: str) -> dict[str, Any]:
         record = self._get(uuid)

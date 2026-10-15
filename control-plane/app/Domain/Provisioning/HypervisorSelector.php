@@ -5,6 +5,7 @@ namespace App\Domain\Provisioning;
 use App\Enums\Virtualization;
 use App\Models\Hypervisor;
 use App\Models\Server;
+use App\Models\ServerDisk;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -64,14 +65,16 @@ class HypervisorSelector
                 );
             }
 
+            // Dysk główny i dodatkowe (z pakietu) — razem zajmują miejsce na węźle.
+            $diskGb = $server->totalDiskGb();
             $candidate = $preferred ?? $this->select(
-                $server->vcpu, $server->ram_mb, $server->disk_gb, $type, $accepts,
+                $server->vcpu, $server->ram_mb, $diskGb, $type, $accepts,
             );
 
             // Zasoby są, ale żaden węzeł nie ma adresów — komunikat musi
             // wskazać pule, a nie pojemność, bo to tam administrator ma szukać.
             if ($candidate === null && $accepts !== null
-                && $this->select($server->vcpu, $server->ram_mb, $server->disk_gb, $type) !== null) {
+                && $this->select($server->vcpu, $server->ram_mb, $diskGb, $type) !== null) {
                 throw new NoAddressesException(
                     __('Pula adresów jest wyczerpana: węzły typu :shortlabel z wolnymi zasobami ', ['shortlabel' => $type->shortLabel()])
                     .__('nie mają adresów wymaganych przez pakiet. Dodaj pulę dla węzła albo jego grupy.')
@@ -81,14 +84,14 @@ class HypervisorSelector
             if ($candidate === null) {
                 throw new NoCapacityException(
                     __('Brak węzła typu :shortlabel z wolnymi zasobami na :vcpu vCPU, ', ['shortlabel' => $type->shortLabel(), 'vcpu' => $server->vcpu])
-                    ."{$server->ram_mb} MB RAM i {$server->disk_gb} GB dysku."
+                    ."{$server->ram_mb} MB RAM i {$diskGb} GB dysku."
                 );
             }
 
             // Ponowny odczyt pod blokadą — stan sprzed sekundy mógł się zmienić.
             $hypervisor = Hypervisor::query()->lockForUpdate()->findOrFail($candidate->id);
 
-            if (! $hypervisor->hasCapacityFor($server->vcpu, $server->ram_mb, $server->disk_gb)) {
+            if (! $hypervisor->hasCapacityFor($server->vcpu, $server->ram_mb, $diskGb)) {
                 throw new NoCapacityException(
                     __('Hypervisor :name nie ma już wolnych zasobów na tę maszynę.', ['name' => $hypervisor->name])
                 );
@@ -96,7 +99,7 @@ class HypervisorSelector
 
             $hypervisor->increment('cpu_cores_used', $server->vcpu);
             $hypervisor->increment('ram_mb_used', $server->ram_mb);
-            $hypervisor->increment('disk_gb_used', $server->disk_gb);
+            $hypervisor->increment('disk_gb_used', $diskGb);
 
             $server->hypervisor()->associate($hypervisor)->save();
 
@@ -111,7 +114,8 @@ class HypervisorSelector
             return;
         }
 
-        DB::transaction(function () use ($server) {
+        $diskGb = $server->totalDiskGb();
+        DB::transaction(function () use ($server, $diskGb) {
             $hypervisor = Hypervisor::query()->lockForUpdate()->find($server->hypervisor_id);
 
             if ($hypervisor === null) {
@@ -123,7 +127,7 @@ class HypervisorSelector
             $hypervisor->forceFill([
                 'cpu_cores_used' => max(0, $hypervisor->cpu_cores_used - $server->vcpu),
                 'ram_mb_used' => max(0, $hypervisor->ram_mb_used - $server->ram_mb),
-                'disk_gb_used' => max(0, $hypervisor->disk_gb_used - $server->disk_gb),
+                'disk_gb_used' => max(0, $hypervisor->disk_gb_used - $diskGb),
             ])->save();
         });
     }
@@ -140,10 +144,12 @@ class HypervisorSelector
             ->selectRaw('COALESCE(SUM(vcpu), 0) as vcpu, COALESCE(SUM(ram_mb), 0) as ram_mb, COALESCE(SUM(disk_gb), 0) as disk_gb')
             ->first();
 
+        $extra = ServerDisk::query()->whereIn('server_id', Server::query()->where('hypervisor_id', $hypervisor->id)->select('id'))->sum('size_gb');
+
         $hypervisor->forceFill([
             'cpu_cores_used' => (int) $totals->vcpu,
             'ram_mb_used' => (int) $totals->ram_mb,
-            'disk_gb_used' => (int) $totals->disk_gb,
+            'disk_gb_used' => (int) $totals->disk_gb + (int) $extra,
         ])->save();
     }
 }

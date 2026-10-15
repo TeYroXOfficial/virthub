@@ -231,6 +231,30 @@
                     <div class="hint">{{ __('Interfejs, do którego podpinane są maszyny.') }}</div>
                 </div>
             </div>
+            @if ($node->virtualization === \App\Enums\Virtualization::Kvm)
+                <fieldset class="grid grid-3" style="border:0;padding:0;margin:0 0 12px">
+                    <legend class="muted" style="margin-bottom:6px">{{ __('Domyślny sprzęt maszyn na węźle (maszyna może nadpisać)') }}</legend>
+                    <div class="field"><label for="n-bus">{{ __('Magistrala dysków') }}</label>
+                        <select id="n-bus" name="hw_disk_bus">
+                            <option value="">VirtIO ({{ __('domyślnie') }})</option>
+                            <option value="scsi" @selected($node->hw_disk_bus === 'scsi')>{{ __('VirtIO SCSI (wątek I/O)') }}</option>
+                        </select></div>
+                    <div class="field"><label for="n-io">{{ __('Tryb I/O') }}</label>
+                        <select id="n-io" name="hw_io_mode">
+                            <option value="">native ({{ __('domyślnie') }})</option>
+                            @foreach (['threads', 'io_uring'] as $mode) <option value="{{ $mode }}" @selected($node->hw_io_mode === $mode)>{{ $mode }}</option> @endforeach
+                        </select></div>
+                    <div class="field"><label for="n-cpu">{{ __('Model procesora maszyn') }}</label>
+                        <select id="n-cpu" name="hw_cpu_model">
+                            <option value="">host-passthrough ({{ __('domyślnie') }})</option>
+                            @foreach (array_slice(\App\Domain\Provisioning\ServerHardware::CPU_MODELS, 1) as $model) <option value="{{ $model }}" @selected($node->hw_cpu_model === $model)>{{ $model }}</option> @endforeach
+                        </select>
+                        <div class="hint">{{ __('Stały model ułatwia migrację na żywo między węzłami z różnymi procesorami.') }}</div></div>
+                    <div class="field"><label for="n-cpuset">{{ __('Rdzenie hosta dla maszyn (cpuset)') }}</label>
+                        <input id="n-cpuset" name="hw_cpuset" value="{{ old('hw_cpuset', $node->hw_cpuset) }}" placeholder="{{ __('np. 2-31,34-63') }}" maxlength="300">
+                        <div class="hint">{{ __('Puste = wszystkie rdzenie. Pozwala zostawić rdzenie dla systemu węzła.') }}</div></div>
+                </fieldset>
+            @endif
             <div class="field">
                 <label for="n-notes">{{ __('Notatki') }} <span class="muted">{{ __('(dla personelu)') }}</span></label>
                 <textarea id="n-notes" name="notes" rows="3" placeholder="{{ __('Dostawca, numer szafy, kontakt do DC…') }}">{{ old('notes', $node->notes) }}</textarea>

@@ -209,6 +209,8 @@
         </div>
     @endif
 
+    @include('panel.servers._hardware')
+
     <div class="card">
         <h3 class="card-title"><x-icon name="node" :size="16"/> {{ __('Informacje') }}</h3>
         <dl class="kv">

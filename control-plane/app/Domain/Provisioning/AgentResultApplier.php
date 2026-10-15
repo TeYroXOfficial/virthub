@@ -69,6 +69,8 @@ class AgentResultApplier
             'network' => null,
             'hostdevs' => null,
             'private_nics' => null,
+            'disks' => null,
+            'hardware' => null,
             'backup' => $this->finishRemoteBackup($job, $result),
             'backup_restore' => $server->markState(ServerState::fromAgentState($result['state'] ?? 'running')),
             'elevate' => $server->forceFill(['elevated_at' => ($result['elevated'] ?? false) ? ($server->elevated_at ?? now()) : null])->save(),
@@ -107,6 +109,7 @@ class AgentResultApplier
             // — pokazane klientowi wyglądałoby na działające.
             'rebuild' => $server->forceFill(['root_password' => null])->save(),
             'password' => $job->forceFill(['payload' => []])->save(),
+            'disks' => app(ServerDisks::class)->revert($job),
             default => null,
         };
 

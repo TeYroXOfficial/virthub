@@ -37,6 +37,10 @@
                     <input id="disk_gb" name="disk_gb" type="text" value="{{ old('disk_gb', 50) }}" required>
                 </div>
                 <div class="field">
+                    <label for="extra_disk_gb">{{ __('Dodatkowy dysk (GB)') }} <span class="muted">{{ __('(opcjonalnie)') }}</span></label>
+                    <input id="extra_disk_gb" name="extra_disk_gb" type="number" min="1" value="{{ old('extra_disk_gb') }}" placeholder="{{ __('brak') }}">
+                </div>
+                <div class="field">
                     <label for="bandwidth_gb">{{ __('Transfer (GB/mies.)') }}</label>
                     <input id="bandwidth_gb" name="bandwidth_gb" type="text"
                            value="{{ old('bandwidth_gb', 2000) }}" required>
@@ -150,6 +154,7 @@
                                         <div class="field"><label>{{ __('Limit CPU (%)') }}</label><input name="cpu_limit_percent" type="number" min="1" placeholder="{{ __('bez limitu') }}" value="{{ $v('cpu_limit_percent', $package->cpu_limit_percent) }}"></div>
                                         <div class="field"><label>{{ __('RAM (MB)') }}</label><input name="ram_mb" type="number" min="512" required value="{{ $v('ram_mb', $package->ram_mb) }}"></div>
                                         <div class="field"><label>{{ __('Dysk (GB)') }}</label><input name="disk_gb" type="number" min="5" required value="{{ $v('disk_gb', $package->disk_gb) }}"></div>
+                                        <div class="field"><label>{{ __('Dodatkowy dysk (GB)') }}</label><input name="extra_disk_gb" type="number" min="1" placeholder="{{ __('brak') }}" value="{{ $v('extra_disk_gb', $package->extra_disk_gb) }}"></div>
                                         <div class="field"><label>{{ __('Transfer (GB/mies.)') }}</label><input name="bandwidth_gb" type="number" min="0" required value="{{ $v('bandwidth_gb', $package->bandwidth_gb) }}"></div>
                                         <div class="field"><label>{{ __('Sieć') }}</label>
                                             <select name="network_type">

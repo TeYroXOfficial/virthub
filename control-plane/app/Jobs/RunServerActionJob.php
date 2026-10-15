@@ -8,6 +8,8 @@ use App\Domain\Agent\ServerPayload;
 use App\Domain\Network\PrivateNetworks;
 use App\Domain\Provisioning\AgentResultApplier;
 use App\Domain\Provisioning\ServerCleanup;
+use App\Domain\Provisioning\ServerDisks;
+use App\Domain\Provisioning\ServerHardware;
 use App\Models\Backup;
 use App\Models\Server;
 use App\Models\ServerJob;
@@ -72,6 +74,8 @@ class RunServerActionJob implements ShouldQueue
                 'recover' => $this->recoverCall($client, $server, $payload),
                 'hostdevs' => $client->setHostdevs($server->agent_uuid,
                     $server->pciAssets()->get()->map->toAgentPayload()->values()->all(), (bool) ($payload['restart'] ?? false)),
+                'disks' => $client->setDisks($server->agent_uuid, ServerDisks::payload($server), (int) $server->disk_gb, (bool) ($payload['delete_removed'] ?? false)),
+                'hardware' => $client->setHardware($server->agent_uuid, ServerHardware::payload($server)['hardware'] ?? []),
                 'private_nics' => $client->setPrivateNics($server->agent_uuid, PrivateNetworks::payload($server)),
                 'rebuild' => $client->rebuild($server->agent_uuid, [
                     'template' => $payload['template'],
@@ -127,6 +131,9 @@ class RunServerActionJob implements ShouldQueue
             ]);
 
             $job->markFailed($e->getMessage());
+            if ($job->action === 'disks') {
+                app(ServerDisks::class)->revert($job);
+            }
             app(AgentResultApplier::class)->rollbackState($job);
 
             return;
