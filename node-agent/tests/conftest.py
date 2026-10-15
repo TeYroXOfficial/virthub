@@ -6,7 +6,9 @@ Windows i w CI, gdzie nie ma ani KVM, ani libvirt.
 
 from __future__ import annotations
 
+import atexit
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -18,6 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 TEST_TOKEN = "test-token-nie-uzywac-w-produkcji"
 
 _tmp = tempfile.mkdtemp(prefix="virthub-tests-")
+# Każde uruchomienie zostawiało ~100 MB obrazów testowych w /tmp.
+atexit.register(shutil.rmtree, _tmp, ignore_errors=True)
 
 os.environ.update(
     VH_AGENT_TOKEN=TEST_TOKEN,
