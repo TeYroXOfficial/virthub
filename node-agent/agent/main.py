@@ -413,6 +413,17 @@ async def host_monitor() -> dict[str, Any]:
 
 # --- aktualizacja węzła -----------------------------------------------------
 
+class ReleaseSpec(BaseModel):
+    version: str = Field(pattern=r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$", max_length=60)
+    url: str = Field(pattern=r"^https?://[^\s'\"]+$", max_length=2000)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    signature: str = Field(pattern=r"^[A-Za-z0-9+/=]{80,120}$")
+
+
+class UpdateRequest(BaseModel):
+    release: ReleaseSpec | None = None
+
+
 @app.get("/system/update", dependencies=[Depends(require_control_plane)], tags=["system"])
 async def update_status() -> dict[str, Any]:
     return updates.status()
@@ -424,10 +435,13 @@ async def update_status() -> dict[str, Any]:
     dependencies=[Depends(require_control_plane)],
     tags=["system"],
 )
-async def request_update() -> dict[str, Any]:
-    """Zleca aktualizację; wykonuje ją uprzywilejowana usługa systemd."""
+async def request_update(req: UpdateRequest | None = None) -> dict[str, Any]:
+    """Zleca aktualizację; wykonuje ją uprzywilejowana usługa systemd.
+
+    Z portalem panel podaje wydanie (wersja, adres, SHA-256, podpis) — usługa
+    sprawdzi podpis kluczem przypiętym na węźle, zanim cokolwiek zainstaluje."""
     try:
-        return updates.request()
+        return updates.request(req.release.model_dump() if req and req.release else None)
     except UpdaterMissing as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 

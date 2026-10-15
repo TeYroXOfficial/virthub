@@ -5,7 +5,9 @@
 @php
     use App\Domain\Updates\Updates;
 
-    $latestSha = $latest['sha'] ?? null;
+    // Z portalem węzły mają mieć wersję panelu; bez portalu — najnowszy commit.
+    $latestSha = $portal ? $version : ($latest['sha'] ?? null);
+    $newest = $portal && ($check['ok'] ?? false) ? ($check['latest'] ?? null) : null;
     $stateLabel = [
         'idle' => ['—', 'neutral'],
         'queued' => ['w kolejce', 'warning'],
@@ -37,8 +39,37 @@
 
     @include('panel.admin._nav')
 
+    @if ($portal)
+    <div class="card">
+        <h3 class="card-title"><x-icon name="package" :size="16"/> {{ __('Wydania z portalu') }}
+            <span class="pill neutral" style="margin-left:auto">{{ __('kanał: :channel', ['channel' => $check['channel'] ?? '—']) }}</span></h3>
+        @if (! ($check['ok'] ?? false))
+            <div class="alert alert-warning" style="margin:0">{{ $check['error'] ?? __('Nie udało się sprawdzić wydań.') }}</div>
+        @elseif (empty($check['update_available']))
+            <p style="margin:0">{{ __('Panel ma najnowszą wersję :version.', ['version' => $version]) }}</p>
+        @else
+            @php $bump = $newest['bump'] ?? null; @endphp
+            <p style="margin-top:0">
+                {!! __('Dostępna wersja <strong>:new</strong> (zainstalowana :current).', ['new' => e($newest['version']), 'current' => e($version)]) !!}
+                @if (! empty($check['security'])) <span class="pill critical">{{ __('poprawki bezpieczeństwa') }}</span> @endif
+                @if ($bump === 'major') <span class="pill warning">{{ __('wersja główna — przeczytaj zmiany przed aktualizacją') }}</span> @endif
+            </p>
+            @foreach ($check['releases'] ?? [] as $release)
+                <details class="form-block" style="margin:8px 0 0" @if ($loop->first) open @endif>
+                    <summary><strong class="mono">{{ $release['version'] }}</strong>
+                        @if (! empty($release['security'])) <span class="pill critical">{{ __('bezpieczeństwo') }}</span> @endif
+                        @if (($release['channel'] ?? '') === 'beta') <span class="pill info">beta</span> @endif
+                        <span class="muted">{{ ! empty($release['published_at']) ? \Illuminate\Support\Carbon::parse($release['published_at'])->timezone(config('app.timezone'))->format('d.m.Y') : '' }}</span></summary>
+                    <div style="white-space:pre-line; margin-top:8px">{{ $release['notes'] ?: __('Bez opisu zmian.') }}</div>
+                </details>
+            @endforeach
+            <p class="hint" style="margin-bottom:0">{{ __('Paczka jest pobierana z portalu i instalowana tylko z poprawnym podpisem Ed25519. Węzły aktualizują się do tej samej wersji co panel.') }}</p>
+        @endif
+    </div>
+    @else
     <div class="card">
         <h3 class="card-title"><x-icon name="package" :size="16"/> {{ __('Najnowsza wersja') }}</h3>
+        <div class="alert alert-warning">{{ __('Panel nie ma licencji — aktualizacje pochodzą wprost z repozytorium. Z kluczem licencji (Administracja → System → Licencja i addony) panel i węzły aktualizują się podpisanymi wydaniami z portalu.') }}</div>
         @if ($latest)
             <dl class="kv">
                 <dt>{{ __('Repozytorium') }}</dt><dd class="mono">{{ config('virthub.update_repo') }} ({{ config('virthub.update_branch') }})</dd>
@@ -53,15 +84,20 @@
             <p class="muted">{{ __('Nie udało się sprawdzić najnowszej wersji (brak połączenia z GitHubem albo limit zapytań). Spróbuj za kilka minut.') }}</p>
         @endif
     </div>
+    @endif
 
     <div class="card" id="panel-card">
-        @php [$vLabel, $vTone] = $versionPill($panelVersion); @endphp
+        @php
+            [$vLabel, $vTone] = $portal
+                ? (($check['ok'] ?? false) ? (empty($check['update_available']) ? [__('aktualna'), 'ok'] : [__('dostępna nowsza'), 'warning']) : ['?', 'neutral'])
+                : $versionPill($panelVersion);
+        @endphp
         <h3 class="card-title">
             <x-icon name="dashboard" :size="16"/> {{ __('Panel') }}
             <span class="pill {{ $vTone }}" style="margin-left:auto">{{ $vLabel }}</span>
         </h3>
         <dl class="kv" style="margin-bottom:14px">
-            <dt>{{ __('Wersja') }}</dt><dd class="mono">{{ Updates::short($panelVersion) }}</dd>
+            <dt>{{ __('Wersja') }}</dt><dd class="mono">{{ $version ?? Updates::short($panelVersion) }}@if ($version && $panelVersion) <span class="muted">({{ Updates::short($panelVersion) }})</span>@endif</dd>
             <dt>{{ __('Ostatnia aktualizacja') }}</dt>
             <dd>
                 @php [$sLabel, $sTone] = $stateLabel[$panelStatus['state'] ?? 'idle'] ?? ['—', 'neutral']; @endphp
@@ -156,6 +192,9 @@
             {{ __('Węzły zainstalowane przed wprowadzeniem zdalnych aktualizacji trzeba zaktualizować raz ręcznie — to polecenie włącza też aktualizacje z tej strony:') }}
         </p>
         <p class="secret">{{ __('curl -sSL https://raw.githubusercontent.com/:update_repo/:update_branch/infra/update-node.sh | sudo bash', ['update_repo' => config('virthub.update_repo'), 'update_branch' => config('virthub.update_branch')]) }}</p>
+        @if ($portal)
+            <p class="hint" style="margin-bottom:0">{{ __('Po tej jednorazowej aktualizacji węzeł przypina klucz portalu i kolejne wersje przyjmuje już tylko jako podpisane wydania z portalu.') }}</p>
+        @endif
     </div>
 
     @push('scripts')
@@ -163,7 +202,7 @@
             // Stan aktualizacji na żywo — panelu i każdego węzła (pytamy agentów przez panel).
             (function () {
                 const labels = @js($stateLabel);
-                const short = (sha) => (sha ? sha.slice(0, 7) : '—');
+                const short = (v) => (!v ? '—' : (/^[0-9a-f]{40}$/.test(v) ? v.slice(0, 7) : v));
                 let timer = null;
 
                 function paint(pill, state) {

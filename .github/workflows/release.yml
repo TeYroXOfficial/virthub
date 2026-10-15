@@ -1,0 +1,42 @@
+name: Release
+
+# Tag vX.Y.Z (semver, zgodny z plikiem VERSION) → paczka → publikacja w portalu.
+# Portal sprawdza, że wersja jest wyższa od wszystkich dotychczasowych, i podpisuje paczkę.
+#
+# Wymagane w ustawieniach repozytorium:
+#   Secrets → VIRTHUB_PORTAL_TOKEN  (portal: Administracja → Wydania → Tokeny CI)
+#   Variables → VIRTHUB_PORTAL_URL  (np. https://virthub.example.com)
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Paczka wydania
+        id: build
+        run: |
+          scripts/release.sh "${GITHUB_REF_NAME}"
+          echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Publikacja w portalu
+        env:
+          PORTAL_URL: ${{ vars.VIRTHUB_PORTAL_URL }}
+          PORTAL_TOKEN: ${{ secrets.VIRTHUB_PORTAL_TOKEN }}
+          VERSION: ${{ steps.build.outputs.version }}
+        run: |
+          [ -n "$PORTAL_URL" ] && [ -n "$PORTAL_TOKEN" ] || { echo "::error::Ustaw VIRTHUB_PORTAL_URL i VIRTHUB_PORTAL_TOKEN."; exit 1; }
+          # Wydanie bezpieczeństwa: linia „Security: yes” w sekcji CHANGELOG.
+          SECURITY=0; grep -qi '^security: *yes' "dist/notes-$VERSION.md" && SECURITY=1
+          code=$(curl -sS -o response.json -w '%{http_code}' -X POST "$PORTAL_URL/api/v1/releases" \
+            -H "Authorization: Bearer $PORTAL_TOKEN" -H 'Accept: application/json' \
+            -F "version=$VERSION" -F "commit=$GITHUB_SHA" -F "security=$SECURITY" \
+            -F "notes=<dist/notes-$VERSION.md" -F "package=@dist/virthub-$VERSION.tar.gz")
+          cat response.json; echo
+          [ "$code" = "201" ] || { echo "::error::Portal odrzucił wydanie (HTTP $code)."; exit 1; }

@@ -1,0 +1,6 @@
+# Klucz publiczny Ed25519 portalu VirtHub (base64) — wpisz tu wynik
+# `php artisan license:keygen` z portalu i wydaj nową wersję.
+#
+# Panel i węzły sprawdzają nim podpis każdej paczki aktualizacji, zanim ją
+# zainstalują. Węzeł przypina klucz przy instalacji albo pierwszej
+# aktualizacji; panel — przy instalacji (/etc/virthub/panel.conf).

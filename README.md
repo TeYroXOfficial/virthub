@@ -55,7 +55,14 @@ Zgubiony pakiet nie zostawia maszyny w stanie „building" na zawsze.
 
 ## Instalacja na serwerze
 
-Jedno polecenie na serwerze panelu (Debian 12/13, Ubuntu 22.04/24.04):
+Z licencją z portalu VirtHub — polecenie ze strony licencji (pobiera najnowsze podpisane wydanie):
+
+```bash
+curl -sSL https://PORTAL/install.sh | sudo bash -s -- --key VH-XXXX-XXXX-XXXX-XXXX --domain panel.twojadomena.pl
+```
+
+Wersje, kanały i aktualizacje przez portal: [`docs/wydania.md`](docs/wydania.md).
+Instalacja deweloperska wprost z repozytorium (bez licencji, bez limitu węzłów):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/TeYroXOfficial/virthub/main/infra/install-panel.sh | sudo bash -s -- --domain panel.twojadomena.pl --repo https://github.com/TeYroXOfficial/virthub.git

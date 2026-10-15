@@ -1,5 +1,9 @@
 # Licencje, addony i reselling usług innych dostawców — plan
 
+> **Od wersji 1.0.0** serwer licencji jest częścią **portalu VirtHub** (osobne repozytorium
+> `TeYroXOfficial/virthub-portal`): sklep licencji za węzeł, faktury, płatności i dystrybucja
+> wydań semver. API i format podpisów są te same — szczegóły w [wydania.md](wydania.md).
+
 ## Cel
 
 Właściciel instancji VirtHub ma **licencję**. Do licencji może dokupić **addony**,

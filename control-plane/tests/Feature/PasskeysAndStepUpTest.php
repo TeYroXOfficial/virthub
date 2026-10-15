@@ -77,10 +77,14 @@ class PasskeysAndStepUpTest extends TestCase
     private function coseKey(): string
     {
         $d = openssl_pkey_get_details($this->key)['ec'];
+        // OpenSSL zwraca współrzędne bez wiodących zer (co ~128. klucz ma 31 bajtów);
+        // COSE wymaga stałych 32 — tak wysyłają je prawdziwe klucze.
+        $x = str_pad($d['x'], 32, "\0", STR_PAD_LEFT);
+        $y = str_pad($d['y'], 32, "\0", STR_PAD_LEFT);
 
         // Mapa COSE: 1:2 (EC2), 3:-7 (ES256), -1:1 (P-256), -2:x, -3:y
         return chr(0xA5).self::cbor(1).self::cbor(2).self::cbor(3).self::cbor(-7).self::cbor(-1).self::cbor(1)
-            .self::cbor(-2).self::bytes($d['x']).self::cbor(-3).self::bytes($d['y']);
+            .self::cbor(-2).self::bytes($x).self::cbor(-3).self::bytes($y);
     }
 
     private function authData(bool $attested, int $flags = 0x05): string

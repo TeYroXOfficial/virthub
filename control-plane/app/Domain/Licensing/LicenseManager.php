@@ -3,6 +3,7 @@
 namespace App\Domain\Licensing;
 
 use App\Models\AuditLog;
+use App\Models\Hypervisor;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Http\Client\ConnectionException;
@@ -95,6 +96,43 @@ class LicenseManager
         return $this->status()['state'] === self::STATE_VALID;
     }
 
+    /** Typ licencji z portalu: paid | trial | dev | internal (null — brak ważnej licencji). */
+    public function type(): ?string
+    {
+        return $this->valid() ? ($this->status()['payload']['type'] ?? 'paid') : null;
+    }
+
+    /** Limit węzłów z licencji (null — bez limitu: brak portalu albo starszy token bez tego pola). */
+    public function nodeLimit(): ?int
+    {
+        $nodes = $this->status()['payload']['nodes'] ?? null;
+
+        return is_numeric($nodes) ? (int) $nodes : null;
+    }
+
+    /**
+     * Czy można dodać kolejny węzeł. Panel bez skonfigurowanego serwera
+     * licencji (instalacja deweloperska) nie ma ograniczeń; z serwerem —
+     * potrzebna ważna licencja z wolnym miejscem. Działające węzły pracują
+     * dalej niezależnie od stanu licencji.
+     */
+    public function canAddNode(): ?string
+    {
+        if (! $this->configured()) {
+            return null;
+        }
+        if (! $this->valid()) {
+            return __('Dodanie węzła wymaga ważnej licencji (Administracja → System → Licencja i addony).');
+        }
+        $limit = $this->nodeLimit();
+        $used = Hypervisor::query()->count();
+        if ($limit !== null && $used >= $limit) {
+            return __('Licencja obejmuje :limit węzłów i wszystkie są w użyciu. Zwiększ liczbę węzłów w portalu — nowy limit zadziała od razu po opłaceniu.', ['limit' => $limit]);
+        }
+
+        return null;
+    }
+
     /** Czy licencja obejmuje addon. */
     public function hasAddon(string $id): bool
     {
@@ -141,6 +179,8 @@ class LicenseManager
                 'key' => $this->key(),
                 'domain' => $this->domain(),
                 'panel_version' => $this->panelVersion(),
+                // Portal widzi, ile węzłów działa na licencji (jak w VirtFusion — opłata za węzeł).
+                'nodes' => Hypervisor::query()->whereNotNull('enrolled_at')->count(),
             ]);
         } catch (ConnectionException $e) {
             return $this->fail(__('Serwer licencji nie odpowiada: :error', ['error' => $e->getMessage()]));

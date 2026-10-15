@@ -26,6 +26,9 @@ DOMAIN=""
 ADMIN_EMAIL=""
 SOURCE_DIR=""
 REPO_URL=""
+LICENSE_KEY=""
+PORTAL_URL=""
+PORTAL_KEY=""
 TARBALL_URL=""
 ROOT_DIR="/opt/virthub"
 APP_DIR=""
@@ -98,6 +101,9 @@ while [ $# -gt 0 ]; do
         --tarball)  TARBALL_URL="$2"; shift 2 ;;
         --app-dir)  APP_DIR="$2"; shift 2 ;;
         --brand)    BRAND="$2"; BRAND_SET=1; shift 2 ;;
+        --license-key) LICENSE_KEY="$2"; shift 2 ;;
+        --portal)   PORTAL_URL="${2%/}"; shift 2 ;;
+        --portal-key) PORTAL_KEY="$2"; shift 2 ;;
         --no-tls)   SKIP_TLS=1; NO_TLS_ARG=1; shift ;;
         --full)     FULL_INSTALL=1; shift ;;
         -h|--help)
@@ -111,6 +117,9 @@ Instalator panelu VirtHub.
   --source KATALOG  użyj kodu już wgranego na serwer
   --app-dir KATALOG gdzie leży aplikacja (domyślnie /opt/virthub/control-plane)
   --brand NAZWA     nazwa produktu widoczna w panelu
+  --portal URL      portal VirtHub (licencje i aktualizacje)
+  --portal-key KLUCZ klucz publiczny portalu (Ed25519, base64) — podpis wydań
+  --license-key KLUCZ klucz licencji VH-…
   --no-tls          nie wystawiaj certyfikatu
   --full            przy aktualizacji też przeinstaluj pakiety systemowe,
                     zależności i certyfikat (domyślnie pomijane, gdy się nie zmieniły)
@@ -436,6 +445,14 @@ UPDATE_REPO="${UPDATE_REPO:-TeYroXOfficial/virthub}"
 LOCALE="$(env_get "$OLD_ENV" VIRTHUB_LOCALE)"
 LOCALE="${LOCALE:-pl}"
 
+# Portal licencji i aktualizacji: podany jawnie wygrywa, inaczej zostaje dotychczasowy.
+# Klucz publiczny: z argumentu, z poprzedniej konfiguracji albo z kodu (node-agent/release-key.pub).
+PORTAL_URL="${PORTAL_URL:-$(env_get "$OLD_ENV" VIRTHUB_LICENSE_SERVER)}"
+PORTAL_KEY="${PORTAL_KEY:-$(env_get "$OLD_ENV" VIRTHUB_LICENSE_PUBLIC_KEY)}"
+if [ -z "$PORTAL_KEY" ] && [ -f "$ROOT_DIR/node-agent/release-key.pub" ]; then
+    PORTAL_KEY="$(grep -v '^\s*#' "$ROOT_DIR/node-agent/release-key.pub" | tr -d '[:space:]' || true)"
+fi
+
 AGENT_SOURCE_LINE=""
 OLD_AGENT_SOURCE="$(env_get "$OLD_ENV" VIRTHUB_AGENT_SOURCE_PATH)"
 [ -n "$OLD_AGENT_SOURCE" ] && AGENT_SOURCE_LINE="VIRTHUB_AGENT_SOURCE_PATH=$OLD_AGENT_SOURCE"
@@ -470,6 +487,8 @@ VIRTHUB_BRAND="$BRAND"
 VIRTHUB_LOCALE=$LOCALE
 VIRTHUB_CONSOLE_SECRET=$CONSOLE_SECRET
 VIRTHUB_UPDATE_REPO=$UPDATE_REPO
+VIRTHUB_LICENSE_SERVER=$PORTAL_URL
+VIRTHUB_LICENSE_PUBLIC_KEY=$PORTAL_KEY
 VIRTHUB_SERVERS_PER_CUSTOMER=10
 VIRTHUB_METRICS_RETENTION_DAYS=30
 $AGENT_SOURCE_LINE
@@ -486,6 +505,15 @@ fi
 
 php artisan migrate --force --quiet
 ok "Migracje wykonane"
+
+if [ -n "$LICENSE_KEY" ]; then
+    php artisan config:clear --quiet
+    if php artisan virthub:license "$LICENSE_KEY"; then
+        ok "Licencja aktywna"
+    else
+        warn "Licencja nie została potwierdzona — sprawdź ją w Administracja → System → Licencja i addony."
+    fi
+fi
 
 # --- konto administratora ---------------------------------------------------
 
@@ -784,6 +812,10 @@ install -d -m 0755 /etc/virthub
     [ "$BRAND_SET" -eq 1 ] && printf 'BRAND=%q\n' "$BRAND"
     printf 'NO_TLS=%s\n' "$NO_TLS_ARG"
     printf 'VH_UPDATE_REPO=%q\n' "$UPDATE_REPO"
+    # Aktualizacje z portalu: usługa (root) sprawdza podpis wydania tym kluczem.
+    # Panel (www-data) nie ma tu zapisu — nie podmieni klucza.
+    printf 'PORTAL=%q\n' "$PORTAL_URL"
+    printf 'PORTAL_PUBLIC_KEY=%q\n' "$PORTAL_KEY"
 } > /etc/virthub/panel.conf
 chmod 600 /etc/virthub/panel.conf
 

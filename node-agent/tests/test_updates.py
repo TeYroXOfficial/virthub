@@ -101,3 +101,40 @@ def test_heartbeat_podaje_wersje(client, monkeypatch, updates):
     health = client.get("/health").json()
     assert health["build"] == "deadbeef"
     assert health["remote_update"] is False
+
+
+RELEASE = {
+    "version": "1.4.2",
+    "url": "https://portal.example.com/api/v1/updates/download/1.4.2?signature=abc",
+    "sha256": "a" * 64,
+    "signature": "c" * 86 + "==",
+}
+
+
+def test_zlecenie_z_wydaniem_z_portalu(client, monkeypatch, updates):
+    from agent import main
+
+    monkeypatch.setattr(main, "updates", updates)
+    updates.unit.write_text("[Path]\n")
+
+    assert client.post("/system/update", json={"release": RELEASE}).status_code == 202
+    assert json.loads((updates.dir / "release.json").read_text()) == RELEASE
+    assert json.loads((updates.dir / "request").read_text())["target"] == "1.4.2"
+
+    # Zlecenie bez wydania (tryb bez portalu) usuwa stary opis wydania.
+    assert client.post("/system/update").status_code == 202
+    assert not (updates.dir / "release.json").exists()
+
+
+@pytest.mark.parametrize("field,value", [
+    ("version", "1.4"), ("version", "latest"), ("url", "file:///etc/passwd"), ("url", "https://x/'; rm -rf /"),
+    ("sha256", "z" * 64), ("signature", "krótki"),
+])
+def test_wydanie_z_blednymi_polami_odrzucone(client, monkeypatch, updates, field, value):
+    from agent import main
+
+    monkeypatch.setattr(main, "updates", updates)
+    updates.unit.write_text("[Path]\n")
+
+    assert client.post("/system/update", json={"release": {**RELEASE, field: value}}).status_code == 422
+    assert not (updates.dir / "request").exists()

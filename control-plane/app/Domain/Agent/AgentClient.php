@@ -210,9 +210,9 @@ class AgentClient
     }
 
     /** Zleca aktualizację węzła — wykonuje ją usługa systemd na węźle. */
-    public function requestUpdate(): array
+    public function requestUpdate(?array $release = null): array
     {
-        return $this->request('POST', '/system/update');
+        return $this->request('POST', '/system/update', $release === null ? null : ['release' => $release]);
     }
 
     /** Stan instalacji MariaDB na węźle; po zakończeniu — jednorazowo dane konta panelu. */
