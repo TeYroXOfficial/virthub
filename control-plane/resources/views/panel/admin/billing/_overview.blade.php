@@ -9,7 +9,7 @@
     $servicesTotal = array_sum(array_column($daily['services'], 'value'));
     $maxProduct = max(1, max(array_column($byProduct, 'value') ?: [0]));
 @endphp
-<div class="grid grid-4" style="margin-bottom:16px">
+<div class="grid stat-strip">
     <div class="stat"><div class="stat-label">{{ __('Wpływy w tym miesiącu') }}</div><div class="stat-value">{{ $money($stats['income_month']) }}</div><div class="hint" style="margin:4px 0 0">{{ __('karta, PayPal, przelewy') }}</div></div>
     <div class="stat"><div class="stat-label">{{ __('Opłacone faktury za usługi') }}</div><div class="stat-value">{{ $money($stats['month']) }}</div></div>
     <div class="stat"><div class="stat-label">{{ __('Opłaty godzinowe w tym miesiącu') }}</div><div class="stat-value">{{ $money($stats['metered']) }}</div></div>

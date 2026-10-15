@@ -19,8 +19,11 @@
         @endcan
     </div>
 
+    {{-- Flota (personel) w kolumnie bocznej na szerokim ekranie, pod listą na wąskim. --}}
+    <div class="{{ $fleet !== null ? 'dash-layout' : '' }}">
+    <div class="dash-main">
     @if ($servers->isNotEmpty())
-        <div class="grid grid-4" style="margin-bottom:20px">
+        <div class="grid stat-strip">
             <div class="stat">
                 <div class="stat-label">{{ __('Wszystkie') }}</div>
                 <div class="stat-value">{{ $servers->count() }}</div>
@@ -109,28 +112,39 @@
         </div>
     @endif
 
+    </div>
+
     @if ($fleet !== null)
-        <h2>{{ __('Flota hypervisorów') }}</h2>
-        <div class="grid grid-3">
+        <aside class="dash-aside">
+        <h2 style="margin-top:0">{{ __('Flota hypervisorów') }}</h2>
+        <div class="card-grid">
             @forelse ($fleet as $node)
                 <div class="card">
-                    <h3>
+                    <h3 class="card-title">
                         {{ $node->name }}
-                        <span class="pill {{ $node->isOnline() ? 'ok' : 'critical' }}" style="float:right">
+                        <span class="pill {{ $node->isOnline() ? 'ok' : 'critical' }}" style="margin-left:auto">
                             {{ $node->isOnline() ? __('online') : $node->status }}
                         </span>
                     </h3>
-                    <dl class="kv">
-                        <dt>{{ __('Maszyny') }}</dt><dd class="num">{{ $node->servers()->count() }}</dd>
-                        <dt>{{ __('vCPU') }}</dt><dd class="num">{{ $node->cpu_cores_used }} / {{ $node->cpu_cores_total }}</dd>
-                        <dt>{{ __('RAM') }}</dt><dd class="num">{{ __(':ram_mb_used / :ram_mb_total GB', ['ram_mb_used' => round($node->ram_mb_used / 1024), 'ram_mb_total' => round($node->ram_mb_total / 1024)]) }}</dd>
-                        <dt>{{ __('Dysk') }}</dt><dd class="num">{{ __(':disk_gb_used / :disk_gb_total GB', ['disk_gb_used' => $node->disk_gb_used, 'disk_gb_total' => $node->disk_gb_total]) }}</dd>
-                    </dl>
-                    @php $util = $node->utilisationPercent(); @endphp
-                    <div class="meter {{ $util > 80 ? 'hot' : '' }}">
-                        <i style="width: {{ min(100, $util) }}%"></i>
+                    @php
+                        $util = $node->utilisationPercent();
+                        $rows = [
+                            [__('vCPU'), $node->cpu_cores_used, $node->cpu_cores_total, ''],
+                            [__('RAM'), round($node->ram_mb_used / 1024), round($node->ram_mb_total / 1024), ' GB'],
+                            [__('Dysk'), $node->disk_gb_used, $node->disk_gb_total, ' GB'],
+                        ];
+                    @endphp
+                    <div class="node-meters">
+                        @foreach ($rows as [$label, $used, $total, $unit])
+                            @php $pct = $total > 0 ? (int) round(100 * $used / $total) : 0; @endphp
+                            <div class="node-meter">
+                                <span>{{ $label }}</span>
+                                <span class="num">{{ $used }} / {{ $total }}{{ $unit }}</span>
+                                <div class="meter {{ $pct >= 90 ? 'critical' : ($pct >= 75 ? 'hot' : '') }}"><i style="width: {{ min(100, $pct) }}%"></i></div>
+                            </div>
+                        @endforeach
                     </div>
-                    <div class="hint">{{ __('Zajętość :util% · ostatni kontakt :nigdy', ['util' => $util, 'nigdy' => $node->last_seen_at?->diffForHumans() ?? __('nigdy')]) }}</div>
+                    <div class="hint">{{ trans_choice(':count maszyna|:count maszyny|:count maszyn', $node->servers()->count()) }} · {{ __('Zajętość :util% · ostatni kontakt :nigdy', ['util' => $util, 'nigdy' => $node->last_seen_at?->diffForHumans() ?? __('nigdy')]) }}</div>
                 </div>
             @empty
                 <div class="card empty">
@@ -139,5 +153,7 @@
                 </div>
             @endforelse
         </div>
+        </aside>
     @endif
+    </div>
 @endsection

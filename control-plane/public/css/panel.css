@@ -33,6 +33,9 @@
     --radius: 12px;
     --radius-sm: 8px;
     --sidebar: 248px;
+    /* Szerokość treści: płynna, z limitem tylko na bardzo szerokich ekranach. */
+    --page-max: 1840px;
+    --gap: 16px;
     --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, monospace;
 }
@@ -145,8 +148,8 @@ img.avatar { object-fit: cover; }
 
 .mobile-bar { display: none; }
 
-main.content { min-width: 0; padding: 32px 40px 80px; }
-.page { max-width: 1180px; margin: 0 auto; }
+main.content { min-width: 0; padding: clamp(20px, 2.2vw, 36px) clamp(16px, 2.4vw, 44px) 56px; }
+.page { max-width: var(--page-max); margin: 0 auto; }
 
 /* --- nagłówek strony ------------------------------------------------------ */
 
@@ -180,10 +183,31 @@ h3 { font-size: 15px; }
 .card-title .icon { color: var(--muted); }
 .card.flush { padding: 0; overflow: hidden; }
 
-.grid { display: grid; gap: 16px; }
-.grid-2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-.grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-.grid-4 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.grid { display: grid; gap: var(--gap); }
+/* Siatki z limitem kolumn: na szerokim ekranie pola i karty rosną, zamiast
+   rozsypywać się na kilkanaście wąskich kolumn. */
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(max(300px, calc((100% - var(--gap)) / 2)), 1fr)); }
+.grid-3 { grid-template-columns: repeat(auto-fit, minmax(max(220px, calc((100% - 2 * var(--gap)) / 3)), 1fr)); }
+.grid-4 { grid-template-columns: repeat(auto-fit, minmax(max(180px, calc((100% - 3 * var(--gap)) / 4)), 1fr)); }
+/* Rząd kafelków liczbowych: tyle w rzędzie, ile się zmieści. */
+.stat-strip { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: var(--gap); }
+/* Karty, które nie rozciągają się na całą szerokość, gdy jest ich mało (np. jeden węzeł). */
+.card-grid { display: grid; gap: var(--gap); grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.card-grid > .card { margin-bottom: 0; }
+
+/* Układ pulpitu: treść główna i kolumna boczna na szerokich ekranach. */
+.dash-layout { display: grid; gap: var(--gap); grid-template-columns: minmax(0, 1fr); align-items: start; }
+.dash-main, .dash-aside { min-width: 0; }
+.dash-aside > .card { margin-bottom: var(--gap); }
+.dash-aside .card-grid { grid-template-columns: minmax(0, 1fr); }
+.node-meters { display: grid; gap: 10px; margin-bottom: 10px; }
+.node-meter { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13.5px; }
+.node-meter > span:first-child { color: var(--muted); }
+.node-meter .meter { grid-column: 1 / -1; margin: 0; }
+@media (min-width: 1480px) {
+    .dash-layout { grid-template-columns: minmax(0, 1fr) clamp(320px, 24vw, 420px); }
+    .dash-aside { position: sticky; top: 20px; }
+}
 .grid > .card { margin-bottom: 0; }
 
 .stat {
@@ -949,3 +973,12 @@ dialog.edit-modal .grid-3 { gap: 0 14px; }
 .api-group-head h2 { margin: 0 0 4px; }
 .api-nav a[aria-current="true"] { background: var(--accent-soft, var(--surface-2)); color: var(--accent); }
 .api-main.api-single .api-console { order: 2; }
+
+/* --- duże ekrany: odrobinę większe pismo i oddech w tabelach -------------- */
+@media (min-width: 1700px) {
+    body { font-size: 15px; }
+    h1 { font-size: 26px; }
+    .stat-value { font-size: 24px; }
+    table { font-size: 14.5px; }
+    .card { padding: 22px 24px; }
+}
