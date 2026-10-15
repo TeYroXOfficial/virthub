@@ -7,6 +7,7 @@ use App\Domain\Provisioning\NoCapacityException;
 use App\Domain\Provisioning\RemoteBackups;
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Domain\Storage\Datastores;
+use App\Models\Backup;
 use App\Models\BackupTarget;
 use App\Models\Datastore;
 use App\Models\Hypervisor;
@@ -173,7 +174,7 @@ class DatastoresTest extends TestCase
         app(ServerProvisioner::class)->order($this->admin, $package, OsTemplate::factory()->create(), 'vps3.example.com');
     }
 
-    public function test_ceph_blokuje_elevate_i_kopie_oraz_usuwanie_magazynu(): void
+    public function test_ceph_blokuje_elevate_i_usuwanie_magazynu_a_kopie_sa_pelne(): void
     {
         Queue::fake();
         $node = $this->node('kvm1');
@@ -187,12 +188,9 @@ class DatastoresTest extends TestCase
             $this->assertStringContainsString('Ceph', $e->getMessage());
         }
         $target = BackupTarget::create(['name' => 'Lokalnie', 'type' => 'local', 'config' => ['path' => '/var/backups']]);
-        try {
-            app(RemoteBackups::class)->create($server, $target, actor: $this->admin);
-            $this->fail('Kopia na cel zewnętrzny z dysku w Cephie powinna być odrzucona');
-        } catch (\DomainException $e) {
-            $this->assertStringContainsString('Ceph', $e->getMessage());
-        }
+        // Od Backup Managera: dysk w Cephie ma kopie na cele zewnętrzne, zawsze pełne (eksport migawki RBD).
+        $job = app(RemoteBackups::class)->create($server, $target, actor: $this->admin);
+        $this->assertSame(Backup::KIND_FULL, Backup::findOrFail($job->payload['backup_id'])->kind);
 
         $this->actingAs($this->admin)->delete(route('panel.admin.datastores.destroy', $datastore))->assertSessionHasErrors('datastore');
         $this->put(route('panel.admin.datastores.update', $datastore), [

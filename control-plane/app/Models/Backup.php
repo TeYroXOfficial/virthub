@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Backup extends Model
 {
@@ -32,7 +33,14 @@ class Backup extends Model
         'parent_id',
         'kind',
         'checkpoint',
+        'fs_frozen',
+        'encrypted',
     ];
+
+    protected function casts(): array
+    {
+        return ['fs_frozen' => 'boolean', 'encrypted' => 'boolean'];
+    }
 
     public const KIND_FULL = 'full';
 
@@ -49,8 +57,8 @@ class Backup extends Model
         return $this->belongsTo(self::class, 'parent_id');
     }
 
-    /** @return \Illuminate\Database\Eloquent\Relations\HasMany<Backup, $this> */
-    public function children(): \Illuminate\Database\Eloquent\Relations\HasMany
+    /** @return HasMany<Backup, $this> */
+    public function children(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id');
     }

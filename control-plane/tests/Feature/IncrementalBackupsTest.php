@@ -5,12 +5,12 @@ namespace Tests\Feature;
 use App\Domain\Provisioning\AgentResultApplier;
 use App\Domain\Provisioning\DisasterRecovery;
 use App\Domain\Provisioning\RemoteBackups;
+use App\Domain\Provisioning\ServerProvisioner;
 use App\Jobs\RunServerActionJob;
 use App\Models\Backup;
 use App\Models\BackupPlan;
 use App\Models\BackupTarget;
 use App\Models\Server;
-use App\Models\ServerJob;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -91,7 +91,7 @@ class IncrementalBackupsTest extends TestCase
         Http::fake(['*' => Http::response(['job_id' => 'r1', 'status' => 'queued'], 202)]);
 
         $job = app(RemoteBackups::class)->restore($this->server->fresh(), $i1);
-        (new RunServerActionJob($job->id))->handle(app(\App\Domain\Provisioning\ServerProvisioner::class));
+        (new RunServerActionJob($job->id))->handle(app(ServerProvisioner::class));
         Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/backups/restore') && $r['key'] === $i1->remote_key
             && $r['chain'] === [['key' => $full->remote_key, 'sha256' => $full->sha256]]);
 
@@ -103,7 +103,7 @@ class IncrementalBackupsTest extends TestCase
         // Kopia planowa wysyła checkpoint i rodzica.
         Http::fake(['*' => Http::response(['job_id' => 'b1', 'status' => 'queued'], 202)]);
         $job = app(RemoteBackups::class)->create($this->server->fresh(), $this->target, true, null, $this->plan);
-        (new RunServerActionJob($job->id))->handle(app(\App\Domain\Provisioning\ServerProvisioner::class));
+        (new RunServerActionJob($job->id))->handle(app(ServerProvisioner::class));
         Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/backups') && $r['checkpoint'] === 'vh-'.$job->payload['backup_id']
             && $r['incremental_from'] === 'vh-'.$fallback->id);
     }
@@ -140,6 +140,6 @@ class IncrementalBackupsTest extends TestCase
         $this->backup();
         $this->backup();
         $this->get(route('panel.servers.show', $this->server))->assertOk()->assertSee('przyrostowa');
-        $this->get(route('panel.admin.backups'))->assertOk()->assertSee('Kopie przyrostowe');
+        $this->get(route('panel.admin.backups'))->assertOk()->assertSee('Rodzaj kopii')->assertSee('różnicowe (od ostatniej pełnej)');
     }
 }

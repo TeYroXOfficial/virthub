@@ -93,8 +93,10 @@ def run_bounded(argv: list[str], *, max_bytes: int, timeout: int = 60, input: st
     return out.decode(errors="replace")
 
 
-def run(argv: list[str], *, timeout: int = 300, check: bool = True, input: str | None = None) -> str:
-    """Uruchamia polecenie i zwraca stdout. Rzuca CommandError przy niezerowym kodzie."""
+def run(argv: list[str], *, timeout: int = 300, check: bool = True, input: str | None = None,
+        env: dict[str, str] | None = None) -> str:
+    """Uruchamia polecenie i zwraca stdout. Rzuca CommandError przy niezerowym kodzie.
+    `env` — pełne środowisko procesu (sekrety tam, a nie w argumentach widocznych w ps)."""
     log.debug("exec: %s", " ".join(argv))
     try:
         proc = subprocess.run(
@@ -104,6 +106,7 @@ def run(argv: list[str], *, timeout: int = 300, check: bool = True, input: str |
             text=True,
             timeout=timeout,
             check=False,
+            env=env,
         )
     except FileNotFoundError as exc:
         raise CommandError(argv, 127, f"Nie znaleziono programu: {argv[0]}") from exc

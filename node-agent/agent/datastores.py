@@ -163,6 +163,41 @@ class CephRbdDriver(StorageDriver):
         log.info("Utworzono dysk %s (%sGB, klon %s)", image, disk_gb, base)
         return Path(f"rbd:{image}")
 
+    def export_image(self, name: str, target: Path, compress: bool = True, after_snapshot: Any = None) -> None:
+        image = self._image(name)
+        snap = f"{image}@vh-backup"
+        raw = target.with_name(target.name + ".raw")
+        with contextlib.suppress(CommandError):
+            self._rbd("snap", "rm", "--no-progress", snap)
+        self._rbd("snap", "create", snap)
+        try:
+            if after_snapshot is not None:
+                after_snapshot()
+            self._rbd("export", "--no-progress", snap, str(raw), timeout=6 * 3600)
+            self.runner(["qemu-img", "convert", "-f", "raw", "-O", "qcow2", *(["-c"] if compress else []), str(raw), str(target)], timeout=6 * 3600)
+        finally:
+            raw.unlink(missing_ok=True)
+            with contextlib.suppress(CommandError):
+                self._rbd("snap", "rm", "--no-progress", snap)
+
+    def import_image(self, name: str, source: Path) -> None:
+        """Nowy obraz obok starego, zamiana nazw i usunięcie starego — błąd w trakcie nie niszczy dysku."""
+        image = self._image(name)
+        fresh, old = f"{image}.vhrestore", f"{image}.vhold"
+        raw = source.with_name(source.name + ".raw")
+        try:
+            self.runner(["qemu-img", "convert", "-O", "raw", str(source), str(raw)], timeout=6 * 3600)
+            with contextlib.suppress(CommandError):
+                self._rbd("rm", "--no-progress", fresh)
+            self._rbd("import", "--no-progress", str(raw), fresh, timeout=6 * 3600)
+        finally:
+            raw.unlink(missing_ok=True)
+        self._rbd("mv", image, old)
+        self._rbd("mv", fresh, image)
+        with contextlib.suppress(CommandError):
+            self._rbd("snap", "purge", "--no-progress", old)
+            self._rbd("rm", "--no-progress", old, timeout=3600)
+
     def create_blank(self, name: str, disk_gb: int) -> Path:
         image = self._image(name)
         if self._info(image) is not None:
@@ -336,6 +371,12 @@ class StorageRouter:
 
     def create_blank(self, name: str, disk_gb: int) -> Path:
         return self.for_volume(name).create_blank(name, disk_gb)
+
+    def export_image(self, name: str, target: Path, compress: bool = True, after_snapshot: Any = None) -> None:
+        self.for_volume(name).export_image(name, target, compress=compress, after_snapshot=after_snapshot)
+
+    def import_image(self, name: str, source: Path) -> None:
+        self.for_volume(name).import_image(name, source)
 
     def libvirt_prepare(self, conn: Any, name: str) -> None:
         self.for_volume(name).libvirt_prepare(conn)

@@ -73,7 +73,7 @@
         </div>
     @endif
 
-    @php $remoteBackups = $server->isContainer() ? collect() : $server->backups()->where('type', 'remote')->with('target:id,name')->latest('id')->limit(20)->get(); @endphp
+    @php $remoteBackups = $server->isContainer() ? collect() : $server->backups()->where('type', 'remote')->with(['target:id,name', 'parent:id,name'])->latest('id')->limit(20)->get(); @endphp
     @if (! $server->isContainer() && ($server->backup_plan_id || $remoteBackups->isNotEmpty() || $user->can('manageResources', $server)))
         <div class="card" id="remote-backups">
             <h3 class="card-title"><x-icon name="archive" :size="16"/> {{ __('Kopie zapasowe') }}
@@ -84,7 +84,10 @@
                     @foreach ($remoteBackups as $backup)
                         <li>
                             <span style="flex:1"><code>{{ $backup->name }}</code> <span class="muted">{{ $backup->created_at->diffForHumans() }}@if ($backup->size_mb) · {{ $backup->size_mb }} MB @endif</span>
-                                @if ($backup->isIncremental()) <span class="pill neutral plain" title="{{ __('Zawiera tylko bloki zmienione od poprzedniej kopii; przywracana razem z łańcuchem.') }}">{{ __('przyrostowa') }}</span> @endif
+                                @if ($backup->isIncremental()) <span class="pill neutral plain" title="{{ __('Zawiera tylko bloki zmienione od poprzedniej kopii; przywracana razem z łańcuchem.') }}">↳ {{ __('przyrostowa') }}@if ($backup->parent) · {{ __('od :name', ['name' => $backup->parent->name]) }}@endif</span> @endif
+                                @if ($backup->fs_frozen === true) <span class="pill ok plain" title="{{ __('Systemy plików zamrożone przez qemu-guest-agent na czas migawki.') }}">{{ __('spójna') }}</span>
+                                @elseif ($backup->fs_frozen === false) <span class="pill warning plain" title="{{ __('Bez qemu-guest-agent w maszynie — kopia jak po nagłym wyłączeniu zasilania.') }}">{{ __('bez zamrożenia') }}</span> @endif
+                                @if ($backup->encrypted) <span class="pill neutral plain">{{ __('szyfrowana') }}</span> @endif
                                 <span class="pill {{ ['ready' => 'ok', 'creating' => 'warning', 'failed' => 'critical'][$backup->status] ?? 'neutral' }}">{{ ['ready' => __('gotowa'), 'creating' => __('tworzenie'), 'failed' => __('błąd'), 'restoring' => __('przywracanie')][$backup->status] ?? $backup->status }}</span></span>
                             @if ($backup->isRestorable() && $user->can('restoreSnapshot', $server))
                                 <form method="POST" action="{{ route('panel.servers.remote-backups.restore', [$server, $backup]) }}" style="margin:0"

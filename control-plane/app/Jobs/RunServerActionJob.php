@@ -168,7 +168,7 @@ class RunServerActionJob implements ShouldQueue
 
         return $action === 'backup'
             ? $client->backup($server->agent_uuid, (string) $backup->remote_key, $backup->target->toAgentPayload(), (bool) ($payload['compress'] ?? true),
-                $backup->checkpoint, $backup->parent?->checkpoint)
+                $backup->checkpoint, $backup->parent?->checkpoint, (bool) ($payload['differential'] ?? false))
             : $client->restoreBackup($server->agent_uuid, (string) $backup->remote_key, $backup->target->toAgentPayload(), $backup->sha256, $backup->chainPayload());
     }
 }

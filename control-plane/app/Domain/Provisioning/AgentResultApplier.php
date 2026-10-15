@@ -279,6 +279,8 @@ class AgentResultApplier
             'kind' => $incremental ? Backup::KIND_INCREMENTAL : Backup::KIND_FULL,
             'checkpoint' => $result['checkpoint'] ?? null,
             'parent_id' => $incremental ? $backup->parent_id : null,
+            'fs_frozen' => isset($result['fs_frozen']) ? (bool) $result['fs_frozen'] : null,
+            'encrypted' => (bool) ($result['encrypted'] ?? false),
         ])->save();
         if ($backup->checkpoint !== null) {
             // Agent trzyma tylko najnowszy checkpoint — starsze kopie nie mogą już być rodzicami.
