@@ -40,6 +40,9 @@ Schedule::command('virthub:collect-metrics')
     ->everyMinute()
     ->withoutOverlapping();
 
+// Kopia systemowa panelu (baza, .env, storage/app) — gdy włączona w Administracja → System → Kopia panelu.
+Schedule::command('virthub:system-backup --if-scheduled')->dailyAt('03:17')->withoutOverlapping();
+
 // Retencja surowych próbek: 8 dni — tyle potrzebuje wykres tygodniowy. Bez
 // tego server_metrics rośnie w nieskończoność.
 Schedule::call(function () {

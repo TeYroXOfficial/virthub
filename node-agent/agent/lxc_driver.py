@@ -32,7 +32,7 @@ from .config import Settings
 from .domain_xml import domain_name
 from .guest_os import parse_os_release
 from .jobs import progress
-from .driver import apparmor_enabled, DriverError, HypervisorDriver, VmNotFound, server_id_from_name, AGENT_VERSION
+from .driver import host_arch, apparmor_enabled, DriverError, HypervisorDriver, VmNotFound, server_id_from_name, AGENT_VERSION
 from .network import interface_name, mac_address
 from .schemas import (
     GuestOs,
@@ -681,6 +681,7 @@ class IncusDriver(HypervisorDriver):
             libvirt_connected=connected,
             running_vms=running,
             security=self._security_report() if connected else None,
+            arch=host_arch(),
             **metrics,
         )
 

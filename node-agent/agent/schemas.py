@@ -744,6 +744,7 @@ class HostHealth(BaseModel):
     running_vms: int
     cpu_model: str | None = Field(default=None, description="Model procesora hosta z /proc/cpuinfo")
     network_backend: str | None = Field(default=None, description="Topologia sieci maszyn: bridge, ovs albo direct")
+    arch: str | None = Field(default=None, description="Architektura węzła: x86_64 albo aarch64")
     apps: dict | None = Field(default=None, description="Docker dla aplikacji: dostępność, wersja, liczba aplikacji")
     host_networks: list[dict] | None = Field(
         default=None,

@@ -9,6 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('ip_pools', fn (Blueprint $t) => $t->unsignedInteger('priority')->default(100));
+        Schema::table('os_templates', fn (Blueprint $t) => $t->string('arch', 16)->default('x86_64'));
         Schema::table('hypervisor_groups', fn (Blueprint $t) => $t->string('placement_strategy', 16)->nullable());
         Schema::create('ip_assignments', function (Blueprint $table) {
             $table->id();
@@ -40,5 +41,6 @@ return new class extends Migration
         Schema::dropIfExists('ip_assignments');
         Schema::table('hypervisor_groups', fn (Blueprint $t) => $t->dropColumn('placement_strategy'));
         Schema::table('ip_pools', fn (Blueprint $t) => $t->dropColumn('priority'));
+        Schema::table('os_templates', fn (Blueprint $t) => $t->dropColumn('arch'));
     }
 };

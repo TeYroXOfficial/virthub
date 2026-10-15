@@ -329,6 +329,12 @@ class AgentClient
     }
 
     /** DR: zrzut konfiguracji węzła na cel kopii. @param  array{type:string, config:array<string, mixed>}  $target */
+    /** Skrypt administratora na węźle (np. przed i po DR), w kolejce agenta. @param array<string, string> $env */
+    public function runHook(string $name, string $script, array $env = [], int $timeout = 900): string
+    {
+        return $this->jobId($this->request('POST', '/system/hook', ['name' => $name, 'script' => $script, 'env' => $env, 'timeout' => $timeout]));
+    }
+
     public function drSnapshot(string $key, array $target): string
     {
         return $this->jobId($this->request('POST', '/system/dr-snapshot', ['key' => $key, 'target' => $target]));

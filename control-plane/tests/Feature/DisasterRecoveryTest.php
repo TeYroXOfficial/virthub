@@ -6,7 +6,9 @@ use App\Domain\Provisioning\AgentResultApplier;
 use App\Domain\Provisioning\DisasterRecovery;
 use App\Domain\Provisioning\RemoteBackups;
 use App\Enums\ServerState;
+use App\Jobs\DrHookJob;
 use App\Jobs\DrSnapshotJob;
+use App\Models\AuditLog;
 use App\Models\Backup;
 use App\Models\BackupPlan;
 use App\Models\BackupTarget;
@@ -96,6 +98,38 @@ class DisasterRecoveryTest extends TestCase
         $withBackup->refresh();
         $this->assertSame('22222222-2222-2222-2222-222222222222', $withBackup->agent_uuid);
         $this->assertSame(ServerState::Running, $withBackup->state);
+    }
+
+    public function test_skrypty_przed_i_po_odtworzeniu(): void
+    {
+        Queue::fake();
+        Http::fake([
+            '*/system/hook' => Http::sequence()->push(['job_id' => 'hook-pre', 'status' => 'queued'], 202)->push(['job_id' => 'hook-post', 'status' => 'queued'], 202),
+            '*/jobs/hook-post' => Http::response(['status' => 'done', 'result' => ['output' => "odtworzono 1\n"]]),
+            '*/vm/recover' => Http::response(['job_id' => 'rec-1', 'status' => 'queued'], 202),
+        ]);
+        $this->actingAs($this->admin)->put(route('panel.admin.dr.scripts'), ['pre_script' => 'echo przed', 'post_script' => 'echo "odtworzono $VH_RECOVERED"'])->assertSessionHasNoErrors();
+        [$withBackup] = $this->fleet();
+        $this->post(route('panel.admin.dr.recover', $this->failed), ['replacement_id' => $this->replacement->id, 'confirm' => 1])->assertSessionHasNoErrors();
+
+        Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/system/hook') && $r['name'] === 'dr-pre' && $r['script'] === 'echo przed'
+            && $r['env']['VH_FAILED_NODE'] === 'kvm-1' && $r['env']['VH_REPLACEMENT_NODE'] === 'kvm-2');
+        Queue::assertPushed(DrHookJob::class, fn ($j) => $j->phase === 'pre' && $j->agentJobId === 'hook-pre');
+        Queue::assertPushed(DrHookJob::class, fn ($j) => $j->phase === 'post' && $j->serverIds === [$withBackup->id]);
+
+        // Skrypt „po” czeka na koniec odtworzeń.
+        $post = new DrHookJob($this->replacement->id, 'post', ['VH_PHASE' => 'post'], [$withBackup->id]);
+        app()->call([$post, 'handle']);
+        $this->assertNull($post->agentJobId);
+        ServerJob::where('action', 'recover')->update(['status' => ServerJob::STATUS_DONE]);
+        app()->call([$post, 'handle']);
+        $this->assertSame('hook-post', $post->agentJobId);
+        Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/system/hook') && $r['name'] === 'dr-post' && $r['env']['VH_RECOVERED'] === '1' && $r['env']['VH_FAILED'] === '0');
+        app()->call([$post, 'handle']);
+        $log = AuditLog::where('action', 'hypervisor.dr_hook')->latest('id')->firstOrFail();
+        $this->assertTrue($log->meta['ok']);
+        $this->assertStringContainsString('odtworzono 1', $log->meta['output']);
+        $this->get(route('panel.admin.dr', $this->failed))->assertOk()->assertSee('odtworzono 1')->assertSee('echo przed');
     }
 
     public function test_nieudane_odtworzenie_i_blokady(): void

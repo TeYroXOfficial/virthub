@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 try:
     from docker import errors as docker_errors  # type: ignore[import-not-found]
@@ -103,6 +103,15 @@ updates = Updates(settings)
 mariadb_setup = MariaDbSetup(settings)
 
 
+def _run_hook(p: dict[str, Any]) -> dict[str, Any]:
+    from .hooks import run_hook
+
+    result = run_hook(p["name"], p["script"], p.get("env") or {}, timeout=int(p.get("timeout") or 900))
+    if not result["ok"]:
+        raise DriverError(f"Skrypt {p['name']} zakończył się kodem {result['exit_code']}: {result['output'][-2000:]}")
+    return result
+
+
 def _handlers() -> dict[str, Any]:
     """Mapowanie nazwy akcji z kolejki na wywołanie sterownika.
 
@@ -147,6 +156,7 @@ def _handlers() -> dict[str, Any]:
         "prepare_incoming": lambda p: driver.prepare_incoming(CreateVmRequest(**p)),
         "migrate_live": lambda p: driver.migrate_live(p["uuid"], LiveMigrationRequest(**p["body"])),
         "cleanup_incoming": lambda p: driver.cleanup_incoming(int(p["server_id"])),
+        "run_hook": lambda p: _run_hook(p),
         "dr_snapshot": lambda p: driver.dr_snapshot(DrSnapshotRequest(**p)),
     }
 
@@ -825,6 +835,20 @@ async def abort_migration(uuid: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Nie ma takiej maszyny.")
     except DriverError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+
+
+class HookRequest(BaseModel):
+    name: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,40}$")
+    script: str = Field(min_length=1, max_length=65536)
+    env: dict[str, str] = Field(default_factory=dict)
+    timeout: int = Field(default=900, ge=10, le=7200)
+
+
+@app.post("/system/hook", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED,
+          dependencies=[Depends(require_control_plane)], tags=["system"])
+async def system_hook(req: HookRequest) -> JobAccepted:
+    """Skrypt administratora na węźle (np. przed i po odtworzeniu DR) — w kolejce, po wcześniejszych zadaniach."""
+    return JobAccepted(job_id=jobs.enqueue("run_hook", req.model_dump()))
 
 
 @app.post("/migration/cleanup/{server_id}", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED,
