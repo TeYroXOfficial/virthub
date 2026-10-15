@@ -98,6 +98,11 @@
                             <option value="">{{ $inherit('cpu_model') }}</option>
                             @foreach (HW::CPU_MODELS as $model) <option value="{{ $model }}" @selected($server->hw_cpu_model === $model)>{{ $model }}</option> @endforeach
                         </select></div>
+                    <div class="field"><label>{{ __('Oświecenia Hyper-V') }}</label>
+                        <select name="hw_hyperv">
+                            <option value="">{{ $inherit('hyperv') }}</option>
+                            @foreach (['off' => __('wyłączone'), 'standard' => __('standardowe'), 'full' => __('pełne (TSC, IPI, TLB, vendor_id)'), 'passthrough' => __('passthrough (wszystko z hosta)')] as $value => $label) <option value="{{ $value }}" @selected($server->hw_hyperv === $value)>{{ $label }}</option> @endforeach
+                        </select></div>
                 @endif
                 <div class="field"><button class="btn" type="submit" @disabled(! $server->acceptsCommands())>{{ __('Zapisz') }}</button></div>
             </form>

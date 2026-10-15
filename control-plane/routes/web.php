@@ -184,6 +184,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::put('/servers/{server}/disks/{disk}', [ServerHardwareController::class, 'growDisk'])->name('servers.disks.update');
     Route::delete('/servers/{server}/disks/{disk}', [ServerHardwareController::class, 'removeDisk'])->name('servers.disks.destroy');
     Route::put('/servers/{server}/hardware', [ServerHardwareController::class, 'update'])->name('servers.hardware');
+    Route::get('/servers/{server}/rdp', [ServerHardwareController::class, 'rdp'])->name('servers.rdp');
     Route::post('/servers/{server}/private-networks', [PrivateNetworkController::class, 'attach'])->middleware('throttle:20,1')->name('servers.private-networks.attach');
     Route::delete('/servers/{server}/nics/{nic}', [PrivateNetworkController::class, 'detach'])->name('servers.nics.detach');
     Route::delete('/servers/{server}/private-networks/{network}', [PrivateNetworkController::class, 'destroy'])->name('servers.private-networks.destroy');

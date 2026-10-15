@@ -9,7 +9,7 @@ use App\Models\User;
 
 /**
  * Sprzęt wirtualny maszyny KVM: magistrala i tryb I/O dysków, firmware
- * (BIOS/UEFI), vTPM, model procesora i rdzenie hosta (cpuset).
+ * (BIOS/UEFI), vTPM, model procesora, rdzenie hosta (cpuset) i oświecenia Hyper-V.
  *
  * Każde ustawienie dziedziczy: maszyna → szablon (firmware, vTPM — zależą od
  * obrazu systemu) albo węzeł (magistrala, I/O, model CPU, cpuset — zależą od
@@ -30,6 +30,9 @@ class ServerHardware
         'EPYC', 'EPYC-Rome', 'EPYC-Milan', 'EPYC-Genoa',
         'Haswell-noTSX', 'Broadwell-noTSX', 'Skylake-Server', 'Cascadelake-Server', 'Icelake-Server', 'SapphireRapids', 'GraniteRapids',
     ];
+
+    /** Profile oświeceń Hyper-V (off — bez, standard — podstawowe, full — z zegarem TSC, IPI, TLB i vendor_id, passthrough — wszystko z hosta). */
+    public const HYPERV_PROFILES = ['off', 'standard', 'full', 'passthrough'];
 
     public const CPUSET_PATTERN = '/^[0-9]+(-[0-9]+)?(,\^?[0-9]+(-[0-9]+)?){0,99}$/';
 
@@ -61,6 +64,9 @@ class ServerHardware
             'tpm' => $pick(['server' => $server->hw_tpm, 'template' => $template?->hw_tpm ? true : null], false),
             'cpu_model' => $pick(['server' => $server->hw_cpu_model, 'hypervisor' => $node?->hw_cpu_model], 'host-passthrough'),
             'cpuset' => $pick(['hypervisor' => $node?->hw_cpuset], null),
+            // Hyper-V: maszyna → szablon → węzeł; domyślnie standard dla Windows, wyłączone dla Linuksa.
+            'hyperv' => $pick(['server' => $server->hw_hyperv, 'template' => $template?->hw_hyperv, 'hypervisor' => $node?->hw_hyperv],
+                $template?->family === 'windows' ? 'standard' : 'off'),
         ];
     }
 
@@ -98,7 +104,7 @@ class ServerHardware
         if ($server->inRescue()) {
             throw new \DomainException(__('Maszyna jest w trybie ratunkowym — najpierw go zakończ.'));
         }
-        $allowed = $staff ? ['hw_disk_bus', 'hw_io_mode', 'hw_firmware', 'hw_tpm', 'hw_cpu_model'] : ['hw_firmware'];
+        $allowed = $staff ? ['hw_disk_bus', 'hw_io_mode', 'hw_firmware', 'hw_tpm', 'hw_cpu_model', 'hw_hyperv'] : ['hw_firmware'];
         $changes = array_intersect_key($settings, array_flip($allowed));
         $server->forceFill($changes);
         $effective = self::resolve($server);

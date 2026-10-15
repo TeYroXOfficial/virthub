@@ -24,6 +24,55 @@ HYPERV = """    <hyperv mode='custom'>
 """
 
 
+# Profile oświeceń Hyper-V (węzeł → szablon → maszyna w panelu):
+# standard — powyższy zestaw; full — także zegar TSC, przerwania IPI, flush TLB,
+# reset i vendor_id (sterowniki GPU NVIDIA w gościu); passthrough — wszystko,
+# co obsługuje QEMU na tym hoście (tylko gdy węzły mają ten sam procesor i QEMU).
+HYPERV_FULL_EXTRA = (
+    ("vpindex", {}), ("runtime", {}), ("synic", {}), ("stimer", {}), ("reset", {}),
+    ("vendor_id", {"value": "VirtHubKVM"}), ("frequencies", {}), ("reenlightenment", {}),
+    ("tlbflush", {}), ("ipi", {}),
+)
+
+
+def hyperv_element(profile: str) -> Any:
+    from xml.etree import ElementTree as ET
+
+    if profile == "passthrough":
+        return ET.Element("hyperv", {"mode": "passthrough"})
+    el = ET.Element("hyperv", {"mode": "custom"})
+    ET.SubElement(el, "relaxed", {"state": "on"})
+    ET.SubElement(el, "vapic", {"state": "on"})
+    ET.SubElement(el, "spinlocks", {"state": "on", "retries": "8191"})
+    extra = HYPERV_FULL_EXTRA if profile == "full" else (("vpindex", {}), ("synic", {}), ("stimer", {}))
+    for name, attrs in extra:
+        ET.SubElement(el, name, {"state": "on", **attrs})
+    return el
+
+
+def apply_hyperv(root: Any, profile: str) -> None:
+    """Podmienia <hyperv> w <features> i zegar hypervclock (oraz TSC dla full)."""
+    from xml.etree import ElementTree as ET
+
+    features = root.find("features")
+    if features is None:
+        features = ET.SubElement(root, "features")
+    for old in features.findall("hyperv"):
+        features.remove(old)
+    clock = root.find("clock")
+    if clock is not None:
+        for timer in clock.findall("timer"):
+            if timer.get("name") in ("hypervclock", "tsc"):
+                clock.remove(timer)
+    if profile == "off":
+        return
+    features.append(hyperv_element(profile))
+    if clock is not None:
+        ET.SubElement(clock, "timer", {"name": "hypervclock", "present": "yes"})
+        if profile == "full":
+            ET.SubElement(clock, "timer", {"name": "tsc", "present": "yes", "mode": "native"})
+
+
 def cpu_xml(allow_nested: bool = False) -> str:
     if allow_nested:
         return "  <cpu mode='host-passthrough' check='none'/>"
@@ -272,6 +321,9 @@ def with_hardware(xml: str, hw: Any, allow_nested: bool = False) -> str:
         iothreads.text = "1"
     elif iothreads is not None:
         root.remove(iothreads)
+
+    if getattr(hw, "hyperv", None):
+        apply_hyperv(root, hw.hyperv)
 
     return ET.tostring(root, encoding="unicode")
 

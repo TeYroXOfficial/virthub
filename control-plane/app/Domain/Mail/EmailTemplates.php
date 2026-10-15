@@ -69,6 +69,19 @@ final class EmailTemplates
                     'body' => "Hi {{ user.name }},\n\nthe machine **{{ server.hostname }}** has been installed and is running.\n\n- IP address: **{{ server.ip }}**\n- OS: {{ server.os }}\n- Resources: {{ server.vcpu }} vCPU, {{ server.ram }} RAM, {{ server.disk }} disk\n\nThe root password and console are in the panel:\n\n[Open the machine]({{ server.url }})",
                 ],
             ],
+            'server.rdp_ready' => [
+                'group' => 'server',
+                'name' => ['pl' => 'Windows gotowy — dane RDP (Direct RDP)', 'en' => 'Windows ready — RDP details (Direct RDP)'],
+                'vars' => ['server.hostname', 'server.os', 'rdp.address', 'rdp.username', 'rdp.password', 'rdp.file_url', 'server.url'],
+                'pl' => [
+                    'subject' => 'Pulpit zdalny {{ server.hostname }} jest gotowy',
+                    'body' => "Cześć {{ user.name }},\n\nsystem {{ server.os }} na **{{ server.hostname }}** jest zainstalowany — możesz się połączyć Pulpitem zdalnym.\n\n- Adres: **{{ rdp.address }}**\n- Użytkownik: **{{ rdp.username }}**\n- Hasło: **{{ rdp.password }}**\n\n[Pobierz plik .rdp]({{ rdp.file_url }})\n\nPo pierwszym logowaniu zmień hasło i usuń tę wiadomość.\n\n[Otwórz maszynę]({{ server.url }})",
+                ],
+                'en' => [
+                    'subject' => 'Remote desktop {{ server.hostname }} is ready',
+                    'body' => "Hi {{ user.name }},\n\n{{ server.os }} on **{{ server.hostname }}** is installed — you can connect with Remote Desktop.\n\n- Address: **{{ rdp.address }}**\n- User: **{{ rdp.username }}**\n- Password: **{{ rdp.password }}**\n\n[Download the .rdp file]({{ rdp.file_url }})\n\nChange the password after the first sign-in and delete this message.\n\n[Open the machine]({{ server.url }})",
+                ],
+            ],
             'server.reinstalled' => [
                 'group' => 'server',
                 'name' => ['pl' => 'Reinstalacja zakończona', 'en' => 'Reinstall finished'],
@@ -447,6 +460,7 @@ final class EmailTemplates
             'amount' => '50,00 PLN', 'hours_left' => '12', 'terminate_at' => now()->addDays(7)->format('d.m.Y'),
             'server' => ['hostname' => 'vps1.example.com', 'ip' => '203.0.113.10', 'os' => 'Ubuntu 24.04 LTS', 'vcpu' => 2, 'ram' => '4 GB', 'disk' => '50 GB', 'url' => url('/panel')],
             'app' => ['name' => 'Survival', 'address' => '203.0.113.10:25565', 'template' => 'Minecraft Paper', 'url' => url('/panel')],
+            'rdp' => ['address' => '203.0.113.10:3389', 'username' => 'Administrator', 'password' => 'Xk7-przyklad-Qm2', 'file_url' => url('/panel')],
             'ticket' => ['number' => '1042', 'subject' => 'Nie działa SSH', 'department' => 'Wsparcie techniczne', 'priority' => 'wysoki', 'url' => url('/panel'), 'admin_url' => url('/panel')],
             'customer' => ['email' => 'klient@example.com'], 'staff' => ['name' => 'Anna'],
             'invoice' => ['number' => 'FV/2026/0042', 'total' => '49,00 PLN', 'due_at' => now()->addDays(7)->format('d.m.Y'), 'url' => url('/panel')],

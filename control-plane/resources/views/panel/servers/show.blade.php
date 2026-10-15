@@ -39,6 +39,9 @@
                     </button>
                 </form>
                 @endcan
+                @if ($server->osFamily() === 'windows' && \App\Domain\Windows\DirectRdp::address($server))
+                    <a class="btn" href="{{ route('panel.servers.rdp', $server) }}" title="{{ \App\Domain\Windows\DirectRdp::address($server) }}"><x-icon name="download" :size="15"/> {{ __('Plik RDP') }}</a>
+                @endif
                 @can('power', $server)
                 <div class="btn-group" id="power-controls">
                     <button class="btn" data-action="start" @disabled($server->isRunning()) title="{{ __('Uruchom') }}">

@@ -28,6 +28,7 @@ class Hypervisor extends Model
         'hw_disk_bus',
         'hw_io_mode',
         'hw_cpu_model',
+        'hw_hyperv',
         'hw_cpuset',
         'traffic_counting',
         'traffic_limit_action',

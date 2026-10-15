@@ -138,6 +138,8 @@ class HardwareSpec(BaseModel):
     cpu_model: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,40}$")
     cpuset: str | None = Field(default=None, pattern=r"^[0-9]+(-[0-9]+)?(,\^?[0-9]+(-[0-9]+)?){0,99}$",
                                description="Rdzenie hosta dla vCPU, np. 0-15,32-47")
+    # Oświecenia Hyper-V: None = bez zmian (standard dla Windows, wyłączone dla Linuksa).
+    hyperv: Literal["off", "standard", "full", "passthrough"] | None = None
 
     @model_validator(mode="after")
     def _tpm_needs_uefi(self) -> "HardwareSpec":

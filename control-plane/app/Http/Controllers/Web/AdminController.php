@@ -216,6 +216,7 @@ class AdminController extends Controller
             'hw_io_mode' => ['nullable', Rule::in(ServerHardware::IO_MODES)],
             'hw_cpu_model' => ['nullable', Rule::in(ServerHardware::CPU_MODELS)],
             'hw_cpuset' => ['nullable', 'string', 'max:300', 'regex:'.ServerHardware::CPUSET_PATTERN],
+            'hw_hyperv' => ['nullable', Rule::in(ServerHardware::HYPERV_PROFILES)],
             'traffic_counting' => ['nullable', Rule::in(Traffic::COUNTING)],
             'traffic_limit_action' => ['nullable', Rule::in(Traffic::ACTIONS)],
             'traffic_throttle_mbps' => ['nullable', 'integer', 'min:1', 'max:100000'],
@@ -238,7 +239,7 @@ class AdminController extends Controller
             'max_servers' => $validated['max_servers'] ?? null,
             'cpu_model' => isset($validated['cpu_model']) ? trim($validated['cpu_model']) ?: null : null,
             'public_address' => ($validated['public_address'] ?? null) ?: null,
-            ...array_map(fn ($v) => $v ?: null, array_intersect_key($validated, array_flip(['hw_disk_bus', 'hw_io_mode', 'hw_cpu_model', 'hw_cpuset', 'traffic_counting', 'traffic_limit_action', 'traffic_throttle_mbps', 'vxlan_address']))),
+            ...array_map(fn ($v) => $v ?: null, array_intersect_key($validated, array_flip(['hw_disk_bus', 'hw_io_mode', 'hw_cpu_model', 'hw_cpuset', 'hw_hyperv', 'traffic_counting', 'traffic_limit_action', 'traffic_throttle_mbps', 'vxlan_address']))),
             'accepts_new_servers' => $request->boolean('accepts_new_servers'),
             'apps_enabled' => $request->boolean('apps_enabled'),
         ]);
@@ -653,13 +654,16 @@ class AdminController extends Controller
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'min_disk_gb' => ['required', 'integer', 'min:1'],
             'hw_firmware' => ['nullable', Rule::in(['bios', 'uefi'])],
+            'hw_hyperv' => ['nullable', Rule::in(ServerHardware::HYPERV_PROFILES)],
         ]);
         if (! $template->isContainer()) {
             $validated['hw_tpm'] = $request->boolean('hw_tpm');
             $validated['is_rescue'] = $template->family !== 'windows' && $request->boolean('is_rescue');
             $validated['hw_firmware'] = $validated['hw_tpm'] ? 'uefi' : (($validated['hw_firmware'] ?? null) ?: null);
+            $validated['hw_hyperv'] = ($validated['hw_hyperv'] ?? null) ?: null;
+            $validated['direct_rdp'] = $template->family === 'windows' && $request->boolean('direct_rdp');
         } else {
-            unset($validated['hw_firmware']);
+            unset($validated['hw_firmware'], $validated['hw_hyperv']);
         }
 
         $template->update([...$validated, 'sort_order' => (int) ($validated['sort_order'] ?? 0)]);

@@ -173,3 +173,28 @@ def test_libvirt_sprzet_i_usuwanie_z_nvram(settings, monkeypatch, fake_libvirt):
     flags = []
     LibvirtDriver._undefine(types.SimpleNamespace(undefineFlags=lambda f: flags.append(f)))
     assert flags == [4 | 64]
+
+
+def test_profile_hyperv():
+    # Brak ustawienia: Windows ma zestaw standardowy, Linux bez oświeceń.
+    win = ET.fromstring(_xml(windows=True, hardware=HardwareSpec()))
+    assert win.find("./features/hyperv").get("mode") == "custom"
+    assert ET.fromstring(_xml(hardware=HardwareSpec())).find("./features/hyperv") is None
+
+    off = ET.fromstring(_xml(windows=True, hardware=HardwareSpec(hyperv="off")))
+    assert off.find("./features/hyperv") is None and off.find("./clock/timer[@name='hypervclock']") is None
+
+    full = ET.fromstring(_xml(hardware=HardwareSpec(hyperv="full")))
+    names = {el.tag for el in full.find("./features/hyperv")}
+    assert {"relaxed", "vapic", "spinlocks", "frequencies", "tlbflush", "ipi", "vendor_id", "reset"} <= names
+    assert full.find("./features/hyperv/vendor_id").get("value") == "VirtHubKVM"
+    assert full.find("./clock/timer[@name='tsc']").get("mode") == "native"
+    assert len(full.findall("./clock/timer[@name='hypervclock']")) == 1
+
+    passthrough = ET.fromstring(with_hardware(ET.tostring(full, encoding="unicode"), HardwareSpec(hyperv="passthrough")))
+    assert len(passthrough.findall("./features/hyperv")) == 1
+    assert passthrough.find("./features/hyperv").get("mode") == "passthrough" and list(passthrough.find("./features/hyperv")) == []
+    assert passthrough.find("./clock/timer[@name='tsc']") is None
+
+    with pytest.raises(ValidationError):
+        HardwareSpec(hyperv="turbo")
