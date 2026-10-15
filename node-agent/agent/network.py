@@ -152,7 +152,8 @@ class NetworkManager:
     def restore(self) -> int:
         """Po restarcie hosta tabele nftables są puste — bez tego maszyny
         chodziłyby bez anty-spoofingu i zapory, dopóki panel nie wyśle
-        konfiguracji ponownie. Odtwarza też ochronę węzła."""
+        konfiguracji ponownie. Odtwarza też mostki VLAN i podsieci routowanych
+        oraz ochronę węzła."""
         if self.settings.is_mock:
             return 0
 
@@ -161,9 +162,17 @@ class NetworkManager:
         for path in sorted(self.settings.network_state_dir.glob("*.json")):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
+                interfaces = [NetworkInterfaceSpec(**i) for i in data.get("interfaces", [])]
+                # Mostki VLAN (vhv<tag>) i podsieci routowanych też giną przy restarcie —
+                # bez nich libvirt nie uruchomi maszyny. Osobno od reguł: błąd mostka
+                # nie może zostawić maszyny bez anty-spoofingu.
+                try:
+                    self.prepare([i for i in interfaces if i.mode != "nat"])
+                except Exception:
+                    log.exception("Nie udało się odtworzyć mostka maszyny %s", path.stem)
                 self.configure(
                     int(path.stem),
-                    [NetworkInterfaceSpec(**i) for i in data.get("interfaces", [])],
+                    interfaces,
                     [FirewallRule(**r) for r in data.get("firewall", [])],
                     FirewallPolicy(**data["policy"]) if data.get("policy") else None,
                     NetworkFilter(**data["filter"]) if data.get("filter") else None,
