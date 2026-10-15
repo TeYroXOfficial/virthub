@@ -344,27 +344,77 @@ CEPH_NAME = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
 CEPH_MON = r"^\[?[A-Za-z0-9.:-]{1,253}\]?(:\d{1,5})?$"
 
 
+DS_HOST = r"^\[?[A-Za-z0-9.:-]{1,253}\]?(:\d{1,5})?$"
+DS_SECRET = r"^[^\x00-\x1f,]{1,256}$"
+MOUNT_OPTIONS = r"^[A-Za-z0-9_=.,:/-]{0,250}$"
+MOUNTED_TYPES = ("nfs", "cifs", "cephfs", "iscsi")
+BLOCK_TYPES = ("ceph", "storpool", "lightbits")
+
+
 class DatastoreSpec(BaseModel):
-    """Magazyn dysków maszyny: katalog z plikami qcow2 albo pula Ceph RBD."""
+    """Magazyn dysków maszyny.
+
+    directory — katalog z plikami qcow2; nfs/cifs/cephfs/iscsi — zasób, który agent
+    montuje sam (pod /var/lib/virthub/mnt/<id>) i trzyma na nim pliki qcow2;
+    ceph/storpool/lightbits — dyski blokowe w zewnętrznym systemie."""
 
     id: int = Field(ge=1)
-    type: Literal["directory", "ceph"]
+    type: Literal["directory", "ceph", "nfs", "cifs", "cephfs", "iscsi", "storpool", "lightbits"]
     # Cienkie przydzielanie: dysk zajmuje tyle, ile zapisano (qcow2 z backing
-    # file, klon RBD). Grube: pełna kopia z rezerwacją miejsca (tylko katalog).
+    # file, klon RBD). Grube: pełna kopia z rezerwacją miejsca (pliki qcow2).
     thin: bool = True
     path: str | None = Field(default=None, pattern=r"^/[A-Za-z0-9._/-]{1,250}$")
     pool: str | None = Field(default=None, pattern=CEPH_NAME)
     monitors: list[Annotated[str, Field(pattern=CEPH_MON)]] = Field(default_factory=list, max_length=9)
     user: str = Field(default="admin", pattern=CEPH_NAME)
     key: str | None = Field(default=None, pattern=r"^[A-Za-z0-9+/=]{16,128}$", repr=False)
+    # Zasoby montowane: serwer NFS/SMB, eksport albo udział, opcje mount.
+    server: str | None = Field(default=None, pattern=DS_HOST)
+    export: str | None = Field(default=None, pattern=r"^/?[A-Za-z0-9._/ $-]{1,250}$")
+    options: str = Field(default="", pattern=MOUNT_OPTIONS)
+    username: str | None = Field(default=None, pattern=r"^[A-Za-z0-9._@\\-]{1,128}$")
+    password: str | None = Field(default=None, pattern=DS_SECRET, repr=False)
+    # iSCSI: portal, IQN celu i numer LUN-u z gotowym systemem plików.
+    portal: str | None = Field(default=None, pattern=DS_HOST)
+    iqn: str | None = Field(default=None, pattern=r"^(iqn\.|eui\.|naa\.)[A-Za-z0-9.:_-]{1,220}$")
+    lun: int = Field(default=0, ge=0, le=16383)
+    # StorPool: szablon (placement, replikacja); Lightbits: projekt, repliki,
+    # podsystem NVMe i adresy danych, punkt API i token JWT.
+    template: str | None = Field(default=None, pattern=CEPH_NAME)
+    project: str = Field(default="default", pattern=CEPH_NAME)
+    replicas: int = Field(default=2, ge=1, le=3)
+    nqn: str | None = Field(default=None, pattern=r"^nqn\.[A-Za-z0-9.:_-]{1,220}$")
+    targets: list[Annotated[str, Field(pattern=DS_HOST)]] = Field(default_factory=list, max_length=9)
+    endpoint: str | None = Field(default=None, pattern=DS_HOST)
+    jwt: str | None = Field(default=None, pattern=r"^[A-Za-z0-9._-]{16,8192}$", repr=False)
+
+    @property
+    def mounted(self) -> bool:
+        return self.type in MOUNTED_TYPES
+
+    @property
+    def file_based(self) -> bool:
+        return self.type == "directory" or self.mounted
 
     @model_validator(mode="after")
     def _complete(self) -> "DatastoreSpec":
+        need = {
+            "ceph": (self.pool and self.monitors and self.key, "Magazyn Ceph wymaga puli, monitorów i klucza."),
+            "nfs": (self.server and self.export, "NFS wymaga serwera i eksportu."),
+            "cifs": (self.server and self.export, "SMB/CIFS wymaga serwera i udziału."),
+            "cephfs": (self.monitors and self.key, "CephFS wymaga monitorów i klucza."),
+            "iscsi": (self.portal and self.iqn, "iSCSI wymaga portalu i IQN celu."),
+            "storpool": (self.template, "StorPool wymaga szablonu."),
+            "lightbits": (self.nqn and self.targets and self.endpoint and self.jwt,
+                          "Lightbits wymaga NQN podsystemu, adresów danych, punktu API i tokenu JWT."),
+        }
         if self.type == "directory":
             if not self.path or ".." in self.path.split("/"):
                 raise ValueError("Magazyn katalogowy wymaga ścieżki bezwzględnej.")
-        elif not (self.pool and self.monitors and self.key):
-            raise ValueError("Magazyn Ceph wymaga puli, monitorów i klucza.")
+        elif not need[self.type][0]:
+            raise ValueError(need[self.type][1])
+        if self.export and ".." in self.export.split("/"):
+            raise ValueError("Eksport nie może zawierać ..")
         return self
 
 

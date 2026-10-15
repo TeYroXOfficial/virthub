@@ -561,8 +561,8 @@ class ServerProvisioner
         if ($server->isContainer()) {
             throw new \DomainException(__('Elevate jest dostępny tylko dla maszyn KVM.'));
         }
-        if ($server->datastore?->isCeph()) {
-            throw new \DomainException(__('Elevate działa tylko dla dysków w magazynie katalogowym (qcow2), a ten jest w Cephie.'));
+        if ($server->datastore && ! $server->datastore->isFileBased()) {
+            throw new \DomainException(__('Elevate działa tylko dla dysków w plikach qcow2, a ten magazyn (:type) jest blokowy.', ['type' => $server->datastore->typeLabel()]));
         }
         if ($action === 'start' && $server->inRescue()) {
             throw new \DomainException(__('Maszyna jest w trybie ratunkowym — najpierw go zakończ.'));

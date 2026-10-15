@@ -238,6 +238,14 @@ async def lifespan(app: FastAPI):
             log.info("Odtworzono reguły sieci dla %s maszyn", restored)
     except Exception:
         log.exception("Nie udało się odtworzyć reguł sieci maszyn")
+    storage = getattr(driver, "storage", None)
+    if hasattr(storage, "restore_mounts") and not settings.is_mock:
+        try:
+            mounted = storage.restore_mounts()
+            if mounted:
+                log.info("Przygotowano zdalne magazyny dla %s dysków", mounted)
+        except Exception:
+            log.exception("Nie udało się przygotować zdalnych magazynów")
     if hasattr(driver, "restore_private_bridges") and not settings.is_mock:
         try:
             bridges = driver.restore_private_bridges()

@@ -42,8 +42,8 @@ class RemoteBackups
         if ($server->agent_uuid === null || $server->state->isTransitioning()) {
             throw new \DomainException(__('Maszyna nie jest gotowa do wykonania kopii.'));
         }
-        // Dysk w Cephie: zawsze kopia pełna (eksport migawki RBD) — bez bitmap libvirt.
-        $mode = $server->datastore?->isCeph() ? 'full' : ($plan?->backupMode() ?? 'full');
+        // Dysk blokowy (Ceph, StorPool, Lightbits): zawsze kopia pełna — bez bitmap libvirt.
+        $mode = $server->datastore?->isFileBased() === false ? 'full' : ($plan?->backupMode() ?? 'full');
         $parent = $mode !== 'full' ? $this->chainParent($server, $target, $plan, $mode) : null;
         $name = ($parent ? 'incr-' : 'backup-').now()->format('Ymd-His');
         $backup = Backup::create([
