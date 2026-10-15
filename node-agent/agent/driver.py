@@ -19,6 +19,7 @@ import platform
 import re
 import secrets
 import socket
+import threading
 import time
 import uuid as uuidlib
 from abc import ABC, abstractmethod
@@ -30,7 +31,7 @@ from .cloudinit import CloudInitBuilder
 from .console import ConsoleTarget, TerminalTarget, VncTarget
 from .guest_os import cpu_model, from_guest_agent, outbound_ipv4, parse_os_release
 from .isos import IsoLibrary
-from .jobs import progress
+from .jobs import progress, progress_reporter
 from .config import Settings
 from .domain_xml import CPU_PERIOD_US, build_domain_xml, cpu_quota_us, disk_dev, domain_name, rescue_xml, with_hardware, with_seed
 from .nat import host_networks
@@ -164,6 +165,36 @@ class HypervisorDriver(ABC):
 
     def migrate_live(self, uuid: str, req: Any) -> dict[str, Any]:
         raise DriverError("Ten węzeł nie obsługuje migracji na żywo.")
+
+    def abort_migration(self, uuid: str) -> dict[str, Any]:
+        raise DriverError("Ten węzeł nie obsługuje migracji na żywo.")
+
+    def cleanup_incoming(self, server_id: int) -> dict[str, Any]:
+        """Cel nieudanej albo anulowanej migracji: usuwa domenę, dyski, sieć i
+        przypisanie magazynu maszyny o tym numerze — jeśli cokolwiek z tego powstało."""
+        raise DriverError("Ten węzeł nie obsługuje migracji maszyn.")
+
+    def _cleanup_files(self, name: str) -> list[str]:
+        removed = []
+        for slot in range(1, 8):
+            extra = self.extra_disk_name(name, slot)
+            try:
+                if self.storage.is_file_based(extra) and self.storage.volume_path(extra).exists():
+                    removed.append(extra)
+                self.storage.delete_volume(extra)
+            except Exception:  # noqa: BLE001 — sprzątanie ma przejść jak najdalej
+                log.exception("Sprzątanie migracji: dysk %s", extra)
+        try:
+            if self.storage.is_file_based(name):
+                path = self.storage.volume_path(name)
+                if path.exists():
+                    removed.append(path.name)
+                path.with_name(f".{name}.recover.qcow2").unlink(missing_ok=True)
+            self.storage.delete_volume(name)
+        except Exception:  # noqa: BLE001
+            log.exception("Sprzątanie migracji: dysk %s", name)
+        self.storage.unbind(name)
+        return removed
 
     def dr_snapshot(self, req: Any) -> dict[str, Any]:
         """Konfiguracja i stan węzła w jednym pliku JSON na celu kopii.
@@ -638,15 +669,75 @@ class LibvirtDriver(HypervisorDriver):
                  | libvirt.VIR_MIGRATE_AUTO_CONVERGE)
         params = {libvirt.VIR_MIGRATE_PARAM_BANDWIDTH: req.bandwidth_mbps // 8} if req.bandwidth_mbps else {}
         progress("migrate", 10)
+        stop = threading.Event()
+        watcher = threading.Thread(target=self._watch_migration, args=(domain, stop, progress_reporter()), daemon=True)
+        watcher.start()
         try:
             domain.migrateToURI3(uri, params, flags)
         except libvirt.libvirtError as exc:
+            if "cancel" in str(exc).lower() or "abort" in str(exc).lower():
+                raise DriverError("Migracja na żywo została anulowana — maszyna działa dalej na tym węźle.") from exc
             raise DriverError(f"Migracja na żywo nie powiodła się: {exc}") from exc
+        finally:
+            stop.set()
+            watcher.join(timeout=5)
         # Domena działa już na węźle docelowym — tu zostają tylko pliki i reguły.
         self.network.teardown(server_id_from_name(name))
         self.storage.delete_volume(name)
         self.storage.unbind(name)
         return {"uuid": uuid, "migrated": True, "uri": uri}
+
+    @staticmethod
+    def _watch_migration(domain: Any, stop: threading.Event, report: Any) -> None:
+        """Postęp migracji na żywo z libvirt (dane przesłane / pozostałe, prędkość)."""
+        while not stop.wait(2):
+            try:
+                stats = domain.jobStats()
+            except Exception:  # noqa: BLE001 — zadanie mogło się właśnie skończyć
+                continue
+            total = int(stats.get("data_total") or 0)
+            done = int(stats.get("data_processed") or 0)
+            if total <= 0:
+                continue
+            mib = 1024 * 1024
+            speed = int(stats.get("memory_bps") or 0) + int(stats.get("disk_bps") or 0)
+            detail = f"{done // mib} MB z {total // mib} MB"
+            if speed:
+                detail += f" · {speed // mib} MB/s"
+            if stats.get("memory_iteration"):
+                detail += f" · przebieg pamięci {stats['memory_iteration']}"
+            report("migrate", 10 + min(85, int(85 * done / total)), detail)
+
+    def abort_migration(self, uuid: str) -> dict[str, Any]:
+        import libvirt
+
+        domain = self._domain(uuid)
+        try:
+            domain.abortJob()
+        except libvirt.libvirtError as exc:
+            raise DriverError(f"Nie udało się przerwać migracji: {exc}") from exc
+        return {"uuid": uuid, "aborted": True}
+
+    def cleanup_incoming(self, server_id: int) -> dict[str, Any]:
+        import libvirt
+
+        name = domain_name(server_id)
+        domain_removed = False
+        try:
+            domain = self.conn.lookupByName(name)
+        except libvirt.libvirtError:
+            domain = None
+        if domain is not None:
+            if domain.isActive():
+                domain.destroy()
+            self._undefine(domain)
+            domain_removed = True
+        try:
+            self.network.teardown(server_id)
+        except Exception:  # noqa: BLE001
+            log.exception("Sprzątanie migracji: sieć maszyny %s", server_id)
+        files = self._cleanup_files(name)
+        return {"server_id": server_id, "domain_removed": domain_removed, "removed": files}
 
     def dr_state(self) -> list[dict[str, Any]]:
         out = []
@@ -1747,11 +1838,29 @@ class MockDriver(HypervisorDriver):
             raise VmNotFound(uuid)
         if record["state"] != "running":
             raise DriverError("Migracja na żywo dotyczy działającej maszyny — zatrzymaną przenieś na zimno.")
+        if (self.settings.state_db.parent / f"mock-abort-{uuid}").exists():
+            (self.settings.state_db.parent / f"mock-abort-{uuid}").unlink()
+            raise DriverError("Migracja na żywo została anulowana — maszyna działa dalej na tym węźle.")
         del data[uuid]
         self._save(data)
         self.storage.delete_volume(record["name"])
         self.storage.unbind(record["name"])
         return {"uuid": uuid, "migrated": True, "uri": self.settings.migration_uri.format(host=req.host)}
+
+    def abort_migration(self, uuid: str) -> dict[str, Any]:
+        self._get(uuid)
+        (self.settings.state_db.parent / f"mock-abort-{uuid}").write_text("1")
+        return {"uuid": uuid, "aborted": True}
+
+    def cleanup_incoming(self, server_id: int) -> dict[str, Any]:
+        name = domain_name(server_id)
+        data = self._load()
+        uuids = [u for u, r in data.items() if r.get("name") == name]
+        for u in uuids:
+            del data[u]
+        self._save(data)
+        files = self._cleanup_files(name)
+        return {"server_id": server_id, "domain_removed": bool(uuids), "removed": files}
 
     def _load(self) -> dict[str, dict]:
         if not self._state_file.exists():

@@ -13,6 +13,7 @@ use App\Models\AuditLog;
 use App\Models\Hypervisor;
 use App\Models\Server;
 use App\Models\ServerDisk;
+use App\Models\ServerJob;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -64,6 +65,53 @@ class ServerAdminController extends Controller
         $job = $migrations->start($server, Hypervisor::findOrFail($validated['hypervisor_id']), $validated['mode'] ?? 'cold', $request->user());
 
         return response()->json(['message' => __('Migracja rozpoczęta.'), 'job_id' => $job->id], 202);
+    }
+
+    /** Węzły, na które maszynę można przenieść (na zimno / na żywo), z powodem odmowy. */
+    public function migrationTargets(Server $server, Migrations $migrations): JsonResponse
+    {
+        return response()->json(['data' => $migrations->candidates($server)->map(fn (array $c) => [
+            'hypervisor_id' => $c['node']->id, 'name' => $c['node']->name,
+            'cold' => $c['cold'] === null, 'live' => $c['live'] === null,
+            'reason' => $c['cold'], 'live_reason' => $c['live'],
+        ])->all()]);
+    }
+
+    /** Stan ostatniej migracji: etapy, postęp, możliwe działania. */
+    public function migration(Server $server, Migrations $migrations): JsonResponse
+    {
+        $job = $migrations->latest($server);
+
+        return response()->json(['data' => $job ? self::migrationState($job) : null]);
+    }
+
+    /** cancel | resume | revert */
+    public function migrationAction(Request $request, Server $server, string $action, Migrations $migrations): JsonResponse
+    {
+        $job = $migrations->latest($server) ?? abort(404);
+        match ($action) {
+            'cancel' => $migrations->cancel($job, $request->user()),
+            'resume' => $job = $migrations->resume($job, $request->user()),
+            'revert' => $migrations->revert($job, $request->user()),
+        };
+
+        return response()->json(['data' => self::migrationState($job->fresh())], $action === 'resume' ? 202 : 200);
+    }
+
+    /** @return array<string, mixed> */
+    public static function migrationState(ServerJob $job): array
+    {
+        $p = $job->payload;
+
+        return [
+            'job_id' => $job->id, 'status' => $job->status, 'mode' => $p['mode'], 'phase' => $p['phase'],
+            'source_id' => $p['source_id'], 'destination_id' => $p['destination_id'],
+            'percent' => Migrations::overall($job), 'progress' => $p['progress'] ?? null, 'steps' => $p['steps'] ?? [],
+            'cancel_requested' => (bool) ($p['cancel'] ?? false), 'cancelled' => (bool) ($p['cancelled'] ?? false),
+            'resumable' => $p['resumable'] ?? null, 'error' => $job->error,
+            'reverted_at' => $p['reverted_at'] ?? null, 'resumed_at' => $p['resumed_at'] ?? null,
+            'created_at' => $job->created_at?->toIso8601String(), 'finished_at' => $job->finished_at?->toIso8601String(),
+        ];
     }
 
     /** Transfer: zużycie w okresie, polityka po dziedziczeniu i dokupione pakiety. */

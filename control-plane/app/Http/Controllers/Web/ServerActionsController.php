@@ -217,6 +217,32 @@ class ServerActionsController extends Controller
         return redirect()->route('panel.servers.show', $server)->with('status', __('Migracja rozpoczęta — postęp widać na stronie maszyny.'));
     }
 
+    /** Personel: anulowanie trwającej, wznowienie albo cofnięcie nieudanej migracji. */
+    public function migrationAction(Request $request, Server $server, string $action, Migrations $migrations): RedirectResponse
+    {
+        $this->authorize('manageResources', $server);
+        $back = redirect()->to(route('panel.servers.show', $server).'#migrate');
+        $job = $migrations->latest($server);
+        if ($job === null) {
+            return $back->withErrors(['migrate' => __('Ta maszyna nie była migrowana.')]);
+        }
+        try {
+            match ($action) {
+                'cancel' => $migrations->cancel($job, $request->user()),
+                'resume' => $migrations->resume($job, $request->user()),
+                'revert' => $migrations->revert($job, $request->user()),
+            };
+        } catch (\DomainException $e) {
+            return $back->withErrors(['migrate' => $e->getMessage()]);
+        }
+
+        return $back->with('status', [
+            'cancel' => __('Anulowanie migracji — maszyna wróci do pracy na węźle źródłowym, gdy bieżący krok się zakończy.'),
+            'resume' => __('Migracja wznowiona.'),
+            'revert' => __('Migracja cofnięta — pozostałości na węźle docelowym są usuwane.'),
+        ][$action]);
+    }
+
     /** rDNS adresu maszyny — klient ustawia nazwę, która wskazuje na ten adres. */
     public function rdns(Request $request, Server $server, IpAddress $address, ReverseDns $reverseDns): RedirectResponse
     {
@@ -282,6 +308,16 @@ class ServerActionsController extends Controller
             $this->results->apply($job, $agent);
             $server->refresh();
             $job->refresh();
+        }
+
+        // Migracja prowadzi własne zadania na dwóch węzłach — etap i postęp są w jej payloadzie.
+        if ($job?->action === 'migrate' && ! $job->isFinished()) {
+            $p = $job->payload;
+            $stage = match ($p['phase'] ?? 'start') {
+                'start' => 'pending', 'exporting', 'preparing' => 'export', 'migrating' => 'download',
+                default => in_array($p['progress']['stage'] ?? null, ['boot', 'network'], true) ? 'boot' : 'download',
+            };
+            $agent = ['stage' => $stage, 'progress' => Migrations::overall($job), 'detail' => $p['progress']['detail'] ?? null];
         }
 
         return response()->json([

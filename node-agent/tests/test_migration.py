@@ -133,3 +133,52 @@ def test_libvirt_migracja_na_zywo_flagi(settings, monkeypatch):
     assert calls["flags"] == 1 | 2 | 8 | 16 | 64 | 8192
     assert calls["params"] == {"bandwidth": 100}
     assert calls["teardown"] == 77 and calls["deleted"] == "virthub-77"
+
+
+def test_anulowanie_migracji_na_zywo_i_sprzatanie_celu(via_client, template, settings):
+    client = via_client
+    vm = create_vm(client, template, server_id=1911)["result"]
+    assert client.post(f"/vm/{vm['uuid']}/migrate/abort").json() == {"uuid": vm["uuid"], "aborted": True}
+    job = wait_for_job(client, client.post(f"/vm/{vm['uuid']}/migrate", json={"host": "kvm-2"}).json()["job_id"])
+    assert job["status"] == "failed" and "anulowana" in job["error"]
+    assert client.get(f"/vm/{vm['uuid']}/stats").status_code == 200  # maszyna została na źródle
+    assert client.post("/vm/00000000-0000-0000-0000-000000000000/migrate/abort").status_code == 404
+
+    # Cel po imporcie (np. anulowanym w trakcie): domena i dysk znikają.
+    export = wait_for_job(client, client.post(f"/vm/{vm['uuid']}/export").json()["job_id"])["result"]
+    url = f"http://source-node:8080/transfer/{export['token']}"
+    imported = wait_for_job(client, client.post("/vm/import", json=_payload(template, 1912, source={
+        "url": url, "sha256": export["sha256"], "size_bytes": export["size_bytes"], "start": False})).json()["job_id"])
+    assert imported["status"] == "done", imported.get("error")
+    assert (settings.image_dir / "virthub-1912.qcow2").exists()
+    cleaned = wait_for_job(client, client.post("/migration/cleanup/1912").json()["job_id"])
+    assert cleaned["status"] == "done", cleaned.get("error")
+    assert cleaned["result"]["domain_removed"] is True and "virthub-1912.qcow2" in cleaned["result"]["removed"]
+    assert not (settings.image_dir / "virthub-1912.qcow2").exists()
+    assert client.get(f"/vm/{imported['result']['uuid']}/stats").status_code == 404
+    # Drugi raz: nic do sprzątania, bez błędu.
+    again = wait_for_job(client, client.post("/migration/cleanup/1912").json()["job_id"])
+    assert again["status"] == "done" and again["result"] == {"server_id": 1912, "domain_removed": False, "removed": []}
+
+
+def test_postep_migracji_na_zywo_z_libvirt():
+    import threading
+
+    from agent.driver import LibvirtDriver
+
+    reports = []
+    stop = threading.Event()
+
+    class Domain:
+        calls = 0
+
+        def jobStats(self):
+            Domain.calls += 1
+            if Domain.calls >= 2:
+                stop.set()
+            return {"data_total": 4096 * 1024 * 1024, "data_processed": 1024 * 1024 * 1024, "memory_bps": 100 * 1024 * 1024, "memory_iteration": 2}
+
+    stop_wait = stop.wait
+    stop.wait = lambda timeout: stop_wait(0.01)  # bez czekania 2 s w teście
+    LibvirtDriver._watch_migration(Domain(), stop, lambda *a: reports.append(a))
+    assert reports[0] == ("migrate", 31, "1024 MB z 4096 MB · 100 MB/s · przebieg pamięci 2")

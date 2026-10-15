@@ -73,10 +73,10 @@
     if (progress && window.vhProgressPanel) {
         window.vhProgressPanel(progress, {
             aliases: { download: 'image' },
-            details: {
-                download: vhT('Węzeł pobiera obraz systemu. Przy pierwszym użyciu tego systemu może to potrwać kilka minut.'),
-            },
-            detailPrefix: { download: vhT('Węzeł pobiera obraz systemu: ') },
+            details: progress.dataset.kind === 'migrate'
+                ? { download: vhT('Przenoszenie dysku między węzłami…') }
+                : { download: vhT('Węzeł pobiera obraz systemu. Przy pierwszym użyciu tego systemu może to potrwać kilka minut.') },
+            detailPrefix: { download: progress.dataset.kind === 'migrate' ? vhT('Przenoszenie: ') : vhT('Węzeł pobiera obraz systemu: ') },
             running: (data) => data.transitioning,
             failure: (data) => (data.state === 'error' || data.job?.status === 'failed')
                 ? (data.job?.error || vhT('Szczegóły pojawią się na stronie.'))
