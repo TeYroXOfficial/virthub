@@ -46,6 +46,24 @@ def render_meta_data(server_id: int, hostname: str) -> str:
 VM_PACKAGES = ["qemu-guest-agent"]
 
 
+SSH_ROOT_PASSWORD_PATH = "/usr/local/sbin/virthub-ssh-root-password"
+
+# Logowanie roota hasłem przez SSH. Plik w sshd_config.d działa tylko, gdy
+# główny sshd_config go dołącza — a w kontenerach serwer SSH instaluje się
+# dopiero przy pierwszym starcie: cloud-init zdąży wcześniej utworzyć własny,
+# krótki sshd_config bez „Include”, pakiet go zostawia i root dostaje
+# „Access denied” mimo poprawnego hasła (konsola działa, bo nie idzie przez SSH).
+SSH_ROOT_PASSWORD_SCRIPT = """#!/bin/sh
+mkdir -p /etc/ssh/sshd_config.d
+printf 'PermitRootLogin yes\\nPasswordAuthentication yes\\n' > /etc/ssh/sshd_config.d/10-virthub.conf
+chmod 0644 /etc/ssh/sshd_config.d/10-virthub.conf
+f=/etc/ssh/sshd_config
+if [ -f "$f" ] && ! grep -qiE '^[[:space:]]*Include[[:space:]]+/etc/ssh/sshd_config[.]d/' "$f"; then
+    sed -i '1i Include /etc/ssh/sshd_config.d/*.conf' "$f"
+fi
+"""
+
+
 def render_user_data(
     hostname: str,
     ssh_keys: list[str],
@@ -110,6 +128,10 @@ def render_user_data(
             "    content: |",
             "      PermitRootLogin yes",
             "      PasswordAuthentication yes",
+            f"  - path: {SSH_ROOT_PASSWORD_PATH}",
+            "    permissions: '0700'",
+            "    encoding: b64",
+            f"    content: {base64.b64encode(SSH_ROOT_PASSWORD_SCRIPT.encode()).decode()}",
         ]
     else:
         # Bez hasła zostawiamy wyłączone logowanie hasłem — inaczej obraz z
@@ -129,8 +151,11 @@ def render_user_data(
         lines.append("package_update: false")
 
     # Usługa nazywa się „ssh" w rodzinie Debiana i „sshd" w rodzinie RHEL.
+    lines.append("runcmd:")
+    if root_password:
+        # Po doinstalowaniu serwera SSH (kontenery) — patrz SSH_ROOT_PASSWORD_SCRIPT.
+        lines.append(f"  - [ sh, {SSH_ROOT_PASSWORD_PATH} ]")
     lines += [
-        "runcmd:",
         "  - [ sh, -c, 'systemctl enable --now ssh 2>/dev/null || systemctl enable --now sshd' ]",
         "  - [ sh, -c, 'systemctl restart ssh 2>/dev/null || systemctl restart sshd' ]",
     ]

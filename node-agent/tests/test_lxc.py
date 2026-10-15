@@ -587,3 +587,15 @@ def test_istniejace_kontenery_dostaja_limit_procesow(driver, incus):
     assert ct["security.nesting"] == "false"
     assert incus.instances["obcy"]["config"] == {}, "cudzych kontenerów nie ruszamy"
     assert driver.harden_existing() == 0
+
+
+def test_reset_hasla_wlacza_logowanie_roota_przez_ssh(driver, incus):
+    uuid = driver.create_vm(request())["uuid"]
+
+    driver.reset_password(uuid, "NoweHaslo789")
+
+    fix = next(c for c in incus.calls if c[:5] == ["exec", "virthub-42", "--", "sh", "-c"])
+    assert "PermitRootLogin yes" in fix[5]
+    assert "Include /etc/ssh/sshd_config.d/*.conf" in fix[5], "sshd_config bez Include ignoruje sshd_config.d"
+    assert fix[5].rstrip().endswith("|| true"), "przeładowanie ssh na końcu — skrypt nie może wcześniej wyjść"
+    assert "NoweHaslo789" not in " ".join(fix)

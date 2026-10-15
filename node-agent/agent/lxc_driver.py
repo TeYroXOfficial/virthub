@@ -26,7 +26,7 @@ import uuid as uuidlib
 from pathlib import Path
 from typing import Any
 
-from .cloudinit import render_network_config, render_user_data
+from .cloudinit import SSH_ROOT_PASSWORD_SCRIPT, render_network_config, render_user_data
 from .console import ConsoleTarget, TerminalTarget
 from .config import Settings
 from .domain_xml import domain_name
@@ -500,6 +500,14 @@ class IncusDriver(HypervisorDriver):
                         input=f"root:{password}\n", timeout=60)
         except CommandError as exc:
             raise DriverError(f"Nie udało się zmienić hasła w kontenerze: {exc.stderr or exc}") from exc
+        # Hasło ma działać także przez SSH — kontener mógł powstać z samym
+        # kluczem albo z sshd_config bez dołączania sshd_config.d.
+        try:
+            run_bounded(["incus", "exec", name, "--", "sh", "-c",
+                         SSH_ROOT_PASSWORD_SCRIPT + "systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true\n"],
+                        max_bytes=65536, timeout=60)
+        except CommandError as exc:
+            log.warning("Nie udało się włączyć logowania hasłem przez SSH w %s: %s", name, exc.stderr or exc)
         return {"uuid": uuid, "state": self._state(name)}
 
     def _current_interfaces(self, name: str) -> str | None:
