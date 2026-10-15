@@ -66,3 +66,21 @@ najbardziej się przyda i co da się sensownie sprawdzić bez prawdziwego hyperv
 17. ✅ **Kopie przyrostowe.** Checkpointy libvirt / dirty bitmaps QEMU (backupBegin, tylko zmienione bloki), łańcuch pełna + przyrostowe z „pełna co N”, retencja z zachowaniem zależnych ogniw, przywracanie i DR ze spłaszczeniem łańcucha (qemu-img rebase + convert). Maszyna zatrzymana albo brak checkpointu rodzica → automatycznie kopia pełna.
 18. ✅ **Dokumentacja API.** Strona `/api-docs`: OpenAPI 3 dla wszystkich endpointów, opisy w każdym języku panelu, przykłady (curl, PHP, Python, JavaScript, Go), wbudowana konsola do testowania zapytań (jak Postman, z historią) i eksport kolekcji Postman.
 19. ✅ **Sieci izolowane i wiele kart.** Sieci prywatne klienta: osobny mostek `vhp<id>` na węźle bez łącza w górę i bez adresu hosta, adresacja z zakresów prywatnych z automatycznym przydziałem; do 7 kart dodatkowych na maszynę KVM (limit `VH_PRIVATE_NICS_PER_SERVER`, domyślnie 4), dołączanie/odłączanie na żywo, adres przez cloud-init/cloudbase-init przy tworzeniu i reinstalacji, API `/servers/{server}/private-networks`. Sieć działa w obrębie węzła — migracja wymaga odłączenia kart, DR przenosi sieci z maszynami.
+
+## Luki względem VirtFusion 7.1 (porównanie z 15.10.2026)
+
+Źródło: strona https://www.virtfusion.com/features i informacje o wydaniach 5.0–7.1.0
+(Backup Manager z 7.0, nowe API z 7.1). Każdy etap to osobny PR.
+
+20. **Dyski i sprzęt maszyny.** Dodatkowe dyski (w pakiecie i ręcznie), powiększanie każdego dysku, magistrala VirtIO SCSI, sterownik I/O (native / threads / io_uring) globalnie, na węźle i na maszynie, przełącznik UEFI/BIOS, vTPM (Windows 11 / Server 2025), cpuset na węźle, wybór modelu CPU.
+21. **Tryb ratunkowy i ustawienia klienta.** Rescue mode dla klienta (start z obrazu ratunkowego z dostępem do dysku), wyłączanie dysku cloud-init (instalacja z ISO), zmiana nazwy hosta, wybór adresu z podsieci IPv6, wybór swap w kreatorze.
+22. **Transfer.** Dławienie prędkości zamiast blokady po limicie, kierunek liczenia (wejście / wyjście / oba), dokupowane pakiety transferu, polityka na węźle, w pakiecie i na maszynie, limit przepustowości karty, webhooki włączenia i zdjęcia dławienia, jednostki dziesiętne lub binarne.
+23. **Kopie — Backup Manager.** Cele FTP/FTPS, Rclone (ponad 35 chmur) i Proxmox Backup Server. Szyfrowanie i deduplikacja, retencja GFS, kopie różnicowe, dni tygodnia w harmonogramie. Spójność przez qemu-guest-agent (fsfreeze) z raportem, czy system plików był zamrożony. Kopie dysków w Cephie (migawki RBD). Przywracanie na inną maszynę i do punktu w czasie, drzewo kopii dla klienta, odzyskiwanie pojedynczych plików (montowanie kopii). Webhooki kopii zbiorczych i przywracania.
+24. **Sieć — topologie.** Open vSwitch, macvtap/direct, sieci prywatne między węzłami (VXLAN), zapora na każdą kartę osobno.
+25. **Magazyny zdalne.** Datastore'y na NFS, CephFS, CIFS/SMB i iSCSI (montowane przez agenta), StorPool, Lightbits NVMe/TCP.
+26. **Windows.** Ustawienia Hyper-V na trzech poziomach (węzeł → szablon → maszyna) i profil „Direct RDP” (gotowy RDP, dane logowania mailem).
+27. **Konsola VNC.** Nagrywanie do WebM, wpisywanie tekstu i zapisane fragmenty, presety jakości, tryb tylko do podglądu, Picture-in-Picture, wirtualna klawiatura i panel klawiszy, zrzut ekranu.
+28. **Bezpieczeństwo kont — rozszerzenie.** Ponowne potwierdzenie (step-up) przy operacjach wrażliwych, wiele metod 2FA (WebAuthn / passkey), wymuszanie 2FA także dla klientów, przypięcie sesji do IP i przeglądarki, ważność i limity zapytań tokenów API.
+29. **Migracje — rozszerzenie.** Postęp krok po kroku, wznawianie, anulowanie i cofanie nieudanej migracji, lista zgodnych węzłów docelowych, przesył po alternatywnym adresie węzła.
+30. **Operacje i administracja.** Audyt przydziałów IP z eksportem CSV/JSON/YAML, kolejność pul IP na węźle, strategie rozmieszczania maszyn w grupie, metryki węzła i status panelu w API, kopia systemowa panelu, skrypty przed i po DR, udostępnianie maszyny innym użytkownikom, zmiana właściciela, węzły ARM.
+31. **Webhooki i self-service — rozszerzenie.** Uwierzytelnianie webhooków tokenem Bearer, przykładowe odbiorniki (Slack, Discord, Telegram, Pushover, Google Chat), godzinowe rozliczanie dodatków (adresy IP, GPU), transfer liczony łącznie dla pakietu zasobów, zmienne limity pakietów.
