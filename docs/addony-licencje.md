@@ -16,7 +16,7 @@ zwykłe VPS-y VirtHub.
 ```
 ┌──────────────────────────┐   HTTPS (klucz licencji)   ┌───────────────────────────┐
 │ Panel VirtHub klienta     │ ─────────────────────────► │ Serwer licencji (Twój)    │
-│  • LicenseManager         │ ◄───────────────────────── │  license-server/          │
+│  • LicenseManager         │ ◄───────────────────────── │  virthub-portal (repo)    │
 │  • AddonManager           │   podpisany token licencji │  • licencje, domeny       │
 │  • sterowniki dostawców   │   + podpisane paczki       │  • addony i wersje        │
 └──────────────────────────┘                             │  • klucz prywatny Ed25519 │
@@ -25,7 +25,7 @@ zwykłe VPS-y VirtHub.
    Onidel / Hetzner / …
 ```
 
-### 1. Serwer licencji — `license-server/` (osobna aplikacja Laravel, Twój serwer)
+### 1. Serwer licencji — portal VirtHub (repozytorium `virthub-portal`, Twój serwer)
 
 - **Licencje**: klucz (`VH-XXXX-…`), właściciel, domena panelu (przypięcie przy
   pierwszej aktywacji, zmiana przez Ciebie), status, data ważności, addony.
@@ -92,6 +92,6 @@ instance_type, cpu, ram, disk, os, payment_cycle `hourly`, ssh_keys…),
 
 1. Panel: licencja + menedżer addonów + interfejs `ProviderDriver` + serwery
    zewnętrzne (testy na atrapie sterownika).
-2. Serwer licencji `license-server/`.
+2. Serwer licencji — dziś część portalu VirtHub (`virthub-portal`).
 3. Addon Onidel w prywatnym repo + skrypt budowania i podpisywania paczek.
 4. Sprzedaż addonów i licencji (Stripe) na serwerze licencji; kolejni dostawcy.

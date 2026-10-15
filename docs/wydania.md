@@ -2,6 +2,7 @@
 
 Od wersji **1.0.0** każda aktualizacja panelu i węzłów przechodzi przez portal VirtHub
 (repozytorium `TeYroXOfficial/virthub-portal`): sklep licencji, lista wydań i podpisane paczki.
+Dawny `license-server/` jest częścią portalu (te same tabele, API i podpisy).
 
 ## Wersje
 
