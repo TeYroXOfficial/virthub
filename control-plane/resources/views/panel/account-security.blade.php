@@ -12,7 +12,9 @@
     </div>
 
     @if ($mustEnable)
-        <div class="alert alert-error" role="alert"><div>{{ __('Administrator wymaga weryfikacji dwuetapowej dla kont personelu — włącz ją, aby korzystać z administracji.') }}</div></div>
+        <div class="alert alert-error" role="alert"><div>{{ $user->role === \App\Models\User::ROLE_CUSTOMER
+            ? __('Administrator wymaga weryfikacji dwuetapowej — dodaj kod z aplikacji albo klucz dostępu, aby korzystać z panelu.')
+            : __('Administrator wymaga weryfikacji dwuetapowej dla kont personelu — włącz ją, aby korzystać z administracji.') }}</div></div>
     @endif
 
     @if (session('recovery_codes'))
@@ -108,6 +110,62 @@
         </div>
     </div>
 
+    <div class="grid grid-2 dash-section" style="margin-top:16px">
+        <div class="card" id="passkeys">
+            <h3 class="card-title"><x-icon name="key" :size="16"/> {{ __('Klucze dostępu (passkeys)') }}
+                <span class="pill {{ $passkeys->isNotEmpty() ? 'ok' : 'neutral' }}">{{ $passkeys->count() }}</span></h3>
+            <p class="muted">{{ __('Logowanie odciskiem palca, twarzą, PIN-em urządzenia albo kluczem sprzętowym (YubiKey, Titan). Klucz zastępuje hasło i kod z aplikacji — nie da się go wyłudzić na fałszywej stronie.') }}</p>
+            @if ($passkeys->isNotEmpty())
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>{{ __('Nazwa') }}</th><th>{{ __('Dodano') }}</th><th>{{ __('Ostatnie użycie') }}</th><th></th></tr></thead>
+                        <tbody>
+                        @foreach ($passkeys as $passkey)
+                            <tr>
+                                <td><strong>{{ $passkey->name }}</strong></td>
+                                <td>{{ $passkey->created_at->format('d.m.Y') }}</td>
+                                <td>{{ $passkey->last_used_at?->diffForHumans() ?? __('nigdy') }}</td>
+                                <td style="text-align:right">
+                                    <form method="POST" action="{{ route('panel.account.security.passkeys.destroy', $passkey) }}" style="margin:0" data-confirm="{{ __('Usunąć klucz :name?', ['name' => $passkey->name]) }}">
+                                        @csrf @method('DELETE')
+                                        <button class="btn btn-sm btn-danger" type="submit">{{ __('Usuń') }}</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+            @error('passkeys') <div class="hint" style="color:var(--critical)">{{ $message }}</div> @enderror
+            <div class="btn-row" style="margin-top:12px; align-items:flex-end">
+                <div class="field" style="margin:0; flex:1; min-width:180px"><label for="passkey-name">{{ __('Nazwa nowego klucza') }}</label>
+                    <input id="passkey-name" maxlength="80" placeholder="{{ __('np. Laptop, YubiKey') }}"></div>
+                <button class="btn btn-primary" type="button" data-webauthn="register"
+                        data-options="{{ route('panel.account.security.passkeys.options') }}" data-finish="{{ route('panel.account.security.passkeys.store') }}"
+                        data-unsupported="{{ __('Ta przeglądarka nie obsługuje kluczy dostępu.') }}" data-cancelled="{{ __('Anulowano — spróbuj jeszcze raz.') }}">
+                    <x-icon name="plus" :size="15"/> {{ __('Dodaj klucz dostępu') }}</button>
+            </div>
+            <div class="hint" id="webauthn-error" role="alert" style="color:var(--critical)" hidden></div>
+            <p class="hint">{{ __('Panel może poprosić o potwierdzenie tożsamości przed dodaniem klucza.') }}</p>
+            @push('scripts')
+                <script src="{{ asset('js/webauthn.js') }}?v={{ @filemtime(public_path('js/webauthn.js')) }}"></script>
+            @endpush
+        </div>
+
+        <div class="card">
+            <h3 class="card-title"><x-icon name="lock" :size="16"/> {{ __('Przypięcie sesji') }}
+                <span class="pill {{ $user->session_lock ? 'ok' : 'neutral' }}">{{ $user->session_lock ? __('włączone') : __('wyłączone') }}</span></h3>
+            <p class="muted">{{ __('Sesja działa tylko z adresu IP i przeglądarki, z których się zalogowano. Skradzione ciasteczko sesji nie zadziała na innym komputerze, ale zmiana sieci (np. telefon w podróży) wymaga ponownego logowania.') }}</p>
+            <form method="POST" action="{{ route('panel.account.security.session-lock') }}">
+                @csrf @method('PUT')
+                <input type="hidden" name="session_lock" value="{{ $user->session_lock ? 0 : 1 }}">
+                <button class="btn {{ $user->session_lock ? '' : 'btn-primary' }}" type="submit">{{ $user->session_lock ? __('Wyłącz przypięcie') : __('Przypnij sesje do IP i przeglądarki') }}</button>
+            </form>
+            <p class="hint">{{ __('Operacje wrażliwe (usunięcie i reinstalacja maszyny, tokeny API, klucze dostępu, zarządzanie kontami) wymagają ponownego potwierdzenia tożsamości co :minutes min.', ['minutes' => \App\Domain\Security\StepUp::minutes()]) }}</p>
+        </div>
+    </div>
+
     <div class="card flush dash-section">
         <div class="dash-head"><h3 class="card-title" style="margin:0"><x-icon name="logout" :size="16"/> {{ __('Zalogowane urządzenia') }}</h3></div>
         @if ($sessions->isNotEmpty())
@@ -150,12 +208,13 @@
             <a class="btn btn-sm" href="{{ route('api-docs') }}">{{ __('Dokumentacja API') }}</a></div>
         <div class="table-wrap">
             <table>
-                <thead><tr><th>{{ __('Nazwa') }}</th><th>{{ __('Zakres') }}</th><th>{{ __('Ostatnie użycie') }}</th><th>{{ __('Wygasa') }}</th><th></th></tr></thead>
+                <thead><tr><th>{{ __('Nazwa') }}</th><th>{{ __('Zakres') }}</th><th>{{ __('Limit') }}</th><th>{{ __('Ostatnie użycie') }}</th><th>{{ __('Wygasa') }}</th><th></th></tr></thead>
                 <tbody>
                 @forelse ($tokens as $token)
                     <tr>
                         <td><strong>{{ $token->name }}</strong></td>
                         <td>{{ \App\Http\Controllers\Web\AccountSecurityController::scopeLabels($token->abilities ?? []) }}</td>
+                        <td class="num">{{ __(':count / min', ['count' => $token->rate_limit ?: $defaultRateLimit]) }}</td>
                         <td>{{ $token->last_used_at?->diffForHumans() ?? __('nigdy') }}</td>
                         <td>{{ $token->expires_at?->format('d.m.Y') ?? __('bez terminu') }}</td>
                         <td style="text-align:right">
@@ -166,18 +225,20 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="muted">{{ __('Brak tokenów.') }}</td></tr>
+                    <tr><td colspan="6" class="muted">{{ __('Brak tokenów.') }}</td></tr>
                 @endforelse
                 </tbody>
             </table>
         </div>
         <form method="POST" action="{{ route('panel.account.security.tokens.store') }}" style="padding:16px">
             @csrf
-            <div class="grid grid-2">
+            <div class="grid grid-3">
                 <div class="field"><label for="t-name">{{ __('Nazwa tokenu') }}</label>
                     <input id="t-name" name="name" required maxlength="100" value="{{ old('name') }}" placeholder="{{ __('np. skrypt kopii') }}"></div>
                 <div class="field"><label for="t-exp">{{ __('Ważność (dni, puste = bez terminu)') }}</label>
                     <input id="t-exp" name="expires_days" type="number" min="1" max="3650" value="{{ old('expires_days') }}"></div>
+                <div class="field"><label for="t-rate">{{ __('Limit zapytań na minutę') }}</label>
+                    <input id="t-rate" name="rate_limit" type="number" min="1" max="10000" value="{{ old('rate_limit') }}" placeholder="{{ $defaultRateLimit }}"></div>
             </div>
             <fieldset class="field" style="border:0; padding:0; margin:0 0 12px">
                 <legend style="font-weight:600; margin-bottom:6px">{{ __('Zakres') }}</legend>

@@ -7,6 +7,7 @@ use App\Http\Middleware\BlockWhileImpersonating;
 use App\Http\Middleware\EnforceAccountSecurity;
 use App\Http\Middleware\EnsureIsAdmin;
 use App\Http\Middleware\EnsureNotSuspended;
+use App\Http\Middleware\RequireStepUp;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -31,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => EnsureIsAdmin::class,
             'not-suspended' => EnsureNotSuspended::class,
             'not-impersonating' => BlockWhileImpersonating::class,
+            'step-up' => RequireStepUp::class,
             // Zakresy tokenów Sanctum: token integracji rozliczeniowej ma
             // dostęp wyłącznie do endpointów billingowych.
             'abilities' => CheckAbilities::class,

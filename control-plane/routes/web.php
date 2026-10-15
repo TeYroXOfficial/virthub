@@ -37,6 +37,7 @@ use App\Http\Controllers\Web\NetworkController;
 use App\Http\Controllers\Web\NetworkFilterController;
 use App\Http\Controllers\Web\NodeSecurityController;
 use App\Http\Controllers\Web\PanelController;
+use App\Http\Controllers\Web\PasskeyController;
 use App\Http\Controllers\Web\PasswordResetController;
 use App\Http\Controllers\Web\PaymentController;
 use App\Http\Controllers\Web\PciAssetController;
@@ -69,6 +70,10 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::get('/login/two-factor', [AuthController::class, 'showTwoFactor'])->name('login.two-factor');
     Route::post('/login/two-factor', [AuthController::class, 'twoFactor'])->middleware('throttle:20,1');
+    Route::post('/login/passkey/options', [PasskeyController::class, 'loginOptions'])->middleware('throttle:30,1')->name('login.passkey.options');
+    Route::post('/login/passkey', [PasskeyController::class, 'login'])->middleware('throttle:20,1')->name('login.passkey');
+    Route::post('/login/two-factor/passkey/options', [PasskeyController::class, 'twoFactorOptions'])->middleware('throttle:30,1')->name('login.two-factor.passkey.options');
+    Route::post('/login/two-factor/passkey', [PasskeyController::class, 'twoFactor'])->middleware('throttle:20,1')->name('login.two-factor.passkey');
     Route::get('/forgot-password', [PasswordResetController::class, 'request'])->name('password.request');
     Route::post('/forgot-password', [PasswordResetController::class, 'send'])->middleware('throttle:5,1')->name('password.email');
     Route::get('/reset-password/{token}', [PasswordResetController::class, 'edit'])->name('password.reset');
@@ -133,8 +138,15 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
             Route::post('/two-factor/recovery-codes', 'recoveryCodes')->middleware('throttle:10,1')->name('.2fa.recovery');
             Route::delete('/sessions/{key}', 'destroySession')->where('key', '[a-f0-9]{64}')->name('.sessions.destroy');
             Route::put('/allowed-ips', 'allowedIps')->middleware('throttle:10,1')->name('.ips');
-            Route::post('/tokens', 'storeToken')->middleware('throttle:20,1')->name('.tokens.store');
+            Route::post('/tokens', 'storeToken')->middleware(['throttle:20,1', 'step-up'])->name('.tokens.store');
             Route::delete('/tokens/{token}', 'destroyToken')->whereNumber('token')->name('.tokens.destroy');
+        });
+    Route::prefix('/account/security')->name('account.security')->controller(PasskeyController::class)
+        ->middleware(['not-impersonating', 'step-up'])->group(function () {
+            Route::post('/passkeys/options', 'registerOptions')->middleware('throttle:20,1')->name('.passkeys.options');
+            Route::post('/passkeys', 'register')->middleware('throttle:20,1')->name('.passkeys.store');
+            Route::delete('/passkeys/{passkey}', 'destroy')->name('.passkeys.destroy');
+            Route::put('/session-lock', 'sessionLock')->name('.session-lock');
         });
 
     Route::get('/self-service', [SelfServiceController::class, 'index'])->name('self-service');
@@ -154,7 +166,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
         Route::put('/name', 'rename')->name('rename');
     });
     Route::post('/servers/{server}/console', [ConsoleController::class, 'open'])->name('servers.console');
-    Route::post('/servers/{server}/rebuild', [ServerActionsController::class, 'rebuild'])->name('servers.rebuild');
+    Route::post('/servers/{server}/rebuild', [ServerActionsController::class, 'rebuild'])->middleware('step-up')->name('servers.rebuild');
     Route::post('/servers/{server}/resize', [ServerActionsController::class, 'resize'])->middleware('throttle:10,1')->name('servers.resize');
     Route::post('/servers/{server}/iso', [ServerActionsController::class, 'iso'])->name('servers.iso');
     Route::post('/servers/{server}/elevate', [ServerActionsController::class, 'elevate'])->middleware('throttle:20,1')->name('servers.elevate');
@@ -166,7 +178,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::delete('/servers/{server}/iso/custom/{iso}', [ServerActionsController::class, 'destroyCustomIso'])->name('servers.iso.custom.destroy');
     Route::post('/servers/{server}/password', [ServerActionsController::class, 'resetPassword'])->name('servers.password');
     Route::get('/servers/{server}/status', [ServerActionsController::class, 'status'])->name('servers.status');
-    Route::delete('/servers/{server}', [ServerActionsController::class, 'destroy'])->name('servers.destroy');
+    Route::delete('/servers/{server}', [ServerActionsController::class, 'destroy'])->middleware('step-up')->name('servers.destroy');
     Route::post('/servers/{server}/purge', [ServerActionsController::class, 'purge'])->name('servers.purge');
     Route::post('/servers/{server}/detect-os', [ServerActionsController::class, 'detectOs'])->name('servers.detect-os');
     Route::post('/servers/{server}/traffic', [ServerActionsController::class, 'traffic'])->name('servers.traffic');
@@ -595,16 +607,16 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
         Route::get('/users', [UsersController::class, 'index'])->name('users');
         Route::get('/users/new', [UsersController::class, 'create'])->name('users.create');
         Route::put('/users/policy', [UsersController::class, 'policy'])->name('users.policy');
-        Route::post('/users', [UsersController::class, 'store'])->name('users.store');
+        Route::post('/users', [UsersController::class, 'store'])->middleware('step-up')->name('users.store');
         Route::get('/users/{user}', [UsersController::class, 'edit'])->name('users.edit');
-        Route::put('/users/{user}', [UsersController::class, 'update'])->name('users.update');
+        Route::put('/users/{user}', [UsersController::class, 'update'])->middleware('step-up')->name('users.update');
         Route::post('/users/{user}/suspend', [UsersController::class, 'suspend'])->name('users.suspend');
         Route::post('/users/{user}/unsuspend', [UsersController::class, 'unsuspend'])->name('users.unsuspend');
         Route::post('/users/{user}/password', [UsersController::class, 'resetPassword'])->name('users.password');
-        Route::post('/users/{user}/security', [UsersController::class, 'resetSecurity'])->name('users.security');
-        Route::delete('/users/{user}', [UsersController::class, 'destroy'])->name('users.destroy');
+        Route::post('/users/{user}/security', [UsersController::class, 'resetSecurity'])->middleware('step-up')->name('users.security');
+        Route::delete('/users/{user}', [UsersController::class, 'destroy'])->middleware('step-up')->name('users.destroy');
         Route::post('/users/{user}/impersonate', [ImpersonationController::class, 'start'])
-            ->middleware(['admin', 'throttle:20,1'])->name('users.impersonate');
+            ->middleware(['admin', 'throttle:20,1', 'step-up'])->name('users.impersonate');
     });
 });
 
@@ -627,6 +639,10 @@ Route::get('/console/{token}', [ConsoleController::class, 'show'])
     ->middleware('auth')
     ->name('console.show');
 Route::middleware('auth')->group(function () {
+    Route::get('/confirm', [PasskeyController::class, 'showConfirm'])->name('confirm');
+    Route::post('/confirm', [PasskeyController::class, 'confirm'])->middleware('throttle:10,1');
+    Route::post('/confirm/passkey/options', [PasskeyController::class, 'confirmOptions'])->middleware('throttle:20,1')->name('confirm.passkey.options');
+    Route::post('/confirm/passkey', [PasskeyController::class, 'confirmPasskey'])->middleware('throttle:20,1')->name('confirm.passkey');
     Route::post('/console-snippets', [ConsoleController::class, 'storeSnippet'])->middleware('throttle:30,1')->name('console.snippets.store');
     Route::delete('/console-snippets/{snippet}', [ConsoleController::class, 'destroySnippet'])->name('console.snippets.destroy');
 });

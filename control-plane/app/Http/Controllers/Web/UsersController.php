@@ -38,6 +38,7 @@ class UsersController extends Controller
             'users' => $users,
             'manager' => $this->users,
             'staff2fa' => AccountSecurity::staffMustUseTwoFactor(),
+            'customer2fa' => AccountSecurity::customersMustUseTwoFactor(),
         ]);
     }
 
@@ -45,8 +46,9 @@ class UsersController extends Controller
     {
         abort_unless($request->user()->isAdmin(), 403);
         $enabled = $request->boolean('staff_2fa');
-        Setting::put(['security.staff_2fa' => $enabled ? '1' : '0']);
-        AuditLog::record('security.policy', null, ['staff_2fa' => $enabled], $request->user());
+        $customers = $request->boolean('customer_2fa');
+        Setting::put(['security.staff_2fa' => $enabled ? '1' : '0', 'security.customer_2fa' => $customers ? '1' : '0']);
+        AuditLog::record('security.policy', null, ['staff_2fa' => $enabled, 'customer_2fa' => $customers], $request->user());
 
         return back()->with('status', __('Zapisano zasady bezpieczeństwa.'));
     }

@@ -122,7 +122,7 @@ class AccountSecurityTest extends TestCase
         $this->put(route('panel.admin.users.policy'), ['staff_2fa' => '1'])->assertRedirect();
         $this->assertSame('1', Setting::get('security.staff_2fa'));
 
-        $this->get(route('panel.admin.users'))->assertRedirect(route('panel.account'));
+        $this->get(route('panel.admin.users'))->assertRedirect(route('panel.account.security'));
         $this->get(route('panel.dashboard'))->assertOk();
 
         $this->enable2fa($admin);

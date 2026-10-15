@@ -35,6 +35,7 @@
 
                 <button class="btn btn-primary" type="submit" style="width:100%">{{ __('Zaloguj się') }}</button>
             </form>
+            @include('auth._passkey-button', ['mode' => 'login', 'options' => route('login.passkey.options'), 'finish' => route('login.passkey'), 'label' => __('Zaloguj się kluczem dostępu')])
         </div>
         <p style="text-align:center; margin-top:16px"><a href="{{ route('password.request') }}">{{ __('Nie pamiętasz hasła?') }}</a></p>
     </div>
