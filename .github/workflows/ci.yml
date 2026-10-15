@@ -12,6 +12,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  version:
+    name: Wersja (semver + changelog)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # VERSION musi być poprawnym semver i mieć sekcję w CHANGELOG.md — inaczej tag wydania by się nie opublikował.
+      - run: scripts/release.sh
+
   control-plane:
     name: Control plane (Laravel)
     runs-on: ubuntu-latest

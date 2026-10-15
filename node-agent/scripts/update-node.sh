@@ -7,8 +7,10 @@
 #   * z panelu: usługa virthub-agent-update.service (jako root, --unattended),
 #               wyzwalana plikiem-zleceniem zostawionym przez agenta.
 #
-# Źródło kodu wyłącznie z lokalnego /etc/virthub-agent/update.env — panel może
-# aktualizację tylko wyzwolić, nie może wskazać, skąd pobrać kod.
+# Z portalem (licencja w panelu) panel podaje wydanie: wersję, adres, SHA-256
+# i podpis — węzeł instaluje je tylko z poprawnym podpisem kluczem przypiętym
+# w /etc/virthub-agent/update.env. Bez wydania od panelu (ręczne uruchomienie)
+# źródłem jest repozytorium z update.env.
 #
 set -Eeuo pipefail
 
@@ -54,7 +56,45 @@ PYEOF
 trap 'rc=$?; write_status failed "Aktualizacja przerwana w linii $LINENO (kod $rc): $BASH_COMMAND"; exit $rc' ERR
 
 write_status running "Pobieram kod"
-echo "==> Aktualizacja węzła z $VH_UPDATE_REPO ($VH_UPDATE_BRANCH)"
+
+WORK="$(mktemp -d /tmp/virthub-update.XXXXXX)"
+trap 'rm -rf "$WORK"' EXIT
+
+SEMVER='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+RELEASE_JSON="$STATE_DIR/release.json"
+
+# Wydanie z portalu, zlecone przez panel: adres i podpis przychodzą z panelu,
+# ale podpis sprawdzamy kluczem przypiętym lokalnie (VH_RELEASE_PUBLIC_KEY) —
+# panel nie może podsunąć ani obcej paczki, ani obcego klucza.
+verify_release() {  # plik wersja sha256 podpis
+    local file="$1" version="$2" sha="$3" sig="$4"
+    [ -n "${VH_RELEASE_PUBLIC_KEY:-}" ] || { echo "Węzeł nie ma przypiętego klucza portalu (VH_RELEASE_PUBLIC_KEY w $CONF)." >&2; return 1; }
+    [ "$(sha256sum "$file" | cut -d' ' -f1)" = "$sha" ] || { echo "Suma SHA-256 paczki się nie zgadza." >&2; return 1; }
+    { printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; printf '%s' "$VH_RELEASE_PUBLIC_KEY" | base64 -d; } > "$WORK/key.der"
+    printf '%s' "$sig" | base64 -d > "$WORK/sig.bin"
+    printf 'virthub-release\n%s\n%s' "$version" "$sha" > "$WORK/msg.bin"
+    openssl pkeyutl -verify -pubin -keyform DER -inkey "$WORK/key.der" -rawin -in "$WORK/msg.bin" -sigfile "$WORK/sig.bin" >/dev/null 2>&1 \
+        || { echo "Podpis Ed25519 paczki jest nieprawidłowy — przerywam." >&2; return 1; }
+}
+
+if [ -f "$RELEASE_JSON" ]; then
+    read -r R_VERSION R_URL R_SHA R_SIG < <(python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(d.get("version", ""), d.get("url", ""), d.get("sha256", ""), d.get("signature", ""))' "$RELEASE_JSON")
+    rm -f "$RELEASE_JSON"
+    [[ "$R_VERSION" =~ $SEMVER ]] && [[ "$R_SHA" =~ ^[0-9a-f]{64}$ ]] && [[ "$R_URL" =~ ^https?:// ]] \
+        || { write_status failed "Nieprawidłowy opis wydania od panelu"; exit 1; }
+    TARGET="$R_VERSION"
+    echo "==> Aktualizacja węzła do VirtHub $TARGET (portal)"
+    curl -fsSL --max-time 600 "$R_URL" -o "$WORK/release.tar.gz"
+    verify_release "$WORK/release.tar.gz" "$R_VERSION" "$R_SHA" "$R_SIG" || { write_status failed "Paczka $TARGET nie przeszła weryfikacji podpisu"; exit 1; }
+    echo "  ✓ Podpis Ed25519 i suma SHA-256 poprawne"
+    tar -xzf "$WORK/release.tar.gz" -C "$WORK"
+    VH_TARBALL="verified"
+else
+    echo "==> Aktualizacja węzła z $VH_UPDATE_REPO ($VH_UPDATE_BRANCH)"
+fi
 
 # Konkretny commit zamiast „najnowszego archiwum gałęzi": węzeł wie, którą
 # wersję ma, a panel porównuje ją z najnowszą.
@@ -69,10 +109,7 @@ if [ -z "$VH_TARBALL" ]; then
     fi
 fi
 
-WORK="$(mktemp -d /tmp/virthub-update.XXXXXX)"
-trap 'rm -rf "$WORK"' EXIT
-
-curl -fsSL --max-time 300 "$VH_TARBALL" | tar -xz -C "$WORK"
+[ "$VH_TARBALL" = "verified" ] || curl -fsSL --max-time 300 "$VH_TARBALL" | tar -xz -C "$WORK"
 SRC="$(find "$WORK" -mindepth 2 -maxdepth 2 -type d -name node-agent | head -1)"
 [ -n "$SRC" ] && [ -f "$SRC/scripts/apply-update.sh" ] || {
     write_status failed "Archiwum nie zawiera node-agent/scripts/apply-update.sh"

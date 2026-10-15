@@ -32,7 +32,8 @@ class Updates:
         self.unit = unit
 
     def build(self) -> str | None:
-        """Commit, z którego pochodzi kod agenta (zapisany przez aktualizację)."""
+        """Wersja kodu agenta zapisana przez aktualizację: semver wydania z portalu
+        albo commit (instalacje sprzed portalu)."""
         try:
             value = self.version_file.read_text(encoding="utf-8").strip().split()[0]
             return value or None
@@ -67,14 +68,23 @@ class Updates:
                 state = {**state, "state": "queued"}
         return {**state, "build": self.build(), "remote_update": self.enabled()}
 
-    def request(self) -> dict:
+    def request(self, release: dict | None = None) -> dict:
         if not self.enabled():
             raise UpdaterMissing(
                 "Zdalna aktualizacja nie jest włączona na tym węźle. Zaktualizuj go raz "
                 "ręcznie poleceniem update-node.sh — potem aktualizacje z panelu zadziałają."
             )
         self.dir.mkdir(parents=True, exist_ok=True)
-        (self.dir / "request").write_text(json.dumps({"requested_at": int(time.time())}), encoding="utf-8")
+        # Wydanie z portalu (wersja, adres, SHA-256, podpis). Root sprawdzi podpis
+        # kluczem z /etc/virthub-agent/update.env — z tego pliku nie ufa niczemu innemu.
+        release_file = self.dir / "release.json"
+        if release:
+            release_file.write_text(json.dumps(release), encoding="utf-8")
+        else:
+            release_file.unlink(missing_ok=True)
+        (self.dir / "request").write_text(
+            json.dumps({"requested_at": int(time.time()), "target": (release or {}).get("version")}), encoding="utf-8"
+        )
         return self.status()
 
 

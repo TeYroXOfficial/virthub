@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Admin\Dashboard;
 use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
+use App\Domain\Licensing\LicenseManager;
 use App\Domain\Network\HypervisorGroupManager;
 use App\Domain\Provisioning\HypervisorSelector;
 use App\Http\Controllers\Controller;
@@ -43,6 +44,10 @@ class HypervisorController extends Controller
             'disk_gb_total' => ['required', 'integer', 'min:10'],
             'bridge' => ['nullable', 'string', 'max:32'],
         ]);
+
+        if (($blocked = app(LicenseManager::class)->canAddNode()) !== null) {
+            return response()->json(['message' => $blocked], 403);
+        }
 
         $agentToken = Str::random(64);
         $callbackSecret = Str::random(64);

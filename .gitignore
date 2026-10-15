@@ -34,3 +34,4 @@ Thumbs.db
 *.zip
 *.tar.gz
 integrations/dist/
+/dist/

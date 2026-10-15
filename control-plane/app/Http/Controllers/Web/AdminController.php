@@ -7,6 +7,7 @@ use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
 use App\Domain\Billing\Billing;
 use App\Domain\Billing\BillingStats;
+use App\Domain\Licensing\LicenseManager;
 use App\Domain\Metrics\Traffic;
 use App\Domain\Network\HypervisorGroupManager;
 use App\Domain\Provisioning\HypervisorEnrollment;
@@ -163,6 +164,9 @@ class AdminController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100', 'unique:hypervisors,name'],
         ]);
+        if (($blocked = app(LicenseManager::class)->canAddNode()) !== null) {
+            return back()->withInput()->withErrors(['name' => $blocked]);
+        }
 
         $hypervisor = Hypervisor::create([
             'name' => $validated['name'],

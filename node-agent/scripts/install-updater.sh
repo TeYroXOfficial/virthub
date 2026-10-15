@@ -29,6 +29,16 @@ ENVEOF
     chmod 644 /etc/virthub-agent/update.env
 fi
 
+# Klucz publiczny portalu VirtHub — nim węzeł sprawdza podpis każdej paczki
+# zleconej z panelu. Przypinamy go raz (z kodu agenta, który już jest na
+# węźle); panel nie może go zmienić. Zmiana klucza = ręczna edycja update.env.
+RELEASE_KEY="$(grep -v '^\s*#' "$AGENT_DIR/release-key.pub" 2>/dev/null | tr -d '[:space:]' || true)"
+if [ -n "$RELEASE_KEY" ] && ! grep -q '^VH_RELEASE_PUBLIC_KEY=' /etc/virthub-agent/update.env; then
+    if printf '%s' "$RELEASE_KEY" | base64 -d 2>/dev/null | wc -c | grep -qx 32; then
+        printf '# Klucz portalu VirtHub (Ed25519) — podpis paczek aktualizacji.\nVH_RELEASE_PUBLIC_KEY=%s\n' "$RELEASE_KEY" >> /etc/virthub-agent/update.env
+    fi
+fi
+
 cat > /etc/systemd/system/virthub-agent-update.path <<UNITEOF
 [Unit]
 Description=VirtHub — zlecenie aktualizacji węzła z panelu

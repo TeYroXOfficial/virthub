@@ -77,13 +77,21 @@ class Dashboard
     /** @return array<string, mixed> wersja, aktualizacje, poczta, węzły, nieudane zadania */
     public function system(Collection $nodes): array
     {
-        $version = $this->updates->panelVersion();
-        $latest = $this->updates->cachedLatest();
         $since = now()->subDay();
+        if ($this->updates->viaPortal()) {
+            $check = $this->updates->cachedCheck();
+            $display = $this->updates->version();
+            $upToDate = $check && $check['ok'] ? empty($check['update_available']) : null;
+        } else {
+            $version = $this->updates->panelVersion();
+            $latest = $this->updates->cachedLatest();
+            $display = $this->updates->version() ?? ($version ? Updates::short($version) : null);
+            $upToDate = $version && $latest ? $latest['sha'] === $version : null;
+        }
 
         return [
-            'version' => $version ? Updates::short($version) : null,
-            'up_to_date' => $version && $latest ? $latest['sha'] === $version : null,
+            'version' => $display,
+            'up_to_date' => $upToDate,
             'mail' => MailSettings::configured(),
             'nodes_online' => $nodes->filter(fn ($n) => $n->enrolled_at !== null && $n->isOnline())->count(),
             'nodes_total' => $nodes->whereNotNull('enrolled_at')->count(),
