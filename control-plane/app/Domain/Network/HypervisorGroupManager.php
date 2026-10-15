@@ -58,7 +58,7 @@ class HypervisorGroupManager
      */
     private function settings(array $settings): array
     {
-        return array_intersect_key($settings, array_flip(['location', 'is_public', 'accepts_new_servers', 'sort_order']));
+        return array_intersect_key($settings, array_flip(['location', 'is_public', 'accepts_new_servers', 'sort_order', 'placement_strategy']));
     }
 
     /** @throws ValidationException */

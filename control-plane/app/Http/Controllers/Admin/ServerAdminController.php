@@ -7,6 +7,7 @@ use App\Domain\Provisioning\Migrations;
 use App\Domain\Provisioning\ServerDisks;
 use App\Domain\Provisioning\ServerHardware;
 use App\Domain\Provisioning\ServerProvisioner;
+use App\Domain\Provisioning\ServerSharing;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ServerResource;
 use App\Models\AuditLog;
@@ -14,6 +15,7 @@ use App\Models\Hypervisor;
 use App\Models\Server;
 use App\Models\ServerDisk;
 use App\Models\ServerJob;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -65,6 +67,20 @@ class ServerAdminController extends Controller
         $job = $migrations->start($server, Hypervisor::findOrFail($validated['hypervisor_id']), $validated['mode'] ?? 'cold', $request->user());
 
         return response()->json(['message' => __('Migracja rozpoczęta.'), 'job_id' => $job->id], 202);
+    }
+
+    /** Nowy właściciel maszyny (with_billing: usługa rozliczeniowa przechodzi razem z nią). */
+    public function transferOwner(Request $request, Server $server, ServerSharing $sharing): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required_without:email', 'nullable', 'integer', 'exists:users,id'],
+            'email' => ['required_without:user_id', 'nullable', 'email', 'exists:users,email'],
+            'with_billing' => ['nullable', 'boolean'],
+        ]);
+        $owner = isset($data['user_id']) ? User::findOrFail($data['user_id']) : User::where('email', $data['email'])->firstOrFail();
+        $sharing->transfer($server, $owner, (bool) ($data['with_billing'] ?? false), $request->user());
+
+        return response()->json(['data' => ['server_id' => $server->id, 'user_id' => $owner->id, 'email' => $owner->email]]);
     }
 
     /** Węzły, na które maszynę można przenieść (na zimno / na żywo), z powodem odmowy. */

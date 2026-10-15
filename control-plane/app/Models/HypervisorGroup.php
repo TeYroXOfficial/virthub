@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -14,7 +15,7 @@ class HypervisorGroup extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'description', 'location', 'is_public', 'accepts_new_servers', 'sort_order'];
+    protected $fillable = ['name', 'description', 'location', 'is_public', 'accepts_new_servers', 'sort_order', 'placement_strategy'];
 
     protected function casts(): array
     {
@@ -25,8 +26,8 @@ class HypervisorGroup extends Model
         ];
     }
 
-    /** @param \Illuminate\Database\Eloquent\Builder<HypervisorGroup> $query */
-    public function scopeOrdered(\Illuminate\Database\Eloquent\Builder $query): void
+    /** @param Builder<HypervisorGroup> $query */
+    public function scopeOrdered(Builder $query): void
     {
         $query->orderBy('sort_order')->orderBy('name');
     }

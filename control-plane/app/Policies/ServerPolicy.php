@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Domain\Billing\Billing;
 use App\Models\Server;
 use App\Models\User;
 
@@ -24,7 +25,19 @@ class ServerPolicy
     public function view(User $user, Server $server): bool
     {
         return ! $user->isSuspended()
-            && ($server->user_id === $user->id || $this->staffAccess($user));
+            && ($server->user_id === $user->id || $this->staffAccess($user) || $server->shareFor($user) !== null);
+    }
+
+    /** Udostępnianie maszyny innym — tylko właściciel (i personel). */
+    public function share(User $user, Server $server): bool
+    {
+        return ! $user->isSuspended() && ($server->user_id === $user->id || $this->staffAccess($user));
+    }
+
+    /** Zmiana właściciela — administrator. */
+    public function transfer(User $user, Server $server): bool
+    {
+        return ! $user->isSuspended() && $user->isAdmin();
     }
 
     /** Operacje bez osobnego uprawnienia: podgląd hasła, statystyki na żywo. */
@@ -56,7 +69,7 @@ class ServerPolicy
     public function resize(User $user, Server $server): bool
     {
         // Z włączonym billingiem większy pakiet to płatna zmiana — klient nie przechodzi na niego sam.
-        if (\App\Domain\Billing\Billing::enabled() && ! $user->isStaff()) {
+        if (Billing::enabled() && ! $user->isStaff()) {
             return false;
         }
 
@@ -111,7 +124,7 @@ class ServerPolicy
     public function create(User $user): bool
     {
         // Z włączonym billingiem klient zamawia przez sklep (płatność przed utworzeniem).
-        if (\App\Domain\Billing\Billing::enabled() && ! $user->isStaff()) {
+        if (Billing::enabled() && ! $user->isStaff()) {
             return false;
         }
 
@@ -126,6 +139,10 @@ class ServerPolicy
 
         if ($server->user_id === $user->id) {
             return $user->hasPermission($permission);
+        }
+        // Udostępniona maszyna: tylko nadane uprawnienia; usunięcia nie da się nadać.
+        if (($share = $server->shareFor($user)) !== null && ! $this->staffAccess($user)) {
+            return $share->allows($permission);
         }
 
         // Support celowo nie może usunąć ani przebudować cudzej maszyny —

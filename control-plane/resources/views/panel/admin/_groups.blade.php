@@ -7,6 +7,7 @@
             'is_public' => (bool) $group?->is_public,
             'accepts' => $group ? $group->accepts_new_servers : true,
             'sort' => $group?->sort_order ?? 0,
+            'strategy' => $group?->placement_strategy,
         ];
     };
 @endphp

@@ -10,6 +10,7 @@ use App\Domain\Billing\BillingStats;
 use App\Domain\Metrics\Traffic;
 use App\Domain\Network\HypervisorGroupManager;
 use App\Domain\Provisioning\HypervisorEnrollment;
+use App\Domain\Provisioning\HypervisorSelector;
 use App\Domain\Provisioning\ServerHardware;
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Domain\Provisioning\TemplateDistributor;
@@ -28,6 +29,7 @@ use App\Models\OsTemplate;
 use App\Models\OsTemplateGroup;
 use App\Models\PciAsset;
 use App\Models\Server;
+use App\Models\Setting;
 use App\Models\TemplateDownload;
 use App\Models\VpsPackage;
 use Illuminate\Http\JsonResponse;
@@ -113,6 +115,16 @@ class AdminController extends Controller
             'hypervisors' => Hypervisor::query()->with('group')->orderBy('name')->get(),
             'groups' => $this->groupsForView(),
         ]);
+    }
+
+    /** Domyślna strategia rozmieszczania nowych maszyn (grupy mogą mieć własną). */
+    public function updatePlacement(Request $request): RedirectResponse
+    {
+        $data = $request->validate(['placement_strategy' => ['required', Rule::in(HypervisorSelector::STRATEGIES)]]);
+        Setting::put(['placement.strategy' => $data['placement_strategy']]);
+        AuditLog::record('placement.strategy', null, $data);
+
+        return back()->with('status', __('Zapisano domyślną strategię rozmieszczania.'));
     }
 
     public function showHypervisor(Hypervisor $hypervisor): View
@@ -786,6 +798,7 @@ class AdminController extends Controller
             'family' => ['required', Rule::in(array_keys(OsTemplateGroup::FAMILIES))],
             'description' => ['nullable', 'string', 'max:255'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'placement_strategy' => ['nullable', Rule::in(HypervisorSelector::STRATEGIES)],
         ];
     }
 
@@ -859,6 +872,7 @@ class AdminController extends Controller
             // Brak pola w starszym formularzu = przyjmuje (dotychczasowe zachowanie).
             'accepts_new_servers' => $request->has('accepts_new_servers') ? $request->boolean('accepts_new_servers') : true,
             'sort_order' => (int) ($validated['sort_order'] ?? 0),
+            'placement_strategy' => ($validated['placement_strategy'] ?? null) ?: null,
         ];
     }
 

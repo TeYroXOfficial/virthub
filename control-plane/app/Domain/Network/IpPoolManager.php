@@ -63,6 +63,7 @@ class IpPoolManager
             'nat_ports_per_server' => ['nullable', 'integer', 'min:1', 'max:1000'],
             'vlan_id' => ['nullable', 'integer', 'min:1', 'max:4094'],
             'routed' => ['nullable', 'boolean'],
+            'priority' => ['nullable', 'integer', 'min:0', 'max:100000'],
         ];
     }
 
@@ -122,6 +123,7 @@ class IpPoolManager
             'nameservers' => ['nullable'],
             'dns_preset' => ['nullable', Rule::in([...array_keys(self::DNS_PRESETS), 'custom', 'default'])],
             'nat_public_address' => ['nullable', 'ip'],
+            'priority' => ['nullable', 'integer', 'min:0', 'max:100000'],
         ];
     }
 
@@ -160,6 +162,7 @@ class IpPoolManager
                 'hypervisor_id' => $group ? null : (int) $data['hypervisor_id'],
                 'hypervisor_group_id' => $group ? (int) $data['hypervisor_group_id'] : null,
                 'nat_public_address' => $publicAddress,
+                'priority' => isset($data['priority']) ? (int) $data['priority'] : $pool->priority,
             ]);
             if ($pool->isDirty(['hypervisor_id', 'hypervisor_group_id'])) {
                 $this->assertNoConflicts($pool);

@@ -71,6 +71,7 @@
                         <tr>
                             <td>
                                 <a href="{{ route('panel.servers.show', $server) }}" style="font-weight:600">{{ $server->hostname }}</a>
+                                @if ($server->user_id !== auth()->id() && ! auth()->user()->isStaff()) <span class="pill neutral plain">{{ __('udostępniona') }}</span> @endif
                                 @if ($server->label)
                                     <div class="hint">{{ $server->label }}</div>
                                 @endif

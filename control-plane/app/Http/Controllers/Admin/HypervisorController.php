@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Admin\Dashboard;
 use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
 use App\Domain\Network\HypervisorGroupManager;
@@ -139,6 +140,38 @@ class HypervisorController extends Controller
         ])->save();
 
         return response()->json(['reachable' => true, 'health' => $health]);
+    }
+
+    /**
+     * Metryki węzła: przydział zasobów, ostatni raport agenta (obciążenie,
+     * pamięć, dyski) i — z ?live=1 — szczegółowy odczyt na żywo (monitor).
+     */
+    public function metrics(Request $request, Hypervisor $hypervisor, Dashboard $dashboard): JsonResponse
+    {
+        $row = $dashboard->nodes(collect([$hypervisor->loadCount('servers')]))->first();
+        $data = [
+            'id' => $hypervisor->id, 'name' => $hypervisor->name, 'status' => $hypervisor->status, 'online' => $hypervisor->isOnline(),
+            'last_seen_at' => $hypervisor->last_seen_at?->toIso8601String(),
+            'allocation' => [
+                'cpu_cores' => ['used' => $hypervisor->cpu_cores_used, 'total' => $hypervisor->cpu_cores_total],
+                'ram_mb' => ['used' => $hypervisor->ram_mb_used, 'total' => $hypervisor->ram_mb_total],
+                'disk_gb' => ['used' => $hypervisor->disk_gb_used, 'total' => $hypervisor->disk_gb_total],
+                'percent' => $hypervisor->utilisationPercent(),
+            ],
+            'host' => ['cpu_percent' => $row['cpu'], 'load_1m' => $row['load'], 'memory_percent' => $row['mem'], 'disk_percent' => $row['disk']],
+            'servers' => $row['servers'], 'apps' => $row['apps'],
+            'report' => $hypervisor->last_health,
+        ];
+        if ($request->boolean('live')) {
+            try {
+                $data['live'] = (new AgentClient($hypervisor))->monitor();
+            } catch (AgentException $e) {
+                $data['live'] = null;
+                $data['live_error'] = $e->getMessage();
+            }
+        }
+
+        return response()->json(['data' => $data]);
     }
 
     /** Przelicza zajętość z maszyn w bazie — po awarii albo ręcznych zmianach. */

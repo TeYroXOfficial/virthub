@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Network\PortForwarding;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +24,21 @@ class IpAddress extends Model
         'rdns',
         'mac_address',
     ];
+
+    protected static function booted(): void
+    {
+        // Historia przydziałów (audyt IP): każda zmiana maszyny adresu.
+        static::created(function (IpAddress $address) {
+            if ($address->server_id !== null) {
+                IpAssignment::track($address, null);
+            }
+        });
+        static::updated(function (IpAddress $address) {
+            if ($address->wasChanged('server_id')) {
+                IpAssignment::track($address, $address->getOriginal('server_id'));
+            }
+        });
+    }
 
     protected function casts(): array
     {
@@ -90,8 +106,8 @@ class IpAddress extends Model
 
         return $ports === null ? null : [
             ...$ports,
-            'ssh' => \App\Domain\Network\PortForwarding::externalFor($this, 22),
-            'rdp' => \App\Domain\Network\PortForwarding::externalFor($this, 3389),
+            'ssh' => PortForwarding::externalFor($this, 22),
+            'rdp' => PortForwarding::externalFor($this, 3389),
         ];
     }
 }

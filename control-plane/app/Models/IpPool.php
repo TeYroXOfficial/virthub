@@ -34,6 +34,7 @@ class IpPool extends Model
         'range_to',
         'nameservers',
         'nat_public_address',
+        'priority',
         'nat_port_start',
         'nat_ports_per_server',
         'vlan_id',
