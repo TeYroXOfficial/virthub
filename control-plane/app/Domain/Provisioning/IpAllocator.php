@@ -3,9 +3,11 @@
 namespace App\Domain\Provisioning;
 
 use App\Domain\Network\IpMath;
+use App\Domain\Network\ReverseDns;
 use App\Models\Hypervisor;
 use App\Models\IpAddress;
 use App\Models\IpPool;
+use App\Models\NatPortForward;
 use App\Models\Server;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -95,11 +97,11 @@ class IpAllocator
     public function release(IpAddress $address): void
     {
         // PTR należy do maszyny — następny właściciel adresu nie może dostać cudzej nazwy.
-        app(\App\Domain\Network\ReverseDns::class)->forget($address);
+        app(ReverseDns::class)->forget($address);
 
         // Przekierowania należą do maszyny — następny właściciel adresu
         // dostaje czysty blok portów.
-        \App\Models\NatPortForward::query()->where('ip_address_id', $address->id)->delete();
+        NatPortForward::query()->where('ip_address_id', $address->id)->delete();
 
         $address->forceFill([
             'server_id' => null,
@@ -176,6 +178,8 @@ class IpAllocator
             ->where('type', $type)
             ->where('version', $version)
             // Najpierw pule węzła, potem pule grupy.
+            // Kolejność pul ustala administrator (priorytet), potem pule węzła przed pulami grupy.
+            ->orderBy('priority')
             ->orderByRaw('CASE WHEN hypervisor_id IS NULL THEN 1 ELSE 0 END')
             ->orderBy('id')
             ->get();

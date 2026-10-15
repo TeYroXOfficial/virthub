@@ -6,20 +6,52 @@ use App\Enums\Virtualization;
 use App\Models\Hypervisor;
 use App\Models\Server;
 use App\Models\ServerDisk;
+use App\Models\Setting;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Dobór hypervisora pod nową maszynę i księgowanie zajętych zasobów.
  *
- * Strategia: bin-packing — wybieramy najbardziej zapełniony node, na którym
- * maszyna jeszcze się mieści. Odwrotność (najluźniejszy node) rozsypuje małe
- * VPS-y po całej flocie i po jakimś czasie nigdzie nie ma miejsca na duży.
+ * Strategie (domyślna panelu albo własna grupy węzłów):
+ * - pack — bin-packing: najbardziej zapełniony węzeł, na którym maszyna się
+ *   mieści (duże maszyny zawsze mają gdzie stanąć);
+ * - spread — najluźniejszy węzeł (mniejszy „hałas sąsiadów”, równe obciążenie);
+ * - fewest — węzeł z najmniejszą liczbą maszyn;
+ * - random — losowo wśród pasujących.
  *
  * Rezerwacja idzie w transakcji z blokadą wiersza hypervisora, bo dwa
  * równoległe zamówienia potrafią zobaczyć to samo wolne miejsce i oba je zająć.
  */
 class HypervisorSelector
 {
+    public const STRATEGIES = ['pack', 'spread', 'fewest', 'random'];
+
+    public static function defaultStrategy(): string
+    {
+        $value = (string) Setting::get('placement.strategy', config('virthub.placement_strategy', 'pack'));
+
+        return in_array($value, self::STRATEGIES, true) ? $value : 'pack';
+    }
+
+    public static function label(string $strategy): string
+    {
+        return match ($strategy) {
+            'spread' => __('rozpraszanie — najluźniejszy węzeł'),
+            'fewest' => __('najmniej maszyn'),
+            'random' => __('losowo'),
+            default => __('upakowanie — najpełniejszy węzeł, na którym się zmieści'),
+        };
+    }
+
+    /** Strategia dla zbioru kandydatów: grupy, gdy wszyscy są w jednej grupie z własną strategią. */
+    public static function strategyFor(Collection $candidates): string
+    {
+        $groups = $candidates->map(fn (Hypervisor $h) => $h->group?->placement_strategy)->unique();
+
+        return $groups->count() === 1 && in_array($groups->first(), self::STRATEGIES, true) ? $groups->first() : self::defaultStrategy();
+    }
+
     /**
      * @param  (callable(Hypervisor): bool)|null  $accepts  dodatkowy warunek, np.
      *                                                      wolne adresy w pulach węzła
@@ -31,8 +63,9 @@ class HypervisorSelector
         Virtualization $virtualization = Virtualization::Kvm,
         ?callable $accepts = null,
     ): ?Hypervisor {
-        return Hypervisor::query()
+        $candidates = Hypervisor::query()
             ->with('group')
+            ->withCount('servers')
             ->available()
             // Kontener nie stanie na węźle KVM (brak Incusa) ani maszyna
             // wirtualna na węźle bez VT-x.
@@ -41,8 +74,17 @@ class HypervisorSelector
             ->filter(fn (Hypervisor $h) => $h->hasCapacityFor($vcpu, $ramMb, $diskGb))
             ->filter(fn (Hypervisor $h) => $h->acceptsMoreServers())
             ->filter(fn (Hypervisor $h) => $accepts === null || $accepts($h))
-            ->sortByDesc(fn (Hypervisor $h) => $h->utilisationPercent())
-            ->first();
+            ->values();
+        if ($candidates->isEmpty()) {
+            return null;
+        }
+
+        return match (self::strategyFor($candidates)) {
+            'spread' => $candidates->sortBy(fn (Hypervisor $h) => [$h->utilisationPercent(), $h->id])->first(),
+            'fewest' => $candidates->sortBy(fn (Hypervisor $h) => [$h->servers_count, $h->utilisationPercent(), $h->id])->first(),
+            'random' => $candidates->random(),
+            default => $candidates->sortByDesc(fn (Hypervisor $h) => $h->utilisationPercent())->first(),
+        };
     }
 
     /**

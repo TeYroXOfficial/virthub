@@ -27,6 +27,7 @@ use App\Http\Controllers\Web\FirewallController;
 use App\Http\Controllers\Web\GatewaySettingsController;
 use App\Http\Controllers\Web\GuestSettingsController;
 use App\Http\Controllers\Web\ImpersonationController;
+use App\Http\Controllers\Web\IpAuditController;
 use App\Http\Controllers\Web\IsoController;
 use App\Http\Controllers\Web\LanguageController;
 use App\Http\Controllers\Web\LicenseController;
@@ -51,6 +52,7 @@ use App\Http\Controllers\Web\ReverseDnsSettingsController;
 use App\Http\Controllers\Web\SelfServiceController;
 use App\Http\Controllers\Web\ServerActionsController;
 use App\Http\Controllers\Web\ServerHardwareController;
+use App\Http\Controllers\Web\ServerShareController;
 use App\Http\Controllers\Web\SsoController;
 use App\Http\Controllers\Web\StoreController;
 use App\Http\Controllers\Web\TicketAdminController;
@@ -183,6 +185,9 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::post('/servers/{server}/detect-os', [ServerActionsController::class, 'detectOs'])->name('servers.detect-os');
     Route::post('/servers/{server}/traffic', [ServerActionsController::class, 'traffic'])->name('servers.traffic');
     Route::post('/servers/{server}/cpu-limit', [ServerActionsController::class, 'cpuLimit'])->name('servers.cpu-limit');
+    Route::post('/servers/{server}/shares', [ServerShareController::class, 'store'])->middleware('throttle:20,1')->name('servers.shares.store');
+    Route::delete('/servers/{server}/shares/{share}', [ServerShareController::class, 'destroy'])->name('servers.shares.destroy');
+    Route::post('/servers/{server}/owner', [ServerShareController::class, 'transfer'])->middleware(['throttle:10,1', 'step-up'])->name('servers.owner');
     Route::post('/servers/{server}/migrate', [ServerActionsController::class, 'migrate'])->middleware('throttle:10,1')->name('servers.migrate');
     Route::post('/servers/{server}/migration/{action}', [ServerActionsController::class, 'migrationAction'])->whereIn('action', ['cancel', 'resume', 'revert'])->middleware('throttle:10,1')->name('servers.migration');
     Route::post('/servers/{server}/network-filter', [NetworkFilterController::class, 'assign'])->name('servers.network-filter');
@@ -421,6 +426,8 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
             Route::get('/network/nat', 'nat')->name('network.nat');
             Route::get('/network/ipv6', 'ipv6')->name('network.ipv6');
         });
+        Route::get('/network/ip-audit', [IpAuditController::class, 'index'])->name('network.ip-audit');
+        Route::get('/network/ip-audit.{format}', [IpAuditController::class, 'export'])->whereIn('format', ['csv', 'json', 'yaml'])->name('network.ip-audit.export');
         Route::controller(NetworkFilterController::class)->group(function () {
             Route::get('/network/filters', 'index')->name('network.filters');
             Route::post('/network/filters', 'store')->name('network.filters.store');
@@ -432,6 +439,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
     Route::middleware('admin:admin.hypervisors|admin.ip_pools')->group(function () {
         Route::get('/hypervisor-groups', [AdminController::class, 'hypervisorGroups'])->name('hypervisor-groups');
         Route::post('/hypervisor-groups', [AdminController::class, 'storeHypervisorGroup'])->name('hypervisor-groups.store');
+        Route::put('/hypervisor-groups/placement', [AdminController::class, 'updatePlacement'])->name('hypervisor-groups.placement');
         Route::put('/hypervisor-groups/{group}', [AdminController::class, 'updateHypervisorGroup'])->name('hypervisor-groups.update');
         Route::delete('/hypervisor-groups/{group}', [AdminController::class, 'destroyHypervisorGroup'])->name('hypervisor-groups.destroy');
     });

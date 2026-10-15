@@ -17,6 +17,16 @@
         <input id="group-sort-{{ $idp }}" name="sort_order" type="text" inputmode="numeric" value="{{ $f['sort'] }}">
         <div class="hint">{{ __('Mniejsza liczba — wyżej na liście.') }}</div>
     </div>
+    <div class="field">
+        <label for="group-strategy-{{ $idp }}">{{ __('Rozmieszczanie nowych maszyn') }}</label>
+        <select id="group-strategy-{{ $idp }}" name="placement_strategy">
+            <option value="">{{ __('domyślne panelu (:name)', ['name' => \App\Domain\Provisioning\HypervisorSelector::label(\App\Domain\Provisioning\HypervisorSelector::defaultStrategy())]) }}</option>
+            @foreach (\App\Domain\Provisioning\HypervisorSelector::STRATEGIES as $strategy)
+                <option value="{{ $strategy }}" @selected(($f['strategy'] ?? null) === $strategy)>{{ \App\Domain\Provisioning\HypervisorSelector::label($strategy) }}</option>
+            @endforeach
+        </select>
+        <div class="hint">{{ __('Na który węzeł grupy trafia nowa maszyna, gdy zmieści się na kilku.') }}</div>
+    </div>
 </div>
 <div class="field">
     <label class="check-line">

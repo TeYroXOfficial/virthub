@@ -72,6 +72,7 @@
                 ['panel.admin.network.ipv4', __('Adresy IPv4'), 'network', 'panel.admin.network.ipv4', 'admin.ip_pools'],
                 ['panel.admin.network.nat', __('Adresy IPv4 NAT'), 'network', 'panel.admin.network.nat', 'admin.ip_pools'],
                 ['panel.admin.network.ipv6', __('Adresy IPv6'), 'network', 'panel.admin.network.ipv6', 'admin.ip_pools'],
+                ['panel.admin.network.ip-audit', __('Audyt IP'), 'list', 'panel.admin.network.ip-audit*', 'admin.ip_pools'],
                 ['panel.admin.network.filters', __('Profile filtrowania'), 'shield', 'panel.admin.network.filters', 'admin.ip_pools'],
                 ['panel.admin.network.dns', __('rDNS (PowerDNS)'), 'network', 'panel.admin.network.dns*', 'admin.settings'],
             ]],

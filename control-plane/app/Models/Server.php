@@ -305,8 +305,28 @@ class Server extends Model
     public function scopeOwnedBy(Builder $query, User $user): void
     {
         if (! $user->isStaff()) {
-            $query->where('user_id', $user->id);
+            // Własne i udostępnione temu użytkownikowi.
+            $query->where(fn (Builder $q) => $q->where('user_id', $user->id)
+                ->orWhereIn('id', ServerShare::query()->select('server_id')->where('user_id', $user->id)));
         }
+    }
+
+    /** @return HasMany<ServerShare, $this> */
+    public function shares(): HasMany
+    {
+        return $this->hasMany(ServerShare::class);
+    }
+
+    /** Udostępnienie tej maszyny danemu użytkownikowi (null = brak). */
+    public function shareFor(User $user): ?ServerShare
+    {
+        if ($this->user_id === $user->id) {
+            return null;
+        }
+
+        return $this->relationLoaded('shares')
+            ? $this->shares->firstWhere('user_id', $user->id)
+            : $this->shares()->where('user_id', $user->id)->first();
     }
 
     /** @param Builder<Server> $query */

@@ -14,6 +14,8 @@ return [
 
     // Ponowne potwierdzenie tożsamości przed operacjami wrażliwymi — ważne przez N minut.
     'step_up_minutes' => (int) env('VH_STEP_UP_MINUTES', 15),
+    // Domyślna strategia rozmieszczania nowych maszyn (pack | spread | fewest | random); grupa może mieć własną.
+    'placement_strategy' => env('VH_PLACEMENT_STRATEGY', 'pack'),
     // Identyfikator RP dla kluczy dostępu (passkey); domyślnie host z APP_URL.
     'webauthn_rp_id' => env('VH_WEBAUTHN_RP_ID'),
     // Domyślny limit zapytań tokenu API na minutę (token może mieć własny).

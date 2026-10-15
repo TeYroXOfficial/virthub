@@ -54,6 +54,11 @@
                     <label for="e-name">{{ __('Nazwa') }}</label>
                     <input id="e-name" name="name" type="text" maxlength="100" required value="{{ old('name', $pool->name) }}">
                 </div>
+                <div class="field">
+                    <label for="e-priority">{{ __('Kolejność przydziału') }}</label>
+                    <input id="e-priority" name="priority" type="number" min="0" max="100000" value="{{ old('priority', $pool->priority) }}">
+                    <div class="hint">{{ __('Mniejsza liczba — adresy z tej puli są przydzielane jako pierwsze (przy remisie: pule węzła przed pulami grupy).') }}</div>
+                </div>
                 <div class="grid-compact">
                     <div class="field">
                         <label for="e-gw">{{ __('Brama') }}</label>

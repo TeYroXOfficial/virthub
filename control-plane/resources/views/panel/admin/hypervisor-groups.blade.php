@@ -12,5 +12,19 @@
         </div>
     </div>
 
+    <form method="POST" action="{{ route('panel.admin.hypervisor-groups.placement') }}" class="card btn-row" style="align-items:flex-end">
+        @csrf @method('PUT')
+        <div class="field" style="margin:0; flex:1; min-width:260px">
+            <label for="placement">{{ __('Domyślne rozmieszczanie nowych maszyn') }}</label>
+            <select id="placement" name="placement_strategy">
+                @foreach (\App\Domain\Provisioning\HypervisorSelector::STRATEGIES as $strategy)
+                    <option value="{{ $strategy }}" @selected(\App\Domain\Provisioning\HypervisorSelector::defaultStrategy() === $strategy)>{{ \App\Domain\Provisioning\HypervisorSelector::label($strategy) }}</option>
+                @endforeach
+            </select>
+            <div class="hint">{{ __('Dotyczy zamówień bez wybranej lokalizacji i grup bez własnej strategii.') }}</div>
+        </div>
+        <button class="btn" type="submit">{{ __('Zapisz') }}</button>
+    </form>
+
     @include('panel.admin._groups')
 @endsection

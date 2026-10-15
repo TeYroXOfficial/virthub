@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\HypervisorController;
 use App\Http\Controllers\Admin\HypervisorGroupController;
 use App\Http\Controllers\Admin\IpPoolController;
 use App\Http\Controllers\Admin\ServerAdminController;
+use App\Http\Controllers\Admin\StatusController;
 use App\Http\Controllers\Api\BillingIntegrationController;
 use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\FirewallController;
@@ -92,6 +93,8 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', 'ability:admin', 'admin'])->prefix('admin')->group(function () {
         Route::apiResource('hypervisors', HypervisorController::class);
         Route::get('hypervisors/{hypervisor}/health', [HypervisorController::class, 'health']);
+        Route::get('hypervisors/{hypervisor}/metrics', [HypervisorController::class, 'metrics']);
+        Route::get('status', StatusController::class);
         Route::post('hypervisors/{hypervisor}/recalculate', [HypervisorController::class, 'recalculate']);
         Route::post('hypervisors/{hypervisor}/rotate-token', [HypervisorController::class, 'rotateToken']);
 
@@ -124,6 +127,7 @@ Route::prefix('v1')->group(function () {
         Route::post('servers/{server}/unsuspend', [ServerAdminController::class, 'unsuspend']);
         Route::post('servers/{server}/migrate', [ServerAdminController::class, 'migrate']);
         Route::get('servers/{server}/migration-targets', [ServerAdminController::class, 'migrationTargets']);
+        Route::post('servers/{server}/owner', [ServerAdminController::class, 'transferOwner']);
         Route::get('servers/{server}/migration', [ServerAdminController::class, 'migration']);
         Route::post('servers/{server}/migration/{action}', [ServerAdminController::class, 'migrationAction'])->whereIn('action', ['cancel', 'resume', 'revert']);
         Route::get('servers/{server}/traffic', [ServerAdminController::class, 'traffic']);

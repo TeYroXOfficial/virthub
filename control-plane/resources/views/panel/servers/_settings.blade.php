@@ -6,6 +6,7 @@
 @endphp
 
 <div class="settings-list">
+    @include('panel.servers._sharing')
     @can('resetPassword', $server)
         <div class="card setting-row" id="password">
             <div class="setting-text">
