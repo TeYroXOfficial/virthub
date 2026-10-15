@@ -158,7 +158,9 @@ class Webhooks
         if ($claimed === 0) {
             return;
         }
-        $body = json_encode($delivery->payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        // Własny format: pełny JSON z podpisem; Slack, Discord… dostają czytelną wiadomość.
+        $target = WebhookFormats::render($webhook, (array) $delivery->payload);
+        $body = json_encode($target['body'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $timestamp = now()->getTimestamp();
         $signature = hash_hmac('sha256', $timestamp.'.'.$body, (string) $webhook->secret);
         $started = microtime(true);
@@ -167,15 +169,19 @@ class Webhooks
         $error = null;
 
         try {
+            $headers = [
+                'User-Agent' => 'VirtHub-Webhook/1',
+                'X-VirtHub-Event' => $delivery->event,
+                'X-VirtHub-Delivery' => $delivery->uuid,
+                'X-VirtHub-Signature' => 't='.$timestamp.',v1='.$signature,
+            ];
+            if ($webhook->bearer_token) {
+                $headers['Authorization'] = 'Bearer '.$webhook->bearer_token;
+            }
             $response = Http::timeout(10)->connectTimeout(5)->withoutRedirecting()
-                ->withHeaders([
-                    'User-Agent' => 'VirtHub-Webhook/1',
-                    'X-VirtHub-Event' => $delivery->event,
-                    'X-VirtHub-Delivery' => $delivery->uuid,
-                    'X-VirtHub-Signature' => 't='.$timestamp.',v1='.$signature,
-                ])
+                ->withHeaders($headers)
                 ->withBody((string) $body, 'application/json')
-                ->post($webhook->url);
+                ->post($target['url']);
             $code = $response->status();
             $responseBody = mb_substr($response->body(), 0, 2000);
             $ok = $response->successful();

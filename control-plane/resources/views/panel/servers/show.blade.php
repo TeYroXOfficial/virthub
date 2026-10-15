@@ -191,6 +191,9 @@
                             <span class="num {{ $pct >= 100 ? 'text-critical' : ($pct >= 80 ? 'text-warn' : '') }}">· {{ str_replace('.', ',', $pct) }}%</span>
                             <div class="meter {{ $pct >= 80 ? 'hot' : '' }}" style="max-width:240px"><i style="width: {{ $pct }}%"></i></div>
                         @endif
+                        @if (! empty($traffic['pool']))
+                            <div class="hint">{{ __('Wspólny transfer pakietu :pack (:count maszyn) — ta maszyna: :own', ['pack' => $traffic['pool']['pack'], 'count' => $traffic['pool']['servers'], 'own' => $T::human($traffic['pool']['own'])]) }}</div>
+                        @endif
                         <div class="hint">
                             {{ __('↓ :rx pobrane · ↑ :tx wysłane', ['rx' => $T::human($traffic['rx']), 'tx' => $T::human($traffic['tx'])]) }}
                             @if ($traffic['counting'] !== 'total')

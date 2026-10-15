@@ -71,6 +71,9 @@ class StoreController extends Controller
                 'hostname' => $hostnameRule,
                 'ssh_key' => ['nullable', 'string', 'max:1000', new SshPublicKey],
             ];
+            foreach ($product->resourceOptions() as $key => $option) {
+                $rules['extra.'.$key] = ['nullable', 'integer', 'min:0', 'max:'.$option['max']];
+            }
         } elseif ($product->type === Product::TYPE_EXTERNAL) {
             $rules += [
                 'image' => ['required', 'string', Rule::in(array_column($product->externalImages(), 'id'))],
@@ -99,7 +102,8 @@ class StoreController extends Controller
         $config = ['location_id' => isset($data['location']) ? (int) $data['location'] : null];
         $sshKeys = array_values(array_filter([trim((string) ($data['ssh_key'] ?? ''))]));
         $config += match ($product->type) {
-            Product::TYPE_VPS => ['template_id' => (int) $data['template'], 'hostname' => strtolower($data['hostname']), 'ssh_keys' => $sshKeys],
+            Product::TYPE_VPS => ['template_id' => (int) $data['template'], 'hostname' => strtolower($data['hostname']), 'ssh_keys' => $sshKeys,
+                'extra' => array_filter(array_map('intval', array_intersect_key((array) ($data['extra'] ?? []), $product->resourceOptions())))],
             Product::TYPE_EXTERNAL => ['image' => (string) $data['image'], 'hostname' => strtolower($data['hostname']), 'ssh_keys' => $sshKeys],
             default => ['egg_id' => (int) $data['egg'], 'name' => $data['name']],
         };

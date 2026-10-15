@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Domain\Webhooks\WebhookFormats;
 use App\Domain\Webhooks\Webhooks;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
@@ -52,7 +53,7 @@ class WebhookController extends Controller
 
     public function update(Request $request, Webhook $webhook): RedirectResponse
     {
-        $data = $this->validated($request);
+        $data = $this->validated($request, $webhook);
         $active = $request->boolean('is_active');
         $webhook->fill($data + ['is_active' => $active]);
         if ($active) {
@@ -101,17 +102,32 @@ class WebhookController extends Controller
             : __('Ponowne wysłanie nieudane: :error', ['error' => $copy->error]));
     }
 
-    /** @return array{name:string, url:string, events:list<string>} */
-    private function validated(Request $request): array
+    /** @return array<string, mixed> */
+    private function validated(Request $request, ?Webhook $existing = null): array
     {
+        $format = (string) ($request->input('format') ?: 'virthub');
         $data = $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'url' => ['required', 'url:http,https', 'max:2000'],
             'events' => ['required', 'array', 'min:1'],
             'events.*' => ['string', Rule::in(['*', ...array_keys(Webhooks::events())])],
-        ]);
+            'format' => ['nullable', Rule::in(WebhookFormats::FORMATS)],
+            'bearer_token' => ['nullable', 'string', 'max:500', 'regex:/^[\x21-\x7e]+$/'],
+            'clear_bearer' => ['nullable', 'boolean'],
+            'options.chat_id' => [$format === 'telegram' ? 'required' : 'nullable', 'string', 'max:64', 'regex:/^-?[0-9]+$|^@[A-Za-z0-9_]{5,64}$/'],
+            'options.user_key' => [$format === 'pushover' ? 'required' : 'nullable', 'string', 'max:64', 'alpha_num'],
+            'options.app_token' => [$format === 'pushover' && ! ($existing?->options['app_token'] ?? null) ? 'required' : 'nullable', 'string', 'max:64', 'alpha_num'],
+        ], ['bearer_token.regex' => __('Token może zawierać tylko widoczne znaki ASCII, bez spacji.')]);
         $events = array_values(array_unique($data['events']));
+        $old = (array) $existing?->options;
+        $options = match ($format) {
+            'telegram' => ['chat_id' => $data['options']['chat_id']],
+            'pushover' => ['user_key' => $data['options']['user_key'], 'app_token' => ($data['options']['app_token'] ?? null) ?: ($old['app_token'] ?? null)],
+            default => null,
+        };
+        $bearer = $request->boolean('clear_bearer') ? null : (($data['bearer_token'] ?? null) ?: $existing?->bearer_token);
 
-        return ['name' => $data['name'], 'url' => $data['url'], 'events' => in_array('*', $events, true) ? ['*'] : $events];
+        return ['name' => $data['name'], 'url' => $data['url'], 'events' => in_array('*', $events, true) ? ['*'] : $events,
+            'format' => $format, 'options' => $options, 'bearer_token' => $bearer];
     }
 }

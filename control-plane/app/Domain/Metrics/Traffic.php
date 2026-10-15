@@ -89,22 +89,23 @@ class Traffic
     public function usage(Server $server): array
     {
         $period = self::periodStart();
-        $row = ServerTraffic::query()
-            ->where('server_id', $server->id)
-            ->whereDate('period_start', $period->toDateString())
-            ->first();
-
-        $rx = $row?->rx_bytes ?? 0;
-        $tx = $row?->tx_bytes ?? 0;
+        [$rx, $tx] = $this->counters($server, $period);
         $policy = self::policy($server);
         $counting = $policy['counting'];
-        $used = match ($counting) {
-            'in' => $rx,
-            'out' => $tx,
-            default => $rx + $tx,
-        };
+        $used = self::counted($counting, $rx, $tx);
         $extraGb = (int) $server->trafficBlocks()->whereDate('period_start', $period->toDateString())->sum('gb');
         $limit = $server->bandwidth_gb > 0 ? ($server->bandwidth_gb + $extraGb) * self::unitBytes() : null;
+
+        // Pakiet zasobów ze wspólnym transferem: limit i zużycie liczone łącznie dla wszystkich jego maszyn.
+        $pack = $server->resource_pack_id ? $server->resourcePack : null;
+        $pool = null;
+        if ($pack?->poolsTraffic()) {
+            $members = $pack->servers()->get();
+            $used = $members->sum(fn (Server $s) => self::counted(self::policy($s)['counting'], ...$this->counters($s, $period)));
+            $extraGb = (int) TrafficBlock::query()->whereIn('server_id', $members->modelKeys())->whereDate('period_start', $period->toDateString())->sum('gb');
+            $limit = ((int) $pack->traffic_gb + $extraGb) * self::unitBytes();
+            $pool = ['pack' => $pack->name, 'servers' => $members->count(), 'own' => self::counted($counting, $rx, $tx)];
+        }
 
         return [
             'period_start' => $period->toDateString(),
@@ -120,18 +121,36 @@ class Traffic
             'blocked' => $server->traffic_blocked_at !== null,
             'throttled' => $server->traffic_throttled_at !== null,
             'throttle_mbps' => $policy['throttle_mbps'],
+            'pool' => $pool,
         ];
     }
 
-    /** Blokuje albo dławi maszynę, która przekroczyła limit. Zwraca true, gdy właśnie to zrobił. */
-    public function enforce(Server $server): bool
+    /** @return array{0: int, 1: int} [rx, tx] w bieżącym okresie */
+    private function counters(Server $server, CarbonImmutable $period): array
     {
-        if ($server->isSuspended() || $server->bandwidth_gb <= 0 || $server->traffic_throttled_at !== null) {
+        $row = ServerTraffic::query()->where('server_id', $server->id)->whereDate('period_start', $period->toDateString())->first();
+
+        return [(int) ($row?->rx_bytes ?? 0), (int) ($row?->tx_bytes ?? 0)];
+    }
+
+    private static function counted(string $counting, int $rx, int $tx): int
+    {
+        return match ($counting) {
+            'in' => $rx,
+            'out' => $tx,
+            default => $rx + $tx,
+        };
+    }
+
+    /** Blokuje albo dławi maszynę, która przekroczyła limit. Zwraca true, gdy właśnie to zrobił. */
+    public function enforce(Server $server, bool $cascade = true): bool
+    {
+        if ($server->isSuspended() || $server->traffic_throttled_at !== null) {
             return false;
         }
 
         $usage = $this->usage($server);
-        if ($usage['used'] < $usage['limit']) {
+        if ($usage['limit'] === null || $usage['used'] < $usage['limit']) {
             return false;
         }
 
@@ -142,6 +161,7 @@ class Traffic
             $webhooks = app(Webhooks::class);
             $webhooks->dispatch('server.traffic_throttled', $webhooks->describe($server) + ['throttle_mbps' => $usage['throttle_mbps'],
                 'used_bytes' => $usage['used'], 'limit_bytes' => $usage['limit'], 'resets_at' => $usage['resets_at']]);
+            $this->enforcePool($server, $usage, $cascade);
 
             return true;
         }
@@ -153,8 +173,19 @@ class Traffic
             self::human($usage['limit']),
             CarbonImmutable::parse($usage['resets_at'])->format('d.m.Y'),
         ));
+        $this->enforcePool($server, $usage, $cascade);
 
         return true;
+    }
+
+    /** Wspólny transfer wyczerpany — ta sama akcja od razu na pozostałych maszynach pakietu. */
+    private function enforcePool(Server $server, array $usage, bool $cascade): void
+    {
+        if (! $cascade || $usage['pool'] === null) {
+            return;
+        }
+        Server::query()->where('resource_pack_id', $server->resource_pack_id)->whereKeyNot($server->id)->get()
+            ->each(fn (Server $other) => $this->enforce($other, false));
     }
 
     /**
@@ -166,7 +197,10 @@ class Traffic
         $released = 0;
         $query = Server::query()->where(fn ($q) => $q->whereNotNull('traffic_blocked_at')->orWhereNotNull('traffic_throttled_at'));
         if ($only !== null) {
-            $query->whereKey($only->id);
+            // Wspólny transfer: zmiana na jednej maszynie dotyczy całego pakietu.
+            $only->resource_pack_id !== null && $only->resourcePack?->poolsTraffic()
+                ? $query->where('resource_pack_id', $only->resource_pack_id)
+                : $query->whereKey($only->id);
         }
 
         foreach ($query->get() as $server) {
