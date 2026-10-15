@@ -33,9 +33,6 @@ class RemoteBackups
         if ($server->isContainer()) {
             throw new \DomainException(__('Kopie na zewnętrzne cele są dostępne tylko dla maszyn KVM.'));
         }
-        if ($server->datastore?->isCeph()) {
-            throw new \DomainException(__('Dysk maszyny jest w Cephie — kopie na zewnętrzne cele obsługują dyski w magazynach katalogowych. Użyj migawek RBD.'));
-        }
         if ($server->isElevated()) {
             throw new \DomainException(__('Maszyna ma aktywny Elevate — najpierw zatwierdź albo odrzuć zmiany dysku.'));
         }
@@ -45,7 +42,9 @@ class RemoteBackups
         if ($server->agent_uuid === null || $server->state->isTransitioning()) {
             throw new \DomainException(__('Maszyna nie jest gotowa do wykonania kopii.'));
         }
-        $parent = $plan?->incremental ? $this->chainParent($server, $target, $plan) : null;
+        // Dysk w Cephie: zawsze kopia pełna (eksport migawki RBD) — bez bitmap libvirt.
+        $mode = $server->datastore?->isCeph() ? 'full' : ($plan?->backupMode() ?? 'full');
+        $parent = $mode !== 'full' ? $this->chainParent($server, $target, $plan, $mode) : null;
         $name = ($parent ? 'incr-' : 'backup-').now()->format('Ymd-His');
         $backup = Backup::create([
             'parent_id' => $parent?->id,
@@ -57,8 +56,9 @@ class RemoteBackups
             'backup_target_id' => $target->id,
             'remote_key' => 'vm'.$server->id.'/'.$name.'.qcow2',
         ]);
-        if ($plan?->incremental) {
-            // Nazwę checkpointu zna panel; agent zwróci ją w wyniku, jeśli go utworzył.
+        if ($mode !== 'full') {
+            // Nazwę checkpointu zna panel; agent zwróci ją w wyniku, jeśli go utworzył
+            // (kopia różnicowa nie tworzy nowego — liczy się od checkpointu pełnej).
             $backup->forceFill(['checkpoint' => 'vh-'.$backup->id])->save();
         }
         $job = ServerJob::create([
@@ -66,7 +66,7 @@ class RemoteBackups
             'hypervisor_id' => $server->hypervisor_id,
             'action' => 'backup',
             'status' => ServerJob::STATUS_QUEUED,
-            'payload' => ['backup_id' => $backup->id, 'compress' => $compress],
+            'payload' => ['backup_id' => $backup->id, 'compress' => $compress, 'differential' => $mode === 'differential' && $parent !== null],
             'user_id' => $actor?->id,
         ]);
         AuditLog::record('server.backup', $server, ['target' => $target->name, 'key' => $backup->remote_key], $actor);
@@ -79,15 +79,43 @@ class RemoteBackups
      * Ostatnia gotowa kopia z aktualnym checkpointem na tym samym celu, jeśli
      * łańcuch jest krótszy niż „pełna co N” — inaczej czas na kopię pełną.
      */
-    private function chainParent(Server $server, BackupTarget $target, BackupPlan $plan): ?Backup
+    private function chainParent(Server $server, BackupTarget $target, BackupPlan $plan, string $mode = 'incremental'): ?Backup
     {
-        $last = $server->backups()->where('type', Backup::TYPE_REMOTE)->where('status', Backup::STATUS_READY)
-            ->where('backup_target_id', $target->id)->latest('created_at')->latest('id')->first();
+        $ready = fn () => $server->backups()->where('type', Backup::TYPE_REMOTE)->where('status', Backup::STATUS_READY)
+            ->where('backup_target_id', $target->id)->latest('created_at')->latest('id');
+        if ($mode === 'differential') {
+            // Rodzic to ostatnia kopia pełna z checkpointem; różnicowe liczą się od niej.
+            $full = $ready()->where('kind', Backup::KIND_FULL)->whereNotNull('checkpoint')->first();
+            if ($full === null || $ready()->first()?->kind === Backup::KIND_INCREMENTAL && $ready()->first()->parent_id !== $full->id) {
+                return null;
+            }
+
+            return $full->children()->count() + 1 < max(1, $plan->full_every) ? $full : null;
+        }
+        $last = $ready()->first();
         if ($last === null || $last->checkpoint === null || ! $last->chainComplete()) {
             return null;
         }
 
         return count($last->ancestors()) + 1 < max(1, $plan->full_every) ? $last : null;
+    }
+
+    /**
+     * Przywrócenie kopii innej maszyny (personel): dysk zastępuje dysk docelowej.
+     * Kopia większej maszyny nie zmieści się na mniejszym dysku docelowej.
+     */
+    public function restoreOnto(Server $target, Backup $backup, ?User $actor = null): ServerJob
+    {
+        $source = $backup->server()->withTrashed()->first();
+        if ($target->isContainer()) {
+            throw new \DomainException(__('Kopie na zewnętrzne cele są dostępne tylko dla maszyn KVM.'));
+        }
+        if ($source !== null && $source->id !== $target->id && (int) $source->disk_gb > (int) $target->disk_gb) {
+            throw new \DomainException(__('Kopia pochodzi z dysku :from GB, a maszyna docelowa ma :to GB — powiększ jej dysk przed przywróceniem.', ['from' => $source->disk_gb, 'to' => $target->disk_gb]));
+        }
+        AuditLog::record('server.backup_restore_cross', $target, ['backup' => $backup->name, 'source_server_id' => $source?->id], $actor);
+
+        return $this->restore($target, $backup, $actor);
     }
 
     public function restore(Server $server, Backup $backup, ?User $actor = null): ServerJob
@@ -143,9 +171,25 @@ class RemoteBackups
         $ready = $server->backups()->where('type', Backup::TYPE_REMOTE)->where('status', Backup::STATUS_READY)
             ->where('backup_target_id', $plan->backup_target_id)
             ->orderByDesc('created_at')->orderByDesc('id')->take(2000)->get();
-        // Zostają najnowsze N oraz ogniwa, od których zależą (pełna i wcześniejsze przyrostowe).
+        // Zostają najnowsze N, kopie z retencji GFS (najnowsza z każdego dnia / tygodnia /
+        // miesiąca) oraz ogniwa, od których zależą (pełna i wcześniejsze przyrostowe).
+        $kept = $ready->take($plan->retention)->keyBy('id');
+        foreach (['keep_daily' => 'Y-m-d', 'keep_weekly' => 'o-W', 'keep_monthly' => 'Y-m'] as $field => $format) {
+            $periods = [];
+            foreach ($ready as $backup) {
+                $period = $backup->created_at->format($format);
+                if (isset($periods[$period])) {
+                    continue;
+                }
+                if (count($periods) >= (int) $plan->{$field}) {
+                    break;
+                }
+                $periods[$period] = true;
+                $kept[$backup->id] = $backup;
+            }
+        }
         $keep = [];
-        foreach ($ready->take($plan->retention) as $backup) {
+        foreach ($kept as $backup) {
             $keep[$backup->id] = true;
             foreach ($backup->ancestors() as $ancestor) {
                 $keep[$ancestor->id] = true;
@@ -176,6 +220,9 @@ class RemoteBackups
             $plan = $server->effectiveBackupPlan();
             if (! $plan?->is_active || ! $plan->target?->is_active || $server->isContainer() || $server->isElevated() || $server->inRescue()) {
                 continue;
+            }
+            if (! $plan->runsOn($now->dayOfWeek)) {
+                continue; // plan ograniczony do wybranych dni tygodnia
             }
             $busy = $server->backups()->where('type', Backup::TYPE_REMOTE)->where('status', Backup::STATUS_CREATING)
                 ->where('created_at', '>', $now->copy()->subHours(12))->exists();

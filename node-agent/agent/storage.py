@@ -69,6 +69,14 @@ class StorageDriver(ABC):
         """Pusty dysk (dodatkowy dysk maszyny)."""
         raise StorageError("Ten magazyn nie obsługuje dodatkowych dysków.")
 
+    def export_image(self, name: str, target: Path, compress: bool = True, after_snapshot: Any = None) -> None:
+        """Kopia dysku z magazynu sieciowego do pliku qcow2 (magazyny plikowe kopiuje sterownik)."""
+        raise StorageError("Ten magazyn nie obsługuje eksportu dysku.")
+
+    def import_image(self, name: str, source: Path) -> None:
+        """Zastąpienie dysku zawartością pliku qcow2 (maszyna zatrzymana)."""
+        raise StorageError("Ten magazyn nie obsługuje importu dysku.")
+
     def size_gb(self, name: str) -> int:
         """Rozmiar wirtualny dysku w GB."""
         info = json.loads(run(["qemu-img", "info", "--output=json", str(self.volume_path(name))]))

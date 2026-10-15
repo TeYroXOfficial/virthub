@@ -117,6 +117,9 @@ bash "$AGENT_DIR/scripts/setup-builder.sh" || warn "Nie udało się przygotować
 # Węzły KVM: OVMF (UEFI) i swtpm (vTPM) dla maszyn, które ich wymagają.
 bash "$AGENT_DIR/scripts/setup-firmware.sh" || warn "Nie udało się zainstalować OVMF / swtpm"
 
+# Cele kopii: rclone (i proxmox-backup-client, jeśli jest repozytorium Proxmox).
+bash "$AGENT_DIR/scripts/setup-backup-tools.sh" || warn "Nie udało się zainstalować narzędzi kopii"
+
 # Węzły kontenerów: osobny zakres UID/GID dla każdego kontenera.
 bash "$AGENT_DIR/scripts/harden-incus.sh" || warn "Nie udało się ustawić przydziału UID/GID dla Incusa"
 

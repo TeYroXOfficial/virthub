@@ -52,7 +52,7 @@
                 @csrf <button class="btn btn-sm" type="submit"><x-icon name="refresh" :size="14"/> {{ __('Odśwież pojemność') }}</button>
             </form>
             @if ($ds->isCeph())
-                <p class="hint">{{ __('Dyski w Cephie: migawki RBD działają; Elevate i kopie na zewnętrzne cele wymagają magazynu katalogowego.') }}</p>
+                <p class="hint">{{ __('Dyski w Cephie: migawki RBD i pełne kopie na zewnętrzne cele (eksport migawki RBD) działają; Elevate, kopie przyrostowe i odtwarzanie DR wymagają magazynu katalogowego.') }}</p>
             @endif
 
             <form method="POST" action="{{ route('panel.admin.datastores.update', $ds) }}" style="margin-top:14px" autocomplete="off">

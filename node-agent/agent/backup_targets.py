@@ -1,4 +1,5 @@
-"""Cele kopii zapasowych: katalog lokalny, S3 (AWS, MinIO, Wasabi, B2…) i SFTP.
+"""Cele kopii zapasowych: katalog lokalny, S3 (AWS, MinIO, Wasabi, B2…), SFTP,
+FTP/FTPS, Rclone (ponad 35 chmur) i Proxmox Backup Server.
 
 Każdy cel umie: wysłać plik pod klucz, pobrać klucz do pliku, usunąć klucz.
 Dane dostępowe przychodzą z panelu w treści zadania (nie są zapisywane na
@@ -248,6 +249,233 @@ class SftpTarget:
         self._run(go())
 
 
+# --- FTP / FTPS --------------------------------------------------------------------
+
+
+class FtpTarget:
+    """FTP albo FTPS (jawne TLS, AUTH TLS) z kanałem danych chronionym (PROT P)."""
+
+    def __init__(self, config: dict[str, Any], factory: Any = None):
+        self.host = str(config.get("host") or "")
+        self.port = int(config.get("port") or 21)
+        self.username = str(config.get("username") or "anonymous")
+        self.password = str(config.get("password") or "")
+        self.root = "/" + str(config.get("path") or "").strip("/")
+        self.tls = bool(config.get("tls", True))
+        self.passive = bool(config.get("passive", True))
+        self.factory = factory
+        if not self.host:
+            raise BackupTargetError("FTP wymaga hosta.")
+
+    def _connect(self):
+        import ftplib
+        import ssl
+
+        if self.factory is not None:
+            ftp = self.factory()
+        elif self.tls:
+            ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=60)
+        else:
+            ftp = ftplib.FTP(timeout=60)
+        try:
+            ftp.connect(self.host, self.port)
+            ftp.login(self.username, self.password)
+            if self.tls and hasattr(ftp, "prot_p"):
+                ftp.prot_p()
+            ftp.set_pasv(self.passive)
+        except ftplib.all_errors as exc:
+            raise BackupTargetError(f"Połączenie FTP nieudane: {exc}") from exc
+        return ftp
+
+    def _remote(self, key: str) -> str:
+        return f"{self.root.rstrip('/')}/{_check_key(key)}"
+
+    def _makedirs(self, ftp, remote: str) -> None:
+        import ftplib
+
+        path = ""
+        for part in remote.strip("/").split("/")[:-1]:
+            path += "/" + part
+            try:
+                ftp.mkd(path)
+            except ftplib.error_perm:
+                pass  # katalog już jest
+
+    def upload(self, source: Path, key: str) -> None:
+        import ftplib
+
+        ftp = self._connect()
+        remote = self._remote(key)
+        try:
+            self._makedirs(ftp, remote)
+            with source.open("rb") as fh:
+                ftp.storbinary(f"STOR {remote}.part", fh, blocksize=CHUNK)
+            ftp.rename(f"{remote}.part", remote)
+        except ftplib.all_errors as exc:
+            raise BackupTargetError(f"Wysyłka FTP nieudana: {exc}") from exc
+        finally:
+            ftp.close()
+
+    def download(self, key: str, target: Path) -> None:
+        import ftplib
+
+        ftp = self._connect()
+        try:
+            with target.open("wb") as fh:
+                ftp.retrbinary(f"RETR {self._remote(key)}", fh.write, blocksize=CHUNK)
+        except ftplib.all_errors as exc:
+            raise BackupTargetError(f"Pobranie FTP nieudane: {exc}") from exc
+        finally:
+            ftp.close()
+
+    def delete(self, key: str) -> None:
+        import ftplib
+
+        ftp = self._connect()
+        try:
+            ftp.delete(self._remote(key))
+        except ftplib.error_perm as exc:
+            if not str(exc).startswith("550"):
+                raise BackupTargetError(f"Usunięcie FTP nieudane: {exc}") from exc
+        finally:
+            ftp.close()
+
+
+# --- Rclone ----------------------------------------------------------------------
+
+
+RCLONE_TYPE = re.compile(r"^[a-z0-9]{2,32}$")
+RCLONE_PARAM = re.compile(r"^[a-z0-9_]{1,64}$")
+
+
+class RcloneTarget:
+    """Dowolny backend rclone (Google Drive, B2, OneDrive, Dropbox, Swift…).
+    Konfiguracja przychodzi z panelu i trafia do pliku tymczasowego (0600)
+    tylko na czas operacji — na węźle nie zostaje żaden sekret."""
+
+    def __init__(self, config: dict[str, Any], runner: Any = None):
+        self.backend = str(config.get("backend") or "")
+        self.params = {str(k): str(v) for k, v in (config.get("params") or {}).items()}
+        self.root = str(config.get("path") or "").strip("/")
+        self.runner = runner
+        if not RCLONE_TYPE.match(self.backend):
+            raise BackupTargetError("Rclone wymaga typu backendu (np. drive, b2, onedrive).")
+        bad = [k for k, v in self.params.items() if not RCLONE_PARAM.match(k) or "\n" in v or "\r" in v]
+        if bad:
+            raise BackupTargetError(f"Nieprawidłowe parametry rclone: {', '.join(bad)}")
+
+    def _remote(self, key: str) -> str:
+        return f"vh:{self.root}/{_check_key(key)}" if self.root else f"vh:{_check_key(key)}"
+
+    def _rclone(self, *args: str) -> None:
+        import tempfile
+
+        from .shell import CommandError, run
+
+        lines = ["[vh]", f"type = {self.backend}", *[f"{k} = {v}" for k, v in self.params.items()]]
+        fd, conf = tempfile.mkstemp(prefix="vh-rclone-", suffix=".conf")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write("\n".join(lines) + "\n")
+            argv = ["rclone", "--config", conf, "--retries", "3", "--low-level-retries", "10", *args]
+            try:
+                (self.runner or run)(argv, timeout=6 * 3600)
+            except CommandError as exc:
+                if exc.returncode == 127:
+                    raise BackupTargetError("Na węźle brak rclone — zainstaluj pakiet rclone.") from exc
+                raise BackupTargetError(f"rclone: {(exc.stderr or str(exc)).strip()[:300]}") from exc
+        finally:
+            Path(conf).unlink(missing_ok=True)
+
+    def upload(self, source: Path, key: str) -> None:
+        self._rclone("copyto", str(source), self._remote(key))
+
+    def download(self, key: str, target: Path) -> None:
+        self._rclone("copyto", self._remote(key), str(target))
+
+    def delete(self, key: str) -> None:
+        self._rclone("deletefile", self._remote(key))
+
+
+# --- Proxmox Backup Server ----------------------------------------------------------
+
+
+class PbsTarget:
+    """Proxmox Backup Server przez proxmox-backup-client.
+
+    Każda kopia to osobna migawka typu vm z identyfikatorem wyprowadzonym z
+    klucza i stałym czasem — dzięki temu klucz panelu jednoznacznie wskazuje
+    migawkę bez zapisywania czegokolwiek na węźle. Dysk idzie do PBS jako
+    obraz surowy (rzadki): PBS dzieli go na kawałki, deduplikuje między
+    wszystkimi kopiami w magazynie i pomija bloki zerowe.
+    """
+
+    BACKUP_TIME = 946684800  # 2000-01-01T00:00:00Z — czas migawki jest stały, identyfikator unikalny
+
+    def __init__(self, config: dict[str, Any], runner: Any = None):
+        self.host = str(config.get("host") or "")
+        self.port = int(config.get("port") or 8007)
+        self.datastore = str(config.get("datastore") or "")
+        self.username = str(config.get("username") or "")  # user@realm albo user@realm!token
+        self.password = str(config.get("password") or "")
+        self.fingerprint = str(config.get("fingerprint") or "")
+        self.namespace = str(config.get("namespace") or "")
+        self.runner = runner
+        if not (self.host and self.datastore and self.username and self.password):
+            raise BackupTargetError("PBS wymaga hosta, magazynu, użytkownika (lub tokenu) i hasła.")
+        if not re.fullmatch(r"[A-Za-z0-9._@!-]{1,128}", self.username) or not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", self.datastore):
+            raise BackupTargetError("Nieprawidłowy użytkownik albo magazyn PBS.")
+
+    @staticmethod
+    def backup_id(key: str) -> str:
+        return re.sub(r"[^A-Za-z0-9_-]", "-", _check_key(key).rsplit(".", 1)[0])[:120]
+
+    def snapshot(self, key: str) -> str:
+        return f"vm/{self.backup_id(key)}/2000-01-01T00:00:00Z"
+
+    def _run(self, *args: str) -> None:
+        from .shell import CommandError, run
+
+        env = {**os.environ, "PBS_PASSWORD": self.password, "PBS_REPOSITORY": f"{self.username}@{self.host}:{self.port}:{self.datastore}"}
+        if self.fingerprint:
+            env["PBS_FINGERPRINT"] = self.fingerprint
+        argv = ["proxmox-backup-client", *args, *(["--ns", self.namespace] if self.namespace else [])]
+        try:
+            (self.runner or run)(argv, timeout=6 * 3600, env=env)
+        except CommandError as exc:
+            if exc.returncode == 127:
+                raise BackupTargetError("Na węźle brak proxmox-backup-client (pakiet proxmox-backup-client z repozytorium Proxmox).") from exc
+            raise BackupTargetError(f"PBS: {(exc.stderr or str(exc)).strip()[:300]}") from exc
+
+    def upload(self, source: Path, key: str) -> None:
+        from .shell import run
+
+        raw = source.with_name(source.name + ".raw")
+        try:
+            (self.runner or run)(["qemu-img", "convert", "-O", "raw", str(source), str(raw)], timeout=6 * 3600)
+            self._run("backup", f"disk.img:{raw}", "--backup-type", "vm", "--backup-id", self.backup_id(key),
+                      "--backup-time", str(self.BACKUP_TIME))
+        finally:
+            raw.unlink(missing_ok=True)
+
+    def download(self, key: str, target: Path) -> None:
+        from .shell import run
+
+        raw = target.with_name(target.name + ".raw")
+        try:
+            self._run("restore", self.snapshot(key), "disk.img", str(raw))
+            (self.runner or run)(["qemu-img", "convert", "-f", "raw", "-O", "qcow2", str(raw), str(target)], timeout=6 * 3600)
+        finally:
+            raw.unlink(missing_ok=True)
+
+    def delete(self, key: str) -> None:
+        try:
+            self._run("snapshot", "forget", self.snapshot(key))
+        except BackupTargetError as exc:
+            if "does not exist" not in str(exc) and "not found" not in str(exc):
+                raise
+
+
 def build_target(spec: dict[str, Any]) -> Target:
     kind = spec.get("type")
     config = spec.get("config") or {}
@@ -257,4 +485,10 @@ def build_target(spec: dict[str, Any]) -> Target:
         return S3Target(config)
     if kind == "sftp":
         return SftpTarget(config)
+    if kind == "ftp":
+        return FtpTarget(config)
+    if kind == "rclone":
+        return RcloneTarget(config)
+    if kind == "pbs":
+        return PbsTarget(config)
     raise BackupTargetError(f"Nieznany typ celu kopii: {kind!r}")

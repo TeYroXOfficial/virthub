@@ -331,6 +331,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel/admin')->name('panel
             Route::put('/backups/targets/{target}', 'updateTarget')->whereNumber('target')->name('backups.targets.update');
             Route::delete('/backups/targets/{target}', 'destroyTarget')->whereNumber('target')->name('backups.targets.destroy');
             Route::post('/backups/plans', 'storePlan')->name('backups.plans.store');
+            Route::post('/backups/{backup}/restore-onto', 'restoreOnto')->whereNumber('backup')->name('backups.restore-onto');
             Route::put('/backups/plans/{plan}', 'updatePlan')->whereNumber('plan')->name('backups.plans.update');
             Route::delete('/backups/plans/{plan}', 'destroyPlan')->whereNumber('plan')->name('backups.plans.destroy');
         });

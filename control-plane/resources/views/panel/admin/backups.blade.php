@@ -28,14 +28,14 @@
     <details class="card" @if ($targets->isEmpty()) open @endif>
         <summary><strong>{{ __('Nowy cel') }}</strong></summary>
         <div class="btn-row" style="margin:12px 0">
-            @foreach (['local' => __('Katalog na węźle'), 's3' => 'S3', 'sftp' => 'SFTP'] as $type => $label)
+            @foreach (['local' => __('Katalog na węźle'), 's3' => 'S3', 'sftp' => 'SFTP', 'ftp' => 'FTP / FTPS', 'rclone' => 'Rclone', 'pbs' => 'Proxmox Backup Server'] as $type => $label)
                 <a class="btn btn-sm @if (request('type', 'local') === $type) btn-primary @endif" href="{{ route('panel.admin.backups', ['type' => $type]) }}">{{ $label }}</a>
             @endforeach
         </div>
         <form method="POST" action="{{ route('panel.admin.backups.targets.store') }}" autocomplete="off">
             @csrf
-            <input type="hidden" name="type" value="{{ in_array(request('type'), ['local', 's3', 'sftp'], true) ? request('type') : 'local' }}">
-            @include('panel.admin._backup-target-fields', ['target' => null, 'type' => in_array(request('type'), ['local', 's3', 'sftp'], true) ? request('type') : 'local'])
+            <input type="hidden" name="type" value="{{ in_array(request('type'), \App\Models\BackupTarget::TYPES, true) ? request('type') : 'local' }}">
+            @include('panel.admin._backup-target-fields', ['target' => null, 'type' => in_array(request('type'), \App\Models\BackupTarget::TYPES, true) ? request('type') : 'local'])
             <button class="btn btn-primary" type="submit">{{ __('Dodaj cel') }}</button>
         </form>
     </details>
@@ -83,7 +83,19 @@
                         <td><code>{{ $backup->name }}</code> <span class="muted">{{ $backup->created_at->diffForHumans() }}</span>@if ($backup->isIncremental()) <span class="pill neutral plain">{{ __('przyrostowa') }}</span>@endif</td>
                         <td>{{ $backup->target?->name ?? '—' }}</td>
                         <td>{{ $backup->size_mb ? $backup->size_mb.' MB' : '—' }}</td>
-                        <td><span class="pill {{ ['ready' => 'ok', 'creating' => 'warning', 'failed' => 'critical'][$backup->status] ?? 'neutral' }}">{{ $backup->status }}</span></td>
+                        <td><span class="pill {{ ['ready' => 'ok', 'creating' => 'warning', 'failed' => 'critical'][$backup->status] ?? 'neutral' }}">{{ $backup->status }}</span>
+                            @if ($backup->encrypted) <span class="pill neutral plain">{{ __('szyfrowana') }}</span> @endif
+                            @if ($backup->isRestorable())
+                                <details class="form-block" style="margin-top:4px">
+                                    <summary>{{ __('Przywróć na inną maszynę') }}</summary>
+                                    <form method="POST" action="{{ route('panel.admin.backups.restore-onto', $backup) }}" style="display:flex;gap:6px;margin-top:6px"
+                                          data-confirm="{{ __('Nadpisać dysk wybranej maszyny zawartością kopii :name?', ['name' => $backup->name]) }}">
+                                        @csrf
+                                        <input name="server_id" type="number" min="1" required placeholder="{{ __('ID maszyny') }}" style="width:110px">
+                                        <button class="btn btn-sm" type="submit">{{ __('Przywróć') }}</button>
+                                    </form>
+                                </details>
+                            @endif</td>
                     </tr>
                 @empty
                     <tr><td colspan="5" class="muted">{{ __('Jeszcze nie ma kopii.') }}</td></tr>

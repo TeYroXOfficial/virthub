@@ -486,8 +486,10 @@ class HostdevRequest(BaseModel):
 
 
 class BackupTargetSpec(BaseModel):
-    type: Literal["local", "s3", "sftp"]
+    type: Literal["local", "s3", "sftp", "ftp", "rclone", "pbs"]
     config: dict[str, Any] = Field(default_factory=dict, repr=False)
+    # Klucz AES-256 (base64) — kopia jest szyfrowana przed wysyłką i odszyfrowywana po pobraniu.
+    encryption_key: str | None = Field(default=None, repr=False, pattern=r"^[A-Za-z0-9+/]{43}=$")
 
 
 class BackupRequest(BaseModel):
@@ -501,6 +503,8 @@ class BackupRequest(BaseModel):
     # zatrzymana) = kopia pełna; agent zwraca kind w wyniku.
     checkpoint: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
     incremental_from: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+    # Różnicowa: bloki zmienione od kopii pełnej (incremental_from = jej checkpoint), bez nowego checkpointu.
+    differential: bool = False
 
 
 class BackupLink(BaseModel):
