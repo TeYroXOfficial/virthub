@@ -52,7 +52,12 @@ class FakeHost:
         _write(self.proc / "net" / "dev",
                "Inter-|   Receive\n face |bytes packets\n"
                f"    lo: 999 1 0 0 0 0 0 0 999 1 0 0 0 0 0 0\n"
-               f"  eth0: {1000 + 125000 * c} 1 0 0 0 0 0 0 {500 + 12500 * c} 1 0 0 0 0 0 0\n")
+               f"  eth0: {1000 + 125000 * c} 1 0 0 0 0 0 0 {500 + 12500 * c} 1 0 0 0 0 0 0\n"
+               # Karty maszyn na hoście: rx hosta = wysyłane przez maszynę.
+               f"  vh42: {2000 * c} 1 0 0 0 0 0 0 {50000 * c} 1 0 0 0 0 0 0\n"
+               f"vh42n1: {1000 * c} 1 0 0 0 0 0 0 {0} 1 0 0 0 0 0 0\n"
+               f"   vh7: {300 * c} 1 0 0 0 0 0 0 {700 * c} 1 0 0 0 0 0 0\n"
+               f"vhnat0: {10 * c} 1 0 0 0 0 0 0 {10 * c} 1 0 0 0 0 0 0\n")
         for path, usage in ((self.kvm, 2_000_000), (self.lxc, 500_000), (self.app, 1_000_000)):
             _write(path / "cpu.stat", f"usage_usec {usage * c}\nthrottled_usec {100_000 * c}\n")
             _write(path / "memory.current", "268435456\n")
@@ -60,6 +65,12 @@ class FakeHost:
             _write(path / "pids.current", "12\n")
             _write(path / "io.stat", f"259:0 rbytes={1_048_576 * c} wbytes={524_288 * c} rios={10 * c} wios={5 * c}\n")
             _write(path / "cpu.pressure", "some avg10=3.25 avg60=0 avg300=0 total=1\nfull avg10=1.00 avg60=0 avg300=0 total=1\n")
+        # Aplikacja: proces 5151 w swojej przestrzeni sieciowej (eth0 kontenera).
+        _write(self.app / "cgroup.procs", "5151\n")
+        _write(self.proc / "5151" / "net" / "dev",
+               "Inter-|   Receive\n face |bytes packets\n"
+               f"    lo: 5 1 0 0 0 0 0 0 5 1 0 0 0 0 0 0\n"
+               f"  eth0: {4000 * c} 1 0 0 0 0 0 0 {1000 * c} 1 0 0 0 0 0 0\n")
         # Proces qemu w cgroup maszyny 42.
         _write(self.proc / "4242" / "stat", "4242 (qemu-system-x86) S " + " ".join(["0"] * 10) + f" {100 * c} {50 * c} 0 0 20 0 8 0 0 0 1000 0\n")
         _write(self.proc / "4242" / "cgroup", "0::/machine.slice/machine-qemu\\x2d3\\x2dvirthub\\x2d42.scope/libvirt/vcpu0\n")
@@ -105,8 +116,23 @@ def test_raport_liczy_roznice_miedzy_odczytami(tmp_path):
     assert disk["read_bps"] == 4096 * 512 and disk["write_iops"] == 100.0 and disk["util"] == 50.0
     assert disk["await_ms"] == 0.67  # 400 ms oczekiwania na 600 operacji
 
-    [nic] = report["network"]
+    # Karty maszyn (vh42, vh42n1, vh7) są przy maszynach, mostek NAT zostaje wśród kart hosta.
+    assert [n["name"] for n in report["network"]] == ["eth0", "vhnat0"]
+    nic = report["network"][0]
     assert nic["name"] == "eth0" and nic["rx_bps"] == 125000 and nic["tx_bps"] == 12500
+
+
+def test_ruch_sieciowy_kazdej_maszyny(tmp_path):
+    host = FakeHost(tmp_path)
+    services = {s["kind"]: s for s in host.monitor().report()["services"]}
+
+    kvm = services["kvm"]
+    # Pobierane przez maszynę = wysyłane przez hosta na jej kartę; obie karty (główna i prywatna) razem.
+    assert kvm["net_in_bps"] == 50000 and kvm["net_out_bps"] == 3000
+    assert kvm["net_in_total"] == 100000 and kvm["net_out_total"] == 6000
+    assert services["lxc"]["net_in_bps"] == 700 and services["lxc"]["net_out_bps"] == 300
+    # Aplikacja: z jej przestrzeni sieciowej (rx kontenera = pobrane), bez lo.
+    assert services["app"]["net_in_bps"] == 4000 and services["app"]["net_out_bps"] == 1000
 
 
 def test_temperatury_procesora_i_dyskow(tmp_path):
