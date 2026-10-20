@@ -17,7 +17,11 @@ def _w(path: Path, text: str) -> None:
 
 def host(tmp_path, *, vendor="GenuineIntel", nested="N", tdp="Y", arch="x86_64", release="6.1.0-30-amd64",
          changelog=None, boot=(), reboot_flag=False, os_release='ID=debian\nVERSION_ID="12"\nPRETTY_NAME="Debian 12"',
-         auto=True, kvm_host=True, vulns=None):
+         auto=True, kvm_host=True, vulns=None, pwnescape_patched=True):
+    # Poprawka PwnEscape (luka wszystkich architektur) — żeby pozostałe testy
+    # sprawdzały to, co opisują; jej brak sprawdza osobny test.
+    if pwnescape_patched:
+        changelog = (changelog or "") + "\n  * ipv4: validate checksum_start (CVE-2026-99999)\n"
     _w(tmp_path / "proc/cpuinfo", f"vendor_id\t: {vendor}\n")
     module, tdp_name = ("kvm_intel", "ept") if vendor == "GenuineIntel" else ("kvm_amd", "npt")
     _w(tmp_path / f"sys/module/{module}/parameters/nested", nested + "\n")
@@ -248,3 +252,10 @@ def test_ubuntu_lts_i_jadro_hwe(tmp_path):
              os_release='ID=ubuntu\nVERSION_ID="22.04"\nVERSION="22.04.5 LTS (Jammy Jellyfish)"\nPRETTY_NAME="Ubuntu 22.04"')
     assert r["packages"]["ecosystem"] == "Ubuntu:22.04:LTS"
     assert r["packages"]["items"][0]["name"] == "linux-hwe-6.8"
+
+
+def test_pwnescape_bez_poprawki_w_jadrze(tmp_path):
+    r = host(tmp_path, pwnescape_patched=False)
+    assert status(r, "CVE-2026-99999") == "vulnerable"
+    assert r["overall"] == "critical"
+    assert status(host(tmp_path / "lxc", pwnescape_patched=False, kvm_host=False), "CVE-2026-99999") == "not_affected"

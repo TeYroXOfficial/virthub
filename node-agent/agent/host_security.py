@@ -61,6 +61,13 @@ KNOWN_ISSUES: list[dict[str, Any]] = [
         "summary": "Use-after-free przy zwalnianiu stron shadow MMU KVM — ucieczka z maszyny do hosta z uprawnieniami roota. Na AMD do ataku nie trzeba zagnieżdżania.",
     },
     {
+        "id": "CVE-2026-99999",
+        "name": "PwnEscape",
+        "arch": ("x86_64", "aarch64"),
+        "rule": "kernel",
+        "summary": "Pakiet ze złymi metadanymi sumy kontrolnej od gościa (virtio-net) psuje nagłówek w stosie IPv4 hosta — odczyt pamięci hosta i ucieczka z maszyny.",
+    },
+    {
         "id": "CVE-2026-46316",
         "name": "ITScape",
         "arch": ("aarch64",),

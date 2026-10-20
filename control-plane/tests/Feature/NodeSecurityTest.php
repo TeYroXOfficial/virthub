@@ -83,10 +83,18 @@ class NodeSecurityTest extends TestCase
                     ['vulns' => [['id' => 'DEBIAN-CVE-2026-1001'], ['id' => 'DEBIAN-CVE-2026-1002']], 'next_page_token' => 'p2'],
                     ['vulns' => [['id' => 'DEBIAN-CVE-2026-2001']]],
                 ]])
-                ->push(['results' => [['vulns' => [['id' => 'DEBIAN-CVE-2026-1003']]]]]),
+                ->push(['results' => [['vulns' => [['id' => 'DEBIAN-CVE-2026-1003'], ['id' => 'DEBIAN-CVE-2026-99999'], ['id' => 'DEBIAN-CVE-2026-1004']]]]]),
             'api.osv.dev/v1/vulns/CVE-2026-1001' => Http::response(['id' => 'CVE-2026-1001', 'summary' => 'KVM: x86: use-after-free in shadow MMU', 'published' => now()->subDays(2)->toIso8601String()]),
             'api.osv.dev/v1/vulns/CVE-2026-1002' => Http::response(['id' => 'CVE-2026-1002', 'summary' => 'ext4: fix leak', 'published' => now()->subDays(3)->toIso8601String()]),
             'api.osv.dev/v1/vulns/CVE-2026-1003' => Http::response(['id' => 'CVE-2026-1003', 'summary' => 'KVM: s390: fix irq state', 'published' => now()->subDays(1)->toIso8601String()]),
+            // PwnEscape: tytuł bez „KVM”, ale CVSS ze zmianą zakresu i nazwana ucieczka.
+            'api.osv.dev/v1/vulns/CVE-2026-99999' => Http::response(['id' => 'CVE-2026-99999', 'summary' => 'ipv4: validate checksum_start before completing checksum',
+                'published' => now()->subDays(5)->toIso8601String(), 'severity' => [['type' => 'CVSS_V3', 'score' => 'CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H']]]),
+            // Bez słowa KVM, ale z „guest-to-host” w opisie.
+            'api.osv.dev/v1/vulns/CVE-2026-1004' => Http::response(['id' => 'CVE-2026-1004', 'summary' => 'tun: fix gso header length',
+                'details' => 'A malicious VM can trigger a guest-to-host memory corruption.', 'published' => '2026-01-01T00:00:00Z']),
+            'api.osv.dev/v1/vulns/DEBIAN-CVE-2026-99999' => Http::response(['affected' => [['package' => ['name' => 'linux', 'ecosystem' => 'Debian:12'], 'ranges' => [['events' => [['introduced' => '0'], ['fixed' => '6.1.190-1']]]]]]]),
+            'api.osv.dev/v1/vulns/DEBIAN-CVE-2026-1004' => Http::response([], 404),
             'api.osv.dev/v1/vulns/CVE-2026-2001' => Http::response(['id' => 'CVE-2026-2001', 'details' => 'Heap overflow in virtio-blk', 'published' => '2025-01-01T00:00:00Z']),
             'api.osv.dev/v1/vulns/DEBIAN-CVE-2026-1001' => Http::response(['affected' => [['package' => ['name' => 'linux', 'ecosystem' => 'Debian:12'], 'ranges' => [['events' => [['introduced' => '0'], ['fixed' => '6.1.140-1']]]]]]]),
             'api.osv.dev/v1/vulns/DEBIAN-CVE-2026-1003' => Http::response([], 404),
@@ -102,7 +110,9 @@ class NodeSecurityTest extends TestCase
             ->assertDontSee('ext4: fix leak')         // poza wirtualizacją — tylko liczba
             ->assertSee('CVE-2026-2001')->assertSee('Heap overflow in virtio-blk')
             ->assertSee('security-tracker.debian.org/tracker/CVE-2026-1001', false)
-            ->assertSee(__('nowa'));
+            ->assertSee(__('nowa'))
+            ->assertSee('CVE-2026-99999')->assertSee('PwnEscape')->assertSee('6.1.190-1')
+            ->assertSee('tun: fix gso header length');
 
         // Poprawka jest w repozytorium → węzeł podatny, mimo że audyt agenta mówi „ok”.
         $this->assertSame('critical', app(VulnerabilityFeed::class)->overall($node->fresh()));
