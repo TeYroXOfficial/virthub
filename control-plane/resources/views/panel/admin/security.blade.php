@@ -19,7 +19,7 @@
     <div class="page-header">
         <div>
             <h1>{{ __('Bezpieczeństwo węzłów') }}</h1>
-            <p class="lede">{{ __('Ochrona hostów przed ucieczkami z maszyn klientów (Januscape, Zapscape, ITScape i podobne), stan jądra i podatności procesora.') }}</p>
+            <p class="lede">{{ __('Ochrona hostów przed ucieczkami z maszyn klientów (PwnEscape, Januscape, Zapscape, ITScape i podobne), stan jądra i podatności procesora.') }}</p>
         </div>
     </div>
 
@@ -205,6 +205,8 @@
                                             </td>
                                             <td>
                                                 <a class="mono" href="{{ $Feed::trackerUrl($feed['ecosystem'], $vuln->id) }}" target="_blank" rel="noopener">{{ $vuln->id }}</a>
+                                                @if ($vuln->escapeName()) <strong>{{ $vuln->escapeName() }}</strong> <span class="pill critical">{{ __('ucieczka z maszyny') }}</span>
+                                                @elseif ($vuln->crossesBoundary()) <span class="pill critical plain" title="{{ $vuln->severity }}">{{ __('przekracza granicę gość/host') }}</span> @endif
                                                 @if ($vuln->isNew()) <span class="pill warning">{{ __('nowa') }}</span> @endif
                                                 @if ($vuln->published_at) <span class="hint">{{ $vuln->published_at->format('d.m.Y') }}</span> @endif
                                                 <div class="hint">{{ $vuln->summary ?? __('Opis jeszcze niepobrany.') }}</div>
