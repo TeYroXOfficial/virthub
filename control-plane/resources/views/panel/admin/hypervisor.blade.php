@@ -111,7 +111,7 @@
                                     <td class="muted">{{ $server->user?->email ?? '—' }}</td>
                                     <td><span class="pill {{ $server->state->tone() }}">{{ $server->state->label() }}</span></td>
                                     <td class="muted">{{ $server->template?->name ?? '—' }}</td>
-                                    <td class="mono">{{ $server->primaryIp()?->address ?? '—' }}</td>
+                                    <td class="mono">{{ $server->primaryIp()?->publicAddress() ?? '—' }}</td>
                                     <td class="num">{{ __(':vcpu / :ram_mb GB / :disk_gb GB', ['vcpu' => $server->vcpu, 'ram_mb' => round($server->ram_mb / 1024, 1), 'disk_gb' => $server->disk_gb]) }}</td>
                                     <td style="text-align:right; white-space:nowrap">
                                         @can('destroy', $server)

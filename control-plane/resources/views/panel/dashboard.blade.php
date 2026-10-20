@@ -79,7 +79,7 @@
                             <td>
                                 <span class="pill {{ $server->state->tone() }}">{{ $server->state->label() }}</span>
                             </td>
-                            <td class="mono">{{ $server->primaryIp()?->address ?? '—' }}</td>
+                            <td class="mono">{{ $server->primaryIp()?->publicAddress() ?? '—' }}</td>
                             <td>
                                 @if ($server->osLabel())
                                     <span class="os-inline">

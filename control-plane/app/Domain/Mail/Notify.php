@@ -16,7 +16,7 @@ class Notify
         if ($owner === null) {
             return false;
         }
-        $ip = $server->primaryIp()?->address;
+        $ip = $server->primaryIp()?->publicAddress();
 
         return $this->mailer->send($owner, $key, $extra + ['server' => [
             'hostname' => $server->hostname,

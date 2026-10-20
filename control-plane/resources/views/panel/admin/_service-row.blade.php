@@ -18,7 +18,7 @@
                     <div class="hint">{{ \Illuminate\Support\Str::limit($item->suspension_reason, 80) }}</div>
                 @endif
             </td>
-            <td class="mono">{{ $item->primaryIp()?->address ?? '—' }}</td>
+            <td class="mono">{{ $item->primaryIp()?->publicAddress() ?? '—' }}</td>
             <td class="muted">
                 @if ($item->hypervisor)
                     <a href="{{ route('panel.admin.hypervisors.show', $item->hypervisor) }}">{{ $item->hypervisor->name }}</a>

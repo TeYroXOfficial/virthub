@@ -110,4 +110,15 @@ class IpAddress extends Model
             'rdp' => PortForwarding::externalFor($this, 3389),
         ];
     }
+
+    /**
+     * Adres, pod którym maszynę widać z zewnątrz: przy NAT wspólny adres węzła
+     * z pierwszym portem bloku (SSH, a w Windows RDP), w pozostałych — sam adres.
+     */
+    public function publicAddress(): string
+    {
+        $ports = $this->natPorts();
+
+        return $ports === null ? $this->address : $this->natEndpoint().':'.$ports['from'];
+    }
 }

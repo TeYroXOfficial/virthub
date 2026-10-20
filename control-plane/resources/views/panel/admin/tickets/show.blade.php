@@ -84,7 +84,7 @@
                         <dd>
                             @if ($service instanceof \App\Models\Server)
                                 <a href="{{ route('panel.servers.show', $service) }}">{{ $service->hostname }}</a>
-                                <div class="hint">{{ $service->primaryIp()?->address ?? '—' }} · {{ $service->hypervisor?->name ?? '—' }}</div>
+                                <div class="hint">{{ $service->primaryIp()?->publicAddress() ?? '—' }} · {{ $service->hypervisor?->name ?? '—' }}</div>
                             @else
                                 <a href="{{ route('panel.apps.show', $service) }}">{{ $service->name }}</a>
                                 <div class="hint">{{ $service->address() ?? '—' }}</div>

@@ -4409,5 +4409,6 @@
     "Adres zewnętrzny": "External address",
     "Brak adresu :version.": "No :version address.",
     "Adresy, porty i karta sieciowa": "Addresses, ports and network interface",
-    "Networking": "Networking"
+    "Networking": "Networking",
+    "Adres wewnętrzny": "Internal address"
 }

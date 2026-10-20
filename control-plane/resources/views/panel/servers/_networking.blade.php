@@ -80,13 +80,19 @@
                     <dl class="kv" style="margin-bottom:12px">
                         <dt>{{ $ip->is_primary ? __('Główny') : __('Dodatkowy') }}</dt>
                         <dd class="mono">
-                            {{ $ip->address }}/{{ $ip->pool->prefix }}
-                            @if ($ip->isNat()) <span class="pill warning">{{ __('NAT') }}</span> @endif
+                            @if ($ip->natPorts())
+                                {{ $ip->publicAddress() }} <span class="pill warning">{{ __('NAT') }}</span>
+                            @else
+                                {{ $ip->address }}/{{ $ip->pool->prefix }}
+                                @if ($ip->isNat()) <span class="pill warning">{{ __('NAT') }}</span> @endif
+                            @endif
                         </dd>
+                        @if ($ip->natPorts())
+                            <dt>{{ __('Adres wewnętrzny') }}</dt><dd class="mono">{{ $ip->address }}/{{ $ip->pool->prefix }}</dd>
+                        @endif
                         <dt>{{ __('Brama') }}</dt><dd class="mono">{{ $ip->pool->gateway }}</dd>
                         <dt>{{ __('DNS') }}</dt><dd class="mono">{{ implode(', ', $ip->pool->nameserverList()) }}</dd>
                         @if ($ports = $ip->natPorts())
-                            <dt>{{ __('Adres zewnętrzny') }}</dt><dd class="mono">{{ $ip->natEndpoint() }}</dd>
                             <dt>{{ __('Porty') }}</dt>
                             <dd>
                                 <span class="mono">{{ $ports['from'] }}–{{ $ports['to'] }}</span>
