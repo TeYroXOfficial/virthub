@@ -228,6 +228,17 @@ class Product extends Model
         return $query->get();
     }
 
+    /** Systemy do wyboru przy zamówieniu maszyny. @return \Illuminate\Support\Collection<int, OsTemplate> */
+    public function orderableTemplates(): \Illuminate\Support\Collection
+    {
+        $package = $this->package;
+
+        return OsTemplate::query()->where('is_active', true)->with('group')->orderBy('name')->get()
+            ->filter(fn (OsTemplate $t) => $t->isSelfService() && ($package === null || $package->disk_gb >= $t->min_disk_gb)
+                && ($t->group === null || $t->group->is_active))
+            ->values();
+    }
+
     /** Szablony aplikacji do wyboru. @return Collection<int, AppEgg> */
     public function eggs(): Collection
     {

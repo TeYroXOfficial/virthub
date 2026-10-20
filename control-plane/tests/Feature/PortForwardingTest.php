@@ -7,6 +7,7 @@ use App\Domain\Network\IpPoolManager;
 use App\Domain\Network\PortForwarding;
 use App\Domain\Provisioning\AgentResultApplier;
 use App\Domain\Provisioning\IpAllocator;
+use App\Enums\ServerState;
 use App\Jobs\RunServerActionJob;
 use App\Models\Hypervisor;
 use App\Models\IpPool;
@@ -17,6 +18,7 @@ use App\Models\ServerJob;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /** Przekierowania portów NAT: usługi stałe wg systemu i porty ustawiane przez klienta. */
@@ -59,13 +61,11 @@ class PortForwardingTest extends TestCase
         return collect($nat['forwards'])->mapWithKeys(fn ($f) => [$f['external'] => $f['internal']])->all();
     }
 
-    public function test_linux_ma_ssh_na_pierwszym_porcie_a_reszte_jeden_do_jednego(): void
+    public function test_linux_ma_ssh_na_pierwszym_porcie_a_reszta_jest_zamknieta(): void
     {
-        // Adres .5 → blok 10050–10059.
-        $this->assertSame([
-            10050 => 22, 10051 => 10051, 10052 => 10052, 10053 => 10053, 10054 => 10054,
-            10055 => 10055, 10056 => 10056, 10057 => 10057, 10058 => 10058, 10059 => 10059,
-        ], $this->forwards());
+        // Adres .5 → blok 10050–10059; węzeł przekierowuje tylko SSH.
+        $this->assertSame([10050 => 22], $this->forwards());
+        $this->assertSame(PortForwarding::KIND_CLOSED, PortForwarding::mapping($this->ip())[1]['kind']);
     }
 
     public function test_windows_ma_rdp_i_ssh_na_stalych_portach(): void
@@ -75,7 +75,7 @@ class PortForwardingTest extends TestCase
         $forwards = $this->forwards();
         $this->assertSame(3389, $forwards[10050]);
         $this->assertSame(22, $forwards[10051]);
-        $this->assertSame(10052, $forwards[10052]);
+        $this->assertArrayNotHasKey(10052, $forwards);
         $this->assertSame(['from' => 10050, 'to' => 10059, 'ssh' => 10051, 'rdp' => 10050], $this->ip()->natPorts());
     }
 
@@ -123,17 +123,18 @@ class PortForwardingTest extends TestCase
 
         $this->actingAs($this->owner)->put(route('panel.servers.ports.update', $this->server), ['ports' => [$ip->id => [
             10055 => '25565',   // nowe przekierowanie
-            10056 => '',        // puste: wraca na 1:1
-            10057 => '10057',   // ten sam numer: 1:1, bez wpisu
+            10056 => '',        // puste: port zamknięty
+            10057 => '10057',   // ten sam numer: zwykłe przekierowanie
             10050 => '9999',    // stały port SSH: ignorowany
             65000 => '80',      // spoza bloku: ignorowany
         ]]])->assertRedirect()->assertSessionHasNoErrors();
 
         $forwards = $this->forwards();
         $this->assertSame(25565, $forwards[10055]);
-        $this->assertSame(10056, $forwards[10056]);
+        $this->assertArrayNotHasKey(10056, $forwards);
         $this->assertSame(10057, $forwards[10057]);
-        $this->assertSame(1, NatPortForward::count());
+        $this->assertArrayNotHasKey(10058, $forwards);
+        $this->assertSame(2, NatPortForward::count());
         Queue::assertPushed(RunServerActionJob::class);
 
         $this->actingAs($this->owner)->put(route('panel.servers.ports.update', $this->server), ['ports' => [$ip->id => [10058 => 'abc']]])
@@ -145,7 +146,7 @@ class PortForwardingTest extends TestCase
         $this->actingAs($stranger)->put(route('panel.servers.ports.update', $this->server), ['ports' => [$ip->id => [10059 => '80']]])->assertForbidden();
     }
 
-    public function test_usuniecie_przywraca_jeden_do_jednego(): void
+    public function test_usuniecie_zamyka_port(): void
     {
         $forward = app(PortForwarding::class)->set($this->server, $this->ip(), 10056, 8080, null);
 
@@ -153,7 +154,7 @@ class PortForwardingTest extends TestCase
             ->delete(route('panel.servers.ports.destroy', [$this->server, $forward]))
             ->assertRedirect();
 
-        $this->assertSame(10056, $this->forwards()[10056]);
+        $this->assertArrayNotHasKey(10056, $this->forwards());
         $this->assertModelMissing($forward);
     }
 
@@ -204,6 +205,16 @@ class PortForwardingTest extends TestCase
         ]);
 
         app(AgentResultApplier::class)->apply($job, ['status' => 'done', 'result' => []]);
+
+        $this->assertDatabaseHas('server_jobs', ['server_id' => $this->server->id, 'action' => 'network']);
+    }
+
+    public function test_komenda_przeladowuje_porty_maszyn_za_natem(): void
+    {
+        $this->server->forceFill(['agent_uuid' => (string) Str::uuid()])->save();
+        $this->server->markState(ServerState::Running);
+
+        $this->artisan('virthub:sync-nat-ports')->assertSuccessful();
 
         $this->assertDatabaseHas('server_jobs', ['server_id' => $this->server->id, 'action' => 'network']);
     }

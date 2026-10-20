@@ -32,7 +32,7 @@
                     @foreach (PF::mapping($ip, $server) as $entry)
                         @php
                             $ext = $entry['external'];
-                            $state = match ($entry['kind']) { PF::KIND_FIXED => 'fixed', PF::KIND_CUSTOM => 'active', default => 'direct' };
+                            $state = match ($entry['kind']) { PF::KIND_FIXED => 'fixed', PF::KIND_CUSTOM => 'active', default => 'closed' };
                             $endpoint = $host.':'.$ext;
                         @endphp
                         <div class="port-tile is-{{ $state }}" data-port-tile>
@@ -45,7 +45,7 @@
                                     <input class="port-box mono" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="5"
                                            name="ports[{{ $ip->id }}][{{ $ext }}]" aria-label="{{ __('Port w maszynie dla :port', ['port' => $ext]) }}"
                                            value="{{ old("ports.{$ip->id}.{$ext}", $state === 'active' ? $entry['internal'] : '') }}"
-                                           placeholder="{{ $ext }}" data-port-input data-initial="{{ $state === 'active' ? $entry['internal'] : '' }}"
+                                           placeholder="—" data-port-input data-initial="{{ $state === 'active' ? $entry['internal'] : '' }}"
                                            @disabled(! $canEdit)>
                                 @endif
                                 <button class="icon-btn" type="button" data-copy="{{ $endpoint }}" title="{{ __('Kopiuj :endpoint', ['endpoint' => $endpoint]) }}"><x-icon name="copy" :size="14"/></button>
@@ -57,7 +57,7 @@
                                 @elseif ($state === 'active')
                                     <span class="pill ok">{{ $entry['label'] ?: __('przekierowany') }}</span>
                                 @else
-                                    <span class="pill warning">{{ __('1:1') }}</span>
+                                    <span class="pill neutral plain">{{ __('zamknięty') }}</span>
                                 @endif
                             </div>
                         </div>
@@ -65,7 +65,7 @@
                 </div>
             @endforeach
             <p class="hint" style="margin-bottom:0">
-                {{ __('Wpisz port w maszynie, na który ma prowadzić port zewnętrzny. Puste pole: port przechodzi na ten sam numer (1:1). Pierwsze porty są stałe i prowadzą do SSH (a w Windows także do RDP).') }}
+                {{ __('Wpisz port w maszynie, na który ma prowadzić port zewnętrzny. Puste pole: port jest zamknięty. Pierwsze porty są stałe i prowadzą do SSH (a w Windows także do RDP).') }}
             </p>
         </form>
     </div>
@@ -84,8 +84,8 @@
                         dirty = dirty || changed;
                         const tile = input.closest('[data-port-tile]');
                         tile.classList.toggle('is-changed', changed);
-                        tile.classList.toggle('is-active', input.value !== '' && input.value !== input.placeholder);
-                        tile.classList.toggle('is-direct', input.value === '' || input.value === input.placeholder);
+                        tile.classList.toggle('is-active', input.value !== '');
+                        tile.classList.toggle('is-closed', input.value === '');
                     });
                     if (save) save.disabled = !dirty;
                 };

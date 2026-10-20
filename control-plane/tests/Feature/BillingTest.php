@@ -10,6 +10,7 @@ use App\Domain\Billing\InsufficientFunds;
 use App\Domain\Billing\InvoiceManager;
 use App\Domain\Billing\Money;
 use App\Domain\Billing\ServiceManager;
+use App\Domain\Billing\Stock;
 use App\Domain\Billing\Wallet;
 use App\Enums\ServerState;
 use App\Mail\TemplatedMail;
@@ -444,7 +445,29 @@ class BillingTest extends TestCase
         $this->product->update(['stock' => 1]);
         $this->actingAs($this->customer)->post(route('panel.store.order', $this->product), [
             'cycle' => 'monthly', 'template' => $this->template->id, 'hostname' => 'shop2.example.com', 'payment' => 'invoice', 'accept' => 1,
-        ])->assertSessionHasErrors('payment');
+        ])->assertSessionHasErrors('cycle');
+    }
+
+    public function test_produkt_bez_miejsca_na_wezlach_jest_wyprzedany(): void
+    {
+        $this->actingAs($this->customer)->get(route('panel.store'))->assertSee(route('panel.store.product', $this->product), false);
+
+        // Pakiet większy niż jakikolwiek węzeł.
+        $this->product->package->update(['ram_mb' => 65536]);
+        $this->actingAs($this->customer)->get(route('panel.store'))->assertOk()->assertSee(__('Wyprzedane'))
+            ->assertDontSee(route('panel.store.product', $this->product), false);
+        $this->actingAs($this->customer)->get(route('panel.store.product', $this->product))->assertOk()
+            ->assertSee(__('Brak wolnego miejsca na serwerach. Zajrzyj później.'));
+        $this->actingAs($this->customer)->post(route('panel.store.order', $this->product), [
+            'cycle' => 'monthly', 'template' => $this->template->id, 'hostname' => 'full.example.com', 'payment' => 'invoice', 'accept' => 1,
+        ])->assertSessionHasErrors('cycle');
+        $this->assertSame(0, BillingService::count());
+        $this->actingAs($this->admin)->get(route('panel.store'))->assertSee('nie ma wolnych zasobów albo adresów IP', false);
+
+        // Zasoby są, ale skończyły się adresy IPv4.
+        $this->product->package->update(['ram_mb' => 1024]);
+        IpAddress::query()->update(['is_reserved' => true]);
+        $this->assertFalse(app(Stock::class)->inStock($this->product->fresh()));
     }
 
     public function test_administracja_katalogu_i_stron(): void

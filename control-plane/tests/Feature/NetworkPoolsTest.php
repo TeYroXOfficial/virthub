@@ -283,10 +283,8 @@ class NetworkPoolsTest extends TestCase
             ],
         ]], $payload);
 
-        // Linux: pierwszy port na SSH, reszta bloku 1:1.
-        $this->assertCount(20, $forwards);
-        $this->assertSame(['external' => 10100, 'internal' => 22], $forwards[0]);
-        $this->assertSame(['external' => 10119, 'internal' => 10119], $forwards[19]);
+        // Linux: pierwszy port na SSH, reszta bloku zamknięta.
+        $this->assertSame([['external' => 10100, 'internal' => 22]], $forwards);
     }
 
     // --- IPv6 ---------------------------------------------------------------

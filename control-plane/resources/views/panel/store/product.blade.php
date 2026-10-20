@@ -71,7 +71,8 @@
                         <select name="location" aria-label="{{ __('Lokalizacja') }}" @if ($product->hypervisor_group_ids) required @endif>
                             @unless ($product->hypervisor_group_ids) <option value="">{{ __('Automatycznie — najmniej obciążona') }}</option> @endunless
                             @foreach ($locations as $location)
-                                <option value="{{ $location->id }}" @selected(old('location') == $location->id)>{{ $location->publicName() }}</option>
+                                @php $open = in_array($location->id, $openLocations, true); @endphp
+                                <option value="{{ $location->id }}" @selected($open && old('location') == $location->id) @disabled(! $open)>{{ $location->publicName() }}@unless ($open) — {{ __('wyprzedane') }}@endunless</option>
                             @endforeach
                         </select>
                         @error('location') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror
@@ -175,7 +176,12 @@
 
             <label class="check-line" style="margin-top:10px"><input type="checkbox" name="accept" value="1" required> {{ __('Akceptuję regulamin i warunki rozliczeń') }}</label>
             @error('accept') <p class="hint" style="color:var(--critical)">{{ $message }}</p> @enderror
-            <button class="btn btn-primary" type="submit" style="width:100%; margin-top:12px">{{ __('Zamawiam') }}</button>
+            @if ($inStock)
+                <button class="btn btn-primary" type="submit" style="width:100%; margin-top:12px">{{ __('Zamawiam') }}</button>
+            @else
+                <button class="btn" type="submit" style="width:100%; margin-top:12px" disabled>{{ __('Wyprzedane') }}</button>
+                <p class="hint">{{ __('Brak wolnego miejsca na serwerach. Zajrzyj później.') }}</p>
+            @endif
         </aside>
     </form>
 @endsection
