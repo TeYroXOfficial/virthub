@@ -45,8 +45,8 @@ class PortForwardController extends Controller
     }
 
     /**
-     * Zapis całego bloku naraz (siatka portów): pusty albo równy numerowi
-     * zewnętrznemu — port wraca na 1:1, inny numer — przekierowanie.
+     * Zapis całego bloku naraz (siatka portów): puste pole zamyka port,
+     * numer — przekierowanie na ten port w maszynie.
      */
     public function update(Request $request, Server $server): RedirectResponse
     {
@@ -69,7 +69,7 @@ class PortForwardController extends Controller
                 }
                 $internal = $internal === null || $internal === '' ? null : (int) $internal;
                 $current = $custom->get($external);
-                if ($internal === null || $internal === $external) {
+                if ($internal === null) {
                     if ($current !== null) {
                         $this->forwarding->remove($current, $request->user());
                         $changed++;
@@ -97,7 +97,7 @@ class PortForwardController extends Controller
         $this->forwarding->remove($forward, $request->user());
         $this->provisioner->syncNetwork($server, $request->user());
 
-        return $this->done($server, __('Port :external wraca na ten sam numer w maszynie (1:1).', ['external' => $external]));
+        return $this->done($server, __('Port :external jest teraz zamknięty.', ['external' => $external]));
     }
 
     private function done(Server $server, string $message): RedirectResponse

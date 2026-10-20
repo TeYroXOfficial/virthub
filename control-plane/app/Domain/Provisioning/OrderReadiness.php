@@ -3,6 +3,7 @@
 namespace App\Domain\Provisioning;
 
 use App\Domain\Billing\Billing;
+use App\Domain\Billing\Stock;
 use App\Enums\Virtualization;
 use App\Models\Hypervisor;
 use App\Models\IpAddress;
@@ -40,6 +41,8 @@ class OrderReadiness
                     $add(__('Produkt „:name” jest ukryty: nie ma żadnej ceny.', ['name' => $product->name]), 'panel.admin.billing.catalog');
                 } elseif ($product->remaining() === 0) {
                     $add(__('Produkt „:name” jest wyprzedany (limit sztuk).', ['name' => $product->name]), 'panel.admin.billing.catalog');
+                } elseif (! app(Stock::class)->inStock($product)) {
+                    $add(__('Produkt „:name” jest wyprzedany: żaden węzeł nie ma wolnych zasobów albo adresów IP dla jego pakietu lub planu.', ['name' => $product->name]), 'panel.admin.hypervisors');
                 }
             }
             $sellsVps = $categories->flatMap->products->contains(fn (Product $p) => $p->type === Product::TYPE_VPS);

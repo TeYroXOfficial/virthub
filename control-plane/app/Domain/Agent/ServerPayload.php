@@ -63,7 +63,7 @@ class ServerPayload
             ];
             if ($ports !== null) {
                 // Pełne mapowanie bloku: usługi dostępu wg systemu, porty
-                // ustawione przez klienta, reszta 1:1.
+                // ustawione przez klienta; reszta bloku zamknięta.
                 $interface['nat']['forwards'] = PortForwarding::agentPayload($ip, $server);
             }
         }

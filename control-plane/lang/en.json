@@ -4410,5 +4410,13 @@
     "Brak adresu :version.": "No :version address.",
     "Adresy, porty i karta sieciowa": "Addresses, ports and network interface",
     "Networking": "Networking",
-    "Adres wewnętrzny": "Internal address"
+    "Adres wewnętrzny": "Internal address",
+    "Port :external jest teraz zamknięty.": "Port :external is now closed.",
+    "zamknięty": "closed",
+    "Wpisz port w maszynie, na który ma prowadzić port zewnętrzny. Puste pole: port jest zamknięty. Pierwsze porty są stałe i prowadzą do SSH (a w Windows także do RDP).": "Enter the port inside the machine that the external port should lead to. An empty field means the port is closed. The first ports are fixed and lead to SSH (and RDP on Windows).",
+    "Produkt „:name” jest wyprzedany: żaden węzeł nie ma wolnych zasobów albo adresów IP dla jego pakietu lub planu.": "Product \":name\" is sold out: no node has free resources or IP addresses for its package or plan.",
+    "W tej lokalizacji nie ma teraz miejsca. Wybierz inną.": "There is no room in this location right now. Choose another one.",
+    "Ten produkt jest chwilowo wyprzedany.": "This product is temporarily sold out.",
+    "wyprzedane": "sold out",
+    "Brak wolnego miejsca na serwerach. Zajrzyj później.": "No free capacity on our servers right now. Check back later."
 }

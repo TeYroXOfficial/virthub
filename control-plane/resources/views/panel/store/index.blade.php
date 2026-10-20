@@ -62,7 +62,7 @@
                             @if (count($prices) > 1)
                                 <div class="hint">{{ collect(array_keys($prices))->map(fn ($c) => $product->renews($c) ? Cycle::label($c) : Cycle::duration($c))->join(' · ') }}</div>
                             @endif
-                            @if (($left = $product->remaining()) !== null && $left === 0)
+                            @if (! $stock->inStock($product))
                                 <span class="btn" aria-disabled="true" style="width:100%; margin-top:12px; opacity:.6">{{ __('Wyprzedane') }}</span>
                             @else
                                 <a class="btn btn-primary" style="width:100%; margin-top:12px" href="{{ route('panel.store.product', $product) }}">{{ __('Zamów') }}</a>

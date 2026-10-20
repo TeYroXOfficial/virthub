@@ -2,9 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Metrics\Traffic;
+use App\Domain\Network\PortForwarding;
 use App\Models\Server;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Arr;
 
 /** @mixin Server */
 class ServerResource extends JsonResource
@@ -53,7 +56,7 @@ class ServerResource extends JsonResource
             ],
             'cpu_model' => $this->hypervisor?->cpuModel(),
             // Transfer w bieżącym miesiącu, w bajtach (1 GB = 1000³ B).
-            'traffic' => app(\App\Domain\Metrics\Traffic::class)->usage($this->resource),
+            'traffic' => app(Traffic::class)->usage($this->resource),
 
             'ip_addresses' => $this->whenLoaded('ipAddresses', fn () => $this->ipAddresses
                 ->map(fn ($ip) => [
@@ -63,13 +66,13 @@ class ServerResource extends JsonResource
                     'rdns' => $ip->rdns,
                     'type' => $ip->pool?->type ?? 'public',
                     // Za NAT-em maszyna jest osiągalna tylko przez blok portów;
-                    // port_forwards to pełne mapowanie (usługi stałe, ustawione, 1:1).
+                    // port_forwards to pełne mapowanie (usługi stałe, ustawione, zamknięte z internal = null).
                     'nat_ports' => $ip->natPorts(),
                     // Adres, pod którym z zewnątrz widać porty z nat_ports.
                     'nat_endpoint' => $ip->natPorts() === null ? null : $ip->natEndpoint(),
                     'port_forwards' => $ip->natPorts() === null ? [] : array_map(
-                        fn (array $e) => \Illuminate\Support\Arr::except($e, ['id']),
-                        \App\Domain\Network\PortForwarding::mapping($ip, $this->resource),
+                        fn (array $e) => Arr::except($e, ['id']),
+                        PortForwarding::mapping($ip, $this->resource),
                     ),
                 ])->values()),
 

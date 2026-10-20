@@ -841,9 +841,11 @@ z maszyny, a bez odczytu — z szablonu):
 | Linux   | SSH / SFTP (22)   | —                 |
 | Windows | RDP (3389)        | SSH / SFTP (22)   |
 
-Pozostałe porty klient kieruje w panelu (Przegląd → Przekierowania portów) na
-dowolny port w maszynie, np. 10103 → 80. Nieustawione przechodzą 1:1 na ten sam
-numer. Po reinstalacji na inny system usługi stałe przeliczają się same.
+Pozostałe porty klient kieruje w panelu (Sieć → Porty) na dowolny port
+w maszynie, np. 10103 → 80. Nieustawione są zamknięte — węzeł ich nie
+przekierowuje. Po aktualizacji ze starszej wersji (gdzie nieustawione
+porty szły 1:1) uruchom `php artisan virthub:sync-nat-ports`, żeby węzły od razu
+zamknęły te porty. Po reinstalacji na inny system usługi stałe przeliczają się same.
 Bloki pul NAT, które mogą trafić na ten sam węzeł, nie mogą się pokrywać — panel
 to sprawdza. Pakiet korzysta z pul NAT, gdy ma `"network_type": "nat"`.
 

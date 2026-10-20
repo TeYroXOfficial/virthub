@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Web;
 use App\Domain\Billing\Billing;
 use App\Domain\Billing\InsufficientFunds;
 use App\Domain\Billing\ServiceManager;
+use App\Domain\Billing\Stock;
 use App\Http\Controllers\Controller;
 use App\Models\BillingService;
-use App\Models\OsTemplate;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Rules\SshPublicKey;
@@ -32,7 +32,7 @@ class StoreController extends Controller
             ->filter(fn (ProductCategory $c) => $c->products->isNotEmpty())
             ->values();
 
-        return view('panel.store.index', ['categories' => $categories]);
+        return view('panel.store.index', ['categories' => $categories, 'stock' => app(Stock::class)]);
     }
 
     public function show(Request $request, Product $product): View
@@ -44,7 +44,9 @@ class StoreController extends Controller
             'product' => $product,
             'prices' => $product->priceMap(),
             'locations' => $product->locations(),
-            'templates' => $product->type === Product::TYPE_VPS ? $this->templates($product) : collect(),
+            'openLocations' => app(Stock::class)->locations($product)->pluck('id')->all(),
+            'inStock' => app(Stock::class)->inStock($product),
+            'templates' => $product->type === Product::TYPE_VPS ? $product->orderableTemplates() : collect(),
             'eggs' => $product->type === Product::TYPE_APP ? $product->eggs() : collect(),
             'balance' => (int) $request->user()->fresh()->wallet_balance,
             'remaining' => $product->remaining(),
@@ -67,7 +69,7 @@ class StoreController extends Controller
         $hostnameRule = ['required', 'string', 'max:253', 'regex:/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/i'];
         if ($product->type === Product::TYPE_VPS) {
             $rules += [
-                'template' => ['required', 'integer', Rule::in($this->templates($product)->pluck('id')->all())],
+                'template' => ['required', 'integer', Rule::in($product->orderableTemplates()->pluck('id')->all())],
                 'hostname' => $hostnameRule,
                 'ssh_key' => ['nullable', 'string', 'max:1000', new SshPublicKey],
             ];
@@ -99,7 +101,14 @@ class StoreController extends Controller
             }
         }
 
-        $config = ['location_id' => isset($data['location']) ? (int) $data['location'] : null];
+        $location = isset($data['location']) ? $locations->firstWhere('id', (int) $data['location']) : null;
+        if (! app(Stock::class)->inStock($product) || ($location !== null && ! app(Stock::class)->fits($product, $location))) {
+            return back()->withInput()->withErrors([$location ? 'location' : 'cycle' => $location
+                ? __('W tej lokalizacji nie ma teraz miejsca. Wybierz inną.')
+                : __('Ten produkt jest chwilowo wyprzedany.')]);
+        }
+
+        $config = ['location_id' => $location?->id];
         $sshKeys = array_values(array_filter([trim((string) ($data['ssh_key'] ?? ''))]));
         $config += match ($product->type) {
             Product::TYPE_VPS => ['template_id' => (int) $data['template'], 'hostname' => strtolower($data['hostname']), 'ssh_keys' => $sshKeys,
@@ -129,15 +138,5 @@ class StoreController extends Controller
     private function assertOrderable(Product $product): void
     {
         abort_unless(Billing::enabled() && $product->is_active && $product->category?->is_active && $product->deliverable(), 404);
-    }
-
-    private function templates(Product $product)
-    {
-        $package = $product->package;
-
-        return OsTemplate::query()->where('is_active', true)->with('group')->orderBy('name')->get()
-            ->filter(fn (OsTemplate $t) => $t->isSelfService() && ($package === null || $package->disk_gb >= $t->min_disk_gb)
-                && ($t->group === null || $t->group->is_active))
-            ->values();
     }
 }

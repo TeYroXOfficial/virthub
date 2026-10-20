@@ -192,7 +192,7 @@ class ServerProvisioner
      * sprzed obsługi magazynów nie zna /system/datastores (odczyt = błąd) i po
      * cichu założyłby dysk w katalogu domyślnym — takiego węzła nie wybieramy.
      */
-    private static function nodeHasDatastore(Hypervisor $node, ?Datastore $datastore): bool
+    public static function nodeHasDatastore(Hypervisor $node, ?Datastore $datastore): bool
     {
         return $datastore === null || $datastore->hypervisors()->whereKey($node->id)
             ->where(fn ($q) => $q->whereNull('datastore_hypervisor.ok')->orWhere('datastore_hypervisor.ok', true))

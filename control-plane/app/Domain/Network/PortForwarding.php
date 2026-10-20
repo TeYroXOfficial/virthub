@@ -16,8 +16,8 @@ use Illuminate\Validation\ValidationException;
  * Pierwsze porty bloku są zawsze zajęte przez usługi dostępu zależne od
  * systemu — SSH/SFTP w Linuksie, RDP (i SSH) w Windows — żeby klient zawsze
  * mógł się dostać do maszyny, niezależnie od tego, co przestawi. Pozostałe
- * porty klient kieruje na dowolne porty w maszynie; nieustawione przechodzą
- * 1:1 na ten sam numer.
+ * porty klient kieruje na dowolne porty w maszynie; nieustawione są
+ * zamknięte (węzeł ich nie przekierowuje).
  */
 class PortForwarding
 {
@@ -25,7 +25,7 @@ class PortForwarding
 
     public const KIND_CUSTOM = 'custom';
 
-    public const KIND_DIRECT = 'direct';
+    public const KIND_CLOSED = 'closed';
 
     /**
      * Usługi dostępu w kolejności, w jakiej dostają pierwsze porty bloku.
@@ -42,7 +42,7 @@ class PortForwarding
     /**
      * Pełne mapowanie bloku portów adresu.
      *
-     * @return list<array{external: int, internal: int, label: ?string, kind: string, id: ?int}>
+     * @return list<array{external: int, internal: ?int, label: ?string, kind: string, id: ?int}>
      */
     public static function mapping(IpAddress $ip, ?Server $server = null): array
     {
@@ -84,8 +84,8 @@ class PortForwarding
 
         for ($port = $block['from']; $port <= $block['to']; $port++) {
             $entries[$port] ??= [
-                'external' => $port, 'internal' => $port,
-                'label' => null, 'kind' => self::KIND_DIRECT, 'id' => null,
+                'external' => $port, 'internal' => null,
+                'label' => null, 'kind' => self::KIND_CLOSED, 'id' => null,
             ];
         }
 
@@ -95,23 +95,23 @@ class PortForwarding
     }
 
     /**
-     * Mapowanie dla agenta: port węzła → port w maszynie.
+     * Mapowanie dla agenta: port węzła → port w maszynie (bez zamkniętych).
      *
      * @return list<array{external: int, internal: int}>
      */
     public static function agentPayload(IpAddress $ip, ?Server $server = null): array
     {
-        return array_map(
+        return array_values(array_map(
             fn (array $e) => ['external' => $e['external'], 'internal' => $e['internal']],
-            self::mapping($ip, $server),
-        );
+            array_filter(self::mapping($ip, $server), fn (array $e) => $e['kind'] !== self::KIND_CLOSED),
+        ));
     }
 
     /** Port zewnętrzny, pod którym widać usługę w maszynie (np. 22) — pierwszy pasujący. */
     public static function externalFor(IpAddress $ip, int $internal, ?Server $server = null): ?int
     {
         foreach (self::mapping($ip, $server) as $entry) {
-            if ($entry['internal'] === $internal && $entry['kind'] !== self::KIND_DIRECT) {
+            if ($entry['internal'] === $internal) {
                 return $entry['external'];
             }
         }
