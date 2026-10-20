@@ -98,17 +98,21 @@ class FleetManagementTest extends TestCase
         $this->assertNotSoftDeleted($server);
     }
 
-    public function test_klient_usuwa_wlasna_maszyne_w_ustawieniach(): void
+    public function test_klient_nie_usuwa_maszyny_tylko_personel(): void
     {
         $customer = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
         $server = $this->serverWithIp(null, ['user_id' => $customer->id]);
 
+        // Klient nie kasuje maszyny wprost: usługę anuluje w billingu, a maszyny z API kończy zewnętrzny billing.
         $this->actingAs($customer)->get(route('panel.servers.show', $server))
-            ->assertSee('Usuń maszynę')->assertDontSee('Usuń tylko z panelu');
+            ->assertOk()->assertDontSee('Usuń maszynę')->assertDontSee('Usuń tylko z panelu');
+        $this->actingAs($customer)->delete(route('panel.servers.destroy', $server), ['confirm' => '1'])->assertForbidden();
+        $this->assertNotSame(ServerState::Deleting, $server->fresh()->state);
 
-        $this->actingAs($customer)->delete(route('panel.servers.destroy', $server))->assertSessionHasErrors('confirm');
-        $this->actingAs($customer)->delete(route('panel.servers.destroy', $server), ['confirm' => '1'])
-            ->assertRedirect(route('panel.dashboard'));
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->actingAs($admin)->get(route('panel.servers.show', $server))->assertSee('Usuń maszynę');
+        $this->actingAs($admin)->delete(route('panel.servers.destroy', $server))->assertSessionHasErrors('confirm');
+        $this->actingAs($admin)->delete(route('panel.servers.destroy', $server), ['confirm' => '1'])->assertRedirect();
         $this->assertSame(ServerState::Deleting, $server->fresh()->state);
 
         $other = $this->serverWithIp(null, ['user_id' => User::factory()->create()->id]);

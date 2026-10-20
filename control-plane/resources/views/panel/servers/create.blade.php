@@ -5,6 +5,7 @@
 @section('content')
     <h1>{{ __('Zamów nowy VPS') }}</h1>
     <p class="lede">{{ __('Maszyna będzie gotowa zwykle w minutę od złożenia zamówienia.') }}</p>
+    @include('panel._order-readiness')
 
     <form method="POST" action="{{ route('panel.servers.store') }}">
         @csrf
@@ -13,7 +14,10 @@
             <h3>{{ __('Pakiet zasobów') }}</h3>
             <div class="field">
                 <label for="package">{{ __('Wybierz pakiet') }}</label>
-                <select id="package" name="package" required>
+                @if ($packages->isEmpty())
+                    <p class="muted">{{ __('Nie ma teraz pakietu do zamówienia. Skontaktuj się z obsługą.') }}</p>
+                @endif
+                <select id="package" name="package" required @disabled($packages->isEmpty())>
                     @foreach ($packages as $package)
                         <option value="{{ $package->slug }}" @selected(old('package') === $package->slug)>
                             {{ __(':name — :vcpu vCPU, :ramgb GB RAM, :disk_gb GB dysku, :bandwidth_gb GB transferu', ['name' => $package->name, 'vcpu' => $package->vcpu, 'ramgb' => $package->ramGb(), 'disk_gb' => $package->disk_gb, 'bandwidth_gb' => $package->bandwidth_gb]) }}

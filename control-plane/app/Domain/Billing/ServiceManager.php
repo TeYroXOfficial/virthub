@@ -426,8 +426,38 @@ class ServiceManager
     }
 
     /** Rezygnacja klienta: okresowe — z końcem opłaconego okresu, godzinowe — od razu. */
-    public function cancel(BillingService $service, User $actor, bool $immediately = false): void
+    /** Terminy rezygnacji do wyboru przez klienta. */
+    public const CANCEL_NOW = 'now';
+
+    public const CANCEL_1D = '1d';
+
+    public const CANCEL_2D = '2d';
+
+    public const CANCEL_PERIOD_END = 'period_end';
+
+    /** @return list<string> */
+    public static function cancelOptions(BillingService $service): array
     {
+        if ($service->status === BillingService::STATUS_PENDING) {
+            return [self::CANCEL_NOW];
+        }
+        // Usługa godzinowa nie ma „końca okresu" — płaci się za każdą godzinę do usunięcia.
+        $options = [self::CANCEL_NOW, self::CANCEL_1D, self::CANCEL_2D];
+        if (! $service->metered() && $service->renews && $service->next_due_at?->isFuture()) {
+            $options[] = self::CANCEL_PERIOD_END;
+        }
+
+        return $options;
+    }
+
+    /**
+     * Rezygnacja: natychmiast, za dzień, za dwa dni albo z końcem opłaconego
+     * okresu. Termin późniejszy niż koniec okresu nie ma sensu — wtedy
+     * usługa kończy się z końcem okresu, bez kolejnej faktury.
+     */
+    public function cancel(BillingService $service, User $actor, bool|string $when = self::CANCEL_PERIOD_END): void
+    {
+        $when = $when === true ? self::CANCEL_NOW : ($when === false ? self::CANCEL_PERIOD_END : $when);
         if ($service->status === BillingService::STATUS_PENDING) {
             $service->update(['status' => BillingService::STATUS_CANCELLED]);
             $this->cancelOpenInvoices($service, $actor);
@@ -435,16 +465,38 @@ class ServiceManager
 
             return;
         }
-        if ($immediately || $service->metered()) {
+        if (! in_array($when, self::cancelOptions($service), true)) {
+            // Starsze wywołania (API, administrator) bez terminu: godzinowa — od razu, okresowa — z końcem okresu.
+            $when = $service->metered() || ! $service->renews ? self::CANCEL_NOW : self::CANCEL_PERIOD_END;
+        }
+        if ($when === self::CANCEL_NOW) {
             if (! $this->terminate($service, 'cancelled', $actor)) {
-                throw new \DomainException(__('Nie udało się teraz usunąć usługi — spróbuj za chwilę.'));
+                throw new \DomainException(__('Nie udało się teraz usunąć usługi. Spróbuj za chwilę.'));
             }
 
             return;
         }
-        $service->update(['cancel_at_period_end' => true]);
+        if ($when === self::CANCEL_PERIOD_END) {
+            $service->update(['cancel_at_period_end' => true, 'cancel_at' => null]);
+        } else {
+            $at = now()->addDays($when === self::CANCEL_1D ? 1 : 2);
+            if (! $service->metered() && $service->next_due_at !== null && $service->next_due_at->lt($at)) {
+                $at = $service->next_due_at->copy();
+            }
+            $service->update(['cancel_at' => $at, 'cancel_at_period_end' => true]);
+        }
         $this->cancelOpenInvoices($service, $actor);
-        AuditLog::record('billing.cancel_requested', $service, ['at' => $service->next_due_at?->toIso8601String()], $actor);
+        AuditLog::record('billing.cancel_requested', $service, ['at' => $service->endsAt()?->toIso8601String(), 'when' => $when], $actor);
+    }
+
+    /** Wycofanie zgłoszonej rezygnacji, dopóki usługa działa. */
+    public function resume(BillingService $service, User $actor): void
+    {
+        if (! $service->isLive() || $service->endsAt() === null || ! $service->renews) {
+            throw new \DomainException(__('Tej usługi nie da się już przywrócić.'));
+        }
+        $service->update(['cancel_at_period_end' => false, 'cancel_at' => null]);
+        AuditLog::record('billing.cancel_withdrawn', $service, [], $actor);
     }
 
     // --- harmonogram -------------------------------------------------------------------
@@ -600,8 +652,9 @@ class ServiceManager
     public function endCancelled(): int
     {
         $ended = 0;
-        BillingService::query()->whereIn('status', BillingService::LIVE)->where('cancel_at_period_end', true)
-            ->where('next_due_at', '<=', now())
+        BillingService::query()->whereIn('status', BillingService::LIVE)
+            ->where(fn ($q) => $q->where(fn ($q) => $q->where('cancel_at_period_end', true)->whereNull('cancel_at')->where('next_due_at', '<=', now()))
+                ->orWhere('cancel_at', '<=', now()))
             ->each(function (BillingService $service) use (&$ended) {
                 $ended += (int) $this->terminate($service, 'cancelled');
             });

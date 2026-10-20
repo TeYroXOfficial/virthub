@@ -224,7 +224,8 @@ class PasskeysAndStepUpTest extends TestCase
     public function test_step_up_przed_operacjami_wrazliwymi(): void
     {
         Queue::fake();
-        $user = User::factory()->create(['password' => 'tajne-haslo-123']);
+        // Usuwanie maszyny jest dla personelu — to nim sprawdzamy step-up.
+        $user = User::factory()->create(['password' => 'tajne-haslo-123', 'role' => User::ROLE_ADMIN]);
         $server = Server::factory()->create(['user_id' => $user->id]);
         $this->actingAs($user)->withSession(['auth.confirmed_at' => now()->subMinutes(30)->getTimestamp()]);
 

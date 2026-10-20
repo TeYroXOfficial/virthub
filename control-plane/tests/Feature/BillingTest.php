@@ -297,6 +297,67 @@ class BillingTest extends TestCase
         $this->assertSame(BillingService::STATUS_TERMINATED, $service->fresh()->status);
     }
 
+    public function test_rezygnacja_za_dzien_dwa_i_natychmiast_ze_strony_maszyny(): void
+    {
+        $manager = app(ServiceManager::class);
+        $this->fund($this->customer, '200');
+        [$service] = $manager->checkout($this->customer, $this->product, 'monthly', $this->config(), true);
+        $server = Server::findOrFail($service->server_id);
+        $server->markState(ServerState::Running);
+
+        // Strona maszyny: klient widzi rezygnację z terminami, nie widzi „Usuń maszynę”.
+        $this->actingAs($this->customer)->get(route('panel.servers.show', $server))->assertOk()
+            ->assertSee(__('Rezygnacja z usługi'))->assertSee(__('Za 1 dzień'))->assertSee(__('Za 2 dni'))->assertDontSee(__('Usuń maszynę'));
+        $this->actingAs($this->customer)->post(route('panel.billing.service.cancel', $service), ['confirm' => 1, 'when' => 'jutro'])->assertSessionHasErrors('when');
+
+        // Za dwa dni: działa do terminu, bez odnowienia, potem znika.
+        $this->actingAs($this->customer)->post(route('panel.billing.service.cancel', $service), ['confirm' => 1, 'when' => '2d'])->assertSessionHasNoErrors();
+        $service->refresh();
+        $this->assertSame(now()->addDays(2)->toDateTimeString(), $service->cancel_at->toDateTimeString());
+        $this->assertSame(0, $manager->endCancelled());
+
+        // Wycofanie i ponownie — za jeden dzień.
+        $this->actingAs($this->customer)->post(route('panel.billing.service.resume', $service))->assertSessionHasNoErrors();
+        $this->assertNull($service->fresh()->endsAt());
+        $this->actingAs($this->customer)->post(route('panel.billing.service.cancel', $service), ['confirm' => 1, 'when' => '1d']);
+        $this->travel(25)->hours();
+        $this->assertSame(1, $manager->endCancelled());
+        $this->assertSame(BillingService::STATUS_TERMINATED, $service->fresh()->status);
+
+    }
+
+    public function test_rezygnacja_natychmiast(): void
+    {
+        $this->fund($this->customer, '49');
+        [$service] = app(ServiceManager::class)->checkout($this->customer, $this->product, 'monthly', $this->config(), true);
+        Server::findOrFail($service->server_id)->markState(ServerState::Running);
+        $this->actingAs($this->customer)->post(route('panel.billing.service.cancel', $service), ['confirm' => 1, 'when' => 'now'])->assertSessionHasNoErrors();
+        $this->assertSame(BillingService::STATUS_TERMINATED, $service->fresh()->status);
+        $this->assertSame(ServerState::Deleting, Server::withTrashed()->find($service->server_id)->state);
+    }
+
+    public function test_maszyna_spoza_naszego_billingu_nie_ma_rezygnacji(): void
+    {
+        // Np. z WHMCS przez API: brak usługi w naszym billingu, więc brak rezygnacji i usuwania u klienta.
+        $server = Server::factory()->create(['user_id' => $this->customer->id]);
+        $server->markState(ServerState::Running);
+        $this->actingAs($this->customer)->get(route('panel.servers.show', $server))->assertOk()
+            ->assertSee(__('Ustawienia'))->assertDontSee(__('Rezygnacja z usługi'))->assertDontSee(__('Usuń maszynę'));
+    }
+
+    public function test_podpowiedzi_dla_administratora_w_sklepie(): void
+    {
+        ProductCategory::query()->update(['is_active' => false]);
+        $this->actingAs($this->admin)->get(route('panel.store'))->assertOk()
+            ->assertSee(__('Sklep nie ma żadnej aktywnej kategorii. Produkty są widoczne tylko w kategoriach.'));
+        $this->actingAs($this->customer)->get(route('panel.store'))->assertOk()
+            ->assertDontSee(__('Widzisz to jako administrator. Klienci nie mogą teraz zamówić maszyny:'));
+
+        ProductCategory::query()->update(['is_active' => true]);
+        $this->product->prices()->delete();
+        $this->actingAs($this->admin)->get(route('panel.store'))->assertSee(__('Produkt „:name” jest ukryty: nie ma żadnej ceny.', ['name' => 'VPS S']));
+    }
+
     public function test_nieudane_uruchomienie_zwraca_pieniadze(): void
     {
         $this->fund($this->customer, '49');

@@ -8,8 +8,10 @@ use App\Models\OsTemplate;
 use App\Models\Server;
 use App\Models\ServerJob;
 use App\Models\User;
+use App\Models\VpsPackage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class ServerControlTest extends TestCase
@@ -156,7 +158,7 @@ class ServerControlTest extends TestCase
 
     public function test_zmiana_pakietu_wymaga_zatrzymanej_maszyny(): void
     {
-        $bigger = \App\Models\VpsPackage::factory()->large()->create(['slug' => 'business']);
+        $bigger = VpsPackage::factory()->large()->create(['slug' => 'business']);
 
         $this->actingAs($this->owner)
             ->postJson("/api/v1/servers/{$this->server->id}/resize", ['package' => 'business'])
@@ -175,7 +177,7 @@ class ServerControlTest extends TestCase
 
     public function test_nie_da_sie_zmniejszyc_dysku(): void
     {
-        $smaller = \App\Models\VpsPackage::factory()->small()->create(['slug' => 'starter']);
+        $smaller = VpsPackage::factory()->small()->create(['slug' => 'starter']);
         $this->server->markState(ServerState::Stopped);
 
         $this->actingAs($this->owner)
@@ -219,8 +221,11 @@ class ServerControlTest extends TestCase
 
     public function test_usuniecie_maszyny_zleca_zadanie_i_nie_kasuje_od_razu(): void
     {
-        $this->actingAs($this->owner)
-            ->deleteJson("/api/v1/servers/{$this->server->id}")
+        // Klient nie usuwa maszyny przez API: robi to zewnętrzny billing kluczem personelu.
+        $this->actingAs($this->owner)->deleteJson("/api/v1/servers/{$this->server->id}")->assertForbidden();
+
+        Sanctum::actingAs(User::factory()->create(['role' => User::ROLE_ADMIN]), ['servers:write']);
+        $this->deleteJson("/api/v1/servers/{$this->server->id}")
             ->assertStatus(202);
 
         // Rekord znika dopiero, gdy hypervisor potwierdzi skasowanie dysku.

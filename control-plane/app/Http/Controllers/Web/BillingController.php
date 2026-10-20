@@ -13,6 +13,7 @@ use App\Models\Invoice;
 use App\Models\WalletTransaction;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /** Rozliczenia klienta: usługi, faktury, portfel. */
@@ -102,16 +103,33 @@ class BillingController extends Controller
     public function cancel(Request $request, BillingService $service): RedirectResponse
     {
         $this->own($request, $service->user_id);
-        $request->validate(['confirm' => ['accepted']]);
+        $data = $request->validate([
+            'confirm' => ['accepted'],
+            'when' => ['nullable', Rule::in(ServiceManager::cancelOptions($service))],
+        ]);
         try {
-            $this->services->cancel($service, $request->user());
+            $this->services->cancel($service, $request->user(), $data['when'] ?? ServiceManager::CANCEL_PERIOD_END);
+        } catch (\DomainException $e) {
+            return back()->withErrors(['service' => $e->getMessage()]);
+        }
+        $service->refresh();
+
+        return back()->with('status', $service->isLive() && $service->endsAt()
+            ? __('Usługa zostanie usunięta :date.', ['date' => $service->endsAt()->format('d.m.Y H:i')])
+            : __('Usługa anulowana.'));
+    }
+
+    /** Wycofanie rezygnacji, dopóki usługa jeszcze działa. */
+    public function resume(Request $request, BillingService $service): RedirectResponse
+    {
+        $this->own($request, $service->user_id);
+        try {
+            $this->services->resume($service, $request->user());
         } catch (\DomainException $e) {
             return back()->withErrors(['service' => $e->getMessage()]);
         }
 
-        return back()->with('status', $service->fresh()->status === BillingService::STATUS_ACTIVE
-            ? __('Usługa zostanie usunięta :date, z końcem opłaconego okresu.', ['date' => $service->next_due_at?->format('d.m.Y H:i')])
-            : __('Usługa anulowana.'));
+        return back()->with('status', __('Rezygnacja wycofana. Usługa będzie odnawiana jak dotąd.'));
     }
 
     /** „Przedłuż” — potwierdzenie, że klient nadal korzysta z usługi. */
