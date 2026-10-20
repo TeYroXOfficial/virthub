@@ -4,9 +4,13 @@ namespace App\Http\Controllers\Web;
 
 use App\Domain\Agent\AgentClient;
 use App\Domain\Agent\AgentException;
+use App\Domain\Security\VulnerabilityFeed;
 use App\Http\Controllers\Controller;
+use App\Jobs\ScanVulnerabilitiesJob;
+use App\Models\AuditLog;
 use App\Models\Hypervisor;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
@@ -15,17 +19,25 @@ use Illuminate\View\View;
  */
 class NodeSecurityController extends Controller
 {
-    public function index(): View
+    public function index(VulnerabilityFeed $feed): View
     {
         $nodes = Hypervisor::query()->whereNotNull('enrolled_at')->orderBy('name')->get();
+        $overall = $nodes->mapWithKeys(fn ($n) => [$n->id => $feed->overall($n)]);
+        $packages = $nodes->mapWithKeys(fn ($n) => [$n->id => $feed->forNode($n)]);
+        $new = $packages->flatMap(fn ($r) => collect($r['packages'])->flatMap(fn ($p) => $p['relevant']))
+            ->filter(fn ($v) => $v['vulnerability']->isNew())
+            ->unique(fn ($v) => $v['vulnerability']->id)->count();
 
         return view('panel.admin.security', [
             'nodes' => $nodes,
+            'overall' => $overall,
+            'packages' => $packages,
             'summary' => [
-                'critical' => $nodes->filter(fn ($n) => ($n->securityReport()['overall'] ?? null) === 'critical')->count(),
-                'warning' => $nodes->filter(fn ($n) => ($n->securityReport()['overall'] ?? null) === 'warning')->count(),
-                'ok' => $nodes->filter(fn ($n) => ($n->securityReport()['overall'] ?? null) === 'ok')->count(),
-                'unknown' => $nodes->filter(fn ($n) => $n->securityReport() === null)->count(),
+                'critical' => $overall->filter(fn ($o) => $o === 'critical')->count(),
+                'warning' => $overall->filter(fn ($o) => $o === 'warning')->count(),
+                'ok' => $overall->filter(fn ($o) => $o === 'ok')->count(),
+                'unknown' => $overall->filter(fn ($o) => $o === null)->count(),
+                'new' => $new,
             ],
         ]);
     }
@@ -34,7 +46,7 @@ class NodeSecurityController extends Controller
      * Zagnieżdżona wirtualizacja: „auto” — węzeł włącza ją sam tylko na jądrze z
      * poprawkami znanych ucieczek; „allow” — administrator włącza ją mimo braku poprawek.
      */
-    public function nested(\Illuminate\Http\Request $request, Hypervisor $hypervisor): RedirectResponse
+    public function nested(Request $request, Hypervisor $hypervisor): RedirectResponse
     {
         abort_unless($request->user()->isAdmin(), 403);
         $policy = $request->validate(['policy' => ['required', 'in:auto,allow']])['policy'];
@@ -53,7 +65,7 @@ class NodeSecurityController extends Controller
             $health['host_security']['nested_policy'] = $policy;
             $hypervisor->forceFill(['last_health' => $health])->save();
         }
-        \App\Models\AuditLog::record('hypervisor.nested_policy', $hypervisor, ['policy' => $policy], $request->user());
+        AuditLog::record('hypervisor.nested_policy', $hypervisor, ['policy' => $policy], $request->user());
 
         return redirect()->to(route('panel.admin.security').'#node-'.$hypervisor->id)->with('status', $policy === 'allow'
             ? __('Zagnieżdżona wirtualizacja na węźle :name zostanie włączona w ciągu kilku sekund (przy działających maszynach — po restarcie węzła). Maszyny dostaną ją po wyłączeniu i włączeniu.', ['name' => $hypervisor->name])
@@ -70,6 +82,7 @@ class NodeSecurityController extends Controller
         }
 
         $hypervisor->forceFill(['last_health' => ['host_security' => $report] + ($hypervisor->last_health ?? [])])->save();
+        ScanVulnerabilitiesJob::dispatch($hypervisor->id);
 
         return redirect()->to(route('panel.admin.security').'#node-'.$hypervisor->id)
             ->with('status', __('Sprawdzono węzeł :name.', ['name' => $hypervisor->name]));
