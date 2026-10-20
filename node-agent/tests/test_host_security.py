@@ -210,3 +210,41 @@ def test_cpu_maszyn_podaza_za_hostem(settings, monkeypatch):
     state["nested"] = True
     assert drv.sync_guest_cpu() == 1
     assert ET.fromstring(dom.xml).find("cpu").findall("feature") == []
+
+
+DPKG = """Package: linux-image-6.1.0-30-amd64
+Status: install ok installed
+Source: linux-signed-amd64 (6.1.124+1)
+Version: 6.1.124-1
+Description: Linux 6.1
+ kernel image
+
+Package: qemu-system-x86
+Status: install ok installed
+Source: qemu
+Version: 1:7.2+dfsg-7+deb12u12
+
+Package: libvirt-daemon
+Status: deinstall ok config-files
+Source: libvirt
+Version: 9.0.0-4
+"""
+
+
+def test_raport_zawiera_wersje_pakietow_do_bazy_luk(tmp_path):
+    _w(tmp_path / "var/lib/dpkg/status", DPKG)
+    r = host(tmp_path)
+    assert r["packages"]["ecosystem"] == "Debian:12"
+    assert r["packages"]["items"] == [
+        {"role": "kernel", "name": "linux", "version": "6.1.124-1", "binary": "linux-image-6.1.0-30-amd64"},
+        {"role": "qemu", "name": "qemu", "version": "1:7.2+dfsg-7+deb12u12", "binary": "qemu-system-x86"},
+    ]
+
+
+def test_ubuntu_lts_i_jadro_hwe(tmp_path):
+    _w(tmp_path / "var/lib/dpkg/status", "Package: linux-image-6.8.0-45-generic\nStatus: install ok installed\n"
+                                          "Source: linux-signed-hwe-6.8\nVersion: 6.8.0-45.45~22.04.1\n")
+    r = host(tmp_path, release="6.8.0-45-generic",
+             os_release='ID=ubuntu\nVERSION_ID="22.04"\nVERSION="22.04.5 LTS (Jammy Jellyfish)"\nPRETTY_NAME="Ubuntu 22.04"')
+    assert r["packages"]["ecosystem"] == "Ubuntu:22.04:LTS"
+    assert r["packages"]["items"][0]["name"] == "linux-hwe-6.8"

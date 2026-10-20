@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Domain\Security\VulnerabilityFeed;
 use App\Models\Hypervisor;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -65,6 +66,51 @@ class NodeSecurityTest extends TestCase
         $node->refresh();
         $this->assertSame('warning', $node->securityReport()['overall']);
         $this->assertSame(8, $node->last_health['cpu_cores_total'], 'reszta raportu zostaje');
+    }
+
+    public function test_nowe_luki_z_bazy_osv_trafiaja_na_strone(): void
+    {
+        $report = $this->report('ok', false, 'mitigated') + ['packages' => ['ecosystem' => 'Debian:12', 'items' => [
+            ['role' => 'kernel', 'name' => 'linux', 'version' => '6.1.129-1', 'binary' => 'linux-image-6.1.0-32-amd64'],
+            ['role' => 'qemu', 'name' => 'qemu', 'version' => '1:7.2+dfsg-7+deb12u12', 'binary' => 'qemu-system-x86'],
+        ]]];
+        $report['findings'] = [];
+        $node = Hypervisor::factory()->create(['name' => 'waw-1', 'enrolled_at' => now(), 'last_health' => ['host_security' => $report]]);
+
+        Http::fake([
+            'api.osv.dev/v1/querybatch' => Http::sequence()
+                ->push(['results' => [
+                    ['vulns' => [['id' => 'DEBIAN-CVE-2026-1001'], ['id' => 'DEBIAN-CVE-2026-1002']], 'next_page_token' => 'p2'],
+                    ['vulns' => [['id' => 'DEBIAN-CVE-2026-2001']]],
+                ]])
+                ->push(['results' => [['vulns' => [['id' => 'DEBIAN-CVE-2026-1003']]]]]),
+            'api.osv.dev/v1/vulns/CVE-2026-1001' => Http::response(['id' => 'CVE-2026-1001', 'summary' => 'KVM: x86: use-after-free in shadow MMU', 'published' => now()->subDays(2)->toIso8601String()]),
+            'api.osv.dev/v1/vulns/CVE-2026-1002' => Http::response(['id' => 'CVE-2026-1002', 'summary' => 'ext4: fix leak', 'published' => now()->subDays(3)->toIso8601String()]),
+            'api.osv.dev/v1/vulns/CVE-2026-1003' => Http::response(['id' => 'CVE-2026-1003', 'summary' => 'KVM: s390: fix irq state', 'published' => now()->subDays(1)->toIso8601String()]),
+            'api.osv.dev/v1/vulns/CVE-2026-2001' => Http::response(['id' => 'CVE-2026-2001', 'details' => 'Heap overflow in virtio-blk', 'published' => '2025-01-01T00:00:00Z']),
+            'api.osv.dev/v1/vulns/DEBIAN-CVE-2026-1001' => Http::response(['affected' => [['package' => ['name' => 'linux', 'ecosystem' => 'Debian:12'], 'ranges' => [['events' => [['introduced' => '0'], ['fixed' => '6.1.140-1']]]]]]]),
+            'api.osv.dev/v1/vulns/DEBIAN-CVE-2026-1003' => Http::response([], 404),
+            'api.osv.dev/v1/vulns/DEBIAN-CVE-2026-2001' => Http::response(['affected' => [['package' => ['name' => 'qemu', 'ecosystem' => 'Debian:12'], 'ranges' => [['events' => [['introduced' => '0']]]]]]]),
+        ]);
+
+        $this->artisan('virthub:scan-vulnerabilities')->assertSuccessful();
+
+        $this->actingAs($this->admin)->get(route('panel.admin.security'))
+            ->assertOk()
+            ->assertSee('CVE-2026-1001')->assertSee('KVM: x86: use-after-free in shadow MMU')->assertSee('6.1.140-1')
+            ->assertDontSee('KVM: s390')             // inna architektura
+            ->assertDontSee('ext4: fix leak')         // poza wirtualizacją — tylko liczba
+            ->assertSee('CVE-2026-2001')->assertSee('Heap overflow in virtio-blk')
+            ->assertSee('security-tracker.debian.org/tracker/CVE-2026-1001', false)
+            ->assertSee(__('nowa'));
+
+        // Poprawka jest w repozytorium → węzeł podatny, mimo że audyt agenta mówi „ok”.
+        $this->assertSame('critical', app(VulnerabilityFeed::class)->overall($node->fresh()));
+
+        // Kolejne sprawdzenie nie pobiera znanych opisów ponownie.
+        $described = collect(Http::recorded())->filter(fn ($pair) => str_contains($pair[0]->url(), '/vulns/CVE-'))->count();
+        $this->artisan('virthub:scan-vulnerabilities')->assertSuccessful();
+        $this->assertSame($described, collect(Http::recorded())->filter(fn ($pair) => str_contains($pair[0]->url(), '/vulns/CVE-'))->count());
     }
 
     public function test_uprawnienia(): void

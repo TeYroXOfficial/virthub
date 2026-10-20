@@ -3,6 +3,8 @@
 @section('title', __('Bezpieczeństwo węzłów'))
 
 @php
+    $Feed = \App\Domain\Security\VulnerabilityFeed::class;
+    $roleLabel = ['kernel' => __('Jądro'), 'qemu' => 'QEMU', 'libvirt' => 'libvirt', 'incus' => 'Incus'];
     $tone = ['ok' => 'ok', 'warning' => 'warning', 'critical' => 'critical'];
     $overallLabel = ['ok' => __('chroniony'), 'warning' => __('wymaga uwagi'), 'critical' => __('podatny')];
     $issueTone = ['fixed' => 'ok', 'mitigated' => 'ok', 'not_affected' => 'neutral', 'partial' => 'warning', 'vulnerable' => 'critical', 'unknown' => 'neutral'];
@@ -27,6 +29,12 @@
         @endforeach
     </div>
 
+    @if ($summary['new'] > 0)
+        <div class="alert alert-warning" style="margin-bottom:16px">
+            {{ trans_choice(':count nowa luka w wirtualizacji (ostatnie 30 dni) dotyczy Twoich węzłów.|:count nowe luki w wirtualizacji (ostatnie 30 dni) dotyczą Twoich węzłów.|:count nowych luk w wirtualizacji (ostatnie 30 dni) dotyczy Twoich węzłów.', $summary['new']) }}
+        </div>
+    @endif
+
     <div class="card">
         <h3 class="card-title"><x-icon name="shield" :size="16"/> {{ __('Co robi panel') }}</h3>
         <ul class="plain-list">
@@ -35,6 +43,7 @@
             <li>{{ __('Pilnuje EPT/NPT — bez nich KVM używa podatnego shadow MMU dla każdej maszyny.') }}</li>
             <li>{{ __('Instaluje najnowsze jądro z repozytorium i włącza automatyczne poprawki bezpieczeństwa (bez automatycznego restartu).') }}</li>
             <li>{{ __('Kontenery LXC i aplikacje nie mają dostępu do /dev/kvm, więc same nie są drogą do tych ataków.') }}</li>
+            <li>{{ __('Co 6 godzin sprawdza wersje jądra, QEMU, libvirt i Incusa na węzłach w bazie luk OSV.dev (Debian, Ubuntu) — nowo ogłoszone CVE pojawiają się tu bez aktualizacji panelu.') }}</li>
         </ul>
         <p class="hint" style="margin:8px 0 0">{{ __('Zabezpieczenia stosuje aktualizacja węzła. Poprawka w jądrze zaczyna działać dopiero po restarcie węzła — zrób go w oknie serwisowym, bo zatrzymuje maszyny klientów.') }}</p>
     </div>
@@ -47,7 +56,8 @@
                     <x-icon name="node" :size="16"/>
                     <a href="{{ route('panel.admin.hypervisors.show', $node) }}">{{ $node->name }}</a>
                     @if ($r)
-                        <span class="pill {{ $tone[$r['overall']] ?? 'neutral' }}">{{ $overallLabel[$r['overall']] ?? $r['overall'] }}</span>
+                        @php $o = $overall[$node->id] ?? $r['overall']; @endphp
+                        <span class="pill {{ $tone[$o] ?? 'neutral' }}">{{ $overallLabel[$o] ?? $o }}</span>
                     @else
                         <span class="pill neutral">{{ __('brak raportu') }}</span>
                     @endif
@@ -157,6 +167,67 @@
                         </tbody>
                     </table>
                 </div>
+
+                @php $feed = $packages[$node->id]; @endphp
+                <h4 style="margin:18px 0 8px">{{ __('Luki w pakietach węzła') }} <span class="muted" style="font-weight:normal">· OSV.dev</span></h4>
+                @if (empty($feed['packages']))
+                    <p class="muted">{{ __('Agent nie zgłasza jeszcze wersji pakietów — zaktualizuj węzeł.') }}</p>
+                @elseif (! $feed['supported'])
+                    <p class="muted">{{ __('System węzła nie jest w bazie luk (obsługiwane: Debian, Ubuntu).') }}</p>
+                @else
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>{{ __('Pakiet') }}</th><th>{{ __('Luka') }}</th><th>{{ __('Stan') }}</th></tr></thead>
+                            <tbody>
+                            @foreach ($feed['packages'] as $pkg)
+                                @if (! $pkg['scanned_at'])
+                                    <tr>
+                                        <td class="nowrap"><strong>{{ $roleLabel[$pkg['role']] ?? $pkg['role'] }}</strong><div class="hint mono">{{ $pkg['name'] }} {{ $pkg['version'] }}</div></td>
+                                        <td colspan="2" class="muted">{{ __('czeka na sprawdzenie') }}</td>
+                                    </tr>
+                                @elseif ($pkg['relevant']->isEmpty())
+                                    <tr>
+                                        <td class="nowrap"><strong>{{ $roleLabel[$pkg['role']] ?? $pkg['role'] }}</strong><div class="hint mono">{{ $pkg['name'] }} {{ $pkg['version'] }}</div></td>
+                                        <td class="muted">{{ $pkg['role'] === 'kernel' ? __('Brak znanych luk w KVM, vhost i VFIO.') : __('Brak znanych luk.') }}</td>
+                                        <td><span class="pill ok">{{ __('ok') }}</span></td>
+                                    </tr>
+                                @else
+                                    @foreach ($pkg['relevant'] as $i => $v)
+                                        @php $vuln = $v['vulnerability']; @endphp
+                                        @if ($i === 8)
+                                            <tr data-more-toggle><td></td><td colspan="2"><button class="btn btn-sm" type="button" onclick="this.closest('tbody').querySelectorAll('[data-more-{{ $node->id }}-{{ $pkg['role'] }}]').forEach(r => r.hidden = false); this.closest('tr').remove()">{{ __('Pokaż wszystkie (:count)', ['count' => $pkg['relevant']->count()]) }}</button></td></tr>
+                                        @endif
+                                        <tr @if ($i >= 8) hidden data-more-{{ $node->id }}-{{ $pkg['role'] }} @endif>
+                                            <td class="nowrap">
+                                                @if ($i === 0)
+                                                    <strong>{{ $roleLabel[$pkg['role']] ?? $pkg['role'] }}</strong><div class="hint mono">{{ $pkg['name'] }} {{ $pkg['version'] }}</div>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                <a class="mono" href="{{ $Feed::trackerUrl($feed['ecosystem'], $vuln->id) }}" target="_blank" rel="noopener">{{ $vuln->id }}</a>
+                                                @if ($vuln->isNew()) <span class="pill warning">{{ __('nowa') }}</span> @endif
+                                                @if ($vuln->published_at) <span class="hint">{{ $vuln->published_at->format('d.m.Y') }}</span> @endif
+                                                <div class="hint">{{ $vuln->summary ?? __('Opis jeszcze niepobrany.') }}</div>
+                                            </td>
+                                            <td>
+                                                @if ($v['fixed'])
+                                                    <span class="pill critical">{{ __('poprawka: :version', ['version' => $v['fixed']]) }}</span>
+                                                    <div class="hint">{{ $pkg['role'] === 'kernel' ? __('Zaktualizuj węzeł i zrestartuj go.') : __('Zaktualizuj węzeł.') }}</div>
+                                                @else
+                                                    <span class="pill warning">{{ $feed['ecosystem'] && str_starts_with($feed['ecosystem'], 'Debian') ? __('brak poprawki') : __('podatna wersja') }}</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                @endif
+                                @if ($pkg['scanned_at'] && $pkg['other'] > 0)
+                                    <tr><td></td><td colspan="2" class="hint">{{ trans_choice(':count inna luka jądra (poza wirtualizacją)|:count inne luki jądra (poza wirtualizacją)|:count innych luk jądra (poza wirtualizacją)', $pkg['other']) }}</td></tr>
+                                @endif
+                            @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
 
                 @if (! empty($r['findings']))
                     <ul class="finding-list">

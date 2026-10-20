@@ -26,6 +26,14 @@ from typing import Any
 
 CACHE_SECONDS = 600
 
+# Pakiety, których luki pozwalają uciec z maszyny albo ją położyć — ich wersje
+# idą do panelu, który sprawdza je w bazie OSV (Debian / Ubuntu).
+WATCHED_PACKAGES = {
+    "qemu": ("qemu-system-x86", "qemu-system-arm", "qemu-system-misc", "qemu-kvm"),
+    "libvirt": ("libvirt-daemon", "libvirt-daemon-system", "libvirt0"),
+    "incus": ("incus",),
+}
+
 # Polityka zagnieżdżonej wirtualizacji ustawiana z panelu (plik zapisuje agent,
 # czyta go harden-host.sh uruchamiany jako root):
 #   auto  — włączona tylko na jądrze z poprawkami znanych ucieczek z maszyn,
@@ -172,6 +180,51 @@ class HostSecurity:
                         continue
         return ""
 
+    def _dpkg(self) -> dict[str, dict[str, str]]:
+        """Zainstalowane pakiety z /var/lib/dpkg/status: nazwa → {version, source}."""
+        text = _read(self._p("/var/lib/dpkg/status")) or ""
+        out: dict[str, dict[str, str]] = {}
+        for block in text.split("\n\n"):
+            fields: dict[str, str] = {}
+            for line in block.splitlines():
+                if line[:1] in (" ", "\t") or ":" not in line:
+                    continue
+                key, _, value = line.partition(":")
+                fields[key] = value.strip()
+            if "Package" in fields and fields.get("Status", "").endswith(" installed"):
+                source = fields.get("Source", fields["Package"]).split(" ")[0]
+                out[fields["Package"]] = {"version": fields.get("Version", ""), "source": source}
+        return out
+
+    @staticmethod
+    def _ecosystem(os_info: dict[str, str]) -> str | None:
+        """Nazwa ekosystemu w OSV: Debian:12, Ubuntu:24.04:LTS."""
+        version = os_info.get("VERSION_ID", "")
+        if os_info.get("ID") == "debian" and version:
+            return f"Debian:{version}"
+        if os_info.get("ID") == "ubuntu" and version:
+            return f"Ubuntu:{version}" + (":LTS" if "LTS" in os_info.get("VERSION", "") else "")
+        return None
+
+    def _packages(self, os_info: dict[str, str]) -> dict[str, Any]:
+        """Wersje jądra (działającego), QEMU, libvirt i Incusa — do sprawdzenia w bazie luk."""
+        installed = self._dpkg()
+        items: list[dict[str, str]] = []
+        release = self.uname.release
+        for binary in (f"linux-image-{release}", f"linux-image-unsigned-{release}", f"linux-modules-{release}"):
+            if binary in installed:
+                # Paczki podpisane (linux-signed-amd64, linux-signed-hwe-6.8) mają
+                # w bazie luk wpisy pakietu źródłowego bez „-signed”.
+                source = re.sub(r"-signed(-(amd64|arm64|i386))?", "", installed[binary]["source"])
+                items.append({"role": "kernel", "name": source, "version": installed[binary]["version"], "binary": binary})
+                break
+        for role, binaries in WATCHED_PACKAGES.items():
+            for binary in binaries:
+                if binary in installed:
+                    items.append({"role": role, "name": installed[binary]["source"], "version": installed[binary]["version"], "binary": binary})
+                    break
+        return {"ecosystem": self._ecosystem(os_info), "items": items}
+
     def _reboot(self) -> dict[str, Any]:
         running = self.uname.release
         kernels = [p.name.removeprefix("vmlinuz-") for p in self._p("/boot").glob("vmlinuz-*")]
@@ -265,6 +318,7 @@ class HostSecurity:
             "issues": issues,
             "findings": findings,
             "cpu_vulnerabilities": cpu_vulns,
+            "packages": self._packages(os_info),
         }
 
     def _evaluate(self, issue: dict[str, Any], arch: str, vendor: str | None,

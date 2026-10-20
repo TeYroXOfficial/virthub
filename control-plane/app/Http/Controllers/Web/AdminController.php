@@ -15,6 +15,7 @@ use App\Domain\Provisioning\HypervisorSelector;
 use App\Domain\Provisioning\ServerHardware;
 use App\Domain\Provisioning\ServerProvisioner;
 use App\Domain\Provisioning\TemplateDistributor;
+use App\Domain\Security\VulnerabilityFeed;
 use App\Enums\ServerState;
 use App\Enums\Virtualization;
 use App\Http\Controllers\Controller;
@@ -62,7 +63,7 @@ class AdminController extends Controller
             'canServers' => $canServers,
             'canApps' => $canApps,
             'canNodes' => $user->hasPermission('admin.hypervisors'),
-            'securityCritical' => $nodes->filter(fn ($n) => ($n->securityReport()['overall'] ?? null) === 'critical')->count(),
+            'securityCritical' => $nodes->filter(fn ($n) => app(VulnerabilityFeed::class)->overall($n) === 'critical')->count(),
             'servers' => $dashboard->servers(),
             'apps' => $dashboard->apps(),
             'ipv4' => $dashboard->ipv4(),
