@@ -4385,5 +4385,13 @@
     "Popraw": "Fix",
     "Rezygnacja z usługi": "Cancel service",
     "Szczegóły usługi i faktury": "Service details and invoices",
-    "Nie ma teraz pakietu do zamówienia. Skontaktuj się z obsługą.": "No package is available to order right now. Please contact support."
+    "Nie ma teraz pakietu do zamówienia. Skontaktuj się z obsługą.": "No package is available to order right now. Please contact support.",
+    "Port w maszynie musi być liczbą od 1 do 65535.": "The machine port must be a number from 1 to 65535.",
+    "Bez zmian.": "No changes.",
+    "Zapisano :count przekierowanie.|Zapisano :count przekierowania.|Zapisano :count przekierowań.": "Saved :count forward.|Saved :count forwards.",
+    "Wspólny adres IPv4: :address. Z zewnątrz maszyna jest osiągalna przez poniższe porty.": "Shared IPv4 address: :address. From outside, the machine is reachable through the ports below.",
+    "Port w maszynie dla :port": "Machine port for :port",
+    "Kopiuj :endpoint": "Copy :endpoint",
+    "przekierowany": "forwarded",
+    "Wpisz port w maszynie, na który ma prowadzić port zewnętrzny. Puste pole: port przechodzi na ten sam numer (1:1). Pierwsze porty są stałe i prowadzą do SSH (a w Windows także do RDP).": "Enter the machine port each external port should lead to. Empty field: the port passes through to the same number (1:1). The first ports are fixed and lead to SSH (and RDP on Windows)."
 }

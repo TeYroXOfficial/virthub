@@ -44,6 +44,50 @@ class PortForwardController extends Controller
         ]));
     }
 
+    /**
+     * Zapis całego bloku naraz (siatka portów): pusty albo równy numerowi
+     * zewnętrznemu — port wraca na 1:1, inny numer — przekierowanie.
+     */
+    public function update(Request $request, Server $server): RedirectResponse
+    {
+        $this->authorize('firewall', $server);
+        $request->validate([
+            'ports' => ['required', 'array'],
+            'ports.*' => ['array'],
+            'ports.*.*' => ['nullable', 'integer', 'min:1', 'max:65535'],
+        ], array_fill_keys(['ports.*.*.integer', 'ports.*.*.min', 'ports.*.*.max'], __('Port w maszynie musi być liczbą od 1 do 65535.')));
+
+        $changed = 0;
+        foreach ((array) $request->input('ports') as $ipId => $ports) {
+            $ip = IpAddress::query()->with('pool')->where('server_id', $server->id)->findOrFail((int) $ipId);
+            $custom = NatPortForward::query()->where('ip_address_id', $ip->id)->get()->keyBy('external_port');
+            $editable = collect(PortForwarding::mapping($ip, $server))->where('kind', '!=', PortForwarding::KIND_FIXED)->pluck('external')->all();
+            foreach ((array) $ports as $external => $internal) {
+                $external = (int) $external;
+                if (! in_array($external, $editable, true)) {
+                    continue; // port spoza bloku albo stały (SSH/RDP)
+                }
+                $internal = $internal === null || $internal === '' ? null : (int) $internal;
+                $current = $custom->get($external);
+                if ($internal === null || $internal === $external) {
+                    if ($current !== null) {
+                        $this->forwarding->remove($current, $request->user());
+                        $changed++;
+                    }
+                } elseif ($current?->internal_port !== $internal) {
+                    $this->forwarding->set($server, $ip, $external, $internal, $current?->label, $request->user());
+                    $changed++;
+                }
+            }
+        }
+        if ($changed === 0) {
+            return $this->done($server, __('Bez zmian.'));
+        }
+        $this->provisioner->syncNetwork($server, $request->user());
+
+        return $this->done($server, trans_choice('Zapisano :count przekierowanie.|Zapisano :count przekierowania.|Zapisano :count przekierowań.', $changed, ['count' => $changed]));
+    }
+
     public function destroy(Request $request, Server $server, NatPortForward $forward): RedirectResponse
     {
         $this->authorize('firewall', $server);

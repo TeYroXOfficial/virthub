@@ -208,6 +208,7 @@ Route::middleware(['auth', 'not-suspended'])->prefix('panel')->name('panel.')->g
     Route::delete('/servers/{server}/nics/{nic}', [PrivateNetworkController::class, 'detach'])->name('servers.nics.detach');
     Route::delete('/servers/{server}/private-networks/{network}', [PrivateNetworkController::class, 'destroy'])->name('servers.private-networks.destroy');
     Route::post('/servers/{server}/ports', [PortForwardController::class, 'store'])->name('servers.ports.store');
+    Route::put('/servers/{server}/ports', [PortForwardController::class, 'update'])->middleware('throttle:20,1')->name('servers.ports.update');
     Route::delete('/servers/{server}/ports/{forward}', [PortForwardController::class, 'destroy'])->name('servers.ports.destroy');
 
     // --- aplikacje (serwery gier, boty) ---
