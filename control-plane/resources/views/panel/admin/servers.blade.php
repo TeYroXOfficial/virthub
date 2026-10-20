@@ -88,7 +88,7 @@
                                     <div class="hint" style="max-width:260px">{{ \Illuminate\Support\Str::limit($server->state_message, 90) }}</div>
                                 @endif
                             </td>
-                            <td class="mono">{{ $server->primaryIp()?->address ?? '—' }}</td>
+                            <td class="mono">{{ $server->primaryIp()?->publicAddress() ?? '—' }}</td>
                             <td class="muted">
                                 @if ($server->hypervisor)
                                     <a href="{{ route('panel.admin.hypervisors.show', $server->hypervisor) }}">{{ $server->hypervisor->name }}</a>

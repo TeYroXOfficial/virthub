@@ -237,6 +237,7 @@ class PortForwardingTest extends TestCase
 
         $this->actingAs($this->owner)->get(route('panel.servers.show', $this->server))
             ->assertSee('ssh -p 10050 root@203.0.113.10', false)
+            ->assertSee('<span class="mono">203.0.113.10:10050</span>', false)
             ->assertSee('203.0.113.10:10050')
             ->assertDontSee('root@node1', false);
 

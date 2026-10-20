@@ -16,7 +16,7 @@
                 <span>{{ $server->virtualization->label() }}</span>
                 @if ($server->label) <span class="sep">·</span> <span>{{ $server->label }}</span> @endif
                 @if ($server->primaryIp())
-                    <span class="sep">·</span> <span class="mono">{{ $server->primaryIp()->address }}</span>
+                    <span class="sep">·</span> <span class="mono">{{ $server->primaryIp()->publicAddress() }}</span>
                 @endif
                 @if ($server->hypervisor && auth()->user()->isStaff())
                     <span class="sep">·</span> <span>{{ __('węzeł :name', ['name' => $server->hypervisor->name]) }}</span>
@@ -250,7 +250,7 @@
                 <h3 class="card-title"><x-icon name="network" :size="16"/> {{ __('Sieć') }}</h3>
                 @forelse ($server->ipAddresses as $ip)
                     <div class="mono" style="margin-bottom:4px">
-                        {{ $ip->address }}
+                        {{ $ip->publicAddress() }}
                         @if ($ip->isNat()) <span class="pill warning">{{ __('NAT') }}</span> @endif
                         @if ($ip->is_primary) <span class="pill neutral plain">{{ __('główny') }}</span> @endif
                     </div>
