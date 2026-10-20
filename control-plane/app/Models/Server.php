@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Server extends Model
@@ -144,6 +145,17 @@ class Server extends Model
     public function datastore(): BelongsTo
     {
         return $this->belongsTo(Datastore::class);
+    }
+
+    /**
+     * Usługa z naszego sklepu, z której powstała maszyna. Brak — maszyna
+     * z zewnętrznego billingu (API), od administratora albo z pakietu zasobów.
+     *
+     * @return HasOne<BillingService, $this>
+     */
+    public function billingService(): HasOne
+    {
+        return $this->hasOne(BillingService::class)->latestOfMany();
     }
 
     public function resourcePack(): BelongsTo

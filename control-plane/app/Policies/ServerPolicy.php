@@ -97,10 +97,21 @@ class ServerPolicy
         return $this->allowed($user, $server, 'servers.snapshots', destructive: true);
     }
 
-    /** Usunięcie maszyny razem z dyskiem. */
+    /**
+     * Usunięcie maszyny razem z dyskiem — tylko personel. Klient nie kasuje
+     * maszyny wprost: usługę ze sklepu anuluje w billingu (z wybranym
+     * terminem), a maszynę z zewnętrznego billingu (WHMCS, Blesta,
+     * Paymenter) usuwa tamten system przez API. Wyjątek: maszyny z pakietu
+     * zasobów, które klient sam tworzy i usuwa w ramach budżetu.
+     */
     public function destroy(User $user, Server $server): bool
     {
-        return $this->allowed($user, $server, 'servers.delete', destructive: true);
+        if ($this->staffAccess($user)) {
+            return $this->allowed($user, $server, 'servers.delete', destructive: true);
+        }
+
+        return $server->resource_pack_id !== null && $server->user_id === $user->id
+            && $this->allowed($user, $server, 'servers.delete', destructive: true);
     }
 
     /** Limit i licznik transferu maszyny — personel obsługujący maszyny. */

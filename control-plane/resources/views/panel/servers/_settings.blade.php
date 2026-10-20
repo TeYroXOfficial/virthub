@@ -506,6 +506,17 @@
         @endif
     @endcan
 
+    {{-- Rezygnacja: tylko maszyny z naszego sklepu i tylko właściciel. Maszyny z WHMCS,
+         Blesta czy Paymenter (API) kończy zewnętrzny billing, więc tu nic nie pokazujemy. --}}
+    @php $service = \App\Domain\Billing\Billing::enabled() && $server->user_id === $user->id ? $server->billingService : null; @endphp
+    @if ($service && in_array($service->status, ['pending', 'active', 'suspended'], true))
+        <div class="card danger-zone" id="cancel">
+            <h3 class="card-title" style="color:var(--critical)">{{ __('Rezygnacja z usługi') }}</h3>
+            @include('panel.billing._cancel', ['service' => $service])
+            <p class="hint" style="margin-bottom:0"><a href="{{ route('panel.billing.service', $service) }}">{{ __('Szczegóły usługi i faktury') }}</a></p>
+        </div>
+    @endif
+
     @if ($user->can('destroy', $server) || $user->can('purge', $server))
         <div class="card danger-zone" id="delete">
             <h3 class="card-title" style="color:var(--critical)">{{ __('Usuwanie maszyny') }}</h3>

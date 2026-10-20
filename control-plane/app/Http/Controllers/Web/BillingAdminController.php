@@ -297,7 +297,7 @@ class BillingAdminController extends Controller
                 'unsuspend' => $this->services->unsuspend($service, $actor),
                 'terminate' => $this->services->terminate($service, 'admin', $actor) ?: throw new \DomainException($service->fresh()->last_error ?: __('Nie udało się usunąć usługi.')),
                 'cancel_end' => $service->update(['cancel_at_period_end' => true]),
-                'resume' => $service->renews ? $service->update(['cancel_at_period_end' => false]) : throw new \DomainException(__('Usługa jest jednorazowa — kończy się z końcem okresu.')),
+                'resume' => $service->renews ? $service->update(['cancel_at_period_end' => false, 'cancel_at' => null]) : throw new \DomainException(__('Usługa jest jednorazowa — kończy się z końcem okresu.')),
                 // Uruchomienie bez płatności (np. usługa testowa, płatność poza panelem).
                 'activate' => $this->services->activate($service, 0, $actor) ?: throw new \DomainException($service->fresh()->last_error ?: __('Usługa nie czeka na uruchomienie.')),
             };

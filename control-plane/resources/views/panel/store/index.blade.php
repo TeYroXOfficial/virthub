@@ -14,6 +14,8 @@
         <div class="actions"><a class="btn" href="{{ route('panel.billing.wallet') }}"><x-icon name="wallet" :size="15"/> {{ __('Portfel') }}</a></div>
     </div>
 
+    @include('panel._order-readiness')
+
     @forelse ($categories as $category)
         <section class="dash-section" style="margin-bottom:24px">
             <h2 class="section-title">{{ $category->name }}</h2>
