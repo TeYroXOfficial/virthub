@@ -175,6 +175,15 @@
                 @elseif (! $feed['supported'])
                     <p class="muted">{{ __('System węzła nie jest w bazie luk (obsługiwane: Debian, Ubuntu).') }}</p>
                 @else
+                    @php [$described, $total] = $progress[$node->id]; @endphp
+                    @if ($total > 0 && $described < $total)
+                        <div class="alert alert-info" style="margin-bottom:10px">
+                            {{ __('Pobieranie opisów luk: :done z :total. Pierwsze sprawdzenie trwa kilka minut, kolejne kilka sekund — odśwież stronę.', ['done' => $described, 'total' => $total]) }}
+                            <div class="meter" style="max-width:320px; margin-top:6px"><i style="width: {{ round($described / $total * 100) }}%"></i></div>
+                        </div>
+                    @elseif (collect($feed['packages'])->contains(fn ($p) => ! $p['scanned_at']))
+                        <p class="hint">{{ __('Kliknij „Sprawdź teraz” — lista luk pojawi się po kilku sekundach. Bez tego panel sprawdzi węzeł sam w ciągu 10 minut.') }}</p>
+                    @endif
                     <div class="table-wrap">
                         <table>
                             <thead><tr><th>{{ __('Pakiet') }}</th><th>{{ __('Luka') }}</th><th>{{ __('Stan') }}</th></tr></thead>

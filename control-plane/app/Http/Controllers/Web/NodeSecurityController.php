@@ -24,6 +24,7 @@ class NodeSecurityController extends Controller
         $nodes = Hypervisor::query()->whereNotNull('enrolled_at')->orderBy('name')->get();
         $overall = $nodes->mapWithKeys(fn ($n) => [$n->id => $feed->overall($n)]);
         $packages = $nodes->mapWithKeys(fn ($n) => [$n->id => $feed->forNode($n)]);
+        $progress = $nodes->mapWithKeys(fn ($n) => [$n->id => $feed->progress($n)]);
         $new = $packages->flatMap(fn ($r) => collect($r['packages'])->flatMap(fn ($p) => $p['relevant']))
             ->filter(fn ($v) => $v['vulnerability']->isNew())
             ->unique(fn ($v) => $v['vulnerability']->id)->count();
@@ -32,6 +33,7 @@ class NodeSecurityController extends Controller
             'nodes' => $nodes,
             'overall' => $overall,
             'packages' => $packages,
+            'progress' => $progress,
             'summary' => [
                 'critical' => $overall->filter(fn ($o) => $o === 'critical')->count(),
                 'warning' => $overall->filter(fn ($o) => $o === 'warning')->count(),

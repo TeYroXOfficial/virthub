@@ -4438,5 +4438,7 @@
     "podatna wersja": "vulnerable version",
     ":count inna luka jądra (poza wirtualizacją)|:count inne luki jądra (poza wirtualizacją)|:count innych luk jądra (poza wirtualizacją)": ":count other kernel vulnerability (outside virtualization)|:count other kernel vulnerabilities (outside virtualization)",
     "ucieczka z maszyny": "VM escape",
-    "przekracza granicę gość/host": "crosses the guest/host boundary"
+    "przekracza granicę gość/host": "crosses the guest/host boundary",
+    "Pobieranie opisów luk: :done z :total. Pierwsze sprawdzenie trwa kilka minut, kolejne kilka sekund — odśwież stronę.": "Downloading vulnerability descriptions: :done of :total. The first check takes a few minutes, later ones a few seconds. Refresh the page.",
+    "Kliknij „Sprawdź teraz” — lista luk pojawi się po kilku sekundach. Bez tego panel sprawdzi węzeł sam w ciągu 10 minut.": "Click \"Check now\" and the list appears within seconds. Otherwise the panel checks the node by itself within 10 minutes."
 }
