@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Domain\Security\VulnerabilityFeed;
+use App\Jobs\ScanVulnerabilitiesJob;
 use App\Models\Hypervisor;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /** Infrastruktura → Bezpieczeństwo: ucieczki z maszyn (Januscape, Zapscape, ITScape). */
@@ -121,6 +123,34 @@ class NodeSecurityTest extends TestCase
         $described = collect(Http::recorded())->filter(fn ($pair) => str_contains($pair[0]->url(), '/vulns/CVE-'))->count();
         $this->artisan('virthub:scan-vulnerabilities')->assertSuccessful();
         $this->assertSame($described, collect(Http::recorded())->filter(fn ($pair) => str_contains($pair[0]->url(), '/vulns/CVE-'))->count());
+    }
+
+    public function test_dlugie_sprawdzenie_dzieli_sie_na_porcje_w_kolejce(): void
+    {
+        $report = $this->report('ok', false, 'mitigated') + ['packages' => ['ecosystem' => 'Debian:13', 'items' => [
+            ['role' => 'kernel', 'name' => 'linux', 'version' => '6.12.107-1', 'binary' => 'linux-image-6.12.107+deb13-cloud-amd64'],
+        ]]];
+        $node = Hypervisor::factory()->create(['enrolled_at' => now(), 'last_health' => ['host_security' => $report]]);
+        $ids = array_map(fn ($n) => ['id' => 'DEBIAN-CVE-2026-'.(5000 + $n)], range(1, 90));
+        Http::fake([
+            'api.osv.dev/v1/querybatch' => Http::response(['results' => [['vulns' => $ids]]]),
+            'api.osv.dev/v1/vulns/*' => Http::response(['summary' => 'net: fix something', 'published' => '2026-01-01T00:00:00Z']),
+        ]);
+
+        // Czas się skończył od razu: lista CVE zapisana, opisów brak, zadanie zleca ciąg dalszy.
+        $feed = app(VulnerabilityFeed::class);
+        $first = $feed->scan(null, microtime(true) - 1);
+        $this->assertFalse($first['complete']);
+        $this->assertSame([0, 90], $feed->progress($node));
+        $this->actingAs($this->admin)->get(route('panel.admin.security'))->assertSee('0 z 90', false);
+        $this->artisan('virthub:scan-vulnerabilities --if-pending')->expectsOutputToContain('Sprawdzono 1');
+
+        $this->assertSame([90, 90], $feed->progress($node));
+        $this->artisan('virthub:scan-vulnerabilities --if-pending')->doesntExpectOutputToContain('Sprawdzono');
+
+        Queue::fake();
+        (new ScanVulnerabilitiesJob($node->id))->handle($feed);
+        Queue::assertNothingPushed();
     }
 
     public function test_uprawnienia(): void

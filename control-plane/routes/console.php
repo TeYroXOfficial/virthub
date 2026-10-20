@@ -43,6 +43,8 @@ Schedule::command('virthub:collect-metrics')
 // Nowe luki w jądrze, QEMU i libvirt węzłów (OSV.dev) — świeżo ogłoszone CVE
 // pojawiają się w Infrastruktura → Bezpieczeństwo bez aktualizacji panelu.
 Schedule::command('virthub:scan-vulnerabilities')->everySixHours()->withoutOverlapping()->runInBackground();
+// Nowy węzeł albo zaktualizowany pakiet — bez czekania 6 godzin.
+Schedule::command('virthub:scan-vulnerabilities --if-pending')->everyTenMinutes()->withoutOverlapping()->runInBackground();
 
 // Kopia systemowa panelu (baza, .env, storage/app) — gdy włączona w Administracja → System → Kopia panelu.
 Schedule::command('virthub:system-backup --if-scheduled')->dailyAt('03:17')->withoutOverlapping();
