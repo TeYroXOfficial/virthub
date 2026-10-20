@@ -208,6 +208,24 @@ class PortForwardingTest extends TestCase
         $this->assertDatabaseHas('server_jobs', ['server_id' => $this->server->id, 'action' => 'network']);
     }
 
+    public function test_zakladka_sieci_pokazuje_adresy_karte_i_porty(): void
+    {
+        $html = $this->actingAs($this->owner)->get(route('panel.servers.show', $this->server))
+            ->assertOk()
+            ->assertSee('data-tab="networking"', false)
+            ->assertSee('id="nic"', false)
+            ->assertSee('id="ipv4"', false)
+            ->assertSee('10.10.0.1')
+            ->assertDontSee('{{', false)
+            ->getContent();
+
+        // Porty i adresy siedzą w zakładce Sieć, podgląd na żywo — w Przeglądzie.
+        $networking = strpos($html, 'data-tab-panel="networking"');
+        $this->assertGreaterThan($networking, strpos($html, 'id="ports"'));
+        $this->assertGreaterThan($networking, strpos($html, 'id="ipv4"'));
+        $this->assertLessThan($networking, strpos($html, 'data-live-section'));
+    }
+
     public function test_polaczenie_idzie_na_publiczny_adres_wezla_a_nie_nazwe_hosta(): void
     {
         $node = $this->server->hypervisor;
