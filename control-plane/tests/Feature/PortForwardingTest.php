@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Domain\Agent\ServerPayload;
 use App\Domain\Network\IpPoolManager;
 use App\Domain\Network\PortForwarding;
+use App\Domain\Provisioning\AgentResultApplier;
 use App\Domain\Provisioning\IpAllocator;
 use App\Jobs\RunServerActionJob;
 use App\Models\Hypervisor;
@@ -109,10 +110,39 @@ class PortForwardingTest extends TestCase
         $this->actingAs($this->owner)
             ->get(route('panel.servers.show', $this->server))
             ->assertOk()
-            ->assertSee('Przekierowania portów')
-            ->assertSee('10.10.0.5:443')
+            ->assertSee('name="ports['.$this->ip()->id.'][10055]"', false)
+            ->assertSee('value="443"', false)
             ->assertSee('ssh -p 10050 root@', false)
             ->assertDontSee('{{', false);
+    }
+
+    public function test_siatka_portow_zapisuje_caly_blok_naraz(): void
+    {
+        $ip = $this->ip();
+        app(PortForwarding::class)->set($this->server, $ip, 10056, 8080, 'Panel');
+
+        $this->actingAs($this->owner)->put(route('panel.servers.ports.update', $this->server), ['ports' => [$ip->id => [
+            10055 => '25565',   // nowe przekierowanie
+            10056 => '',        // puste: wraca na 1:1
+            10057 => '10057',   // ten sam numer: 1:1, bez wpisu
+            10050 => '9999',    // stały port SSH: ignorowany
+            65000 => '80',      // spoza bloku: ignorowany
+        ]]])->assertRedirect()->assertSessionHasNoErrors();
+
+        $forwards = $this->forwards();
+        $this->assertSame(25565, $forwards[10055]);
+        $this->assertSame(10056, $forwards[10056]);
+        $this->assertSame(10057, $forwards[10057]);
+        $this->assertSame(1, NatPortForward::count());
+        Queue::assertPushed(RunServerActionJob::class);
+
+        $this->actingAs($this->owner)->put(route('panel.servers.ports.update', $this->server), ['ports' => [$ip->id => [10058 => 'abc']]])
+            ->assertSessionHasErrors();
+        $this->actingAs($this->owner)->put(route('panel.servers.ports.update', $this->server), ['ports' => [$ip->id => [10055 => '25565']]])
+            ->assertSessionHas('status', __('Bez zmian.'));
+
+        $stranger = User::factory()->create();
+        $this->actingAs($stranger)->put(route('panel.servers.ports.update', $this->server), ['ports' => [$ip->id => [10059 => '80']]])->assertForbidden();
     }
 
     public function test_usuniecie_przywraca_jeden_do_jednego(): void
@@ -173,7 +203,7 @@ class PortForwardingTest extends TestCase
             'server_id' => $this->server->id, 'action' => 'rebuild', 'status' => ServerJob::STATUS_RUNNING, 'payload' => [],
         ]);
 
-        app(\App\Domain\Provisioning\AgentResultApplier::class)->apply($job, ['status' => 'done', 'result' => []]);
+        app(AgentResultApplier::class)->apply($job, ['status' => 'done', 'result' => []]);
 
         $this->assertDatabaseHas('server_jobs', ['server_id' => $this->server->id, 'action' => 'network']);
     }

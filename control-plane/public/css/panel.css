@@ -1021,3 +1021,21 @@ dialog.edit-modal .grid-3 { gap: 0 14px; }
 .migration-steps .step-done::before { background: var(--ok); }
 .migration-steps .step-active::before { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 25%, transparent); }
 .migration-steps .step-failed::before { background: var(--critical); }
+
+/* --- porty NAT: siatka port zewnętrzny → port w maszynie --- */
+.ports-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.ports-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin: 16px 0; }
+.port-tile { border: 1px solid var(--border); border-radius: 10px; padding: 14px 12px 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; background: var(--surface); }
+.port-tile.is-active { border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
+.port-tile.is-direct { border-color: color-mix(in srgb, var(--warn) 35%, var(--border)); }
+.port-tile.is-changed { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #3b82f6) 35%, transparent); }
+.port-map { display: flex; align-items: center; gap: 10px; }
+.port-ext { font-weight: 700; font-size: 15px; }
+.port-tile .port-box, .port-tile input.port-box { width: 76px; min-width: 0; text-align: center; padding: 6px 4px; border-radius: 8px; border: 1.5px dashed var(--border-strong, var(--border)); background: transparent; color: var(--text); font-size: 14px; }
+.port-tile.is-active .port-box, .port-tile.is-active input.port-box { border-color: var(--ok); }
+.port-tile.is-direct .port-box, .port-tile.is-direct input.port-box { border-color: var(--warn); }
+.port-tile.is-fixed .port-box { border-style: solid; color: var(--muted); }
+.port-box::placeholder { color: var(--muted); opacity: .7; }
+.port-tile input.port-box:focus { outline: none; border-style: solid; box-shadow: none; }
+.port-endpoint { font-size: 12px; color: var(--muted); }
+.icon-btn.is-copied { color: var(--ok); }
