@@ -4393,5 +4393,21 @@
     "Port w maszynie dla :port": "Machine port for :port",
     "Kopiuj :endpoint": "Copy :endpoint",
     "przekierowany": "forwarded",
-    "Wpisz port w maszynie, na który ma prowadzić port zewnętrzny. Puste pole: port przechodzi na ten sam numer (1:1). Pierwsze porty są stałe i prowadzą do SSH (a w Windows także do RDP).": "Enter the machine port each external port should lead to. Empty field: the port passes through to the same number (1:1). The first ports are fixed and lead to SSH (and RDP on Windows)."
+    "Wpisz port w maszynie, na który ma prowadzić port zewnętrzny. Puste pole: port przechodzi na ten sam numer (1:1). Pierwsze porty są stałe i prowadzą do SSH (a w Windows także do RDP).": "Enter the machine port each external port should lead to. Empty field: the port passes through to the same number (1:1). The first ports are fixed and lead to SSH (and RDP on Windows).",
+    "Karta sieciowa": "Network interface",
+    "Typ sieci": "Network type",
+    "Maszyna wychodzi w świat adresem węzła, a z zewnątrz jest osiągalna wyłącznie przez przekierowane porty.": "The machine reaches the internet through the node's address and is reachable from outside only through forwarded ports.",
+    "Publiczny adres": "Public address",
+    "routowany": "routed",
+    "Prędkość portu": "Port speed",
+    ":mbps Mbit/s": ":mbps Mbit/s",
+    "VLAN": "VLAN",
+    "Filtrowanie": "Filtering",
+    "Ochrona przed podszywaniem się pod cudze adresy IP i MAC.": "Protection against spoofing other IP and MAC addresses.",
+    "szczegóły": "details",
+    "DNS": "DNS",
+    "Adres zewnętrzny": "External address",
+    "Brak adresu :version.": "No :version address.",
+    "Adresy, porty i karta sieciowa": "Addresses, ports and network interface",
+    "Networking": "Networking"
 }

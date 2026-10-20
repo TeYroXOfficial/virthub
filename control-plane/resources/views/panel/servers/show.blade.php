@@ -144,6 +144,7 @@
     @else
         <nav class="tabs" role="tablist" aria-label="{{ __('Sekcje maszyny') }}">
             <button type="button" role="tab" data-tab="overview">{{ __('Przegląd') }}</button>
+            <button type="button" role="tab" data-tab="networking">{{ __('Networking') }}</button>
             <button type="button" role="tab" data-tab="stats">{{ __('Statystyki') }}</button>
             <button type="button" role="tab" data-tab="firewall-tab">{{ __('Zapora') }}</button>
             <button type="button" role="tab" data-tab="history">{{ __('Kopie i historia') }}</button>
@@ -151,6 +152,7 @@
         </nav>
 
         <div data-tab-panel="overview" role="tabpanel">
+    @php $charts = ['cpu' => __('Procesor'), 'ram' => __('Pamięć RAM'), 'disk' => __('Dysk I/O'), 'net' => __('Sieć')]; @endphp
         <div class="grid grid-2">
             <div class="card">
                 <h3 class="card-title"><x-icon name="node" :size="16"/> {{ __('Parametry') }}</h3>
@@ -245,102 +247,35 @@
             </div>
 
             <div class="card" id="network">
-                <h3 class="card-title"><x-icon name="network" :size="16"/> {{ __('Adresy IP') }}</h3>
+                <h3 class="card-title"><x-icon name="network" :size="16"/> {{ __('Sieć') }}</h3>
                 @forelse ($server->ipAddresses as $ip)
-                    <dl class="kv" style="margin-bottom:12px">
-                        <dt>{{ $ip->is_primary ? __('Główny') : __('Dodatkowy') }}</dt>
-                        <dd class="mono">
-                            {{ $ip->address }}/{{ $ip->pool->prefix }}
-                            @if ($ip->isNat()) <span class="pill warning">{{ __('NAT') }}</span> @endif
-                        </dd>
-                        <dt>{{ __('Brama') }}</dt><dd class="mono">{{ $ip->pool->gateway }}</dd>
-                        @if ($ports = $ip->natPorts())
-                            <dt>{{ __('Porty') }}</dt>
-                            <dd>
-                                <span class="mono">{{ $ports['from'] }}–{{ $ports['to'] }}</span>
-                                <a href="#ports" class="muted">{{ __('mapowanie') }}</a>
-                            </dd>
-                        @endif
-                        @if ($ip->mac_address)
-                            <dt>{{ __('MAC') }}</dt><dd class="mono">{{ $ip->mac_address }}
-                                <div class="hint">{{ __('Wymagany przez dostawcę dla tego adresu — przy instalacji z ISO ustaw kartę z tym MAC-iem.') }}</div></dd>
-                        @endif
-                        @unless ($ip->isNat())
-                            <dt>{{ __('rDNS') }}</dt>
-                            <dd>
-                                <span class="mono">{{ $ip->rdns ?? '—' }}</span>
-                                @can('operate', $server)
-                                    <details class="form-block" style="margin-top:6px">
-                                        <summary>{{ __('Zmień rDNS') }}</summary>
-                                        <form method="POST" action="{{ route('panel.servers.rdns', [$server, $ip]) }}" style="margin-top:8px">
-                                            @csrf @method('PUT')
-                                            <div class="field" style="margin-bottom:8px">
-                                                <input name="rdns" type="text" value="{{ $ip->rdns }}" placeholder="mail.example.com" aria-label="{{ __('rDNS') }}">
-                                            </div>
-                                            <button class="btn btn-sm btn-primary" type="submit">{{ __('Zapisz') }}</button>
-                                            <div class="hint">{{ __('Nazwa musi wskazywać rekordem :type na :address. Puste pole usuwa rDNS.', ['type' => $ip->version === 6 ? 'AAAA' : 'A', 'address' => $ip->address]) }}</div>
-                                        </form>
-                                    </details>
-                                @endcan
-                            </dd>
-                        @endunless
-                        @if ($ip->version === 6 && ! $ip->isNat() && auth()->user()->can('firewall', $server))
-                            <dt></dt>
-                            <dd>
-                                <details class="form-block">
-                                    <summary>{{ __('Wybierz inny adres IPv6') }}</summary>
-                                    <form method="POST" action="{{ route('panel.servers.ipv6', [$server, $ip]) }}" style="margin-top:8px">
-                                        @csrf @method('PUT')
-                                        <div class="field" style="margin-bottom:8px">
-                                            <input name="address" type="text" placeholder="{{ $ip->address }}" aria-label="{{ __('Nowy adres IPv6') }}" required>
-                                        </div>
-                                        <button class="btn btn-sm btn-primary" type="submit">{{ __('Zmień adres') }}</button>
-                                        <div class="hint">{{ __('Dowolny wolny adres z puli :cidr. Po zmianie ustaw adres w systemie (albo zreinstaluj go).', ['cidr' => $ip->pool->cidr]) }}</div>
-                                    </form>
-                                </details>
-                            </dd>
-                        @endif
-                    </dl>
+                    <div class="mono" style="margin-bottom:4px">
+                        {{ $ip->address }}
+                        @if ($ip->isNat()) <span class="pill warning">{{ __('NAT') }}</span> @endif
+                        @if ($ip->is_primary) <span class="pill neutral plain">{{ __('główny') }}</span> @endif
+                    </div>
                 @empty
                     <p class="muted">{{ __('Maszyna nie ma jeszcze przypisanego adresu.') }}</p>
                 @endforelse
-
                 @if ($primary = $server->primaryIp())
                     @if ($primary->isNat())
-                        <p class="hint">
-                            {{ __('Maszyna stoi za NAT-em: wychodzi w świat adresem węzła, a z zewnątrz jest osiągalna wyłącznie przez porty powyżej.') }}
-                            @if ($ports = $primary->natPorts())
-                                @php $natHost = $primary->natEndpoint(); @endphp
-                                @if ($ports['rdp'])
-                                    <br>{{ __('Pulpit zdalny (RDP):') }} <code>{{ $natHost }}:{{ $ports['rdp'] }}</code>
-                                @endif
-                                @if ($ports['ssh'])
-                                    <br>{{ __('SSH / SFTP:') }} <code>ssh -p {{ $ports['ssh'] }} {{ ($server->osFamily() === 'windows' ? 'Administrator' : 'root').'@'.$natHost }}</code>
-                                @endif
-                            @endif
-                        </p>
-                    @else
-                        @if ($server->osFamily() === 'windows')
-                            <p class="hint">{{ __('Pulpit zdalny (RDP):') }} <code>{{ $primary->address }}</code> · {{ __('użytkownik') }} <code>Administrator</code></p>
-                        @else
-                            <p class="hint">{{ __('Połączenie:') }} <code>ssh {{ 'root@'.$primary->address }}</code></p>
+                        @if (($ports = $primary->natPorts()) && $ports['ssh'] && $server->osFamily() !== 'windows')
+                            <p class="hint">{{ __('Połączenie:') }} <code>ssh -p {{ $ports['ssh'] }} {{ 'root@'.$primary->natEndpoint() }}</code></p>
+                        @elseif ($ports && $ports['rdp'])
+                            <p class="hint">{{ __('Pulpit zdalny (RDP):') }} <code>{{ $primary->natEndpoint() }}:{{ $ports['rdp'] }}</code></p>
                         @endif
+                    @elseif ($server->osFamily() === 'windows')
+                        <p class="hint">{{ __('Pulpit zdalny (RDP):') }} <code>{{ $primary->address }}</code> · {{ __('użytkownik') }} <code>Administrator</code></p>
+                    @else
+                        <p class="hint">{{ __('Połączenie:') }} <code>ssh {{ 'root@'.$primary->address }}</code></p>
                     @endif
                 @endif
+                <a class="btn btn-sm" href="#networking" style="margin-top:8px">{{ __('Adresy, porty i karta sieciowa') }}</a>
             </div>
         </div>
 
-        @include('panel.servers._ports')
-        @include('panel.servers._private-networks')
-        </div>
 
-        <div data-tab-panel="stats" role="tabpanel" hidden>
-    @php $charts = ['cpu' => __('Procesor'), 'ram' => __('Pamięć RAM'), 'disk' => __('Dysk I/O'), 'net' => __('Sieć')]; @endphp
-    <section data-server-metrics
-             data-live-url="{{ url("/api/v1/servers/{$server->id}/metrics/live") }}"
-             data-history-url="{{ url("/api/v1/servers/{$server->id}/metrics") }}"
-             data-running="{{ $server->isRunning() && $server->agent_uuid ? '1' : '0' }}">
-
+    <section class="live-usage" data-live-section style="margin-top:24px">
         <div class="section-head" style="margin-top:0">
             <h2>{{ __('Zużycie na żywo') }}</h2>
             @if ($server->isRunning())
@@ -368,9 +303,21 @@
         @else
             <div class="card empty">{{ __('Podgląd na żywo jest dostępny, gdy maszyna działa.') }}</div>
         @endif
+    </section>
+        </div>
+
+        <div data-tab-panel="networking" role="tabpanel" hidden>
+            @include('panel.servers._networking')
+        </div>
+
+        <div data-tab-panel="stats" role="tabpanel" hidden>
+    <section data-server-metrics
+             data-live-url="{{ url("/api/v1/servers/{$server->id}/metrics/live") }}"
+             data-history-url="{{ url("/api/v1/servers/{$server->id}/metrics") }}"
+             data-running="{{ $server->isRunning() && $server->agent_uuid ? '1' : '0' }}">
 
         <div data-history>
-            <div class="section-head">
+            <div class="section-head" style="margin-top:0">
                 <h2>{{ __('Historia zużycia') }}</h2>
                 <div class="segmented" role="group" aria-label="{{ __('Zakres historii') }}">
                     <button type="button" data-range="hour" aria-pressed="false">{{ __('Godzina') }}</button>

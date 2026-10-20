@@ -7,7 +7,9 @@
  * wartości w punkcie kursora. Wymaga uPlot (public/vendor/uplot).
  *
  * Konfiguracja: element [data-server-metrics] z atrybutami data-live-url,
- * data-history-url i data-running ("1"/"0").
+ * data-history-url i data-running ("1"/"0"). Podgląd na żywo ([data-live])
+ * siedzi w zakładce Przegląd, historia ([data-history]) w Statystykach —
+ * dlatego oba szukamy w całym dokumencie.
  */
 (function () {
     'use strict';
@@ -143,13 +145,13 @@
 
     // --- na żywo ------------------------------------------------------------
 
-    const liveBox = root.querySelector('[data-live]');
+    const liveBox = document.querySelector('[data-live]');
     if (liveBox && root.dataset.running === '1') {
         const buffer = { t: [] };
         Object.values(METRICS).forEach((m) => m.series.forEach(([f]) => (buffer[f] = [])));
         let ramTotal = null;
         const charts = buildGrid(liveBox, 'live', { ram: { yMax: () => ramTotal } });
-        const state = root.querySelector('[data-live-state]');
+        const state = document.querySelector('[data-live-state]');
         const tiles = {
             cpu: liveBox.querySelector('[data-now="cpu"]'),
             ram: liveBox.querySelector('[data-now="ram"]'),
@@ -195,7 +197,7 @@
 
     // --- historia -----------------------------------------------------------
 
-    const historyBox = root.querySelector('[data-history]');
+    const historyBox = document.querySelector('[data-history]');
     if (historyBox) {
         let ramTotal = null;
         const charts = buildGrid(historyBox, 'history', { ram: { yMax: () => ramTotal } });
